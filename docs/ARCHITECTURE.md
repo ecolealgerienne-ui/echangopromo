@@ -80,3 +80,27 @@ Les points ouverts fonctionnels du §7 des specs (mode hors-ligne agent, tri
 par défaut, durée par défaut ajustable, seuil anti-fraude auto-inscription)
 restent à trancher — ce document ne couvre que le choix de stack et
 l'organisation du code, pas les règles métier encore en discussion.
+
+## 4. État d'avancement backend
+
+L'API REST (`apps/backend`) implémente l'ensemble des règles métier des
+specs V0 : cycle de vie commerçant (auto-inscription et création agent,
+OTP+PIN, PIN oublié), plafond et expiration des promos, anti-fraude
+signalements avec fenêtre d'ignore 30 jours, zones/transfert d'agent,
+modération et dashboard admin, upload S3 pré-signé, communes. Vérifié de
+bout en bout localement (build, lint, et parcours API réel via curl :
+inscription → revendication → publication → signalement → seuil →
+résolution admin → plafond de 5 promos).
+
+**Non couvert / à faire avant le pilote** :
+- Intégration SMS réelle (`AuthModule`'s `SmsService` est un stub qui
+  logge le code — voir point ouvert §7.5 des specs).
+- Migrations TypeORM versionnées (le schéma utilise `synchronize: true` en
+  développement, à remplacer par des migrations avant la prod).
+- La liste des 36 communes de la wilaya de Djelfa dans
+  `scripts/seed-communes.ts` a été reconstituée par recherche web faute
+  d'accès direct aux sources officielles depuis cet environnement — **à
+  vérifier contre une source officielle (ministère de l'intérieur / ONS)
+  avant utilisation en production.**
+- Application mobile Flutter : squelette de navigation seulement, aucun
+  écran n'est encore relié à l'API.

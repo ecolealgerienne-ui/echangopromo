@@ -1,10 +1,32 @@
 import { Module } from '@nestjs/common';
-import { AuthController } from './auth.controller';
+import { ConfigService } from '@nestjs/config';
+import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { OtpCode } from './entities/otp-code.entity';
 import { AuthService } from './auth.service';
+import { SmsService } from './sms.service';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
 
 @Module({
-  controllers: [AuthController],
-  providers: [AuthService],
-  exports: [AuthService],
+  imports: [
+    TypeOrmModule.forFeature([OtpCode]),
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService): JwtModuleOptions => ({
+        secret: config.get<string>('JWT_SECRET'),
+        // `expiresIn` accepte une durée libre ('30d') non représentable par le
+        // type `StringValue` trop strict de la lib `ms` — cast nécessaire.
+        signOptions: {
+          expiresIn: config.get<string>(
+            'JWT_EXPIRES_IN',
+            '30d',
+          ) as unknown as number,
+        },
+      }),
+    }),
+  ],
+  providers: [AuthService, SmsService, JwtAuthGuard, RolesGuard],
+  exports: [AuthService, JwtModule, JwtAuthGuard, RolesGuard],
 })
 export class AuthModule {}

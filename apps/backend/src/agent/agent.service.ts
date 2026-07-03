@@ -1,4 +1,93 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { AuthService } from '../auth/auth.service';
+import { CreateAgentDto } from './dto/create-agent.dto';
+import { Agent } from './entities/agent.entity';
 
 @Injectable()
-export class AgentService {}
+export class AgentService {
+  constructor(
+    @InjectRepository(Agent) private readonly agents: Repository<Agent>,
+    private readonly authService: AuthService,
+  ) {}
+
+  /** Créé exclusivement par l'admin — pas d'auto-inscription agent (specs §3.3). */
+  async create(dto: CreateAgentDto): Promise<Agent> {
+    const existing = await this.agents.findOne({ where: { email: dto.email } });
+    if (existing) {
+      throw new BadRequestException('Cet email est déjà utilisé par un agent');
+    }
+
+    const passwordHash = await this.authService.hash(dto.password);
+    return this.agents.save(
+      this.agents.create({
+        email: dto.email,
+        nom: dto.nom,
+        passwordHash,
+        zoneId: dto.zoneId ?? null,
+      }),
+    );
+  }
+
+  async login(email: string, password: string): Promise<Agent> {
+    const agent = await this.agents.findOne({ where: { email } });
+    if (!agent) {
+      throw new BadRequestException('Identifiants invalides');
+    }
+    const matches = await this.authService.compare(
+      password,
+      agent.passwordHash,
+    );
+    if (!matches) {
+      throw new BadRequestException('Identifiants invalides');
+    }
+    return agent;
+  }
+
+  async findByIdOrFail(id: string): Promise<Agent> {
+    const agent = await this.agents.findOne({ where: { id } });
+    if (!agent) {
+      throw new NotFoundException('Agent introuvable');
+    }
+    return agent;
+  }
+
+  async findAll(): Promise<Agent[]> {
+    return this.agents.find();
+  }
+
+  async assignZone(agentId: string, zoneId: string | null): Promise<Agent> {
+    const agent = await this.findByIdOrFail(agentId);
+    agent.zoneId = zoneId;
+    return this.agents.save(agent);
+  }
+
+  /**
+   * Transfère une zone d'un agent à un autre (specs §3.4) — cas type :
+   * départ d'un agent, pour éviter que les fiches de la zone cessent d'être
+   * mises à jour silencieusement.
+   */
+  async transferZone(
+    zoneId: string,
+    fromAgentId: string,
+    toAgentId: string,
+  ): Promise<void> {
+    const fromAgent = await this.findByIdOrFail(fromAgentId);
+    const toAgent = await this.findByIdOrFail(toAgentId);
+
+    if (fromAgent.zoneId !== zoneId) {
+      throw new BadRequestException(
+        "Cette zone n'est pas actuellement assignée à cet agent",
+      );
+    }
+
+    fromAgent.zoneId = null;
+    toAgent.zoneId = zoneId;
+    await this.agents.save([fromAgent, toAgent]);
+  }
+}
