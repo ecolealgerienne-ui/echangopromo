@@ -1,0 +1,50 @@
+name: echango_promo
+description: echango Promo - Application mobile client, commerçant & agent terrain
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.5.0
+
+  # Navigation
+  go_router: ^14.0.0
+
+  # API REST
+  dio: ^5.7.0
+
+  # UI
+  cached_network_image: ^3.4.0
+  shimmer: ^3.0.0
+
+  # Stockage local (device ID anonyme, favoris, commune sélectionnée)
+  shared_preferences: ^2.3.0
+  flutter_secure_storage: ^9.2.0
+  uuid: ^4.4.0
+
+  # Photo promo (agent) — capture caméra obligatoire, pas de galerie
+  image_picker: ^1.1.0
+
+  # Compression avant upload — §5.8 des specs
+  flutter_image_compress: ^2.3.0
+
+  intl: 0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  generate: true
+  assets:
+    - assets/images/

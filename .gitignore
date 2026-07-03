@@ -1,0 +1,18 @@
+# Node
+node_modules/
+dist/
+coverage/
+*.log
+
+# Env
+.env
+.env.local
+
+# Flutter (voir aussi apps/mobile/.gitignore)
+apps/mobile/.dart_tool/
+apps/mobile/build/
+
+# OS / éditeurs
+.DS_Store
+.vscode/
+.idea/
