@@ -14,25 +14,40 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { DeviceId } from '../common/decorators/device-id.decorator';
+import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
 import { ListPromoQueryDto } from './dto/list-promo-query.dto';
 import { UpdatePromoDto } from './dto/update-promo.dto';
+import { Promo } from './entities/promo.entity';
 import { PromoService } from './promo.service';
 
 @Controller('promo')
 export class PromoController {
-  constructor(private readonly promoService: PromoService) {}
+  constructor(
+    private readonly promoService: PromoService,
+    private readonly storageService: StorageService,
+  ) {}
+
+  /** Ajoute l'URL publique résolue à partir de la clé S3 (specs §5.8) — le
+   * client n'a jamais accès à la clé brute, seulement à l'URL lisible. */
+  private withPhotoUrl(promo: Promo) {
+    return {
+      ...promo,
+      photoUrl: this.storageService.buildPublicUrl(promo.photoKey),
+    };
+  }
 
   @Get()
   async list(@Query() query: ListPromoQueryDto) {
-    return this.promoService.findActiveForClient(query);
+    const promos = await this.promoService.findActiveForClient(query);
+    return promos.map((promo) => this.withPhotoUrl(promo));
   }
 
   @Get(':id')
   async detail(@Param('id') id: string, @DeviceId() deviceId: string) {
     const promo = await this.promoService.findByIdOrFail(id);
     await this.promoService.recordView(id, deviceId);
-    return promo;
+    return this.withPhotoUrl(promo);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -54,7 +69,7 @@ export class PromoController {
       promos.map((p) => p.id),
     );
     return promos.map((promo) => ({
-      ...promo,
+      ...this.withPhotoUrl(promo),
       viewCount: viewCounts[promo.id] ?? 0,
     }));
   }

@@ -1,8 +1,34 @@
 import 'package:dio/dio.dart';
 import '../../config/env.dart';
+import 'api_exception.dart';
 
+/// Client HTTP partagé : ajoute systématiquement le device ID anonyme
+/// (specs §3.1/§5.4) et le token JWT s'il y a une session active. Les
+/// erreurs Dio sont converties en [ApiException] pour un affichage simple.
 class ApiClient {
-  ApiClient() : dio = Dio(BaseOptions(baseUrl: Env.apiBaseUrl));
+  ApiClient({required String Function() getDeviceId, required String? Function() getToken})
+      : dio = Dio(BaseOptions(baseUrl: Env.apiBaseUrl)) {
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          options.headers['X-Device-Id'] = getDeviceId();
+          final token = getToken();
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+          handler.next(options);
+        },
+        onError: (error, handler) {
+          handler.next(DioException(
+            requestOptions: error.requestOptions,
+            response: error.response,
+            error: ApiException.fromDioError(error),
+            type: error.type,
+          ));
+        },
+      ),
+    );
+  }
 
   final Dio dio;
 }

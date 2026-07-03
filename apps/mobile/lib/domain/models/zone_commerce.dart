@@ -1,0 +1,27 @@
+import 'commercant.dart';
+
+/// Commerce de la zone d'un agent avec son statut de tournée (specs §3.3).
+class ZoneCommerce {
+  const ZoneCommerce({required this.commercant, required this.visitStatus});
+
+  factory ZoneCommerce.fromJson(Map<String, dynamic> json) => ZoneCommerce(
+        commercant: Commercant.fromJson(json),
+        visitStatus: json['visitStatus'] as String,
+      );
+
+  final Commercant commercant;
+  final String visitStatus;
+
+  String get visitStatusLabel {
+    switch (visitStatus) {
+      case 'jamais_visite':
+        return 'Jamais visité';
+      case 'a_jour':
+        return 'À jour';
+      case 'a_relancer':
+        return 'À relancer';
+      default:
+        return visitStatus;
+    }
+  }
+}
