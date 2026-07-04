@@ -14,11 +14,14 @@ import { Commune } from '../../commune/entities/commune.entity';
 import { Zone } from '../../zone/entities/zone.entity';
 import { Agent } from '../../agent/entities/agent.entity';
 
-/** Cycle de vie du compte (specs §3.2). */
+/**
+ * Cycle de vie du compte (specs §3.2). Sans OTP, il n'y a plus d'étape
+ * intermédiaire de revendication : un commerçant créé par un agent reste
+ * `cree_agent` jusqu'à ce qu'il définisse lui-même son PIN (`claim`), ce qui
+ * le fait passer directement à `autonome`.
+ */
 export enum CommercantAccountState {
   CREE_AGENT = 'cree_agent',
-  EN_ATTENTE_REVENDICATION = 'en_attente_revendication',
-  REVENDIQUE = 'revendique',
   AUTONOME = 'autonome',
 }
 
@@ -83,7 +86,7 @@ export class Commercant {
   @Column({
     type: 'enum',
     enum: CommercantAccountState,
-    default: CommercantAccountState.EN_ATTENTE_REVENDICATION,
+    default: CommercantAccountState.CREE_AGENT,
   })
   accountState: CommercantAccountState;
 
@@ -93,9 +96,6 @@ export class Commercant {
   @Exclude()
   @Column({ type: 'varchar', nullable: true })
   pinHash: string | null;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  telephoneVerifiedAt: Date | null;
 
   @Column({ type: 'enum', enum: RegistreStatus, nullable: true })
   registreStatus: RegistreStatus | null;

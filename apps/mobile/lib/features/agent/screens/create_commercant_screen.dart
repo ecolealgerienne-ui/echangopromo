@@ -8,8 +8,9 @@ import '../../shared/widgets/category_dropdown.dart';
 import '../../../providers/core_providers.dart';
 
 /// Création assistée par l'agent (specs §3.2, voie 2) : numéro de
-/// téléphone, nom, adresse, catégorie. La revendication (OTP) est initiée
-/// séparément depuis la liste de la zone.
+/// téléphone, nom, adresse, catégorie. Le commerçant active lui-même son
+/// compte plus tard, sans OTP, en définissant son PIN depuis l'écran de
+/// connexion commerçant.
 class CreateCommercantScreen extends ConsumerStatefulWidget {
   const CreateCommercantScreen({super.key});
 

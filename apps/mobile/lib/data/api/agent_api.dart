@@ -43,8 +43,4 @@ class AgentApi {
     });
     return Commercant.fromJson(response.data!);
   }
-
-  Future<void> initiateClaim(String commercantId) async {
-    await _dio.post<void>('/agent/commercant/$commercantId/initiate-claim');
-  }
 }

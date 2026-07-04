@@ -27,9 +27,9 @@ import { AuthModule } from './auth/auth.module';
       synchronize: process.env.NODE_ENV !== 'production',
     }),
     ScheduleModule.forRoot(),
-    // Limite globale par défaut ; les endpoints sensibles (login, OTP,
-    // signalement) ont une limite plus stricte via @Throttle() (specs
-    // d'audit sécurité — @nestjs/throttler n'était pas installé du tout).
+    // Limite globale par défaut ; les endpoints sensibles (login, claim
+    // commerçant, signalement) ont une limite plus stricte via @Throttle()
+    // (specs d'audit sécurité — @nestjs/throttler n'était pas installé du tout).
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     CommuneModule,
     ZoneModule,

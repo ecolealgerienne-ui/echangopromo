@@ -34,9 +34,11 @@ signalements, séparation Commune/Zone, actions admin, dashboard).
 ## Mobile — écrans implémentés
 
 Client (sélection commune, liste promos, détail, favoris, signalement),
-Commerçant (inscription, revendication OTP, login PIN, PIN oublié,
-dashboard, promos), Agent (login, zone, création commerçant, promo avec
-caméra obligatoire). Pas d'écran admin en V0 (décision assumée).
+Commerçant (inscription, activation d'un compte créé par agent (`claim`,
+sans OTP), login PIN, dashboard, promos), Agent (login, zone, création
+commerçant, promo avec caméra obligatoire). Pas d'écran admin en V0
+(décision assumée). PIN oublié : plus d'écran self-service, seul l'admin
+peut réinitialiser (voir l'entrée "suppression OTP/SMS" ci-dessous).
 
 ---
 
@@ -49,19 +51,23 @@ local), pas seulement par la compilation.
 
 ### Sécurité
 
-- [x] **IDOR agent → promo/commerçant** : `PromoController.update`,
-      `.createByAgent` et `AgentController.initiateClaim` vérifient
-      désormais que le commerçant appartient à la zone de l'agent connecté
-      (`CommercantService.assertZoneMatches`). **Testé** : agent hors zone
-      → 403 sur les 3 endpoints ; agent de la bonne zone → 200/201.
+- [x] **IDOR agent → promo/commerçant** : `PromoController.update` et
+      `.createByAgent` vérifient désormais que le commerçant appartient à
+      la zone de l'agent connecté (`CommercantService.assertZoneMatches`).
+      **Testé** : agent hors zone → 403 ; agent de la bonne zone → 200/201.
+      (`AgentController.initiateClaim`, le 3ᵉ endpoint concerné par ce
+      finding, a depuis été **supprimé** avec l'OTP — voir plus bas.)
 - [x] **Rate limiting auth** : `@nestjs/throttler` installé et branché
       globalement (60 req/min/IP par défaut) + limite stricte
       (5 req/min/IP, `STRICT_THROTTLE`) sur tous les logins (commerçant,
-      agent, admin), les endpoints OTP, et `POST /report`. **Testé** : 429
-      dès la 6ᵉ requête sur `/commercant/login`.
-- [x] **Anti brute-force OTP** : compteur de tentatives (`OtpCode.attempts`,
-      verrouillage à 5 échecs) + cooldown d'envoi de 60s, indépendants de
-      l'expiration du code.
+      agent, admin), `POST /commercant/claim`, et `POST /report`. **Testé** :
+      429 dès la 6ᵉ requête sur `/commercant/login`.
+- [x] **OTP SMS supprimé du projet** (2026-07-04, décision produit : jugé
+      inutile et coûteux pour ce marché). Le finding "anti brute-force
+      OTP" et le point ouvert "fuite d'énumération sur `forgot-pin/request`"
+      n'ont plus d'objet : `OtpCode`, `SmsService`, et tous les endpoints
+      OTP/forgot-pin ont été retirés. Détail du remplacement dans la
+      section dédiée plus bas.
 - [x] **Upload S3 sans limite de taille** : remplacé le PUT pré-signé par
       une POST policy S3 (`content-length-range`, 5 Mo max) — mobile mis à
       jour pour envoyer un formulaire multipart au lieu d'un PUT brut
@@ -74,8 +80,6 @@ local), pas seulement par la compilation.
 - [ ] JWT 30 jours sans révocation — **non traité**, nécessite un design de
       refresh token / tokenVersion (session dédiée recommandée).
 - [ ] `JWT_SECRET` sans validation au démarrage — **non traité**.
-- [ ] Fuite d'énumération de téléphone sur `forgot-pin/request` — **non
-      traité** (sévérité basse).
 - [ ] Regex PIN 4-6 chiffres vs 4 fixes dans les specs — **non traité**
       (décision produit à trancher, pas un bug).
 
@@ -96,12 +100,14 @@ local), pas seulement par la compilation.
       agrégée (JOIN + GROUP BY + HAVING).
 - [x] **`AuditLogModule` jamais branché** — corrigé : `AuditLogService`
       implémenté (repository + `record()`) et appelé depuis
-      `AgentController` (création commerçant, initiation revendication) et
-      `AdminController` (création agent, transfert de zone, 3 actions de
-      modération, validation/rejet registre).
+      `AgentController` (création commerçant) et `AdminController`
+      (création agent, transfert de zone, réinitialisation PIN, 3 actions de
+      modération, validation/rejet registre). (L'action `initiate_claim`
+      loggée par `AgentController` a disparu avec la suppression de l'OTP.)
 - [x] Index DB manquants — `Promo.status+dateFin` (composite),
-      `Promo.commercantId`, `Commercant.communeId`, `Commercant.zoneId`,
-      `OtpCode(telephone,purpose)` tous ajoutés.
+      `Promo.commercantId`, `Commercant.communeId`, `Commercant.zoneId`
+      tous ajoutés. (`OtpCode(telephone,purpose)` n'existe plus, l'entité a
+      été supprimée avec l'OTP.)
 - [x] `assertOwnedBy` orpheline — **supprimée** (remplacée par
       `assertZoneMatches`, plus adaptée au besoin réel).
 - [ ] `AdminController` god-object (5 services injectés) — **non traité**
@@ -124,8 +130,9 @@ local), pas seulement par la compilation.
 - [x] **`flutter analyze` exécuté pour la première fois** (SDK installé en
       local par l'utilisateur, WSL) : 5 issues trouvées et corrigées —
       import mort (`commune_providers.dart` dans `promo_list_screen.dart`),
-      `AppRole` non importé (`otp_confirm_screen.dart`, faute de compilation
-      réelle), et 3× usage déprécié de `DropdownButtonFormField.value` →
+      `AppRole` non importé (dans l'ancien `otp_confirm_screen.dart`,
+      supprimé depuis avec l'OTP — faute de compilation réelle à
+      l'époque), et 3× usage déprécié de `DropdownButtonFormField.value` →
       `initialValue` (`category_dropdown.dart`, `create_commercant_screen.dart`,
       `commercant_register_screen.dart`). `flutter analyze` propre après
       correction (0 issue restante à vérifier après ce commit).
@@ -155,13 +162,14 @@ non traités par cette session de corrections :
 2. Validation de `JWT_SECRET` au démarrage (rejeter les valeurs par défaut
    en production).
 3. Migrations TypeORM versionnées (toujours en `synchronize: true` dev).
-4. Vraie intégration SMS (stub qui logge toujours le code).
-5. `flutter test` réel (jamais exécuté ; `flutter analyze` fait et propre).
-6. Refactoring `AdminController` (extraire l'orchestration modération dans
+4. `flutter test` réel (jamais exécuté ; `flutter analyze` fait et propre).
+5. Refactoring `AdminController` (extraire l'orchestration modération dans
    un service dédié).
-7. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
+6. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
    développement mobile via émulateur Android + backend WSL continue —
    sinon documenter clairement la procédure pour chaque nouvelle session.
+7. Regex PIN 4-6 chiffres vs 4 fixes dans les specs — décision produit à
+   trancher (pas un bug).
 
 ---
 
@@ -185,3 +193,33 @@ non traités par cette session de corrections :
   au backend WSL2 (nécessite un `netsh portproxy`, IP WSL changeante).
   Création de la branche `main` (absente jusque-là, `claude/new-project-
   setup-t5rs5y` était la branche par défaut).
+- **2026-07-04 (suppression OTP/SMS)** — Décision produit : le SMS est
+  jugé inutile et coûteux pour ce marché. Suppression complète de l'OTP
+  (backend : `OtpCode`, `SmsService`, `AuthService.sendOtp/verifyOtp`,
+  endpoints `confirm-inscription`/`confirm-revendication`/`forgot-pin/*`,
+  `AgentController.initiateClaim` ; mobile : `otp_confirm_screen.dart`,
+  `forgot_pin_screen.dart`, routes associées). Nouveaux flux, sans preuve
+  de possession du numéro de téléphone :
+  - Auto-inscription : téléphone + PIN en un seul appel
+    (`POST /commercant/register`), compte `autonome` immédiatement.
+  - Compte créé par un agent : le commerçant définit lui-même son PIN
+    (`POST /commercant/claim`, nouvel endpoint), passage direct
+    `créé_agent` → `autonome`. L'agent n'a plus rien à initier ; l'écran
+    zone affiche juste un indicateur "en attente d'activation".
+  - PIN oublié : plus de flux self-service. Seul l'admin peut effacer le
+    PIN (`POST /admin/commercant/:id/reset-pin`, nouvel endpoint) ; le
+    commerçant en redéfinit un via `claim`.
+  - `CommercantAccountState` simplifié à `CREE_AGENT`/`AUTONOME` (les
+    états `EN_ATTENTE_REVENDICATION`/`REVENDIQUE`, qui n'existaient que
+    pour l'attente OTP, disparaissent — `REVENDIQUE` était de toute façon
+    déjà mort, voir dette connue ci-dessus dans les versions précédentes).
+  - Colonne `telephoneVerifiedAt` supprimée (plus de vérification à
+    horodater).
+  Specs (`docs/SPECS_ECHANGO_PROMO_V0.md` §3.2/§3.3/§7), architecture et
+  audit mis à jour dans le même commit. Risque assumé documenté : sans
+  OTP, un numéro usurpé peut techniquement créer/activer un compte au nom
+  d'un tiers — le signalement/modération reste la seule ligne de défense.
+  **Non exécuté dans mon environnement** (pas de `npm install`/build ici,
+  conformément aux instructions) : à valider avec `npm run build && npm
+  run lint` côté backend, et `flutter analyze` côté mobile, avant de
+  considérer ce changement testé.

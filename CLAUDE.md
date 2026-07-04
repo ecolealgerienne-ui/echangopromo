@@ -200,11 +200,7 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
 - Aucun commerçant auto-inscrit ne peut corriger une promo déjà publiée
   (seul l'agent a `PATCH /promo/:id`) — tension avec l'autonomie visée
   pour ce profil par les specs §3.2.
-- `CommercantAccountState.REVENDIQUE` n'est jamais atteint en pratique
-  (fusionné avec `AUTONOME`, décision assumée et documentée) — enum à
-  simplifier si cette fusion est confirmée définitive.
 - Pas de pagination sur les listes (`/promo`, `/admin/agent`, `/zone`,
   `/commune`).
-- Pas de vraie intégration SMS (stub qui logge le code).
 
 Détail complet, fichier:ligne, sévérités : `docs/AUDIT_V0.md`.

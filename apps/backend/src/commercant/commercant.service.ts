@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { OtpPurpose } from '../auth/entities/otp-code.entity';
 import { AuthService } from '../auth/auth.service';
 import { Promo, VISIBLE_PROMO_STATUSES } from '../promo/entities/promo.entity';
 import { CommercantView } from './entities/commercant-view.entity';
@@ -17,7 +16,7 @@ import {
   CommercantOriginVerification,
   RegistreStatus,
 } from './entities/commercant.entity';
-import { ConfirmPhoneDto } from './dto/confirm-phone.dto';
+import { ClaimCommercantDto } from './dto/claim-commercant.dto';
 import { CreateCommercantByAgentDto } from './dto/create-commercant-by-agent.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
 
@@ -41,20 +40,24 @@ export class CommercantService {
     }
   }
 
-  /** Auto-inscription (specs §3.2, voie 1) — pas de passage agent requis. */
+  /**
+   * Auto-inscription (specs §3.2, voie 1) — pas de passage agent requis, et
+   * pas d'OTP (décision produit) : le compte est `autonome` dès la saisie du
+   * PIN, sans preuve de possession du numéro de téléphone.
+   */
   async selfRegister(dto: RegisterCommercantDto): Promise<Commercant> {
     await this.assertPhoneAvailable(dto.telephone);
 
-    const commercant = await this.commercants.save(
+    const { pin, ...rest } = dto;
+    return this.commercants.save(
       this.commercants.create({
-        ...dto,
-        accountState: CommercantAccountState.EN_ATTENTE_REVENDICATION,
+        ...rest,
+        telephone: dto.telephone,
+        pinHash: await this.authService.hash(pin),
+        accountState: CommercantAccountState.AUTONOME,
         originVerification: CommercantOriginVerification.AUTO_INSCRIT,
       }),
     );
-
-    await this.authService.sendOtp(dto.telephone, OtpPurpose.INSCRIPTION);
-    return commercant;
   }
 
   /** Création assistée par l'agent (specs §3.2, voie 2) — pas d'OTP envoyé ici. */
@@ -76,44 +79,27 @@ export class CommercantService {
     );
   }
 
-  /** L'agent initie la revendication : déclenche l'envoi de l'OTP (specs §3.3). */
-  async initiateClaim(commercantId: string): Promise<void> {
-    const commercant = await this.findByIdOrFail(commercantId);
-    if (commercant.accountState !== CommercantAccountState.CREE_AGENT) {
-      throw new BadRequestException(
-        'La revendication a déjà été initiée pour ce commerçant',
-      );
-    }
-
-    commercant.accountState = CommercantAccountState.EN_ATTENTE_REVENDICATION;
-    await this.commercants.save(commercant);
-    await this.authService.sendOtp(
-      commercant.telephone,
-      OtpPurpose.REVENDICATION,
-    );
-  }
-
   /**
-   * Valide l'OTP (inscription ou revendication) et définit le PIN. Les deux
-   * voies convergent directement vers `autonome` : le spec ne définit aucune
-   * règle métier distinguant `revendique` d'`autonome`, donc on saute
-   * l'état intermédiaire plutôt que d'introduire une distinction arbitraire.
+   * Le commerçant définit lui-même son PIN pour activer un compte créé par
+   * un agent, ou pour se réactiver après une réinitialisation par l'admin
+   * (§3.3) — aucun OTP : seul le numéro de téléphone est requis (décision
+   * produit assumée, voir §3.2 des specs). Refusé si un PIN est déjà défini,
+   * pour ne pas permettre l'écrasement silencieux du PIN d'un tiers.
    */
-  async confirmPhoneAndSetPin(
-    purpose: OtpPurpose,
-    dto: ConfirmPhoneDto,
-  ): Promise<Commercant> {
+  async claim(dto: ClaimCommercantDto): Promise<Commercant> {
     const commercant = await this.commercants.findOne({
       where: { telephone: dto.telephone },
     });
     if (!commercant) {
       throw new NotFoundException('Commerçant introuvable');
     }
-
-    await this.authService.verifyOtp(dto.telephone, purpose, dto.code);
+    if (commercant.pinHash) {
+      throw new ConflictException(
+        'Un PIN est déjà défini pour ce numéro — contactez un administrateur pour le réinitialiser',
+      );
+    }
 
     commercant.pinHash = await this.authService.hash(dto.pin);
-    commercant.telephoneVerifiedAt = new Date();
     commercant.accountState = CommercantAccountState.AUTONOME;
     return this.commercants.save(commercant);
   }
@@ -132,26 +118,15 @@ export class CommercantService {
     return commercant;
   }
 
-  async requestForgotPin(telephone: string): Promise<void> {
-    const commercant = await this.commercants.findOne({ where: { telephone } });
-    if (!commercant?.pinHash) {
-      throw new NotFoundException('Commerçant introuvable');
-    }
-    await this.authService.sendOtp(telephone, OtpPurpose.PIN_OUBLIE);
-  }
-
-  async confirmForgotPin(
-    telephone: string,
-    code: string,
-    newPin: string,
-  ): Promise<void> {
-    const commercant = await this.commercants.findOne({ where: { telephone } });
-    if (!commercant) {
-      throw new NotFoundException('Commerçant introuvable');
-    }
-
-    await this.authService.verifyOtp(telephone, OtpPurpose.PIN_OUBLIE, code);
-    commercant.pinHash = await this.authService.hash(newPin);
+  /**
+   * PIN oublié : pas de flux libre-service (pas d'OTP pour reprouver la
+   * possession du numéro). Seul l'admin peut effacer le PIN ; le commerçant
+   * en définit ensuite un nouveau via `claim`, exactement comme pour un
+   * compte créé par un agent.
+   */
+  async adminResetPin(commercantId: string): Promise<void> {
+    const commercant = await this.findByIdOrFail(commercantId);
+    commercant.pinHash = null;
     await this.commercants.save(commercant);
   }
 

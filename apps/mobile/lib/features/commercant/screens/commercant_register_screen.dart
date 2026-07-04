@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
+import '../../../domain/models/auth_session.dart';
+import '../../../providers/auth_provider.dart';
 import '../../client/providers/commune_providers.dart';
 import '../../shared/widgets/category_dropdown.dart';
 import '../../../providers/core_providers.dart';
 
-/// Auto-inscription (specs §3.2, voie 1) — sans passage agent requis.
+/// Auto-inscription (specs §3.2, voie 1) — sans passage agent requis, et sans
+/// OTP : le compte est actif dès la saisie du PIN (décision produit assumée).
 class CommercantRegisterScreen extends ConsumerStatefulWidget {
   const CommercantRegisterScreen({super.key});
 
@@ -20,6 +23,7 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
   final _telephoneController = TextEditingController();
   final _nomController = TextEditingController();
   final _adresseController = TextEditingController();
+  final _pinController = TextEditingController();
   Categorie? _categorie;
   String? _communeId;
   bool _loading = false;
@@ -30,6 +34,7 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
     _telephoneController.dispose();
     _nomController.dispose();
     _adresseController.dispose();
+    _pinController.dispose();
     super.dispose();
   }
 
@@ -45,19 +50,21 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
     });
 
     try {
-      await ref.read(commercantApiProvider).register(
-            telephone: _telephoneController.text.trim(),
-            nom: _nomController.text.trim(),
-            adresse: _adresseController.text.trim(),
-            categorie: _categorie!,
-            communeId: _communeId!,
+      final api = ref.read(commercantApiProvider);
+      final token = await api.register(
+        telephone: _telephoneController.text.trim(),
+        nom: _nomController.text.trim(),
+        adresse: _adresseController.text.trim(),
+        categorie: _categorie!,
+        communeId: _communeId!,
+        pin: _pinController.text.trim(),
+      );
+      await ref.read(authControllerProvider.notifier).loginThenResolveId(
+            role: AppRole.commercant,
+            token: token,
+            fetchId: () async => (await api.me()).id,
           );
-      if (mounted) {
-        context.push(
-          '/commercant/otp',
-          extra: {'telephone': _telephoneController.text.trim(), 'purpose': 'inscription'},
-        );
-      }
+      if (mounted) context.go('/commercant/dashboard');
     } catch (error) {
       setState(() => _error = extractApiErrorMessage(error, fallback: 'Inscription impossible.'));
     } finally {
@@ -110,6 +117,15 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
                   ],
                   onChanged: (v) => setState(() => _communeId = v),
                 ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _pinController,
+                decoration: const InputDecoration(labelText: 'Choisissez un code PIN (4-6 chiffres)'),
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 6,
+                validator: (v) => (v == null || v.length < 4) ? 'PIN invalide' : null,
               ),
               if (_error != null) ...[
                 const SizedBox(height: 8),

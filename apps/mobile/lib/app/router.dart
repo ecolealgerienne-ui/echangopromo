@@ -12,9 +12,7 @@ import '../features/client/providers/commune_providers.dart';
 import '../features/commercant/screens/commercant_dashboard_screen.dart';
 import '../features/commercant/screens/commercant_login_screen.dart';
 import '../features/commercant/screens/commercant_register_screen.dart';
-import '../features/commercant/screens/forgot_pin_screen.dart';
 import '../features/commercant/screens/my_promos_screen.dart';
-import '../features/commercant/screens/otp_confirm_screen.dart';
 import '../features/commercant/screens/promo_form_screen.dart';
 import '../providers/auth_provider.dart';
 
@@ -71,14 +69,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/commercant/register',
         builder: (context, state) => const CommercantRegisterScreen(),
       ),
-      GoRoute(
-        path: '/commercant/otp',
-        builder: (context, state) {
-          final extra = state.extra as Map<String, String>;
-          return OtpConfirmScreen(telephone: extra['telephone']!, purpose: extra['purpose']!);
-        },
-      ),
-      GoRoute(path: '/commercant/forgot-pin', builder: (context, state) => const ForgotPinScreen()),
       GoRoute(
         path: '/commercant/dashboard',
         builder: (context, state) => const CommercantDashboardScreen(),

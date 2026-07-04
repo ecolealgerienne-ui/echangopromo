@@ -7,40 +7,30 @@ class CommercantApi {
 
   final Dio _dio;
 
-  Future<void> register({
+  Future<String> register({
     required String telephone,
     required String nom,
     required String adresse,
     required Categorie categorie,
     required String communeId,
+    required String pin,
   }) async {
-    await _dio.post<void>('/commercant/register', data: {
+    final response = await _dio.post<Map<String, dynamic>>('/commercant/register', data: {
       'telephone': telephone,
       'nom': nom,
       'adresse': adresse,
       'categorie': categorie.value,
       'communeId': communeId,
+      'pin': pin,
     });
+    return response.data!['accessToken'] as String;
   }
 
-  Future<String> confirmInscription({
-    required String telephone,
-    required String code,
-    required String pin,
-  }) =>
-      _confirm('/commercant/confirm-inscription', telephone, code, pin);
-
-  Future<String> confirmRevendication({
-    required String telephone,
-    required String code,
-    required String pin,
-  }) =>
-      _confirm('/commercant/confirm-revendication', telephone, code, pin);
-
-  Future<String> _confirm(String path, String telephone, String code, String pin) async {
+  /// Active un compte créé par un agent (ou réinitialisé par l'admin) — pas d'OTP.
+  Future<String> claim({required String telephone, required String pin}) async {
     final response = await _dio.post<Map<String, dynamic>>(
-      path,
-      data: {'telephone': telephone, 'code': code, 'pin': pin},
+      '/commercant/claim',
+      data: {'telephone': telephone, 'pin': pin},
     );
     return response.data!['accessToken'] as String;
   }
@@ -51,22 +41,6 @@ class CommercantApi {
       data: {'telephone': telephone, 'pin': pin},
     );
     return response.data!['accessToken'] as String;
-  }
-
-  Future<void> forgotPinRequest(String telephone) async {
-    await _dio.post<void>('/commercant/forgot-pin/request', data: {'telephone': telephone});
-  }
-
-  Future<void> forgotPinConfirm({
-    required String telephone,
-    required String code,
-    required String newPin,
-  }) async {
-    await _dio.post<void>('/commercant/forgot-pin/confirm', data: {
-      'telephone': telephone,
-      'code': code,
-      'newPin': newPin,
-    });
   }
 
   Future<Commercant> me() async {

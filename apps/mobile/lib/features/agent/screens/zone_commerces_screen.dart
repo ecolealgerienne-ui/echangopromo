@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../data/api/api_exception.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 
@@ -59,10 +58,9 @@ class ZoneCommercesScreen extends ConsumerWidget {
                   title: Text(commercant.nom),
                   subtitle: Text('${commercant.adresse} · ${entry.visitStatusLabel}'),
                   trailing: commercant.accountState == 'cree_agent'
-                      ? IconButton(
-                          icon: const Icon(Icons.sms_outlined),
-                          tooltip: 'Initier la revendication',
-                          onPressed: () => _initiateClaim(context, ref, commercant.id),
+                      ? const Tooltip(
+                          message: "En attente d'activation par le commerçant",
+                          child: Icon(Icons.hourglass_empty),
                         )
                       : null,
                   onTap: () => context.push('/agent/promo/new/${commercant.id}'),
@@ -73,20 +71,5 @@ class ZoneCommercesScreen extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  Future<void> _initiateClaim(BuildContext context, WidgetRef ref, String commercantId) async {
-    try {
-      await ref.read(agentApiProvider).initiateClaim(commercantId);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('OTP envoyé au commerçant.')));
-      }
-    } catch (error) {
-      final message = extractApiErrorMessage(error, fallback: 'Action impossible.');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-      }
-    }
   }
 }

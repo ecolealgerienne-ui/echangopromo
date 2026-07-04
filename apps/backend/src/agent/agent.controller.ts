@@ -3,7 +3,6 @@ import {
   Body,
   Controller,
   Get,
-  Param,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -78,27 +77,5 @@ export class AgentController {
       targetId: commercant.id,
     });
     return commercant;
-  }
-
-  /** IDOR corrigé : un agent ne peut initier la revendication que pour un commerçant de sa zone. */
-  @Throttle(STRICT_THROTTLE)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('agent')
-  @Post('commercant/:id/initiate-claim')
-  async initiateClaim(
-    @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
-  ) {
-    const agent = await this.agentService.findByIdOrFail(user.sub);
-    await this.commercantService.assertZoneMatches(commercantId, agent.zoneId);
-    await this.commercantService.initiateClaim(commercantId);
-    await this.auditLogService.record({
-      actorType: AuditActorType.AGENT,
-      actorId: agent.id,
-      action: 'initiate_claim',
-      targetType: 'commercant',
-      targetId: commercantId,
-    });
-    return { ok: true };
   }
 }

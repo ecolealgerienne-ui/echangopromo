@@ -43,14 +43,14 @@ Modules NestJS calqués sur les entités des specs (§4) :
 
 - `commune` — référentiel administratif (wilaya → commune), lecture seule côté client.
 - `zone` — découpage opérationnel agent, distinct de `commune` (§5.2, ne pas fusionner).
-- `commercant` — fiche, cycle de vie du compte, niveau de vérification, auth téléphone+PIN+OTP.
+- `commercant` — fiche, cycle de vie du compte, niveau de vérification, auth téléphone+PIN (pas d'OTP — décision produit, §3.2 des specs).
 - `promo` — CRUD promo, plafond de 5 actives (§5.3), job d'expiration (§5.1).
 - `agent` — compte agent, auth email+mot de passe, rattachement à une zone.
 - `admin` — auth email+mot de passe, modération, gestion zones/agents.
 - `report` — signalements anti-fraude par device_id (§5.4).
 - `audit-log` — traçabilité des actions agent/admin.
 - `storage` — intégration S3 OVH, compression déléguée au client, cron de purge à 1 mois (§5.8).
-- `auth` — OTP SMS, sessions PIN, JWT.
+- `auth` — hash/compare PIN, JWT (pas d'OTP SMS, supprimé du projet).
 
 Tâches planifiées (`@nestjs/schedule`) : expiration des promos (J+fin de validité) et purge des images S3 à 1 mois — deux jobs indépendants (§5.1 et §5.8).
 
@@ -85,16 +85,14 @@ l'organisation du code, pas les règles métier encore en discussion.
 
 L'API REST (`apps/backend`) implémente l'ensemble des règles métier des
 specs V0 : cycle de vie commerçant (auto-inscription et création agent,
-OTP+PIN, PIN oublié), plafond et expiration des promos, anti-fraude
-signalements avec fenêtre d'ignore 30 jours, zones/transfert d'agent,
-modération et dashboard admin, upload S3 pré-signé, communes. Vérifié de
-bout en bout localement (build, lint, et parcours API réel via curl :
-inscription → revendication → publication → signalement → seuil →
-résolution admin → plafond de 5 promos).
+PIN sans OTP, PIN oublié réinitialisé par l'admin), plafond et expiration
+des promos, anti-fraude signalements avec fenêtre d'ignore 30 jours,
+zones/transfert d'agent, modération et dashboard admin, upload S3
+pré-signé, communes. Vérifié de bout en bout localement (build, lint, et
+parcours API réel via curl : inscription → publication → signalement →
+seuil → résolution admin → plafond de 5 promos).
 
 **Non couvert / à faire avant le pilote** :
-- Intégration SMS réelle (`AuthModule`'s `SmsService` est un stub qui
-  logge le code — voir point ouvert §7.5 des specs).
 - Migrations TypeORM versionnées (le schéma utilise `synchronize: true` en
   développement, à remplacer par des migrations avant la prod).
 - La liste des 36 communes de la wilaya de Djelfa dans

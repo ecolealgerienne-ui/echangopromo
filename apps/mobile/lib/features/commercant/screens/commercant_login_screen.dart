@@ -53,33 +53,80 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
     }
   }
 
-  /// L'agent initie la revendication depuis son propre appareil (envoi de
-  /// l'OTP) ; le commerçant doit ensuite, de son côté, saisir son numéro
-  /// pour atteindre l'écran de confirmation (specs §3.2/§3.3).
-  Future<void> _confirmClaim(BuildContext context) async {
-    final controller = TextEditingController();
-    final telephone = await showDialog<String>(
+  /// Active un compte créé par un agent : pas d'OTP, le commerçant définit
+  /// directement son PIN pour le numéro que l'agent a enregistré (specs §3.2/§3.3).
+  Future<void> _claim(BuildContext context) async {
+    final telephoneController = TextEditingController();
+    final pinController = TextEditingController();
+    final result = await showDialog<(String, String)>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Confirmer la revendication'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Téléphone', hintText: '+213...'),
-          keyboardType: TextInputType.phone,
+        title: const Text('Définir mon PIN'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: telephoneController,
+              decoration: const InputDecoration(labelText: 'Téléphone', hintText: '+213...'),
+              keyboardType: TextInputType.phone,
+            ),
+            TextField(
+              controller: pinController,
+              decoration: const InputDecoration(labelText: 'Nouveau code PIN'),
+              keyboardType: TextInputType.number,
+              obscureText: true,
+              maxLength: 6,
+            ),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
           FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Continuer'),
+            onPressed: () => Navigator.pop(
+              context,
+              (telephoneController.text.trim(), pinController.text.trim()),
+            ),
+            child: const Text('Valider'),
           ),
         ],
       ),
     );
 
-    if (telephone != null && telephone.isNotEmpty && context.mounted) {
-      context.push('/commercant/otp', extra: {'telephone': telephone, 'purpose': 'revendication'});
+    if (result == null || result.$1.isEmpty || result.$2.isEmpty || !context.mounted) return;
+
+    try {
+      final api = ref.read(commercantApiProvider);
+      final token = await api.claim(telephone: result.$1, pin: result.$2);
+      await ref.read(authControllerProvider.notifier).loginThenResolveId(
+            role: AppRole.commercant,
+            token: token,
+            fetchId: () async => (await api.me()).id,
+          );
+      if (mounted) context.go('/commercant/dashboard');
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(extractApiErrorMessage(error, fallback: 'Activation impossible.'))),
+        );
+      }
     }
+  }
+
+  void _showForgotPinInfo(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('PIN oublié'),
+        content: const Text(
+          "Il n'y a pas de réinitialisation automatique. Contactez l'administrateur : "
+          "il réinitialise votre PIN, puis vous en définissez un nouveau via "
+          "« Compte créé par un agent ? Définir mon PIN ».",
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Compris')),
+        ],
+      ),
+    );
   }
 
   @override
@@ -128,12 +175,12 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
                 child: const Text('Pas encore inscrit ? Créer un compte'),
               ),
               TextButton(
-                onPressed: () => context.push('/commercant/forgot-pin'),
+                onPressed: () => _showForgotPinInfo(context),
                 child: const Text('PIN oublié ?'),
               ),
               TextButton(
-                onPressed: () => _confirmClaim(context),
-                child: const Text('Compte créé par un agent ? Confirmer la revendication'),
+                onPressed: () => _claim(context),
+                child: const Text('Compte créé par un agent ? Définir mon PIN'),
               ),
             ],
           ),

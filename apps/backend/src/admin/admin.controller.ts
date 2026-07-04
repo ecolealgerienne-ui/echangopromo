@@ -197,6 +197,25 @@ export class AdminController {
     return { ok: true };
   }
 
+  /** PIN oublié : pas d'OTP, seul l'admin peut effacer le PIN (§3.2). */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('commercant/:id/reset-pin')
+  async resetPin(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('id') commercantId: string,
+  ) {
+    await this.commercantService.adminResetPin(commercantId);
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'commercant_reset_pin',
+      targetType: 'commercant',
+      targetId: commercantId,
+    });
+    return { ok: true };
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('commercant/:id/registre/rejeter')
