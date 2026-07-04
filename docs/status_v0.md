@@ -165,10 +165,7 @@ non traités par cette session de corrections :
 2. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
    développement mobile via émulateur Android + backend WSL continue —
    sinon documenter clairement la procédure pour chaque nouvelle session.
-3. Mobile : listes de chemins protégés en dur dans `router.dart` (3
-   techniques différentes cohabitent) au lieu d'associer le rôle à la
-   route.
-4. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
+3. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
    par `String` littérale, pas de miroir enum Dart.
 
 ---
@@ -450,3 +447,12 @@ non traités par cette session de corrections :
   ligne par ligne dans `AdminController`. Le controller ne fait plus que
   déléguer (`this.moderationService.masquer(user.sub, promoId)`), le
   reste (agents, registre, dashboard) est inchangé.
+- **2026-07-04 (rôle associé à la route dans router.dart)** — Les listes
+  `_commercantProtectedPaths`/`_agentProtectedPaths` + le cas spécial
+  `isAgentPromoForm` (3 techniques différentes de protection cohabitant)
+  sont remplacées par une seule liste `_appRoutes` de déclarations
+  `_AppRoute(path, builder, {requiredRole})` : le rôle requis est porté par
+  la déclaration de route elle-même, la liste des `GoRoute` et la
+  vérification dans `redirect` sont dérivées de cette même source. Un
+  écran ajouté sans `requiredRole` est public par construction. Aucun
+  changement de comportement (mêmes routes protégées qu'avant).
