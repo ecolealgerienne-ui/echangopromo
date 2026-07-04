@@ -3,12 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "echango Promo — module de la suite echango, mise en relation commerçants/clients autour des promotions (pilote Djelfa)",
-  "workspaces": [
-    "apps/backend"
-  ],
   "scripts": {
-    "backend:dev": "npm run start:dev --workspace=apps/backend",
-    "backend:build": "npm run build --workspace=apps/backend",
-    "backend:start": "npm run start:prod --workspace=apps/backend"
+    "backend:dev": "cd apps/backend && npm run start:dev",
+    "backend:build": "cd apps/backend && npm run build",
+    "backend:start": "cd apps/backend && npm run start:prod"
   }
 }
