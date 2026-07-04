@@ -408,3 +408,11 @@ non traités par cette session de corrections :
   - `CLAUDE.md` et la liste "Reste à faire" mis à jour (3 items retirés).
   - **Non exécuté dans mon environnement** : à valider avec `npm run
     build && npm run lint` côté backend, `flutter analyze` côté mobile.
+- **2026-07-04 (sélection commune client en 2 étapes)** — L'écran
+  `CommuneSelectionScreen` (bouton localisation côté client) affichait une
+  liste plate de communes ; il réutilise maintenant `CommuneCascadeField`
+  (wilaya → commune) déjà utilisé côté commerçant/agent. Ne change rien au
+  pilote (une seule wilaya) mais évite de reprendre l'écran à l'extension
+  multi-wilaya. Persistance locale (`SelectedCommuneStore` /
+  `selectedCommuneProvider`) inchangée : le choix reste préchargé à
+  l'ouverture de l'écran et réutilisé aux prochains lancements.
