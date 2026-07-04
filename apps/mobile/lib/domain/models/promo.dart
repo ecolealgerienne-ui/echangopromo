@@ -1,4 +1,6 @@
 import '../enums/categorie.dart';
+import '../enums/promo_lifecycle_status.dart';
+import '../enums/promo_moderation_status.dart';
 
 class Promo {
   const Promo({
@@ -25,8 +27,8 @@ class Promo {
         prixApres: double.parse(json['prixApres'].toString()),
         categorie: Categorie.fromValue(json['categorie'] as String),
         dateFin: json['dateFin'] != null ? DateTime.parse(json['dateFin'] as String) : null,
-        lifecycleStatus: json['lifecycleStatus'] as String,
-        moderationStatus: json['moderationStatus'] as String,
+        lifecycleStatus: PromoLifecycleStatus.fromValue(json['lifecycleStatus'] as String),
+        moderationStatus: PromoModerationStatus.fromValue(json['moderationStatus'] as String),
         photoUrl: json['photoUrl'] as String?,
         viewCount: json['viewCount'] as int?,
       );
@@ -41,29 +43,28 @@ class Promo {
 
   /// Null tant que la promo est en brouillon (pas encore publiée).
   final DateTime? dateFin;
-  final String lifecycleStatus;
-  final String moderationStatus;
+  final PromoLifecycleStatus lifecycleStatus;
+  final PromoModerationStatus moderationStatus;
   final String? photoUrl;
   final int? viewCount;
 
-  bool get isDraft => lifecycleStatus == 'brouillon';
-  bool get isPublished => lifecycleStatus == 'publiee';
-  bool get isStopped => lifecycleStatus == 'arretee';
+  bool get isDraft => lifecycleStatus == PromoLifecycleStatus.brouillon;
+  bool get isPublished => lifecycleStatus == PromoLifecycleStatus.publiee;
+  bool get isStopped => lifecycleStatus == PromoLifecycleStatus.arretee;
   bool get isExpired =>
-      lifecycleStatus == 'expiree' || (dateFin != null && dateFin!.isBefore(DateTime.now()));
+      lifecycleStatus == PromoLifecycleStatus.expiree ||
+      (dateFin != null && dateFin!.isBefore(DateTime.now()));
 
   String get lifecycleLabel {
     switch (lifecycleStatus) {
-      case 'brouillon':
+      case PromoLifecycleStatus.brouillon:
         return 'Brouillon';
-      case 'publiee':
+      case PromoLifecycleStatus.publiee:
         return isExpired ? 'Expirée' : 'Publiée';
-      case 'arretee':
+      case PromoLifecycleStatus.arretee:
         return 'Arrêtée';
-      case 'expiree':
+      case PromoLifecycleStatus.expiree:
         return 'Expirée';
-      default:
-        return lifecycleStatus;
     }
   }
 }

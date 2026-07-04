@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../domain/enums/commercant_account_state.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 
@@ -60,7 +61,7 @@ class ZoneCommercesScreen extends ConsumerWidget {
                     [if (commercant.adresse != null) commercant.adresse!, entry.visitStatusLabel]
                         .join(' · '),
                   ),
-                  trailing: commercant.accountState == 'cree_agent'
+                  trailing: commercant.accountState == CommercantAccountState.creeAgent
                       ? const Tooltip(
                           message: "En attente d'activation par le commerçant",
                           child: Icon(Icons.hourglass_empty),
