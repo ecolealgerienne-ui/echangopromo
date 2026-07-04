@@ -102,9 +102,9 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
             token: token,
             fetchId: () async => (await api.me()).id,
           );
-      if (mounted) context.go('/commercant/dashboard');
+      if (context.mounted) context.go('/commercant/dashboard');
     } catch (error) {
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(extractApiErrorMessage(error, fallback: 'Activation impossible.'))),
         );
