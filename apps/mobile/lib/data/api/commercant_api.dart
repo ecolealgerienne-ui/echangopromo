@@ -65,7 +65,7 @@ class CommercantApi {
   }) async {
     final response = await _dio.patch<Map<String, dynamic>>('/commercant/me', data: {
       if (nom != null) 'nom': nom,
-      if (adresse != null) 'adresse': adresse,
+      if (adresse != null && adresse.isNotEmpty) 'adresse': adresse,
       if (categorie != null) 'categorie': categorie.value,
       if (photoKey != null) 'photoKey': photoKey,
       if (latitude != null) 'latitude': latitude,
