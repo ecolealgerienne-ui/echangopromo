@@ -162,15 +162,13 @@ Voir `CLAUDE.md` pour les règles générales. Liste concrète des éléments
 non traités par cette session de corrections :
 
 1. `flutter test` réel (jamais exécuté ; `flutter analyze` fait et propre).
-2. Refactoring `AdminController` (extraire l'orchestration modération dans
-   un service dédié).
-3. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
+2. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
    développement mobile via émulateur Android + backend WSL continue —
    sinon documenter clairement la procédure pour chaque nouvelle session.
-4. Mobile : listes de chemins protégés en dur dans `router.dart` (3
+3. Mobile : listes de chemins protégés en dur dans `router.dart` (3
    techniques différentes cohabitent) au lieu d'associer le rôle à la
    route.
-5. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
+4. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
    par `String` littérale, pas de miroir enum Dart.
 
 ---
@@ -445,3 +443,10 @@ non traités par cette session de corrections :
   miroir exact de la regex backend) utilisé dans
   `commercant_register_screen.dart` et `commercant_login_screen.dart`
   (connexion, claim, PIN oublié → nouveau PIN).
+- **2026-07-04 (refactoring AdminController)** — Nouveau
+  `ModerationService` (`admin/moderation.service.ts`) qui regroupe la file
+  d'attente de modération et les 3 résolutions (`masquer`/`verifierOk`/
+  `avertir`), chacune avec son audit-log — logique auparavant dupliquée
+  ligne par ligne dans `AdminController`. Le controller ne fait plus que
+  déléguer (`this.moderationService.masquer(user.sub, promoId)`), le
+  reste (agents, registre, dashboard) est inchangé.
