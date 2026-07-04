@@ -344,3 +344,10 @@ non traités par cette session de corrections :
   `PATCH /commercant/me` (téléphone volontairement exclu — identifiant de
   connexion, pas un champ de profil) et d'un écran `EditProfileScreen`
   accessible depuis le dashboard commerçant.
+- **2026-07-04 (carte promo client)** — Suite à un retour visuel (espace
+  vide sous le prix sur la carte) : description limitée à 2 lignes
+  (`maxLines`/`ellipsis`, détail complet accessible au clic) et ajout du
+  nom du commerçant sur la carte (absent jusqu'ici de la liste, seulement
+  visible en détail). Backend : `findActiveForClient`/`findByIdOrFail`
+  chargent maintenant la relation `commercant` (`innerJoinAndSelect`/
+  `relations`), `toClientJson` expose `commercantNom`.

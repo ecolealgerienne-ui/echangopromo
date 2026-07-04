@@ -182,7 +182,7 @@ export class PromoService {
   async findActiveForClient(query: ListPromoQueryDto): Promise<Promo[]> {
     const qb = this.promos
       .createQueryBuilder('promo')
-      .innerJoin('promo.commercant', 'commercant')
+      .innerJoinAndSelect('promo.commercant', 'commercant')
       .where('promo.lifecycleStatus = :lifecycleStatus', {
         lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
       })
@@ -215,7 +215,10 @@ export class PromoService {
   }
 
   async findByIdOrFail(id: string): Promise<Promo> {
-    const promo = await this.promos.findOne({ where: { id } });
+    const promo = await this.promos.findOne({
+      where: { id },
+      relations: ['commercant'],
+    });
     if (!promo) {
       throw new NotFoundException('Promo introuvable');
     }

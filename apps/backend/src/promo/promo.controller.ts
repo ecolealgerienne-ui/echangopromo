@@ -45,6 +45,7 @@ export class PromoController {
     return {
       id: promo.id,
       commercantId: promo.commercantId,
+      commercantNom: promo.commercant?.nom ?? null,
       description: promo.description,
       prixAvant: promo.prixAvant,
       prixApres: promo.prixApres,
