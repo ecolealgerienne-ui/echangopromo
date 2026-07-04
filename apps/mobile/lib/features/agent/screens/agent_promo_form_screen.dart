@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
-import '../../shared/widgets/category_dropdown.dart';
-import '../../shared/widgets/photo_picker_field.dart';
+import '../../shared/widgets/error_text.dart';
+import '../../shared/widgets/loading_button.dart';
+import '../../shared/widgets/promo_form_fields.dart';
 import '../../../providers/core_providers.dart';
 
-const _descriptionMaxLength = 140;
 const _defaultDureeJours = 5;
 const _maxDureeJours = 7;
 
@@ -104,68 +104,23 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
           key: _formKey,
           child: ListView(
             children: [
-              PhotoPickerField(
-                file: _photo,
+              PromoFormFields(
+                photo: _photo,
+                onPhotoChanged: (file) => setState(() => _photo = file),
                 cameraOnly: true,
-                onChanged: (file) => setState(() => _photo = file),
+                descriptionController: _descriptionController,
+                prixAvantController: _prixAvantController,
+                prixApresController: _prixApresController,
+                prixApresValidator: _validatePrixApres,
+                categorie: _categorie,
+                onCategorieChanged: (v) => setState(() => _categorie = v),
+                dureeJours: _dureeJours,
+                maxDureeJours: _maxDureeJours,
+                onDureeJoursChanged: (v) => setState(() => _dureeJours = v ?? _defaultDureeJours),
               ),
+              ErrorText(_error),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(labelText: 'Description'),
-                maxLines: 3,
-                maxLength: _descriptionMaxLength,
-                validator: (v) => (v == null || v.isEmpty) ? 'Description requise' : null,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _prixAvantController,
-                      decoration: const InputDecoration(labelText: 'Prix avant (DA)'),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      validator: (v) => (double.tryParse(v ?? '') == null) ? 'Invalide' : null,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _prixApresController,
-                      decoration: const InputDecoration(labelText: 'Prix après (DA)'),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      validator: _validatePrixApres,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              CategoryDropdown(value: _categorie, onChanged: (v) => setState(() => _categorie = v)),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<int>(
-                initialValue: _dureeJours,
-                decoration: const InputDecoration(labelText: 'Durée de validité'),
-                items: [
-                  for (var jours = 1; jours <= _maxDureeJours; jours++)
-                    DropdownMenuItem(value: jours, child: Text('$jours jour${jours > 1 ? 's' : ''}')),
-                ],
-                onChanged: (v) => setState(() => _dureeJours = v ?? _defaultDureeJours),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(_error!, style: const TextStyle(color: Colors.red)),
-              ],
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _loading ? null : _submit,
-                child: _loading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Publier'),
-              ),
+              LoadingButton(loading: _loading, onPressed: _submit, label: 'Publier'),
             ],
           ),
         ),

@@ -7,11 +7,9 @@ import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/models/auth_session.dart';
 import '../../../providers/auth_provider.dart';
-import '../../client/providers/commune_providers.dart';
-import '../../shared/widgets/category_dropdown.dart';
-import '../../shared/widgets/commune_cascade_field.dart';
-import '../../shared/widgets/location_capture_field.dart';
-import '../../shared/widgets/photo_picker_field.dart';
+import '../../shared/widgets/commercant_fields_form.dart';
+import '../../shared/widgets/error_text.dart';
+import '../../shared/widgets/loading_button.dart';
 import '../../../providers/core_providers.dart';
 
 /// Auto-inscription (specs §3.2, voie 1) — sans passage agent requis, et sans
@@ -91,8 +89,6 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
 
   @override
   Widget build(BuildContext context) {
-    final communesAsync = ref.watch(communeListProvider);
-
     return Scaffold(
       appBar: AppBar(title: const Text('Créer un compte commerçant')),
       body: Padding(
@@ -101,45 +97,22 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
           key: _formKey,
           child: ListView(
             children: [
-              PhotoPickerField(file: _photo, onChanged: (file) => setState(() => _photo = file)),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _telephoneController,
-                decoration: const InputDecoration(labelText: 'Téléphone', hintText: '+213...'),
-                keyboardType: TextInputType.phone,
-                validator: (v) => (v == null || v.isEmpty) ? 'Téléphone requis' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _nomController,
-                decoration: const InputDecoration(labelText: 'Nom du commerce'),
-                validator: (v) => (v == null || v.isEmpty) ? 'Nom requis' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _adresseController,
-                decoration: const InputDecoration(labelText: 'Adresse (optionnel)'),
-              ),
-              const SizedBox(height: 12),
-              LocationCaptureField(
+              CommercantFieldsForm(
+                photo: _photo,
+                onPhotoChanged: (file) => setState(() => _photo = file),
+                telephoneController: _telephoneController,
+                nomController: _nomController,
+                adresseController: _adresseController,
                 latitude: _latitude,
                 longitude: _longitude,
-                onChanged: (lat, lng) => setState(() {
+                onLocationChanged: (lat, lng) => setState(() {
                   _latitude = lat;
                   _longitude = lng;
                 }),
-              ),
-              const SizedBox(height: 12),
-              CategoryDropdown(value: _categorie, onChanged: (v) => setState(() => _categorie = v)),
-              const SizedBox(height: 12),
-              communesAsync.when(
-                loading: () => const LinearProgressIndicator(),
-                error: (error, _) => Text('Erreur communes : $error'),
-                data: (communes) => CommuneCascadeField(
-                  communes: communes,
-                  selectedCommuneId: _communeId,
-                  onChanged: (v) => setState(() => _communeId = v),
-                ),
+                categorie: _categorie,
+                onCategorieChanged: (v) => setState(() => _categorie = v),
+                communeId: _communeId,
+                onCommuneChanged: (v) => setState(() => _communeId = v),
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -159,21 +132,9 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
                 validator: (v) =>
                     (v != _pinController.text) ? 'Les deux codes PIN ne correspondent pas' : null,
               ),
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(_error!, style: const TextStyle(color: Colors.red)),
-              ],
+              ErrorText(_error),
               const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _loading ? null : _submit,
-                child: _loading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text("S'inscrire"),
-              ),
+              LoadingButton(loading: _loading, onPressed: _submit, label: "S'inscrire"),
             ],
           ),
         ),

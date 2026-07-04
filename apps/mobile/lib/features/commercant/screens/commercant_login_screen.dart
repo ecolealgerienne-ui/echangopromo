@@ -5,6 +5,8 @@ import '../../../data/api/api_exception.dart';
 import '../../../domain/models/auth_session.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/widgets/error_text.dart';
+import '../../shared/widgets/loading_button.dart';
 
 /// Authentification téléphone + code PIN, sans SMS (specs §3.2).
 class CommercantLoginScreen extends ConsumerStatefulWidget {
@@ -173,21 +175,9 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
                 maxLength: 6,
                 validator: (v) => (v == null || v.length < 4) ? 'PIN invalide' : null,
               ),
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(_error!, style: const TextStyle(color: Colors.red)),
-              ],
+              ErrorText(_error),
               const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _loading ? null : _submit,
-                child: _loading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Se connecter'),
-              ),
+              LoadingButton(loading: _loading, onPressed: _submit, label: 'Se connecter'),
               const SizedBox(height: 8),
               TextButton(
                 onPressed: () => context.push('/commercant/register'),

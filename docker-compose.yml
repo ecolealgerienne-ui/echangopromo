@@ -10,12 +10,18 @@ services:
       - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U echango -d echango_promo']
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
     build: ./apps/backend
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     env_file:
       - ./apps/backend/.env
     ports:

@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../shared/widgets/category_dropdown.dart';
+import '../../shared/widgets/error_text.dart';
+import '../../shared/widgets/loading_button.dart';
 import '../../shared/widgets/location_capture_field.dart';
 import '../../shared/widgets/photo_picker_field.dart';
 import '../../../providers/core_providers.dart';
@@ -122,21 +124,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 ),
                 const SizedBox(height: 12),
                 CategoryDropdown(value: _categorie, onChanged: (v) => setState(() => _categorie = v)),
-                if (_error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(_error!, style: const TextStyle(color: Colors.red)),
-                ],
+                ErrorText(_error),
                 const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: _loading ? null : _submit,
-                  child: _loading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Enregistrer'),
-                ),
+                LoadingButton(loading: _loading, onPressed: _submit, label: 'Enregistrer'),
               ],
             ),
           ),

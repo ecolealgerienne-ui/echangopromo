@@ -4,8 +4,6 @@ import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { CommuneModule } from './commune/commune.module';
 import { ZoneModule } from './zone/zone.module';
 import { CommercantModule } from './commercant/commercant.module';
@@ -50,7 +48,6 @@ import { typeOrmBaseOptions } from './data-source';
     StorageModule,
     AuthModule,
   ],
-  controllers: [AppController],
-  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

@@ -174,18 +174,11 @@ non traités par cette session de corrections :
    trancher (pas un bug).
 7. CORS non configuré explicitement (sans impact tant qu'il n'y a pas de
    frontend web).
-8. Healthcheck Postgres absent de `docker-compose.yml`.
-9. Scaffolding NestJS jamais nettoyé (`app.controller.ts`/`.spec.ts`,
-   `test/app.e2e-spec.ts`) — seuls tests de tout le backend, sur du code
-   mort.
-10. Mobile : listes de chemins protégés en dur dans `router.dart` (3
-    techniques différentes cohabitent) au lieu d'associer le rôle à la
-    route.
-11. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
-    par `String` littérale, pas de miroir enum Dart.
-12. Mobile : duplication du bloc loading/erreur/bouton dans 8+ écrans, et
-    écrans quasi-jumeaux non factorisés (`CommercantRegisterScreen`/
-    `CreateCommercantScreen`, `PromoFormScreen`/`AgentPromoFormScreen`).
+8. Mobile : listes de chemins protégés en dur dans `router.dart` (3
+   techniques différentes cohabitent) au lieu d'associer le rôle à la
+   route.
+9. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
+   par `String` littérale, pas de miroir enum Dart.
 
 ---
 
@@ -389,3 +382,29 @@ non traités par cette session de corrections :
   visible en détail). Backend : `findActiveForClient`/`findByIdOrFail`
   chargent maintenant la relation `commercant` (`innerJoinAndSelect`/
   `relations`), `toClientJson` expose `commercantNom`.
+- **2026-07-04 (3 findings audit : healthcheck, scaffolding, duplication)**
+  — Traitement de 3 points de dette identifiés par l'audit :
+  - **Healthcheck Postgres** ajouté à `docker-compose.yml` (`pg_isready`),
+    `backend` attend `service_healthy` au lieu d'un simple `depends_on`
+    sans condition (pouvait démarrer avant que Postgres accepte les
+    connexions).
+  - **Scaffolding NestJS nettoyé** : suppression de `app.controller.ts`/
+    `.spec.ts`, `app.service.ts`, `test/app.e2e-spec.ts` ("Hello World"
+    jamais appelé par aucun client, seuls tests de tout le backend avant
+    ce nettoyage) — retirés d'`app.module.ts`.
+  - **Duplication mobile factorisée** :
+    - Widgets partagés `LoadingButton`/`ErrorText` (bloc
+      `_loading`/`_error` + `FilledButton`/`CircularProgressIndicator`
+      répété dans 6+ écrans) — appliqués à `agent_login_screen.dart`,
+      `commercant_login_screen.dart`, `commercant_register_screen.dart`,
+      `create_commercant_screen.dart`, `edit_profile_screen.dart`,
+      `promo_form_screen.dart`, `agent_promo_form_screen.dart`.
+    - Widget `PromoFormFields` (photo, description, prix, catégorie,
+      durée) factorisant `PromoFormScreen`/`AgentPromoFormScreen`.
+    - Widget `CommercantFieldsForm` (photo, téléphone, nom, adresse,
+      position GPS, catégorie, commune) factorisant
+      `CommercantRegisterScreen`/`CreateCommercantScreen` — le PIN
+      (uniquement à l'auto-inscription) reste géré par l'écran appelant.
+  - `CLAUDE.md` et la liste "Reste à faire" mis à jour (3 items retirés).
+  - **Non exécuté dans mon environnement** : à valider avec `npm run
+    build && npm run lint` côté backend, `flutter analyze` côté mobile.
