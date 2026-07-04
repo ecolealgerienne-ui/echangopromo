@@ -1,6 +1,10 @@
 /**
  * Bootstrap manuel du premier compte admin (specs §2 — pas d'auto-inscription
  * admin). Usage : npm run seed:admin -- admin@echango.com "mot-de-passe" "Nom"
+ * ou, sans argument, via les variables d'environnement ADMIN_EMAIL /
+ * ADMIN_PASSWORD / ADMIN_NOM (pratique pour reseeder après un reset de la
+ * base de dev sans retaper la commande) — les arguments CLI restent
+ * prioritaires s'ils sont fournis.
  */
 import 'dotenv/config';
 import * as bcrypt from 'bcryptjs';
@@ -8,9 +12,15 @@ import { DataSource } from 'typeorm';
 import { Admin } from '../src/admin/entities/admin.entity';
 
 async function main() {
-  const [email, password, nom] = process.argv.slice(2);
+  const [argEmail, argPassword, argNom] = process.argv.slice(2);
+  const email = argEmail || process.env.ADMIN_EMAIL;
+  const password = argPassword || process.env.ADMIN_PASSWORD;
+  const nom = argNom || process.env.ADMIN_NOM;
   if (!email || !password || !nom) {
-    console.error('Usage: npm run seed:admin -- <email> <password> <nom>');
+    console.error(
+      'Usage: npm run seed:admin -- <email> <password> <nom>\n' +
+        '(ou définir ADMIN_EMAIL / ADMIN_PASSWORD / ADMIN_NOM dans .env)',
+    );
     process.exit(1);
   }
 
