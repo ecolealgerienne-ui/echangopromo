@@ -92,7 +92,8 @@ création agent) :
   photo de promo prise par l'agent qui est caméra uniquement).
 - **Position GPS, optionnelle** — capturée via la localisation native de
   l'appareil (gratuit, aucune intégration Google Maps payante). L'adresse
-  texte reste saisie et affichée en complément, l'adressage informel étant
+  texte est elle aussi optionnelle (peut être saisie en complément de ou à
+  la place de la position GPS), l'adressage informel étant
   courant localement. Sert uniquement à afficher un bouton "Itinéraire"
   côté client (§3.1) ; aucune carte interactive en V0.
 - **Confirmation du PIN** : ressaisie obligatoire à la définition du PIN

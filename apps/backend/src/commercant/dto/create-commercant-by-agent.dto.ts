@@ -18,9 +18,10 @@ export class CreateCommercantByAgentDto {
   @MinLength(2)
   nom: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(2)
-  adresse: string;
+  adresse?: string;
 
   @IsEnum(Categorie)
   categorie: Categorie;

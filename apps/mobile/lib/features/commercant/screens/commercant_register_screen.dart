@@ -118,8 +118,7 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
               const SizedBox(height: 12),
               TextFormField(
                 controller: _adresseController,
-                decoration: const InputDecoration(labelText: 'Adresse'),
-                validator: (v) => (v == null || v.isEmpty) ? 'Adresse requise' : null,
+                decoration: const InputDecoration(labelText: 'Adresse (optionnel)'),
               ),
               const SizedBox(height: 12),
               LocationCaptureField(

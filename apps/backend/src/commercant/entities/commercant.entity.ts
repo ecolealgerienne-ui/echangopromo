@@ -53,8 +53,8 @@ export class Commercant {
   @Column()
   nom: string;
 
-  @Column()
-  adresse: string;
+  @Column({ nullable: true })
+  adresse: string | null;
 
   @Column({ type: 'enum', enum: Categorie })
   categorie: Categorie;

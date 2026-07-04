@@ -283,3 +283,12 @@ non traités par cette session de corrections :
     dans cet environnement).
   - **Non exécuté dans mon environnement** : à valider avec `npm run
     build && npm run lint` côté backend, `flutter analyze` côté mobile.
+- **2026-07-04 (MinIO local)** — Ajout d'un service MinIO au
+  `docker-compose.yml` (+ init bucket lecture publique) pour tester
+  l'upload S3 sans bucket OVH. Fix au passage : `forcePathStyle: true`
+  ajouté au `S3Client`, requis par MinIO et la plupart des S3 non-AWS
+  (dont OVH) — bug latent jamais détecté faute de test end-to-end réel.
+- **2026-07-04 (adresse optionnelle)** — `Commercant.adresse` rendue
+  nullable (backend : entité + 2 DTOs ; mobile : modèle + champ non requis
+  + affichage conditionnel côté client/agent), cohérent avec la
+  géolocalisation qui peut désormais suffire à situer un commerce.

@@ -56,7 +56,10 @@ class ZoneCommercesScreen extends ConsumerWidget {
                 final commercant = entry.commercant;
                 return ListTile(
                   title: Text(commercant.nom),
-                  subtitle: Text('${commercant.adresse} · ${entry.visitStatusLabel}'),
+                  subtitle: Text(
+                    [if (commercant.adresse != null) commercant.adresse!, entry.visitStatusLabel]
+                        .join(' · '),
+                  ),
                   trailing: commercant.accountState == 'cree_agent'
                       ? const Tooltip(
                           message: "En attente d'activation par le commerçant",

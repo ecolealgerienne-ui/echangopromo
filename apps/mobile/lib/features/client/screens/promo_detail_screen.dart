@@ -149,14 +149,16 @@ class _CommercantInfo extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              const Icon(Icons.place_outlined, size: 18, color: Colors.grey),
-              const SizedBox(width: 4),
-              Expanded(child: Text(commercant.adresse)),
-            ],
-          ),
+          if (commercant.adresse != null && commercant.adresse!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.place_outlined, size: 18, color: Colors.grey),
+                const SizedBox(width: 4),
+                Expanded(child: Text(commercant.adresse!)),
+              ],
+            ),
+          ],
           if (commercant.latitude != null && commercant.longitude != null) ...[
             const SizedBox(height: 8),
             OutlinedButton.icon(

@@ -10,7 +10,7 @@ class CommercantApi {
   Future<String> register({
     required String telephone,
     required String nom,
-    required String adresse,
+    String? adresse,
     required Categorie categorie,
     required String communeId,
     required String pin,
@@ -21,7 +21,7 @@ class CommercantApi {
     final response = await _dio.post<Map<String, dynamic>>('/commercant/register', data: {
       'telephone': telephone,
       'nom': nom,
-      'adresse': adresse,
+      if (adresse != null && adresse.isNotEmpty) 'adresse': adresse,
       'categorie': categorie.value,
       'communeId': communeId,
       'pin': pin,
