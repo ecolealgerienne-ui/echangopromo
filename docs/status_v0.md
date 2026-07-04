@@ -219,7 +219,10 @@ non traités par cette session de corrections :
   audit mis à jour dans le même commit. Risque assumé documenté : sans
   OTP, un numéro usurpé peut techniquement créer/activer un compte au nom
   d'un tiers — le signalement/modération reste la seule ligne de défense.
-  **Non exécuté dans mon environnement** (pas de `npm install`/build ici,
-  conformément aux instructions) : à valider avec `npm run build && npm
-  run lint` côté backend, et `flutter analyze` côté mobile, avant de
-  considérer ce changement testé.
+  **Testé côté utilisateur** : `flutter analyze` exécuté sur le clone
+  Windows après bascule de branche — 2 issues (`use_build_context_synchronously`
+  sur les deux usages de `context` dans `_claim`, faux positif du linter
+  sur un `mounted` nu après plusieurs `await`) corrigées en remplaçant par
+  `context.mounted` explicite (commit `a1395dd`). Reste à confirmer
+  `flutter analyze` propre après re-pull, et valider `npm run build && npm
+  run lint` côté backend.
