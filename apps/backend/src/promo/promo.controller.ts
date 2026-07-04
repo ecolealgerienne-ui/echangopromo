@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -49,10 +50,33 @@ export class PromoController {
       prixApres: promo.prixApres,
       categorie: promo.categorie,
       dateFin: promo.dateFin,
-      status: promo.status,
+      lifecycleStatus: promo.lifecycleStatus,
+      moderationStatus: promo.moderationStatus,
       photoUrl: this.storageService.buildPublicUrl(promo.photoKey),
       createdAt: promo.createdAt,
     };
+  }
+
+  /**
+   * Un commerçant ne peut agir que sur ses propres promos ; un agent, que
+   * sur celles des commerçants de sa zone (même pattern IDOR que le reste
+   * du module commerçant).
+   */
+  private async assertCanManage(
+    user: AuthTokenPayload,
+    promo: Promo,
+  ): Promise<void> {
+    if (user.role === 'commercant') {
+      if (promo.commercantId !== user.sub) {
+        throw new ForbiddenException("Cette promo n'appartient pas à ce commerçant");
+      }
+      return;
+    }
+    const agent = await this.agentService.findByIdOrFail(user.sub);
+    await this.commercantService.assertZoneMatches(
+      promo.commercantId,
+      agent.zoneId,
+    );
   }
 
   @Get()
@@ -106,9 +130,9 @@ export class PromoController {
     return this.promoService.create(commercantId, dto);
   }
 
-  /** IDOR corrigé : un agent ne peut modifier que les promos de commerçants de sa zone. */
+  /** Édition ouverte au commerçant propriétaire, en plus de l'agent (auparavant agent uniquement). */
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('agent')
+  @Roles('commercant', 'agent')
   @Patch(':id')
   async update(
     @CurrentUser() user: AuthTokenPayload,
@@ -116,11 +140,30 @@ export class PromoController {
     @Body() dto: UpdatePromoDto,
   ) {
     const promo = await this.promoService.findByIdOrFail(id);
-    const agent = await this.agentService.findByIdOrFail(user.sub);
-    await this.commercantService.assertZoneMatches(
-      promo.commercantId,
-      agent.zoneId,
-    );
+    await this.assertCanManage(user, promo);
     return this.promoService.update(id, dto);
+  }
+
+  /** Publie un brouillon, ou republie une promo arrêtée/expirée (specs §3.2). */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('commercant', 'agent')
+  @Post(':id/publish')
+  async publish(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('id') id: string,
+  ) {
+    const promo = await this.promoService.findByIdOrFail(id);
+    await this.assertCanManage(user, promo);
+    return this.promoService.publish(id);
+  }
+
+  /** Arrêt volontaire (ex. rupture de stock) — libère un slot sur le plafond de 5. */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('commercant', 'agent')
+  @Post(':id/stop')
+  async stop(@CurrentUser() user: AuthTokenPayload, @Param('id') id: string) {
+    const promo = await this.promoService.findByIdOrFail(id);
+    await this.assertCanManage(user, promo);
+    return this.promoService.stop(id);
   }
 }

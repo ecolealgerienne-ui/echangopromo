@@ -8,7 +8,11 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
-import { Promo, VISIBLE_PROMO_STATUSES } from '../promo/entities/promo.entity';
+import {
+  Promo,
+  PromoLifecycleStatus,
+  VISIBLE_MODERATION_STATUSES,
+} from '../promo/entities/promo.entity';
 import { CommercantView } from './entities/commercant-view.entity';
 import {
   Commercant,
@@ -200,8 +204,9 @@ export class CommercantService {
    *
    * Deux requêtes agrégées (pas une par commerçant) : le statut "à jour"
    * doit utiliser la même définition de "promo visible" que le client
-   * (`VISIBLE_PROMO_STATUSES`), pas seulement `ACTIVE` — sinon une promo
-   * `verifiee_ok` fait apparaître à tort le commerçant comme "à relancer".
+   * (`lifecycleStatus = publiee` + `VISIBLE_MODERATION_STATUSES`), pas
+   * seulement `publiee` — sinon une promo `verifiee_ok` fait apparaître à
+   * tort le commerçant comme "à relancer".
    */
   async listByZoneWithVisitStatus(
     zoneId: string,
@@ -224,8 +229,11 @@ export class CommercantService {
       .select('promo.commercantId', 'commercantId')
       .addSelect('COUNT(*)', 'count')
       .where('promo.commercantId IN (:...commercantIds)', { commercantIds })
-      .andWhere('promo.status IN (:...visibleStatuses)', {
-        visibleStatuses: VISIBLE_PROMO_STATUSES,
+      .andWhere('promo.lifecycleStatus = :lifecycleStatus', {
+        lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
+      })
+      .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
+        moderationStatuses: VISIBLE_MODERATION_STATUSES,
       })
       .groupBy('promo.commercantId')
       .getRawMany<{ commercantId: string; count: string }>();

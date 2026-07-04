@@ -35,10 +35,11 @@ class PromoApi {
     required Categorie categorie,
     required String photoKey,
     DateTime? dateFin,
+    bool asDraft = false,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/promo',
-      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKey, dateFin),
+      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKey, dateFin, asDraft),
     );
     return Promo.fromJson(response.data!);
   }
@@ -51,10 +52,11 @@ class PromoApi {
     required Categorie categorie,
     required String photoKey,
     DateTime? dateFin,
+    bool asDraft = false,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/promo/agent/$commercantId',
-      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKey, dateFin),
+      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKey, dateFin, asDraft),
     );
     return Promo.fromJson(response.data!);
   }
@@ -81,6 +83,17 @@ class PromoApi {
     });
   }
 
+  /// Publie un brouillon, ou republie une promo arrêtée/expirée (nouvelle
+  /// `dateFin` recalculée côté backend).
+  Future<void> publish(String id) async {
+    await _dio.post<void>('/promo/$id/publish');
+  }
+
+  /// Arrêt volontaire (ex. rupture de stock) — libère un slot sur le plafond de 5.
+  Future<void> stop(String id) async {
+    await _dio.post<void>('/promo/$id/stop');
+  }
+
   Map<String, dynamic> _buildPayload(
     String description,
     double prixAvant,
@@ -88,6 +101,7 @@ class PromoApi {
     Categorie categorie,
     String photoKey,
     DateTime? dateFin,
+    bool asDraft,
   ) =>
       {
         'description': description,
@@ -96,5 +110,6 @@ class PromoApi {
         'categorie': categorie.value,
         'photoKey': photoKey,
         if (dateFin != null) 'dateFin': dateFin.toIso8601String(),
+        if (asDraft) 'asDraft': asDraft,
       };
 }

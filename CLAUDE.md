@@ -207,9 +207,6 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
 - Migrations TypeORM absentes (`synchronize: true` en dev uniquement,
   mais le chemin de déploiement Docker actuel est fragile selon la config
   `.env` — voir `docs/AUDIT_V0.md` §2).
-- Aucun commerçant auto-inscrit ne peut corriger une promo déjà publiée
-  (seul l'agent a `PATCH /promo/:id`) — tension avec l'autonomie visée
-  pour ce profil par les specs §3.2.
 - Pas de pagination sur les listes (`/promo`, `/admin/agent`, `/zone`,
   `/commune`).
 

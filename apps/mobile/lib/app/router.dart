@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../domain/enums/categorie.dart';
 import '../domain/models/auth_session.dart';
+import '../domain/models/promo.dart';
 import '../features/agent/screens/agent_login_screen.dart';
 import '../features/agent/screens/agent_promo_form_screen.dart';
 import '../features/agent/screens/create_commercant_screen.dart';
@@ -77,7 +78,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/commercant/promos', builder: (context, state) => const MyPromosScreen()),
       GoRoute(
         path: '/commercant/promos/new',
-        builder: (context, state) => const PromoFormScreen(),
+        builder: (context, state) => PromoFormScreen(existingPromo: state.extra as Promo?),
       ),
 
       // Agent

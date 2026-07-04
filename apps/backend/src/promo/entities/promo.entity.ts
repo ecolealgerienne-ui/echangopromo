@@ -13,30 +13,45 @@ import { Categorie } from '../../common/enums/categorie.enum';
 import { Commercant } from '../../commercant/entities/commercant.entity';
 
 /**
- * Statuts (specs §4). `active` et `verifiee_ok` sont les deux statuts
- * visibles côté client — `verifiee_ok` reste affichée après qu'un
- * signalement a été jugé infondé par l'admin (§5.4).
+ * Cycle de vie éditorial (specs §3.2, workflow brouillon/publication/arrêt) —
+ * volontairement séparé de `PromoModerationStatus` (CLAUDE.md #8 : ne jamais
+ * combiner cycle de vie et modération dans un seul enum, leçon tirée d'un
+ * bug réel de comptage avant ce projet). Le commerçant peut éditer une promo
+ * quel que soit son statut ici.
  */
-export enum PromoStatus {
-  ACTIVE = 'active',
+export enum PromoLifecycleStatus {
+  BROUILLON = 'brouillon',
+  PUBLIEE = 'publiee',
+  ARRETEE = 'arretee',
   EXPIREE = 'expiree',
+}
+
+/**
+ * Statut de modération (specs §5.4), indépendant du cycle de vie ci-dessus.
+ * `normale` et `verifiee_ok` sont les deux valeurs qui n'empêchent pas la
+ * visibilité client — `verifiee_ok` reste affichée après qu'un signalement
+ * a été jugé infondé par l'admin, avec fenêtre d'ignore de 30 jours.
+ */
+export enum PromoModerationStatus {
+  NORMALE = 'normale',
   SIGNALEE = 'signalee',
   MASQUEE = 'masquee',
   VERIFIEE_OK = 'verifiee_ok',
 }
 
 /**
- * Seule source de vérité pour "qu'est-ce qu'une promo visible" — importée
- * partout où cette règle est nécessaire (client, statut de zone agent,
- * dashboard admin) pour éviter qu'elle ne diverge d'un service à l'autre.
+ * Seule source de vérité pour "qu'est-ce qu'une promo visible" (avec
+ * `lifecycleStatus = PUBLIEE` et `dateFin > NOW()` en plus) — importée
+ * partout où cette règle est nécessaire pour éviter qu'elle ne diverge d'un
+ * service à l'autre.
  */
-export const VISIBLE_PROMO_STATUSES = [
-  PromoStatus.ACTIVE,
-  PromoStatus.VERIFIEE_OK,
+export const VISIBLE_MODERATION_STATUSES = [
+  PromoModerationStatus.NORMALE,
+  PromoModerationStatus.VERIFIEE_OK,
 ];
 
 @Entity()
-@Index(['status', 'dateFin'])
+@Index(['lifecycleStatus', 'dateFin'])
 export class Promo {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -71,11 +86,23 @@ export class Promo {
   @Column()
   photoKey: string;
 
-  @Column({ type: 'timestamptz' })
-  dateFin: Date;
+  /** Null tant que la promo est en `brouillon` — fixée à la publication. */
+  @Column({ type: 'timestamptz', nullable: true })
+  dateFin: Date | null;
 
-  @Column({ type: 'enum', enum: PromoStatus, default: PromoStatus.ACTIVE })
-  status: PromoStatus;
+  @Column({
+    type: 'enum',
+    enum: PromoLifecycleStatus,
+    default: PromoLifecycleStatus.BROUILLON,
+  })
+  lifecycleStatus: PromoLifecycleStatus;
+
+  @Column({
+    type: 'enum',
+    enum: PromoModerationStatus,
+    default: PromoModerationStatus.NORMALE,
+  })
+  moderationStatus: PromoModerationStatus;
 
   /**
    * Horodatage de la dernière validation admin en `verifiee_ok`. Sert de
@@ -89,7 +116,7 @@ export class Promo {
   /**
    * Horodatage de suppression du fichier S3 (rétention 1 mois, specs §5.8).
    * Les métadonnées de la promo restent en base indéfiniment — seul le
-   * fichier image est purgé, indépendamment du statut fonctionnel.
+   * fichier image est purgé, indépendamment du cycle de vie.
    */
   @Column({ type: 'timestamptz', nullable: true })
   photoPurgedAt: Date | null;

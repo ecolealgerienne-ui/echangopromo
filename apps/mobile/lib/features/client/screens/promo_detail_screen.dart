@@ -75,7 +75,8 @@ class PromoDetailScreen extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text('Valable jusqu\'au ${dateFormat.format(promo.dateFin)}'),
+                    if (promo.dateFin != null)
+                      Text('Valable jusqu\'au ${dateFormat.format(promo.dateFin!)}'),
                     const Divider(height: 32),
                     _CommercantInfo(commercantId: promo.commercantId),
                     const SizedBox(height: 24),

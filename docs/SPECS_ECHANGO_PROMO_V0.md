@@ -100,11 +100,34 @@ création agent) :
   (inscription ou activation d'un compte créé par un agent), pour éviter
   qu'une faute de frappe bloque le commerçant à la première connexion.
 
-**Gestion des promos** :
-- Jusqu'à **5 promos actives simultanément** par commerçant.
-- **Date de fin obligatoire** sur chaque promo (pas de promo "permanente").
-- Valeur par défaut : **5 jours**.
-- À expiration : la promo passe en statut `expirée` (déclenché par tâche planifiée, voir §5.1) et **disparaît de la liste client**. Republication complète requise pour réactiver — pas de simple prolongation de date. Objectif : forcer un geste actif régulier du commerçant, garantir la fraîcheur du contenu.
+**Gestion des promos — cycle de vie éditorial** (indépendant du statut de
+modération, voir §5.4 — CLAUDE.md règle 8) :
+
+```
+brouillon → publiée → arrêtée
+              ↓
+           expirée (auto, à dateFin)
+```
+
+- **Édition toujours possible**, quel que soit le statut (description,
+  prix, catégorie, photo) — c'est la publication/republication qui
+  constitue le "geste actif" ci-dessous, pas une restriction sur l'édition.
+- **Brouillon** : la promo est créée et remplie mais pas visible côté
+  client, et ne compte pas dans le plafond de 5.
+- **Publication** (depuis brouillon, arrêtée ou expirée) : fixe une
+  **date de fin obligatoire**, toujours recalculée à neuf (jamais une
+  simple prolongation) — entre **1 et 7 jours**, 5 jours par défaut.
+  Objectif inchangé : forcer un geste actif régulier du commerçant,
+  garantir la fraîcheur du contenu. Compte dans le plafond de 5 actives.
+- **Arrêt** : action volontaire du commerçant (ex. rupture de stock),
+  disparaît immédiatement de la liste client et libère un slot sur le
+  plafond de 5 — republication possible à tout moment (nouveau cycle
+  complet, pas une reprise).
+- **Expiration** : automatique à `dateFin` (tâche planifiée, §5.1),
+  **disparaît de la liste client**. Republication complète requise pour
+  réactiver, comme l'arrêt volontaire.
+- Jusqu'à **5 promos "publiée" simultanément** par commerçant (brouillons
+  et promos arrêtées/expirées illimités, hors plafond).
 
 **Dashboard commerçant (statistiques)** — inclus dès la V0 :
 - Nombre de vues sur la fiche commerçant.
@@ -164,7 +187,7 @@ Tâche planifiée (cron, ex. quotidienne) qui bascule automatiquement les promos
 Ce sont deux entités séparées dans le modèle de données.
 
 ### 5.3 Plafond de promos actives
-5 promos actives maximum par commerçant, simultanément. Tri par défaut à définir (proposition : date d'expiration la plus proche en premier) — **point encore ouvert**, à trancher lors du modèle de données/UX.
+5 promos **publiées** maximum par commerçant, simultanément (voir §3.2 pour le cycle de vie brouillon/publiée/arrêtée). Tri par défaut à définir (proposition : date d'expiration la plus proche en premier) — **point encore ouvert**, à trancher lors du modèle de données/UX.
 
 ### 5.4 Anti-fraude sur les signalements
 - Identifiant device anonyme généré à l'installation côté client (pas de compte).
@@ -225,7 +248,7 @@ Ces points ont été identifiés en cours de discussion mais **pas encore défin
 3. **Choix technique (stack)** : non tranché dans cette discussion. Le porteur de projet utilise habituellement NestJS (backend) + Flutter (mobile) sur ses autres projets — à confirmer explicitement comme choix pour ce module ou à rediscuter.
 4. **CGU / consentement** (photo, données commerçant) : non traité, explicitement noté comme hors périmètre pour un pilote à échelle réduite (~30 commerces, connus personnellement), mais **à traiter avant toute ouverture publique plus large**.
 5. ~~**Coût SMS OTP**~~ — **Tranché** : suppression complète de l'OTP SMS (jugé inutile et coûteux pour ce marché). Le commerçant définit son PIN sans preuve de possession du numéro ; le signalement/modération devient la seule ligne de défense anti-fraude (voir §3.2 et le point 7 ci-dessous).
-6. **Ajustabilité de la date de fin par défaut** (5 jours) — non précisé si le commerçant/agent peut choisir une autre durée à la création, ou si 5 jours est fixe en V0.
+6. ~~**Ajustabilité de la date de fin par défaut**~~ — **Tranché** : sélecteur de durée 1 à 7 jours à la publication (5 jours par défaut), validé côté serveur (`PROMO_MAX_DURATION_DAYS`). Voir §3.2.
 7. **Impact de l'auto-inscription sur l'anti-fraude** : avec l'auto-inscription ouverte dès la V0, un compte peut publier sans jamais être vérifié physiquement (niveau `auto_inscrit`). Le seuil de signalement actuel (3 devices) a été calibré en pensant à un contenu majoritairement `confirmé_agent`. À réévaluer une fois le pilote lancé : le seuil est-il toujours pertinent avec une proportion significative de comptes `auto_inscrit` non vérifiés ?
 
 ---

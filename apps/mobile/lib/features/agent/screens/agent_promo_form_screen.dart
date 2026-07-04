@@ -9,6 +9,8 @@ import '../../shared/widgets/photo_picker_field.dart';
 import '../../../providers/core_providers.dart';
 
 const _descriptionMaxLength = 140;
+const _defaultDureeJours = 5;
+const _maxDureeJours = 7;
 
 /// Création/mise à jour d'une promo par l'agent. Photo obligatoirement
 /// prise dans l'app (pas de galerie), avec horodatage côté serveur — preuve
@@ -32,6 +34,7 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
   final _prixAvantController = TextEditingController();
   final _prixApresController = TextEditingController();
   Categorie? _categorie;
+  int _dureeJours = _defaultDureeJours;
   File? _photo;
   bool _loading = false;
   String? _error;
@@ -81,6 +84,7 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
             prixApres: double.parse(_prixApresController.text.trim()),
             categorie: _categorie!,
             photoKey: photoKey,
+            dateFin: DateTime.now().add(Duration(days: _dureeJours)),
           );
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
@@ -137,6 +141,16 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
               ),
               const SizedBox(height: 12),
               CategoryDropdown(value: _categorie, onChanged: (v) => setState(() => _categorie = v)),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                initialValue: _dureeJours,
+                decoration: const InputDecoration(labelText: 'Durée de validité'),
+                items: [
+                  for (var jours = 1; jours <= _maxDureeJours; jours++)
+                    DropdownMenuItem(value: jours, child: Text('$jours jour${jours > 1 ? 's' : ''}')),
+                ],
+                onChanged: (v) => setState(() => _dureeJours = v ?? _defaultDureeJours),
+              ),
               if (_error != null) ...[
                 const SizedBox(height: 8),
                 Text(_error!, style: const TextStyle(color: Colors.red)),

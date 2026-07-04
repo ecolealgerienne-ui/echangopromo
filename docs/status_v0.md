@@ -292,3 +292,42 @@ non traités par cette session de corrections :
   nullable (backend : entité + 2 DTOs ; mobile : modèle + champ non requis
   + affichage conditionnel côté client/agent), cohérent avec la
   géolocalisation qui peut désormais suffire à situer un commerce.
+- **2026-07-04 (workflow promo brouillon/publication/arrêt)** — Suite au
+  constat qu'un commerçant ne pouvait pas modifier une promo déjà créée
+  (`PATCH /promo/:id` était réservé à l'agent — dette connue de
+  `CLAUDE.md`, maintenant levée) :
+  - **`Promo.status` (enum unique) éclaté en deux champs indépendants**
+    `lifecycleStatus` (`brouillon`/`publiee`/`arretee`/`expiree`) et
+    `moderationStatus` (`normale`/`signalee`/`masquee`/`verifiee_ok`) —
+    corrige enfin la règle CLAUDE.md #8 ("ne jamais combiner cycle de vie
+    et modération dans un seul enum"), profitant de l'ajout des nouveaux
+    états demandé par l'utilisateur pour le faire proprement plutôt que
+    d'empiler `brouillon`/`arretee` dans l'ancien enum.
+  - Nouveaux endpoints `POST /promo/:id/publish` (brouillon/arrêtée/
+    expirée → publiée, `dateFin` toujours recalculée à neuf — c'est ce
+    geste explicite qui constitue la "republication complète" des specs,
+    pas une simple prolongation) et `POST /promo/:id/stop` (arrêt
+    volontaire, libère un slot sur le plafond de 5 immédiatement).
+  - `PATCH /promo/:id` (édition de contenu) ouvert au commerçant
+    propriétaire en plus de l'agent — vérification d'appartenance
+    (`assertCanManage`), même pattern que les corrections IDOR
+    précédentes. Édition possible quel que soit le statut.
+  - Plafond de 5 compté sur `lifecycleStatus = publiee` uniquement
+    (brouillons et promos arrêtées/expirées ne comptent pas) — verrou
+    consultatif Postgres conservé (create + publish).
+  - Durée de validité : sélecteur 1-7 jours ajouté au formulaire mobile
+    (`PROMO_MAX_DURATION_DAYS=7`, validée côté serveur — auparavant
+    invisible et sans borne max, un point ouvert des specs §7).
+  - Mobile : `promo_form_screen.dart` réutilisé pour créer (brouillon ou
+    publication) et éditer une promo existante ; `my_promos_screen.dart`
+    a maintenant des actions Modifier/Publier/Arrêter par promo.
+  - Specs (`docs/SPECS_ECHANGO_PROMO_V0.md` §3.2/§5.3/§7) et `CLAUDE.md`
+    (dette levée) mis à jour dans le même commit.
+  - **Non exécuté dans mon environnement** : à valider avec `npm run
+    build && npm run lint` côté backend, `flutter analyze` côté mobile —
+    changement de schéma (colonne `status` → `lifecycleStatus` +
+    `moderationStatus`, `dateFin` nullable) : `synchronize: true` en dev
+    devrait s'en charger, mais si des promos existent déjà en base avec
+    l'ancien enum, le même risque qu'avec l'enum `CommercantAccountState`
+    (valeurs absentes du nouveau type) peut se reproduire — repartir d'une
+    base vide si erreur `invalid input value for enum` au démarrage.

@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsDate,
   IsEnum,
   IsNumber,
@@ -34,12 +35,17 @@ export class CreatePromoDto {
   photoKey: string;
 
   /**
-   * Optionnel — si omis, calculée à `+PROMO_DEFAULT_DURATION_DAYS` jours
-   * (5 par défaut). Point ouvert §7.6 des specs : ajustabilité non tranchée,
-   * on l'autorise par prudence plutôt que de figer 5 jours en dur.
+   * Ignoré si `asDraft` est vrai. Optionnel — si omis, calculée à
+   * `+PROMO_DEFAULT_DURATION_DAYS` jours (5 par défaut), plafonnée à
+   * `PROMO_MAX_DURATION_DAYS` (7 par défaut).
    */
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   dateFin?: Date;
+
+  /** Enregistre en brouillon (non publiée, non comptée dans le plafond de 5) au lieu de publier immédiatement. */
+  @IsOptional()
+  @IsBoolean()
+  asDraft?: boolean;
 }

@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, LessThan, Not, Repository } from 'typeorm';
+import { EntityManager, IsNull, LessThan, Not, Repository } from 'typeorm';
 import { CommercantService } from '../commercant/commercant.service';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
@@ -16,8 +16,9 @@ import { UpdatePromoDto } from './dto/update-promo.dto';
 import { PromoView } from './entities/promo-view.entity';
 import {
   Promo,
-  PromoStatus,
-  VISIBLE_PROMO_STATUSES,
+  PromoLifecycleStatus,
+  PromoModerationStatus,
+  VISIBLE_MODERATION_STATUSES,
 } from './entities/promo.entity';
 
 const MAX_PROMOS_ACTIVES = 5;
@@ -38,58 +39,138 @@ export class PromoService {
     return this.configService.get<number>('PROMO_DEFAULT_DURATION_DAYS', 5);
   }
 
+  private maxDureeJours(): number {
+    return this.configService.get<number>('PROMO_MAX_DURATION_DAYS', 7);
+  }
+
   private imageRetentionDays(): number {
     return this.configService.get<number>('IMAGE_RETENTION_DAYS', 30);
   }
 
-  /**
-   * Plafond de 5 promos actives (specs §5.3). Aucune autre condition sur le
-   * cycle de vie du compte : les niveaux `auto_inscrit` et `confirme_agent`
-   * suffisent tous deux pour publier (specs §3.2), y compris avant
-   * revendication — c'est ce qui permet à l'agent de créer la première
-   * promo pendant sa visite, avant que le commerçant n'ait défini son PIN.
-   *
-   * Le compte des promos actives puis l'insertion sont protégés par un
-   * verrou consultatif Postgres scopé au commerçant (`pg_advisory_xact_lock`)
-   * — sans ça, deux créations quasi simultanées peuvent chacune lire un
-   * compte de 4 et passer, aboutissant à 6 promos actives.
-   */
-  async create(commercantId: string, dto: CreatePromoDto): Promise<Promo> {
-    await this.commercantService.findByIdOrFail(commercantId);
-    this.assertPriceOrder(dto.prixAvant, dto.prixApres);
-
+  /** Calcule/valide la date de fin — jamais plus loin que `PROMO_MAX_DURATION_DAYS`. */
+  private resolveDateFin(requested?: Date): Date {
+    const now = Date.now();
+    const max = new Date(now + this.maxDureeJours() * 24 * 60 * 60 * 1000);
     const dateFin =
-      dto.dateFin ??
-      new Date(Date.now() + this.defaultDureeJours() * 24 * 60 * 60 * 1000);
+      requested ?? new Date(now + this.defaultDureeJours() * 24 * 60 * 60 * 1000);
 
+    if (dateFin.getTime() <= now) {
+      throw new BadRequestException('La date de fin doit être dans le futur');
+    }
+    if (dateFin.getTime() > max.getTime()) {
+      throw new BadRequestException(
+        `La date de fin ne peut pas dépasser ${this.maxDureeJours()} jours`,
+      );
+    }
+    return dateFin;
+  }
+
+  /**
+   * Plafond de 5 promos actives (specs §5.3), compté sur `lifecycleStatus =
+   * publiee` uniquement — un brouillon ou une promo arrêtée ne compte pas.
+   * Appelé sous verrou consultatif Postgres scopé au commerçant (voir
+   * `create`/`publish`) — sans ça, deux publications quasi simultanées
+   * peuvent chacune lire un compte de 4 et passer, aboutissant à 6 actives.
+   */
+  private async assertUnderCap(
+    manager: EntityManager,
+    commercantId: string,
+  ): Promise<void> {
+    const activeCount = await manager.count(Promo, {
+      where: { commercantId, lifecycleStatus: PromoLifecycleStatus.PUBLIEE },
+    });
+    if (activeCount >= MAX_PROMOS_ACTIVES) {
+      throw new BadRequestException(
+        `Plafond de ${MAX_PROMOS_ACTIVES} promos actives atteint pour ce commerçant`,
+      );
+    }
+  }
+
+  private async withCommercantLock<T>(
+    commercantId: string,
+    fn: (manager: EntityManager) => Promise<T>,
+  ): Promise<T> {
     return this.promos.manager.transaction(async (manager) => {
       await manager.query(
         'SELECT pg_advisory_xact_lock(hashtext($1)::bigint)',
         [commercantId],
       );
+      return fn(manager);
+    });
+  }
 
-      const activeCount = await manager.count(Promo, {
-        where: { commercantId, status: PromoStatus.ACTIVE },
-      });
-      if (activeCount >= MAX_PROMOS_ACTIVES) {
-        throw new BadRequestException(
-          `Plafond de ${MAX_PROMOS_ACTIVES} promos actives atteint pour ce commerçant`,
-        );
-      }
+  /**
+   * Création (specs §3.2/§5.3) — `asDraft: true` enregistre en brouillon
+   * (non visible, non compté dans le plafond, `dateFin` non fixée) ;
+   * sinon publie immédiatement (comportement historique, comportement par
+   * défaut pour ne rien casser côté agent).
+   */
+  async create(commercantId: string, dto: CreatePromoDto): Promise<Promo> {
+    await this.commercantService.findByIdOrFail(commercantId);
+    this.assertPriceOrder(dto.prixAvant, dto.prixApres);
 
+    const base = {
+      commercantId,
+      description: dto.description,
+      prixAvant: dto.prixAvant.toFixed(2),
+      prixApres: dto.prixApres.toFixed(2),
+      categorie: dto.categorie,
+      photoKey: dto.photoKey,
+    };
+
+    if (dto.asDraft) {
+      return this.promos.save(
+        this.promos.create({
+          ...base,
+          dateFin: null,
+          lifecycleStatus: PromoLifecycleStatus.BROUILLON,
+        }),
+      );
+    }
+
+    const dateFin = this.resolveDateFin(dto.dateFin);
+    return this.withCommercantLock(commercantId, async (manager) => {
+      await this.assertUnderCap(manager, commercantId);
       return manager.save(
         manager.create(Promo, {
-          commercantId,
-          description: dto.description,
-          prixAvant: dto.prixAvant.toFixed(2),
-          prixApres: dto.prixApres.toFixed(2),
-          categorie: dto.categorie,
-          photoKey: dto.photoKey,
+          ...base,
           dateFin,
-          status: PromoStatus.ACTIVE,
+          lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
         }),
       );
     });
+  }
+
+  /**
+   * Publie un brouillon, ou republie une promo arrêtée/expirée — toujours
+   * avec une `dateFin` recalculée à neuf (jamais une simple prolongation :
+   * specs §3.2, "republication complète requise pour réactiver"). C'est ce
+   * geste explicite qui constitue la republication complète, pas une
+   * resaisie du formulaire.
+   */
+  async publish(promoId: string): Promise<Promo> {
+    const promo = await this.findByIdOrFail(promoId);
+    if (promo.lifecycleStatus === PromoLifecycleStatus.PUBLIEE) {
+      throw new BadRequestException('Cette promo est déjà publiée');
+    }
+
+    const dateFin = this.resolveDateFin();
+    return this.withCommercantLock(promo.commercantId, async (manager) => {
+      await this.assertUnderCap(manager, promo.commercantId);
+      promo.lifecycleStatus = PromoLifecycleStatus.PUBLIEE;
+      promo.dateFin = dateFin;
+      return manager.save(promo);
+    });
+  }
+
+  /** Arrêt volontaire par le commerçant (ex. rupture de stock) — libère un slot immédiatement. */
+  async stop(promoId: string): Promise<Promo> {
+    const promo = await this.findByIdOrFail(promoId);
+    if (promo.lifecycleStatus !== PromoLifecycleStatus.PUBLIEE) {
+      throw new BadRequestException('Seule une promo publiée peut être arrêtée');
+    }
+    promo.lifecycleStatus = PromoLifecycleStatus.ARRETEE;
+    return this.promos.save(promo);
   }
 
   /**
@@ -102,8 +183,11 @@ export class PromoService {
     const qb = this.promos
       .createQueryBuilder('promo')
       .innerJoin('promo.commercant', 'commercant')
-      .where('promo.status IN (:...statuses)', {
-        statuses: VISIBLE_PROMO_STATUSES,
+      .where('promo.lifecycleStatus = :lifecycleStatus', {
+        lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
+      })
+      .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
+        moderationStatuses: VISIBLE_MODERATION_STATUSES,
       })
       .andWhere('promo.dateFin > NOW()');
 
@@ -180,10 +264,10 @@ export class PromoService {
     const result = await this.promos
       .createQueryBuilder()
       .update(Promo)
-      .set({ status: PromoStatus.EXPIREE })
+      .set({ lifecycleStatus: PromoLifecycleStatus.EXPIREE })
       .where('dateFin < NOW()')
-      .andWhere('status NOT IN (:...terminal)', {
-        terminal: [PromoStatus.EXPIREE, PromoStatus.MASQUEE],
+      .andWhere('lifecycleStatus = :lifecycleStatus', {
+        lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
       })
       .execute();
     return result.affected ?? 0;
@@ -191,33 +275,44 @@ export class PromoService {
 
   async markSignalee(promoId: string): Promise<void> {
     await this.promos.update(
-      { id: promoId, status: Not(PromoStatus.MASQUEE) },
-      { status: PromoStatus.SIGNALEE },
+      { id: promoId, moderationStatus: Not(PromoModerationStatus.MASQUEE) },
+      { moderationStatus: PromoModerationStatus.SIGNALEE },
     );
   }
 
   /** Décision admin : masquer une promo signalée à tort ou réellement abusive (specs §3.4). */
   async resolveMasquer(promoId: string): Promise<void> {
-    await this.promos.update({ id: promoId }, { status: PromoStatus.MASQUEE });
+    await this.promos.update(
+      { id: promoId },
+      { moderationStatus: PromoModerationStatus.MASQUEE },
+    );
   }
 
   /** Décision admin : promo légitime — ouvre la fenêtre d'ignore de 30 jours (specs §5.4). */
   async resolveVerifieOk(promoId: string): Promise<void> {
     await this.promos.update(
       { id: promoId },
-      { status: PromoStatus.VERIFIEE_OK, verifiedOkAt: new Date() },
+      { moderationStatus: PromoModerationStatus.VERIFIEE_OK, verifiedOkAt: new Date() },
     );
   }
 
   /** Décision admin : avertir le commerçant sans changer la visibilité de la promo. */
   async resolveAvertir(promoId: string): Promise<void> {
     const promo = await this.findByIdOrFail(promoId);
-    if (promo.status === PromoStatus.SIGNALEE) {
-      await this.promos.update({ id: promoId }, { status: PromoStatus.ACTIVE });
+    if (promo.moderationStatus === PromoModerationStatus.SIGNALEE) {
+      await this.promos.update(
+        { id: promoId },
+        { moderationStatus: PromoModerationStatus.NORMALE },
+      );
     }
   }
 
-  /** Mise à jour d'une promo existante par l'agent lors d'une visite (specs §3.3). */
+  /**
+   * Édition du contenu — autorisée quel que soit le cycle de vie (brouillon,
+   * publiée, arrêtée, expirée) : c'est l'action de publication/republication
+   * qui constitue le "geste actif" des specs, pas une restriction sur
+   * l'édition elle-même.
+   */
   async update(promoId: string, dto: UpdatePromoDto): Promise<Promo> {
     const promo = await this.findByIdOrFail(promoId);
     const prixAvant = dto.prixAvant ?? Number(promo.prixAvant);
@@ -275,8 +370,11 @@ export class PromoService {
   async countVisible(): Promise<number> {
     return this.promos
       .createQueryBuilder('promo')
-      .where('promo.status IN (:...statuses)', {
-        statuses: VISIBLE_PROMO_STATUSES,
+      .where('promo.lifecycleStatus = :lifecycleStatus', {
+        lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
+      })
+      .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
+        moderationStatuses: VISIBLE_MODERATION_STATUSES,
       })
       .andWhere('promo.dateFin > NOW()')
       .getCount();
