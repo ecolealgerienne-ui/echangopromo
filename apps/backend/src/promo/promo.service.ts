@@ -217,7 +217,7 @@ export class PromoService {
   async findByIdOrFail(id: string): Promise<Promo> {
     const promo = await this.promos.findOne({
       where: { id },
-      relations: ['commercant'],
+      relations: { commercant: true },
     });
     if (!promo) {
       throw new NotFoundException('Promo introuvable');
