@@ -161,22 +161,20 @@ local), pas seulement par la compilation.
 Voir `CLAUDE.md` pour les règles générales. Liste concrète des éléments
 non traités par cette session de corrections :
 
-1. Validation de `JWT_SECRET` au démarrage (rejeter les valeurs par défaut
-   en production).
-2. `flutter test` réel (jamais exécuté ; `flutter analyze` fait et propre).
-3. Refactoring `AdminController` (extraire l'orchestration modération dans
+1. `flutter test` réel (jamais exécuté ; `flutter analyze` fait et propre).
+2. Refactoring `AdminController` (extraire l'orchestration modération dans
    un service dédié).
-4. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
+3. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
    développement mobile via émulateur Android + backend WSL continue —
    sinon documenter clairement la procédure pour chaque nouvelle session.
-5. Regex PIN 4-6 chiffres vs 4 fixes dans les specs — décision produit à
+4. Regex PIN 4-6 chiffres vs 4 fixes dans les specs — décision produit à
    trancher (pas un bug).
-6. CORS non configuré explicitement (sans impact tant qu'il n'y a pas de
+5. CORS non configuré explicitement (sans impact tant qu'il n'y a pas de
    frontend web).
-7. Mobile : listes de chemins protégés en dur dans `router.dart` (3
+6. Mobile : listes de chemins protégés en dur dans `router.dart` (3
    techniques différentes cohabitent) au lieu d'associer le rôle à la
    route.
-8. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
+7. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
    par `String` littérale, pas de miroir enum Dart.
 
 ---
@@ -428,3 +426,10 @@ non traités par cette session de corrections :
   unique en V0, pas de gestion multi-admin). Pas de migration à écrire à
   la main : le schéma initial n'a pas encore été généré côté utilisateur,
   `npm run migration:generate` capturera directement ces colonnes.
+- **2026-07-04 (validation JWT_SECRET au démarrage)** — `ConfigModule.forRoot`
+  reçoit désormais un `validate` (`src/config/env.validation.ts`) : le
+  backend refuse de démarrer si `JWT_SECRET` est absent, et si en plus
+  `NODE_ENV=production` il refuse aussi la valeur par défaut `change-me`
+  ou un secret de moins de 32 caractères. En dev/pilote, `change-me` reste
+  toléré (celui fourni par `.env.example`) pour ne pas casser le
+  démarrage local existant.

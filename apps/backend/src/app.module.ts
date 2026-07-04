@@ -14,11 +14,14 @@ import { ReportModule } from './report/report.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { StorageModule } from './storage/storage.module';
 import { AuthModule } from './auth/auth.module';
+import { validateEnv } from './config/env.validation';
 import { typeOrmBaseOptions } from './data-source';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    // `validate` fait échouer le démarrage si JWT_SECRET est absent ou
+    // laissé à sa valeur par défaut — voir env.validation.ts.
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     /**
      * `synchronize` toujours false (voir data-source.ts) — le schéma est
      * géré exclusivement par des migrations versionnées (`npm run
