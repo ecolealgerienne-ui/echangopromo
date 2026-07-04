@@ -161,8 +161,7 @@ local), pas seulement par la compilation.
 Voir `CLAUDE.md` pour les règles générales. Liste concrète des éléments
 non traités par cette session de corrections :
 
-1. `flutter test` réel (jamais exécuté ; `flutter analyze` fait et propre).
-2. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
+1. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
    développement mobile via émulateur Android + backend WSL continue —
    sinon documenter clairement la procédure pour chaque nouvelle session.
 
@@ -464,3 +463,13 @@ non traités par cette session de corrections :
   `zone_commerces_screen.dart` (`accountState == 'cree_agent'`)
   sont mis à jour en conséquence. Erreur de compilation garantie en cas de
   renommage backend au lieu d'un bug silencieux.
+- **2026-07-04 (première suite de tests mobile)** — `apps/mobile/test/`
+  n'existait pas du tout jusqu'ici. Ajout d'une première suite ciblée sur
+  de la logique pure (pas de widget test, pas besoin d'émulateur) :
+  `pin_validator_test.dart` (regex 4-6 chiffres), `promo_lifecycle_status_test.dart`
+  (`fromValue`), `promo_test.dart` (`Promo.fromJson` + `isDraft`/
+  `isPublished`/`isExpired`/`lifecycleLabel`, dont un cas non trivial :
+  une promo `publiee` dont `dateFin` est déjà dépassée doit être considérée
+  expirée côté mobile sans attendre le cron backend
+  `expireOutdatedPromos`). **Non exécuté dans mon environnement** (pas de
+  SDK Flutter) : lancer `flutter test` en local pour confirmer.
