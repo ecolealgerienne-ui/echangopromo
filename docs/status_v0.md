@@ -164,15 +164,28 @@ non traités par cette session de corrections :
 1. Révocation JWT (tokenVersion ou refresh token) pour agent/admin.
 2. Validation de `JWT_SECRET` au démarrage (rejeter les valeurs par défaut
    en production).
-3. Migrations TypeORM versionnées (toujours en `synchronize: true` dev).
-4. `flutter test` réel (jamais exécuté ; `flutter analyze` fait et propre).
-5. Refactoring `AdminController` (extraire l'orchestration modération dans
+3. `flutter test` réel (jamais exécuté ; `flutter analyze` fait et propre).
+4. Refactoring `AdminController` (extraire l'orchestration modération dans
    un service dédié).
-6. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
+5. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
    développement mobile via émulateur Android + backend WSL continue —
    sinon documenter clairement la procédure pour chaque nouvelle session.
-7. Regex PIN 4-6 chiffres vs 4 fixes dans les specs — décision produit à
+6. Regex PIN 4-6 chiffres vs 4 fixes dans les specs — décision produit à
    trancher (pas un bug).
+7. CORS non configuré explicitement (sans impact tant qu'il n'y a pas de
+   frontend web).
+8. Healthcheck Postgres absent de `docker-compose.yml`.
+9. Scaffolding NestJS jamais nettoyé (`app.controller.ts`/`.spec.ts`,
+   `test/app.e2e-spec.ts`) — seuls tests de tout le backend, sur du code
+   mort.
+10. Mobile : listes de chemins protégés en dur dans `router.dart` (3
+    techniques différentes cohabitent) au lieu d'associer le rôle à la
+    route.
+11. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
+    par `String` littérale, pas de miroir enum Dart.
+12. Mobile : duplication du bloc loading/erreur/bouton dans 8+ écrans, et
+    écrans quasi-jumeaux non factorisés (`CommercantRegisterScreen`/
+    `CreateCommercantScreen`, `PromoFormScreen`/`AgentPromoFormScreen`).
 
 ---
 
@@ -331,6 +344,31 @@ non traités par cette session de corrections :
     l'ancien enum, le même risque qu'avec l'enum `CommercantAccountState`
     (valeurs absentes du nouveau type) peut se reproduire — repartir d'une
     base vide si erreur `invalid input value for enum` au démarrage.
+- **2026-07-04 (migrations TypeORM réelles)** — Traitement du finding
+  sévérité **haute** de l'audit architecture (`synchronize` couplé à
+  `NODE_ENV`, chemin de déploiement Docker fragile/dangereux selon le
+  `.env` monté) :
+  - `synchronize: false` **en permanence**, plus aucune bascule sur
+    `NODE_ENV` — schéma géré uniquement par des migrations versionnées.
+  - `src/data-source.ts` : config TypeORM partagée entre le bootstrap
+    NestJS et la CLI de migrations (`typeOrmBaseOptions` réutilisé par
+    `app.module.ts`, une seule source de vérité).
+  - Scripts `npm run migration:generate|run|revert` ajoutés.
+  - `Dockerfile` : lance `npx typeorm migration:run` avant `node
+    dist/main` au démarrage du conteneur, au lieu de compter sur
+    `synchronize`.
+  - Fix au passage : `"typeorm": "^1.0.0"` dans `package.json` — version
+    incohérente avec le peer dependency de `@nestjs/typeorm@^11`
+    (attend `^0.3.x`) ; corrigée en `^0.3.20`. À vérifier après `npm
+    install` (`npm ls typeorm`) au cas où le lockfile actuel résolvait
+    déjà autre chose.
+  - `CLAUDE.md` mis à jour (commandes, dette levée).
+  - **Non exécuté dans mon environnement — étapes obligatoires côté
+    utilisateur** avant que ça fonctionne (voir message de session pour
+    le détail complet) : `npm install` (nouvelle version `typeorm` + script CLI),
+    repartir d'une base vide, générer la migration initiale
+    (`npm run migration:generate -- src/migrations/InitialSchema`) contre
+    cette base vide, `npm run migration:run`, puis reseed.
 - **2026-07-04 (fix schéma)** — `Commercant.adresse` (`string | null`)
   n'avait pas de `type` explicite sur `@Column()` : TypeORM ne peut pas
   inférer le type Postgres depuis un union type TS via reflect-metadata,

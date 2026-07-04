@@ -28,7 +28,12 @@ apps/mobile/lib/{app,data,domain,providers,features/{client,commercant,agent,sha
 
 Commandes utiles :
 - Backend : `cd apps/backend && npm run start:dev` / `build` / `lint` /
-  `seed:admin -- <email> <password> <nom>` / `seed:communes`
+  `seed:admin -- <email> <password> <nom>` / `seed:communes` /
+  `migration:run` / `migration:generate -- src/migrations/<Nom>` /
+  `migration:revert`. Schéma géré uniquement par migrations
+  (`synchronize: false` toujours, plus de bascule sur `NODE_ENV`) —
+  lancer `npm run migration:run` avant le premier `start:dev` sur une
+  base neuve, et avant les scripts seed.
 - Mobile : `cd apps/mobile && flutter pub get && flutter analyze` — **le
   SDK Flutter n'a jamais pu être installé dans l'environnement de dev
   utilisé jusqu'ici** (proxy réseau bloquant `storage.googleapis.com`),
@@ -204,9 +209,6 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
 
 ## Dette connue, non bloquante pour le pilote mais à traiter avant extension
 
-- Migrations TypeORM absentes (`synchronize: true` en dev uniquement,
-  mais le chemin de déploiement Docker actuel est fragile selon la config
-  `.env` — voir `docs/AUDIT_V0.md` §2).
 - Pas de pagination sur les listes (`/promo`, `/admin/agent`, `/zone`,
   `/commune`).
 

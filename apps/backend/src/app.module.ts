@@ -16,15 +16,23 @@ import { ReportModule } from './report/report.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { StorageModule } from './storage/storage.module';
 import { AuthModule } from './auth/auth.module';
+import { typeOrmBaseOptions } from './data-source';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    /**
+     * `synchronize` toujours false (voir data-source.ts) — le schéma est
+     * géré exclusivement par des migrations versionnées (`npm run
+     * migration:run`), plus par une bascule implicite sur NODE_ENV qui
+     * rendait le déploiement Docker fragile ou dangereux selon le .env
+     * monté (audit §2 — un volume neuf avec NODE_ENV=production ne créait
+     * aucune table, et l'inverse activait synchronize sur un volume
+     * persistant nommé "production").
+     */
     TypeOrmModule.forRoot({
-      type: 'postgres',
-      url: process.env.DATABASE_URL,
+      ...typeOrmBaseOptions,
       autoLoadEntities: true,
-      synchronize: process.env.NODE_ENV !== 'production',
     }),
     ScheduleModule.forRoot(),
     // Limite globale par défaut ; les endpoints sensibles (login, claim
