@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,7 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OtpPurpose } from '../auth/entities/otp-code.entity';
 import { AuthService } from '../auth/auth.service';
-import { Promo, PromoStatus } from '../promo/entities/promo.entity';
+import { Promo, VISIBLE_PROMO_STATUSES } from '../promo/entities/promo.entity';
 import { CommercantView } from './entities/commercant-view.entity';
 import {
   Commercant,
@@ -219,38 +220,78 @@ export class CommercantService {
   /**
    * Commerces d'une zone avec statut de tournée (specs §3.3). Faute d'un
    * horodatage explicite de "dernière visite" dans les specs, le statut est
-   * dérivé de l'état des promos : jamais publié / a une promo active / n'a
-   * plus que des promos expirées.
+   * dérivé de l'état des promos : jamais publié / a une promo visible / n'a
+   * plus que des promos expirées ou masquées.
+   *
+   * Deux requêtes agrégées (pas une par commerçant) : le statut "à jour"
+   * doit utiliser la même définition de "promo visible" que le client
+   * (`VISIBLE_PROMO_STATUSES`), pas seulement `ACTIVE` — sinon une promo
+   * `verifiee_ok` fait apparaître à tort le commerçant comme "à relancer".
    */
   async listByZoneWithVisitStatus(
     zoneId: string,
   ): Promise<Array<Commercant & { visitStatus: ZoneCommerceStatus }>> {
     const commercants = await this.commercants.find({ where: { zoneId } });
+    if (commercants.length === 0) return [];
 
-    const results = await Promise.all(
-      commercants.map(async (commercant) => {
-        const totalPromos = await this.promos.count({
-          where: { commercantId: commercant.id },
-        });
-        const activePromos = await this.promos.count({
-          where: { commercantId: commercant.id, status: PromoStatus.ACTIVE },
-        });
+    const commercantIds = commercants.map((c) => c.id);
 
-        let visitStatus: ZoneCommerceStatus;
-        if (totalPromos === 0) visitStatus = 'jamais_visite';
-        else if (activePromos > 0) visitStatus = 'a_jour';
-        else visitStatus = 'a_relancer';
+    const totalRows = await this.promos
+      .createQueryBuilder('promo')
+      .select('promo.commercantId', 'commercantId')
+      .addSelect('COUNT(*)', 'count')
+      .where('promo.commercantId IN (:...commercantIds)', { commercantIds })
+      .groupBy('promo.commercantId')
+      .getRawMany<{ commercantId: string; count: string }>();
 
-        return Object.assign(commercant, { visitStatus });
-      }),
+    const visibleRows = await this.promos
+      .createQueryBuilder('promo')
+      .select('promo.commercantId', 'commercantId')
+      .addSelect('COUNT(*)', 'count')
+      .where('promo.commercantId IN (:...commercantIds)', { commercantIds })
+      .andWhere('promo.status IN (:...visibleStatuses)', {
+        visibleStatuses: VISIBLE_PROMO_STATUSES,
+      })
+      .groupBy('promo.commercantId')
+      .getRawMany<{ commercantId: string; count: string }>();
+
+    const totalByCommercant = new Map(
+      totalRows.map((row) => [row.commercantId, Number(row.count)]),
+    );
+    const visibleByCommercant = new Map(
+      visibleRows.map((row) => [row.commercantId, Number(row.count)]),
     );
 
-    return results;
+    return commercants.map((commercant) => {
+      const total = totalByCommercant.get(commercant.id) ?? 0;
+      const visible = visibleByCommercant.get(commercant.id) ?? 0;
+
+      let visitStatus: ZoneCommerceStatus;
+      if (total === 0) visitStatus = 'jamais_visite';
+      else if (visible > 0) visitStatus = 'a_jour';
+      else visitStatus = 'a_relancer';
+
+      return Object.assign(commercant, { visitStatus });
+    });
   }
 
   async countActive(): Promise<number> {
     return this.commercants.count({
       where: { accountState: CommercantAccountState.AUTONOME },
     });
+  }
+
+  /** Garde IDOR : un agent ne peut agir que sur les commerçants de sa propre zone. */
+  async assertZoneMatches(
+    commercantId: string,
+    agentZoneId: string | null,
+  ): Promise<Commercant> {
+    const commercant = await this.findByIdOrFail(commercantId);
+    if (!agentZoneId || commercant.zoneId !== agentZoneId) {
+      throw new ForbiddenException(
+        "Ce commerçant n'est pas dans la zone de cet agent",
+      );
+    }
+    return commercant;
   }
 }

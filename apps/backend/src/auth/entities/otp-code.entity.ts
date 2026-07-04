@@ -3,6 +3,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
@@ -14,6 +15,7 @@ export enum OtpPurpose {
 
 /** Code OTP SMS — seuls cas d'usage : inscription initiale et PIN oublié (§3.2). */
 @Entity()
+@Index(['telephone', 'purpose'])
 export class OtpCode {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -33,6 +35,10 @@ export class OtpCode {
 
   @Column({ type: 'timestamptz', nullable: true })
   consumedAt: Date | null;
+
+  /** Tentatives de vérification échouées — verrouille le code après un seuil (anti brute-force). */
+  @Column({ default: 0 })
+  attempts: number;
 
   @CreateDateColumn()
   createdAt: Date;

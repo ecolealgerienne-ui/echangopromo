@@ -36,7 +36,9 @@ class ZoneCommercesScreen extends ConsumerWidget {
         label: const Text('Nouveau commerçant'),
         onPressed: () async {
           final created = await context.push<bool>('/agent/commercant/new');
-          if (created == true) ref.invalidate(zoneCommercesProvider);
+          if (created == true && context.mounted) {
+            ref.invalidate(zoneCommercesProvider);
+          }
         },
       ),
       body: RefreshIndicator(

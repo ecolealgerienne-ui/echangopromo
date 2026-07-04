@@ -1,6 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { Promo } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
 import { Report } from './entities/report.entity';
 
@@ -11,6 +12,11 @@ const IGNORE_WINDOW_DAYS = 30;
 export class ReportService {
   constructor(
     @InjectRepository(Report) private readonly reports: Repository<Report>,
+    // Accès direct à l'entité Promo (pas au PromoModule) pour la requête
+    // agrégée de `listPendingModeration` — évite un import de module en
+    // plus juste pour un JOIN en lecture seule (même pattern que
+    // CommercantModule pour la même raison, voir commercant.module.ts).
+    @InjectRepository(Promo) private readonly promos: Repository<Promo>,
     private readonly promoService: PromoService,
   ) {}
 
@@ -66,29 +72,37 @@ export class ReportService {
   }
 
   /**
-   * File de modération pour l'admin (specs §3.4). Réutilise
-   * `countActiveReports` (qui applique la fenêtre d'ignore de 30 jours)
-   * plutôt qu'un COUNT SQL brut, pour rester cohérent avec le seuil
-   * réellement utilisé à la création d'un signalement.
+   * File de modération pour l'admin (specs §3.4). Une seule requête
+   * agrégée (JOIN + GROUP BY + HAVING) plutôt qu'un `countActiveReports`
+   * par promo signalée — l'ancienne version faisait 2 requêtes par promo
+   * (fetch + count), non borné par une zone, potentiellement des centaines
+   * de requêtes à l'échelle multi-wilaya. La fenêtre d'ignore de 30 jours
+   * est répliquée ici en SQL (même seuil, même logique que
+   * `countActiveReports`, appliquée par-signalement plutôt qu'après coup).
    */
   async listPendingModeration(): Promise<
     { promoId: string; activeReportCount: number }[]
   > {
-    const { promoIds } = await this.reports
+    const rows = await this.reports
       .createQueryBuilder('report')
-      .select('ARRAY_AGG(DISTINCT report.promoId)', 'promoIds')
-      .getRawOne<{ promoIds: string[] | null }>()
-      .then((row) => ({ promoIds: row?.promoIds ?? [] }));
+      .innerJoin(Promo, 'promo', 'promo.id = report.promoId')
+      .select('report.promoId', 'promoId')
+      .addSelect('COUNT(DISTINCT report.deviceId)', 'count')
+      .where(
+        `(promo.verifiedOkAt IS NULL
+          OR report.createdAt > promo.verifiedOkAt
+          OR NOW() > promo.verifiedOkAt + make_interval(days => :ignoreWindowDays))`,
+        { ignoreWindowDays: IGNORE_WINDOW_DAYS },
+      )
+      .groupBy('report.promoId')
+      .having('COUNT(DISTINCT report.deviceId) >= :threshold', {
+        threshold: MODERATION_THRESHOLD,
+      })
+      .getRawMany<{ promoId: string; count: string }>();
 
-    const counts = await Promise.all(
-      promoIds.map(async (promoId) => ({
-        promoId,
-        activeReportCount: await this.countActiveReports(promoId),
-      })),
-    );
-
-    return counts.filter(
-      (entry) => entry.activeReportCount >= MODERATION_THRESHOLD,
-    );
+    return rows.map((row) => ({
+      promoId: row.promoId,
+      activeReportCount: Number(row.count),
+    }));
   }
 }

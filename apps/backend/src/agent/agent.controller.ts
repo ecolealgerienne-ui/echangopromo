@@ -7,6 +7,9 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { AuditLogService } from '../audit-log/audit-log.service';
+import { AuditActorType } from '../audit-log/entities/audit-log.entity';
 import { AuthService } from '../auth/auth.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -15,6 +18,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
 import { CreateCommercantByAgentDto } from '../commercant/dto/create-commercant-by-agent.dto';
+import { STRICT_THROTTLE } from '../common/throttle';
 import { AgentService } from './agent.service';
 import { LoginAgentDto } from './dto/login-agent.dto';
 
@@ -24,8 +28,10 @@ export class AgentController {
     private readonly agentService: AgentService,
     private readonly commercantService: CommercantService,
     private readonly authService: AuthService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
+  @Throttle(STRICT_THROTTLE)
   @Post('login')
   async login(@Body() dto: LoginAgentDto) {
     const agent = await this.agentService.login(dto.email, dto.password);
@@ -59,14 +65,40 @@ export class AgentController {
     @Body() dto: CreateCommercantByAgentDto,
   ) {
     const agent = await this.agentService.findByIdOrFail(user.sub);
-    return this.commercantService.createByAgent(dto, agent.id, agent.zoneId);
+    const commercant = await this.commercantService.createByAgent(
+      dto,
+      agent.id,
+      agent.zoneId,
+    );
+    await this.auditLogService.record({
+      actorType: AuditActorType.AGENT,
+      actorId: agent.id,
+      action: 'create_commercant',
+      targetType: 'commercant',
+      targetId: commercant.id,
+    });
+    return commercant;
   }
 
+  /** IDOR corrigé : un agent ne peut initier la revendication que pour un commerçant de sa zone. */
+  @Throttle(STRICT_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('agent')
   @Post('commercant/:id/initiate-claim')
-  async initiateClaim(@Param('id') commercantId: string) {
+  async initiateClaim(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('id') commercantId: string,
+  ) {
+    const agent = await this.agentService.findByIdOrFail(user.sub);
+    await this.commercantService.assertZoneMatches(commercantId, agent.zoneId);
     await this.commercantService.initiateClaim(commercantId);
+    await this.auditLogService.record({
+      actorType: AuditActorType.AGENT,
+      actorId: agent.id,
+      action: 'initiate_claim',
+      targetType: 'commercant',
+      targetId: commercantId,
+    });
     return { ok: true };
   }
 }

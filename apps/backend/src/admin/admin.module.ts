@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AgentModule } from '../agent/agent.module';
+import { AuditLogModule } from '../audit-log/audit-log.module';
 import { AuthModule } from '../auth/auth.module';
 import { CommercantModule } from '../commercant/commercant.module';
 import { PromoModule } from '../promo/promo.module';
@@ -17,6 +18,7 @@ import { Admin } from './entities/admin.entity';
     CommercantModule,
     PromoModule,
     ReportModule,
+    AuditLogModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],

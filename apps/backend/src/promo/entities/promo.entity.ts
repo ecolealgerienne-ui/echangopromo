@@ -1,7 +1,9 @@
+import { Exclude } from 'class-transformer';
 import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -23,7 +25,18 @@ export enum PromoStatus {
   VERIFIEE_OK = 'verifiee_ok',
 }
 
+/**
+ * Seule source de vérité pour "qu'est-ce qu'une promo visible" — importée
+ * partout où cette règle est nécessaire (client, statut de zone agent,
+ * dashboard admin) pour éviter qu'elle ne diverge d'un service à l'autre.
+ */
+export const VISIBLE_PROMO_STATUSES = [
+  PromoStatus.ACTIVE,
+  PromoStatus.VERIFIEE_OK,
+];
+
 @Entity()
+@Index(['status', 'dateFin'])
 export class Promo {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -32,6 +45,7 @@ export class Promo {
   @JoinColumn({ name: 'commercantId' })
   commercant: Commercant;
 
+  @Index()
   @Column()
   commercantId: string;
 
@@ -47,7 +61,13 @@ export class Promo {
   @Column({ type: 'enum', enum: Categorie })
   categorie: Categorie;
 
-  /** Clé de l'objet S3 (voir docs/ARCHITECTURE.md — structure de bucket). */
+  /**
+   * Clé de l'objet S3 (voir docs/ARCHITECTURE.md — structure de bucket).
+   * Jamais exposée au client : pour les promos créées par un agent, cette
+   * clé contient l'UUID de l'agent (pas du commerçant) — fuite d'identifiant
+   * interne évitable. Le contrôleur expose `photoUrl` à la place.
+   */
+  @Exclude()
   @Column()
   photoKey: string;
 

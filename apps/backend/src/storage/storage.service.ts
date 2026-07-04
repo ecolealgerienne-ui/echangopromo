@@ -1,14 +1,18 @@
-import {
-  DeleteObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 
 const PRESIGNED_URL_TTL_SECONDS = 5 * 60;
+
+/**
+ * Limite haute généreuse vu la compression obligatoire côté app avant
+ * upload (max ~1200px, JPEG qualité ~80, specs §5.8) — sert uniquement de
+ * garde-fou contre un upload arbitrairement volumineux (audit sécurité :
+ * un PUT pré-signé simple n'imposait aucune limite de taille).
+ */
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 @Injectable()
 export class StorageService {
@@ -39,19 +43,27 @@ export class StorageService {
     return `promo-photos/${commercantId}/${randomUUID()}.${extension}`;
   }
 
-  async createPresignedUploadUrl(
+  /**
+   * POST policy S3 (pas un simple PUT pré-signé) : `content-length-range`
+   * est une contrainte appliquée par S3 lui-même, contrairement à un PUT où
+   * le `Content-Type` déclaré à la signature n'engage à rien lors de
+   * l'upload réel.
+   */
+  async createPresignedUpload(
     key: string,
     contentType: string,
-  ): Promise<{ uploadUrl: string; key: string }> {
-    const command = new PutObjectCommand({
+  ): Promise<{ url: string; fields: Record<string, string>; key: string }> {
+    const { url, fields } = await createPresignedPost(this.client, {
       Bucket: this.bucket,
       Key: key,
-      ContentType: contentType,
+      Conditions: [
+        ['content-length-range', 0, MAX_UPLOAD_BYTES],
+        { 'Content-Type': contentType },
+      ],
+      Fields: { 'Content-Type': contentType },
+      Expires: PRESIGNED_URL_TTL_SECONDS,
     });
-    const uploadUrl = await getSignedUrl(this.client, command, {
-      expiresIn: PRESIGNED_URL_TTL_SECONDS,
-    });
-    return { uploadUrl, key };
+    return { url, fields, key };
   }
 
   buildPublicUrl(key: string): string {

@@ -15,16 +15,24 @@ class MyPromosScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final promosAsync = ref.watch(myPromosProvider);
     final dateFormat = DateFormat('dd/MM/yyyy');
+    final activeCount =
+        promosAsync.valueOrNull?.where((p) => p.status == 'active').length ?? 0;
+    final atCap = activeCount >= 5;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Mes promos')),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add),
-        label: const Text('Nouvelle promo'),
-        onPressed: () async {
-          final created = await context.push<bool>('/commercant/promos/new');
-          if (created == true) ref.invalidate(myPromosProvider);
-        },
+        label: Text(atCap ? 'Plafond de 5 promos atteint' : 'Nouvelle promo'),
+        onPressed: atCap
+            ? null
+            : () async {
+                final created =
+                    await context.push<bool>('/commercant/promos/new');
+                if (created == true && context.mounted) {
+                  ref.invalidate(myPromosProvider);
+                }
+              },
       ),
       body: promosAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),

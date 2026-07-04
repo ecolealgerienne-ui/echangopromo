@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -25,6 +27,10 @@ import { AuthModule } from './auth/auth.module';
       synchronize: process.env.NODE_ENV !== 'production',
     }),
     ScheduleModule.forRoot(),
+    // Limite globale par défaut ; les endpoints sensibles (login, OTP,
+    // signalement) ont une limite plus stricte via @Throttle() (specs
+    // d'audit sécurité — @nestjs/throttler n'était pas installé du tout).
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     CommuneModule,
     ZoneModule,
     CommercantModule,
@@ -37,6 +43,6 @@ import { AuthModule } from './auth/auth.module';
     AuthModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

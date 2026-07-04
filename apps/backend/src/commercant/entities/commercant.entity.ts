@@ -3,6 +3,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -59,6 +60,7 @@ export class Commercant {
   @JoinColumn({ name: 'communeId' })
   commune: Commune;
 
+  @Index()
   @Column()
   communeId: string;
 
@@ -67,6 +69,7 @@ export class Commercant {
   @JoinColumn({ name: 'zoneId' })
   zone: Zone | null;
 
+  @Index()
   @Column({ type: 'varchar', nullable: true })
   zoneId: string | null;
 

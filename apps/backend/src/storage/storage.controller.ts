@@ -25,6 +25,6 @@ export class StorageController {
   ) {
     const extension = dto.contentType === 'image/png' ? 'png' : 'jpg';
     const key = this.storageService.buildKey(user.sub, extension);
-    return this.storageService.createPresignedUploadUrl(key, dto.contentType);
+    return this.storageService.createPresignedUpload(key, dto.contentType);
   }
 }

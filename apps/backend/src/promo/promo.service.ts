@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -15,10 +14,13 @@ import { CreatePromoDto } from './dto/create-promo.dto';
 import { ListPromoQueryDto } from './dto/list-promo-query.dto';
 import { UpdatePromoDto } from './dto/update-promo.dto';
 import { PromoView } from './entities/promo-view.entity';
-import { Promo, PromoStatus } from './entities/promo.entity';
+import {
+  Promo,
+  PromoStatus,
+  VISIBLE_PROMO_STATUSES,
+} from './entities/promo.entity';
 
 const MAX_PROMOS_ACTIVES = 5;
-const VISIBLE_STATUSES = [PromoStatus.ACTIVE, PromoStatus.VERIFIEE_OK];
 
 @Injectable()
 export class PromoService {
@@ -46,35 +48,47 @@ export class PromoService {
    * suffisent tous deux pour publier (specs §3.2), y compris avant
    * revendication — c'est ce qui permet à l'agent de créer la première
    * promo pendant sa visite, avant que le commerçant n'ait défini son PIN.
+   *
+   * Le compte des promos actives puis l'insertion sont protégés par un
+   * verrou consultatif Postgres scopé au commerçant (`pg_advisory_xact_lock`)
+   * — sans ça, deux créations quasi simultanées peuvent chacune lire un
+   * compte de 4 et passer, aboutissant à 6 promos actives.
    */
   async create(commercantId: string, dto: CreatePromoDto): Promise<Promo> {
     await this.commercantService.findByIdOrFail(commercantId);
-
-    const activeCount = await this.promos.count({
-      where: { commercantId, status: PromoStatus.ACTIVE },
-    });
-    if (activeCount >= MAX_PROMOS_ACTIVES) {
-      throw new BadRequestException(
-        `Plafond de ${MAX_PROMOS_ACTIVES} promos actives atteint pour ce commerçant`,
-      );
-    }
 
     const dateFin =
       dto.dateFin ??
       new Date(Date.now() + this.defaultDureeJours() * 24 * 60 * 60 * 1000);
 
-    return this.promos.save(
-      this.promos.create({
-        commercantId,
-        produit: dto.produit,
-        prixAvant: dto.prixAvant.toFixed(2),
-        prixApres: dto.prixApres.toFixed(2),
-        categorie: dto.categorie,
-        photoKey: dto.photoKey,
-        dateFin,
-        status: PromoStatus.ACTIVE,
-      }),
-    );
+    return this.promos.manager.transaction(async (manager) => {
+      await manager.query(
+        'SELECT pg_advisory_xact_lock(hashtext($1)::bigint)',
+        [commercantId],
+      );
+
+      const activeCount = await manager.count(Promo, {
+        where: { commercantId, status: PromoStatus.ACTIVE },
+      });
+      if (activeCount >= MAX_PROMOS_ACTIVES) {
+        throw new BadRequestException(
+          `Plafond de ${MAX_PROMOS_ACTIVES} promos actives atteint pour ce commerçant`,
+        );
+      }
+
+      return manager.save(
+        manager.create(Promo, {
+          commercantId,
+          produit: dto.produit,
+          prixAvant: dto.prixAvant.toFixed(2),
+          prixApres: dto.prixApres.toFixed(2),
+          categorie: dto.categorie,
+          photoKey: dto.photoKey,
+          dateFin,
+          status: PromoStatus.ACTIVE,
+        }),
+      );
+    });
   }
 
   /**
@@ -87,7 +101,9 @@ export class PromoService {
     const qb = this.promos
       .createQueryBuilder('promo')
       .innerJoin('promo.commercant', 'commercant')
-      .where('promo.status IN (:...statuses)', { statuses: VISIBLE_STATUSES })
+      .where('promo.status IN (:...statuses)', {
+        statuses: VISIBLE_PROMO_STATUSES,
+      })
       .andWhere('promo.dateFin > NOW()');
 
     if (query.communeId) {
@@ -236,19 +252,19 @@ export class PromoService {
     );
   }
 
+  /**
+   * Utilisé par le dashboard admin. Filtre aussi sur `dateFin` comme
+   * `findActiveForClient` — sans ça, une promo expirée reste comptée comme
+   * "publiée" jusqu'au passage du cron quotidien (`expireOutdatedPromosCron`),
+   * jusqu'à 24h de statistique fausse.
+   */
   async countVisible(): Promise<number> {
-    return this.promos.count({
-      where: VISIBLE_STATUSES.map((status) => ({ status })),
-    });
-  }
-
-  async assertOwnedBy(promoId: string, commercantId: string): Promise<Promo> {
-    const promo = await this.findByIdOrFail(promoId);
-    if (promo.commercantId !== commercantId) {
-      throw new ForbiddenException(
-        "Cette promo n'appartient pas à ce commerçant",
-      );
-    }
-    return promo;
+    return this.promos
+      .createQueryBuilder('promo')
+      .where('promo.status IN (:...statuses)', {
+        statuses: VISIBLE_PROMO_STATUSES,
+      })
+      .andWhere('promo.dateFin > NOW()')
+      .getCount();
   }
 }

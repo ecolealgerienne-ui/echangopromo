@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AgentModule } from '../agent/agent.module';
 import { AuthModule } from '../auth/auth.module';
 import { CommercantModule } from '../commercant/commercant.module';
 import { StorageModule } from '../storage/storage.module';
@@ -14,6 +15,7 @@ import { Promo } from './entities/promo.entity';
     AuthModule,
     CommercantModule,
     StorageModule,
+    AgentModule,
   ],
   controllers: [PromoController],
   providers: [PromoService],

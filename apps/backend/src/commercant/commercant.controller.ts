@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { OtpPurpose } from '../auth/entities/otp-code.entity';
@@ -6,6 +7,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AuthService } from '../auth/auth.service';
 import type { AuthTokenPayload } from '../auth/role';
+import { STRICT_THROTTLE } from '../common/throttle';
 import { DeviceId } from '../common/decorators/device-id.decorator';
 import { CommercantService } from './commercant.service';
 import { ConfirmPhoneDto } from './dto/confirm-phone.dto';
@@ -21,11 +23,13 @@ export class CommercantController {
     private readonly authService: AuthService,
   ) {}
 
+  @Throttle(STRICT_THROTTLE)
   @Post('register')
   async register(@Body() dto: RegisterCommercantDto) {
     return this.commercantService.selfRegister(dto);
   }
 
+  @Throttle(STRICT_THROTTLE)
   @Post('confirm-inscription')
   async confirmInscription(@Body() dto: ConfirmPhoneDto) {
     const commercant = await this.commercantService.confirmPhoneAndSetPin(
@@ -37,6 +41,7 @@ export class CommercantController {
     };
   }
 
+  @Throttle(STRICT_THROTTLE)
   @Post('confirm-revendication')
   async confirmRevendication(@Body() dto: ConfirmPhoneDto) {
     const commercant = await this.commercantService.confirmPhoneAndSetPin(
@@ -48,6 +53,7 @@ export class CommercantController {
     };
   }
 
+  @Throttle(STRICT_THROTTLE)
   @Post('login')
   async login(@Body() dto: LoginCommercantDto) {
     const commercant = await this.commercantService.login(
@@ -59,12 +65,14 @@ export class CommercantController {
     };
   }
 
+  @Throttle(STRICT_THROTTLE)
   @Post('forgot-pin/request')
   async forgotPinRequest(@Body() dto: ForgotPinRequestDto) {
     await this.commercantService.requestForgotPin(dto.telephone);
     return { ok: true };
   }
 
+  @Throttle(STRICT_THROTTLE)
   @Post('forgot-pin/confirm')
   async forgotPinConfirm(@Body() dto: ForgotPinConfirmDto) {
     await this.commercantService.confirmForgotPin(

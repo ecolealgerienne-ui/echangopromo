@@ -1,8 +1,11 @@
 # Audit V0 — echango Promo
 
-**Statut** : les 6 audits sont terminés. Aucune correction n'a encore été
-appliquée à ce stade — ce document liste les findings, `CLAUDE.md` en
-tire les leçons pour la suite du développement.
+**Statut** : les 6 audits sont terminés. Ce document reste le compte-rendu
+figé des findings tels que trouvés — pour savoir ce qui a été corrigé
+depuis, voir `docs/status_v0.md` (la plupart des findings critiques/hauts
+de sécurité et les bugs d'architecture identifiés ici ont été traités dans
+la foulée). `CLAUDE.md` tire les leçons générales pour la suite du
+développement.
 **Méthode** : 6 audits indépendants menés en parallèle par des agents en
 lecture seule (aucune modification de code), sur la branche
 `claude/new-project-setup-t5rs5y` (commit `e56c015`). L'audit fonctionnel

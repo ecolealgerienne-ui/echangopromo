@@ -7,10 +7,13 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AgentService } from '../agent/agent.service';
 import { AssignZoneDto } from '../agent/dto/assign-zone.dto';
 import { CreateAgentDto } from '../agent/dto/create-agent.dto';
 import { TransferZoneDto } from '../agent/dto/transfer-zone.dto';
+import { AuditLogService } from '../audit-log/audit-log.service';
+import { AuditActorType } from '../audit-log/entities/audit-log.entity';
 import { AuthService } from '../auth/auth.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -18,6 +21,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
+import { STRICT_THROTTLE } from '../common/throttle';
 import { PromoService } from '../promo/promo.service';
 import { ReportService } from '../report/report.service';
 import { AdminService } from './admin.service';
@@ -32,8 +36,10 @@ export class AdminController {
     private readonly promoService: PromoService,
     private readonly reportService: ReportService,
     private readonly authService: AuthService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
+  @Throttle(STRICT_THROTTLE)
   @Post('login')
   async login(@Body() dto: LoginAdminDto) {
     const admin = await this.adminService.login(dto.email, dto.password);
@@ -50,8 +56,19 @@ export class AdminController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('agent')
-  async createAgent(@Body() dto: CreateAgentDto) {
-    return this.agentService.create(dto);
+  async createAgent(
+    @CurrentUser() user: AuthTokenPayload,
+    @Body() dto: CreateAgentDto,
+  ) {
+    const agent = await this.agentService.create(dto);
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'create_agent',
+      targetType: 'agent',
+      targetId: agent.id,
+    });
+    return agent;
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -72,12 +89,23 @@ export class AdminController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('agent/transfer-zone')
-  async transferZone(@Body() dto: TransferZoneDto) {
+  async transferZone(
+    @CurrentUser() user: AuthTokenPayload,
+    @Body() dto: TransferZoneDto,
+  ) {
     await this.agentService.transferZone(
       dto.zoneId,
       dto.fromAgentId,
       dto.toAgentId,
     );
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'transfer_zone',
+      targetType: 'zone',
+      targetId: dto.zoneId,
+      metadata: { fromAgentId: dto.fromAgentId, toAgentId: dto.toAgentId },
+    });
     return { ok: true };
   }
 
@@ -97,46 +125,96 @@ export class AdminController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('moderation/:promoId/masquer')
-  async masquer(@Param('promoId') promoId: string) {
+  async masquer(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('promoId') promoId: string,
+  ) {
     await this.promoService.resolveMasquer(promoId);
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'moderation_masquer',
+      targetType: 'promo',
+      targetId: promoId,
+    });
     return { ok: true };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('moderation/:promoId/verifier-ok')
-  async verifierOk(@Param('promoId') promoId: string) {
+  async verifierOk(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('promoId') promoId: string,
+  ) {
     await this.promoService.resolveVerifieOk(promoId);
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'moderation_verifier_ok',
+      targetType: 'promo',
+      targetId: promoId,
+    });
     return { ok: true };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('moderation/:promoId/avertir')
-  async avertir(@Param('promoId') promoId: string) {
+  async avertir(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('promoId') promoId: string,
+  ) {
     await this.promoService.resolveAvertir(promoId);
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'moderation_avertir',
+      targetType: 'promo',
+      targetId: promoId,
+    });
     return { ok: true };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('commercant/:id/registre/valider')
-  async validerRegistre(@Param('id') commercantId: string) {
+  async validerRegistre(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('id') commercantId: string,
+  ) {
     await this.commercantService.resolveRegistreVerification(
       commercantId,
       true,
     );
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'registre_valider',
+      targetType: 'commercant',
+      targetId: commercantId,
+    });
     return { ok: true };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('commercant/:id/registre/rejeter')
-  async rejeterRegistre(@Param('id') commercantId: string) {
+  async rejeterRegistre(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('id') commercantId: string,
+  ) {
     await this.commercantService.resolveRegistreVerification(
       commercantId,
       false,
     );
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'registre_rejeter',
+      targetType: 'commercant',
+      targetId: commercantId,
+    });
     return { ok: true };
   }
 
