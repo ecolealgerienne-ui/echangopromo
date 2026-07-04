@@ -34,7 +34,13 @@ export class AgentController {
   @Post('login')
   async login(@Body() dto: LoginAgentDto) {
     const agent = await this.agentService.login(dto.email, dto.password);
-    return { accessToken: this.authService.issueToken(agent.id, 'agent') };
+    return {
+      accessToken: this.authService.issueToken(
+        agent.id,
+        'agent',
+        agent.tokenVersion,
+      ),
+    };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

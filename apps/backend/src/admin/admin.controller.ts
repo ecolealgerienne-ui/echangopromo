@@ -26,6 +26,7 @@ import { PromoService } from '../promo/promo.service';
 import { ReportService } from '../report/report.service';
 import { AdminService } from './admin.service';
 import { LoginAdminDto } from './dto/login-admin.dto';
+import { ModerationService } from './moderation.service';
 
 @Controller('admin')
 export class AdminController {
@@ -37,13 +38,20 @@ export class AdminController {
     private readonly reportService: ReportService,
     private readonly authService: AuthService,
     private readonly auditLogService: AuditLogService,
+    private readonly moderationService: ModerationService,
   ) {}
 
   @Throttle(STRICT_THROTTLE)
   @Post('login')
   async login(@Body() dto: LoginAdminDto) {
     const admin = await this.adminService.login(dto.email, dto.password);
-    return { accessToken: this.authService.issueToken(admin.id, 'admin') };
+    return {
+      accessToken: this.authService.issueToken(
+        admin.id,
+        'admin',
+        admin.tokenVersion,
+      ),
+    };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -85,6 +93,25 @@ export class AdminController {
     return this.agentService.assignZone(agentId, dto.zoneId ?? null);
   }
 
+  /** Révoque les JWT déjà émis pour cet agent (device perdu/volé, départ — audit règle #6). */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('agent/:id/revoke-token')
+  async revokeAgentToken(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('id') agentId: string,
+  ) {
+    await this.agentService.revokeTokens(agentId);
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'revoke_agent_token',
+      targetType: 'agent',
+      targetId: agentId,
+    });
+    return { ok: true };
+  }
+
   /** Transfère une zone d'un agent à un autre (specs §3.4). */
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
@@ -113,13 +140,7 @@ export class AdminController {
   @Roles('admin')
   @Get('moderation/queue')
   async moderationQueue() {
-    const pending = await this.reportService.listPendingModeration();
-    return Promise.all(
-      pending.map(async ({ promoId, activeReportCount }) => ({
-        promo: await this.promoService.findByIdOrFail(promoId),
-        activeReportCount,
-      })),
-    );
+    return this.moderationService.queue();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -129,14 +150,7 @@ export class AdminController {
     @CurrentUser() user: AuthTokenPayload,
     @Param('promoId') promoId: string,
   ) {
-    await this.promoService.resolveMasquer(promoId);
-    await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
-      actorId: user.sub,
-      action: 'moderation_masquer',
-      targetType: 'promo',
-      targetId: promoId,
-    });
+    await this.moderationService.masquer(user.sub, promoId);
     return { ok: true };
   }
 
@@ -147,14 +161,7 @@ export class AdminController {
     @CurrentUser() user: AuthTokenPayload,
     @Param('promoId') promoId: string,
   ) {
-    await this.promoService.resolveVerifieOk(promoId);
-    await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
-      actorId: user.sub,
-      action: 'moderation_verifier_ok',
-      targetType: 'promo',
-      targetId: promoId,
-    });
+    await this.moderationService.verifierOk(user.sub, promoId);
     return { ok: true };
   }
 
@@ -165,14 +172,7 @@ export class AdminController {
     @CurrentUser() user: AuthTokenPayload,
     @Param('promoId') promoId: string,
   ) {
-    await this.promoService.resolveAvertir(promoId);
-    await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
-      actorId: user.sub,
-      action: 'moderation_avertir',
-      targetType: 'promo',
-      targetId: promoId,
-    });
+    await this.moderationService.avertir(user.sub, promoId);
     return { ok: true };
   }
 

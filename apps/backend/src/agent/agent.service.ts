@@ -67,6 +67,12 @@ export class AgentService {
     return this.agents.save(agent);
   }
 
+  /** Révoque tous les JWT déjà émis pour cet agent (device perdu/volé, départ) — audit règle #6. */
+  async revokeTokens(agentId: string): Promise<void> {
+    await this.findByIdOrFail(agentId);
+    await this.agents.increment({ id: agentId }, 'tokenVersion', 1);
+  }
+
   /**
    * Transfère une zone d'un agent à un autre (specs §3.4) — cas type :
    * départ d'un agent, pour éviter que les fiches de la zone cessent d'être

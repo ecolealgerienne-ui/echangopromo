@@ -161,23 +161,11 @@ local), pas seulement par la compilation.
 Voir `CLAUDE.md` pour les règles générales. Liste concrète des éléments
 non traités par cette session de corrections :
 
-1. Révocation JWT (tokenVersion ou refresh token) pour agent/admin.
-2. Validation de `JWT_SECRET` au démarrage (rejeter les valeurs par défaut
-   en production).
-3. `flutter test` réel (jamais exécuté ; `flutter analyze` fait et propre).
-4. Refactoring `AdminController` (extraire l'orchestration modération dans
-   un service dédié).
-5. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
+1. `flutter test` réel (jamais exécuté ; `flutter analyze` fait et propre).
+2. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
    développement mobile via émulateur Android + backend WSL continue —
    sinon documenter clairement la procédure pour chaque nouvelle session.
-6. Regex PIN 4-6 chiffres vs 4 fixes dans les specs — décision produit à
-   trancher (pas un bug).
-7. CORS non configuré explicitement (sans impact tant qu'il n'y a pas de
-   frontend web).
-8. Mobile : listes de chemins protégés en dur dans `router.dart` (3
-   techniques différentes cohabitent) au lieu d'associer le rôle à la
-   route.
-9. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
+3. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
    par `String` littérale, pas de miroir enum Dart.
 
 ---
@@ -408,3 +396,63 @@ non traités par cette session de corrections :
   - `CLAUDE.md` et la liste "Reste à faire" mis à jour (3 items retirés).
   - **Non exécuté dans mon environnement** : à valider avec `npm run
     build && npm run lint` côté backend, `flutter analyze` côté mobile.
+- **2026-07-04 (sélection commune client en 2 étapes)** — L'écran
+  `CommuneSelectionScreen` (bouton localisation côté client) affichait une
+  liste plate de communes ; il réutilise maintenant `CommuneCascadeField`
+  (wilaya → commune) déjà utilisé côté commerçant/agent. Ne change rien au
+  pilote (une seule wilaya) mais évite de reprendre l'écran à l'extension
+  multi-wilaya. Persistance locale (`SelectedCommuneStore` /
+  `selectedCommuneProvider`) inchangée : le choix reste préchargé à
+  l'ouverture de l'écran et réutilisé aux prochains lancements.
+- **2026-07-04 (révocation JWT agent/admin)** — Ajout d'un `tokenVersion`
+  (colonne `int default 0`) sur `Agent` et `Admin`, inclus dans le payload
+  JWT à l'émission (`AuthService.issueToken`). `JwtAuthGuard` recharge le
+  compte (agent/admin uniquement) à chaque requête et compare son
+  `tokenVersion` à celui du token — mismatch = 401 "Token révoqué". Accès
+  direct aux entités `Agent`/`Admin` depuis `AuthModule` (pas leurs
+  modules, pour éviter un cycle — commenté, règle #9). Nouvel endpoint
+  `POST /admin/agent/:id/revoke-token` (admin) incrémente le
+  `tokenVersion` d'un agent — cas d'usage : téléphone perdu/volé, départ
+  d'un agent. Pas d'endpoint équivalent pour l'admin lui-même (compte
+  unique en V0, pas de gestion multi-admin). Pas de migration à écrire à
+  la main : le schéma initial n'a pas encore été généré côté utilisateur,
+  `npm run migration:generate` capturera directement ces colonnes.
+- **2026-07-04 (validation JWT_SECRET au démarrage)** — `ConfigModule.forRoot`
+  reçoit désormais un `validate` (`src/config/env.validation.ts`) : le
+  backend refuse de démarrer si `JWT_SECRET` est absent, et si en plus
+  `NODE_ENV=production` il refuse aussi la valeur par défaut `change-me`
+  ou un secret de moins de 32 caractères. En dev/pilote, `change-me` reste
+  toléré (celui fourni par `.env.example`) pour ne pas casser le
+  démarrage local existant.
+- **2026-07-04 (CORS explicite)** — `main.ts` appelle désormais
+  `app.enableCors()` avec une liste d'origines lue dans `CORS_ORIGINS`
+  (nouvelle variable, `.env.example`, vide par défaut = aucune origine
+  web autorisée). L'app mobile (Dio natif) n'est pas concernée par le
+  CORS ; ce réglage ne sert qu'à préparer un futur frontend web (admin)
+  sans laisser la config permissive par défaut de NestJS en attendant.
+- **2026-07-04 (décision PIN 4-6 chiffres)** — Tranché en faveur du code
+  existant (backend + specs disaient déjà 4-6 chiffres depuis la
+  suppression de l'OTP ; seul `AUDIT_V0.md` gardait la mention obsolète
+  "4 fixes"). Côté mobile, les 4 validateurs dupliqués
+  (`v.length < 4`, ne vérifiait ni le max ni que ce sont bien des
+  chiffres) sont remplacés par un validateur partagé
+  `features/shared/validators/pin_validator.dart` (regex `^\d{4,6}$`,
+  miroir exact de la regex backend) utilisé dans
+  `commercant_register_screen.dart` et `commercant_login_screen.dart`
+  (connexion, claim, PIN oublié → nouveau PIN).
+- **2026-07-04 (refactoring AdminController)** — Nouveau
+  `ModerationService` (`admin/moderation.service.ts`) qui regroupe la file
+  d'attente de modération et les 3 résolutions (`masquer`/`verifierOk`/
+  `avertir`), chacune avec son audit-log — logique auparavant dupliquée
+  ligne par ligne dans `AdminController`. Le controller ne fait plus que
+  déléguer (`this.moderationService.masquer(user.sub, promoId)`), le
+  reste (agents, registre, dashboard) est inchangé.
+- **2026-07-04 (rôle associé à la route dans router.dart)** — Les listes
+  `_commercantProtectedPaths`/`_agentProtectedPaths` + le cas spécial
+  `isAgentPromoForm` (3 techniques différentes de protection cohabitant)
+  sont remplacées par une seule liste `_appRoutes` de déclarations
+  `_AppRoute(path, builder, {requiredRole})` : le rôle requis est porté par
+  la déclaration de route elle-même, la liste des `GoRoute` et la
+  vérification dans `redirect` sont dérivées de cette même source. Un
+  écran ajouté sans `requiredRole` est public par construction. Aucun
+  changement de comportement (mêmes routes protégées qu'avant).

@@ -5,6 +5,7 @@ import '../../../data/api/api_exception.dart';
 import '../../../domain/models/auth_session.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/validators/pin_validator.dart';
 import '../../shared/widgets/error_text.dart';
 import '../../shared/widgets/loading_button.dart';
 
@@ -83,7 +84,7 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
                 keyboardType: TextInputType.number,
                 obscureText: true,
                 maxLength: 6,
-                validator: (v) => (v == null || v.length < 4) ? 'PIN invalide' : null,
+                validator: validatePin,
               ),
               TextFormField(
                 controller: pinConfirmController,
@@ -173,7 +174,7 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
                 keyboardType: TextInputType.number,
                 obscureText: true,
                 maxLength: 6,
-                validator: (v) => (v == null || v.length < 4) ? 'PIN invalide' : null,
+                validator: validatePin,
               ),
               ErrorText(_error),
               const SizedBox(height: 16),

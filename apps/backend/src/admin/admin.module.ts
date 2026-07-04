@@ -9,6 +9,7 @@ import { ReportModule } from '../report/report.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { Admin } from './entities/admin.entity';
+import { ModerationService } from './moderation.service';
 
 @Module({
   imports: [
@@ -21,7 +22,7 @@ import { Admin } from './entities/admin.entity';
     AuditLogModule,
   ],
   controllers: [AdminController],
-  providers: [AdminService],
+  providers: [AdminService, ModerationService],
   exports: [AdminService],
 })
 export class AdminModule {}
