@@ -169,12 +169,10 @@ non traités par cette session de corrections :
    sinon documenter clairement la procédure pour chaque nouvelle session.
 4. Regex PIN 4-6 chiffres vs 4 fixes dans les specs — décision produit à
    trancher (pas un bug).
-5. CORS non configuré explicitement (sans impact tant qu'il n'y a pas de
-   frontend web).
-6. Mobile : listes de chemins protégés en dur dans `router.dart` (3
+5. Mobile : listes de chemins protégés en dur dans `router.dart` (3
    techniques différentes cohabitent) au lieu d'associer le rôle à la
    route.
-7. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
+6. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
    par `String` littérale, pas de miroir enum Dart.
 
 ---
@@ -433,3 +431,9 @@ non traités par cette session de corrections :
   ou un secret de moins de 32 caractères. En dev/pilote, `change-me` reste
   toléré (celui fourni par `.env.example`) pour ne pas casser le
   démarrage local existant.
+- **2026-07-04 (CORS explicite)** — `main.ts` appelle désormais
+  `app.enableCors()` avec une liste d'origines lue dans `CORS_ORIGINS`
+  (nouvelle variable, `.env.example`, vide par défaut = aucune origine
+  web autorisée). L'app mobile (Dio natif) n'est pas concernée par le
+  CORS ; ce réglage ne sert qu'à préparer un futur frontend web (admin)
+  sans laisser la config permissive par défaut de NestJS en attendant.
