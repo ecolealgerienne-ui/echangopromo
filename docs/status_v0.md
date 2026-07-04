@@ -158,12 +158,13 @@ local), pas seulement par la compilation.
 
 ## Reste à faire avant extension au-delà du pilote Djelfa
 
-Voir `CLAUDE.md` pour les règles générales. Liste concrète des éléments
-non traités par cette session de corrections :
-
-1. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
-   développement mobile via émulateur Android + backend WSL continue —
-   sinon documenter clairement la procédure pour chaque nouvelle session.
+Voir `CLAUDE.md` pour les règles générales. Tous les points identifiés par
+l'audit à 6 volets (`docs/AUDIT_V0.md`) ont été traités un par un (voir
+historique ci-dessous) ; aucun élément concret restant à cette date. Les
+seules réserves sont l'exécution locale (jamais effectuée dans cet
+environnement, faute de SDK Flutter/DB accessible) : `flutter test`,
+`flutter analyze`, `npm run build`/`lint` côté backend, migration initiale
+TypeORM — à confirmer par l'utilisateur sur sa machine.
 
 ---
 
@@ -473,3 +474,12 @@ non traités par cette session de corrections :
   expirée côté mobile sans attendre le cron backend
   `expireOutdatedPromos`). **Non exécuté dans mon environnement** (pas de
   SDK Flutter) : lancer `flutter test` en local pour confirmer.
+- **2026-07-04 (automatisation netsh portproxy)** — Nouveau script
+  `scripts/windows/sync-wsl-portproxy.ps1` (PowerShell, à lancer côté
+  Windows en administrateur) : détecte l'IP WSL2 courante (`wsl hostname -I`)
+  et recrée les règles `netsh interface portproxy` pour les ports 3000
+  (backend) et 9000 (MinIO) — jusqu'ici refait à la main à chaque session
+  après un redémarrage WSL. Référencé depuis `apps/mobile/README.md`. Ne
+  touche pas au pare-feu (règle entrante à créer une seule fois,
+  manuellement). Dernier point de la liste "Reste à faire" — plus aucun
+  élément concret restant issu de l'audit à 6 volets.
