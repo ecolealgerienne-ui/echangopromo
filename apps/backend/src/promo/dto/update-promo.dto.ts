@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 import { Categorie } from '../../common/enums/categorie.enum';
@@ -12,7 +13,8 @@ export class UpdatePromoDto {
   @IsOptional()
   @IsString()
   @MinLength(2)
-  produit?: string;
+  @MaxLength(140)
+  description?: string;
 
   @IsOptional()
   @IsNumber()

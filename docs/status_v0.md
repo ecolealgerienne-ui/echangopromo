@@ -266,3 +266,20 @@ non traités par cette session de corrections :
     pub get` ici) : à valider avec `npm run build && npm run lint` côté
     backend, et `flutter pub get && flutter analyze` côté mobile (nouvelles
     dépendances `geolocator` et `url_launcher` à récupérer).
+- **2026-07-04 (formulaire promo)** — 3 points remontés sur l'ajout d'une
+  promo :
+  - `Promo.produit` renommé `description` (`@Column({ length: 140 })`,
+    `MaxLength(140)` sur les DTOs), champ multiligne côté mobile.
+  - Catégorie pré-remplie avec celle du commerçant (modifiable) : côté
+    commerçant via `commercantApiProvider.me()`, côté agent via la
+    catégorie du commerçant passée en `extra` de route (évite un appel
+    API supplémentaire). Fix au passage d'un piège Flutter sur
+    `CategoryDropdown` (`initialValue` non réactif sans `key`).
+  - Contrôle `prixApres < prixAvant` ajouté côté backend
+    (`PromoService.assertPriceOrder`, create + update) et côté mobile
+    (validateur croisé sur les 2 formulaires).
+  - Ajout d'une section "Consignes de fonctionnement" dans `CLAUDE.md` à
+    la demande de l'utilisateur (optimiser les tokens, ne rien exécuter
+    dans cet environnement).
+  - **Non exécuté dans mon environnement** : à valider avec `npm run
+    build && npm run lint` côté backend, `flutter analyze` côté mobile.

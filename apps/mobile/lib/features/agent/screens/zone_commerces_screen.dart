@@ -63,7 +63,10 @@ class ZoneCommercesScreen extends ConsumerWidget {
                           child: Icon(Icons.hourglass_empty),
                         )
                       : null,
-                  onTap: () => context.push('/agent/promo/new/${commercant.id}'),
+                  onTap: () => context.push(
+                    '/agent/promo/new/${commercant.id}',
+                    extra: commercant.categorie,
+                  ),
                 );
               },
             );

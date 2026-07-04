@@ -49,7 +49,7 @@ class PromoCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(promo.produit, style: Theme.of(context).textTheme.titleMedium),
+                  Text(promo.description, style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 4),
                   Row(
                     children: [

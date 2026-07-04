@@ -56,6 +56,7 @@ export class PromoService {
    */
   async create(commercantId: string, dto: CreatePromoDto): Promise<Promo> {
     await this.commercantService.findByIdOrFail(commercantId);
+    this.assertPriceOrder(dto.prixAvant, dto.prixApres);
 
     const dateFin =
       dto.dateFin ??
@@ -79,7 +80,7 @@ export class PromoService {
       return manager.save(
         manager.create(Promo, {
           commercantId,
-          produit: dto.produit,
+          description: dto.description,
           prixAvant: dto.prixAvant.toFixed(2),
           prixApres: dto.prixApres.toFixed(2),
           categorie: dto.categorie,
@@ -219,12 +220,25 @@ export class PromoService {
   /** Mise à jour d'une promo existante par l'agent lors d'une visite (specs §3.3). */
   async update(promoId: string, dto: UpdatePromoDto): Promise<Promo> {
     const promo = await this.findByIdOrFail(promoId);
+    const prixAvant = dto.prixAvant ?? Number(promo.prixAvant);
+    const prixApres = dto.prixApres ?? Number(promo.prixApres);
+    this.assertPriceOrder(prixAvant, prixApres);
+
     Object.assign(promo, {
       ...dto,
       prixAvant: dto.prixAvant?.toFixed(2) ?? promo.prixAvant,
       prixApres: dto.prixApres?.toFixed(2) ?? promo.prixApres,
     });
     return this.promos.save(promo);
+  }
+
+  /** Une promo est censée être une réduction — le prix après doit être strictement inférieur. */
+  private assertPriceOrder(prixAvant: number, prixApres: number): void {
+    if (prixApres >= prixAvant) {
+      throw new BadRequestException(
+        'Le prix après réduction doit être inférieur au prix avant réduction',
+      );
+    }
   }
 
   /**

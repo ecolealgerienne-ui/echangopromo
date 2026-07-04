@@ -4,7 +4,7 @@ class Promo {
   const Promo({
     required this.id,
     required this.commercantId,
-    required this.produit,
+    required this.description,
     required this.prixAvant,
     required this.prixApres,
     required this.categorie,
@@ -17,7 +17,7 @@ class Promo {
   factory Promo.fromJson(Map<String, dynamic> json) => Promo(
         id: json['id'] as String,
         commercantId: json['commercantId'] as String,
-        produit: json['produit'] as String,
+        description: json['description'] as String,
         prixAvant: double.parse(json['prixAvant'].toString()),
         prixApres: double.parse(json['prixApres'].toString()),
         categorie: Categorie.fromValue(json['categorie'] as String),
@@ -29,7 +29,7 @@ class Promo {
 
   final String id;
   final String commercantId;
-  final String produit;
+  final String description;
   final double prixAvant;
   final double prixApres;
   final Categorie categorie;

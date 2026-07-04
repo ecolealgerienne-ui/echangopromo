@@ -9,7 +9,7 @@ import '../../../providers/core_providers.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/promo_providers.dart';
 
-/// Fiche promo (specs §3.1) : photo, produit, prix avant/après, nom et
+/// Fiche promo (specs §3.1) : photo, description, prix avant/après, nom et
 /// adresse du commerçant, date de fin de validité, signalement.
 class PromoDetailScreen extends ConsumerWidget {
   const PromoDetailScreen({super.key, required this.promoId});
@@ -47,7 +47,7 @@ class PromoDetailScreen extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(
-                          child: Text(promo.produit, style: Theme.of(context).textTheme.headlineSmall),
+                          child: Text(promo.description, style: Theme.of(context).textTheme.headlineSmall),
                         ),
                         IconButton(
                           icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),

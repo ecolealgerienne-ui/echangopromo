@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../domain/enums/categorie.dart';
 import '../domain/models/auth_session.dart';
 import '../features/agent/screens/agent_login_screen.dart';
 import '../features/agent/screens/agent_promo_form_screen.dart';
@@ -89,8 +90,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/agent/promo/new/:commercantId',
-        builder: (context, state) =>
-            AgentPromoFormScreen(commercantId: state.pathParameters['commercantId']!),
+        builder: (context, state) => AgentPromoFormScreen(
+          commercantId: state.pathParameters['commercantId']!,
+          defaultCategorie: state.extra as Categorie?,
+        ),
       ),
     ],
   );

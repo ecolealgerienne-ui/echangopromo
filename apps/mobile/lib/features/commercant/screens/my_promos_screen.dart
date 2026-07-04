@@ -58,7 +58,7 @@ class MyPromosScreen extends ConsumerWidget {
                         backgroundImage:
                             promo.photoUrl != null ? CachedNetworkImageProvider(promo.photoUrl!) : null,
                       ),
-                      title: Text(promo.produit),
+                      title: Text(promo.description),
                       subtitle: Text(
                         '${promo.status} · jusqu\'au ${dateFormat.format(promo.dateFin)} · ${promo.viewCount ?? 0} vues',
                       ),

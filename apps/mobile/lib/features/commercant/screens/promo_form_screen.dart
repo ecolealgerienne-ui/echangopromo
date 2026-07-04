@@ -8,6 +8,10 @@ import '../../shared/widgets/category_dropdown.dart';
 import '../../shared/widgets/photo_picker_field.dart';
 import '../../../providers/core_providers.dart';
 
+const _descriptionMaxLength = 140;
+
+final _promoFormMeProvider = FutureProvider.autoDispose((ref) => ref.watch(commercantApiProvider).me());
+
 /// Création d'une promo par le commerçant lui-même. Durée par défaut de 5
 /// jours appliquée côté backend si aucune date de fin n'est fournie (specs
 /// §3.2 — point ouvert §7.6 sur l'ajustabilité, non exposé ici en V0).
@@ -20,7 +24,7 @@ class PromoFormScreen extends ConsumerStatefulWidget {
 
 class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _produitController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _prixAvantController = TextEditingController();
   final _prixApresController = TextEditingController();
   Categorie? _categorie;
@@ -30,10 +34,20 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
 
   @override
   void dispose() {
-    _produitController.dispose();
+    _descriptionController.dispose();
     _prixAvantController.dispose();
     _prixApresController.dispose();
     super.dispose();
+  }
+
+  String? _validatePrixApres(String? v) {
+    final prixApres = double.tryParse(v ?? '');
+    if (prixApres == null) return 'Invalide';
+    final prixAvant = double.tryParse(_prixAvantController.text);
+    if (prixAvant != null && prixApres >= prixAvant) {
+      return 'Doit être inférieur au prix avant';
+    }
+    return null;
   }
 
   Future<void> _submit() async {
@@ -51,7 +65,7 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
     try {
       final photoKey = await ref.read(storageApiProvider).uploadPhoto(_photo!);
       await ref.read(promoApiProvider).create(
-            produit: _produitController.text.trim(),
+            description: _descriptionController.text.trim(),
             prixAvant: double.parse(_prixAvantController.text.trim()),
             prixApres: double.parse(_prixApresController.text.trim()),
             categorie: _categorie!,
@@ -67,6 +81,14 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Pré-remplit la catégorie avec celle du commerçant (modifiable ensuite),
+    // une seule fois quand le profil est chargé.
+    ref.listen(_promoFormMeProvider, (previous, next) {
+      if (_categorie == null) {
+        next.whenData((me) => setState(() => _categorie = me.categorie));
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(title: const Text('Nouvelle promo')),
       body: Padding(
@@ -78,9 +100,11 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
               PhotoPickerField(file: _photo, onChanged: (file) => setState(() => _photo = file)),
               const SizedBox(height: 16),
               TextFormField(
-                controller: _produitController,
-                decoration: const InputDecoration(labelText: 'Produit'),
-                validator: (v) => (v == null || v.isEmpty) ? 'Produit requis' : null,
+                controller: _descriptionController,
+                decoration: const InputDecoration(labelText: 'Description'),
+                maxLines: 3,
+                maxLength: _descriptionMaxLength,
+                validator: (v) => (v == null || v.isEmpty) ? 'Description requise' : null,
               ),
               const SizedBox(height: 12),
               Row(
@@ -99,7 +123,7 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
                       controller: _prixApresController,
                       decoration: const InputDecoration(labelText: 'Prix après (DA)'),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      validator: (v) => (double.tryParse(v ?? '') == null) ? 'Invalide' : null,
+                      validator: _validatePrixApres,
                     ),
                   ),
                 ],

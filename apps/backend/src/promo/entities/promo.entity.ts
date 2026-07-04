@@ -49,8 +49,8 @@ export class Promo {
   @Column()
   commercantId: string;
 
-  @Column()
-  produit: string;
+  @Column({ length: 140 })
+  description: string;
 
   @Column({ type: 'numeric', precision: 10, scale: 2 })
   prixAvant: string;

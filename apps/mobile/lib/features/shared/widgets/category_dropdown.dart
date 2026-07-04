@@ -10,6 +10,12 @@ class CategoryDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<Categorie>(
+      // `initialValue` n'est lu qu'une fois par le FormField interne — sans
+      // cette clé dépendant de `value`, un changement programmatique (ex.
+      // pré-remplissage depuis la catégorie du commerçant) ne se
+      // refléterait pas visuellement tant que l'utilisateur n'a pas
+      // lui-même touché le menu.
+      key: ValueKey(value),
       initialValue: value,
       decoration: const InputDecoration(labelText: 'Catégorie'),
       items: [

@@ -89,7 +89,10 @@ class _CreateCommercantScreenState extends ConsumerState<CreateCommercantScreen>
           // formulaire promo avant de dépiler cet écran, sinon le `Future`
           // de l'appel `context.push` initial se résoudrait immédiatement
           // sans attendre la création de la promo.
-          await context.push<bool>('/agent/promo/new/${commercant.id}');
+          await context.push<bool>(
+            '/agent/promo/new/${commercant.id}',
+            extra: commercant.categorie,
+          );
           if (!mounted) return;
           Navigator.of(context).pop(true);
         } else {

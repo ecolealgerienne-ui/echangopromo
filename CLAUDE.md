@@ -5,6 +5,16 @@ Instructions pour Claude Code sur ce dépôt. Lire aussi `docs/SPECS_ECHANGO_PRO
 `docs/AUDIT_V0.md` (audit complet avec fichier:ligne — ce fichier-ci en est
 la synthèse actionnable).
 
+## Consignes de fonctionnement (utilisateur)
+
+- **Optimiser l'usage des tokens** : éviter les tâches/vérifications
+  inutiles (builds, greps de relecture, allers-retours de confirmation
+  superflus), rester concis dans les réponses.
+- **Ne jamais lancer les tests/builds/l'app** dans cet environnement
+  (pas de `npm install`/`flutter pub get` ici, l'utilisateur développe sur
+  sa propre machine WSL/Windows) — donner les commandes exactes à exécuter
+  chez lui et attendre ses retours, plutôt que d'essayer de vérifier soi-même.
+
 ## Projet en un coup d'œil
 
 Backend NestJS + TypeORM + PostgreSQL (`apps/backend`), app mobile Flutter

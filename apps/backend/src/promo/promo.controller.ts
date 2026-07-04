@@ -44,7 +44,7 @@ export class PromoController {
     return {
       id: promo.id,
       commercantId: promo.commercantId,
-      produit: promo.produit,
+      description: promo.description,
       prixAvant: promo.prixAvant,
       prixApres: promo.prixApres,
       categorie: promo.categorie,
