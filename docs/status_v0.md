@@ -121,9 +121,14 @@ local), pas seulement par la compilation.
       gap fonctionnel mineur relevé par l'audit, corrigé au passage.
 - [ ] Durée de validité par défaut (5 jours) toujours invisible/non
       éditable dans `promo_form_screen.dart` — **non traité** (UX mineure).
-- [ ] **Toujours jamais compilé** : ces corrections n'ont pas pu être
-      vérifiées par `flutter analyze` (SDK indisponible). À faire en
-      priorité en reprenant le projet localement.
+- [x] **`flutter analyze` exécuté pour la première fois** (SDK installé en
+      local par l'utilisateur, WSL) : 5 issues trouvées et corrigées —
+      import mort (`commune_providers.dart` dans `promo_list_screen.dart`),
+      `AppRole` non importé (`otp_confirm_screen.dart`, faute de compilation
+      réelle), et 3× usage déprécié de `DropdownButtonFormField.value` →
+      `initialValue` (`category_dropdown.dart`, `create_commercant_screen.dart`,
+      `commercant_register_screen.dart`). `flutter analyze` propre après
+      correction (0 issue restante à vérifier après ce commit).
 
 ---
 

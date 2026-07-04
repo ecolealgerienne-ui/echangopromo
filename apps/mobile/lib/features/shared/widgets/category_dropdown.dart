@@ -10,7 +10,7 @@ class CategoryDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<Categorie>(
-      value: value,
+      initialValue: value,
       decoration: const InputDecoration(labelText: 'Catégorie'),
       items: [
         for (final categorie in Categorie.values)

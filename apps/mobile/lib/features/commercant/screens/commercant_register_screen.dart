@@ -102,7 +102,7 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
                 loading: () => const LinearProgressIndicator(),
                 error: (error, _) => Text('Erreur communes : $error'),
                 data: (communes) => DropdownButtonFormField<String>(
-                  value: _communeId,
+                  initialValue: _communeId,
                   decoration: const InputDecoration(labelText: 'Commune'),
                   items: [
                     for (final commune in communes)
