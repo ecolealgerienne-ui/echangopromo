@@ -43,7 +43,13 @@ export class AdminController {
   @Post('login')
   async login(@Body() dto: LoginAdminDto) {
     const admin = await this.adminService.login(dto.email, dto.password);
-    return { accessToken: this.authService.issueToken(admin.id, 'admin') };
+    return {
+      accessToken: this.authService.issueToken(
+        admin.id,
+        'admin',
+        admin.tokenVersion,
+      ),
+    };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -83,6 +89,25 @@ export class AdminController {
   @Patch('agent/:id/zone')
   async assignZone(@Param('id') agentId: string, @Body() dto: AssignZoneDto) {
     return this.agentService.assignZone(agentId, dto.zoneId ?? null);
+  }
+
+  /** Révoque les JWT déjà émis pour cet agent (device perdu/volé, départ — audit règle #6). */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('agent/:id/revoke-token')
+  async revokeAgentToken(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('id') agentId: string,
+  ) {
+    await this.agentService.revokeTokens(agentId);
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'revoke_agent_token',
+      targetType: 'agent',
+      targetId: agentId,
+    });
+    return { ok: true };
   }
 
   /** Transfère une zone d'un agent à un autre (specs §3.4). */

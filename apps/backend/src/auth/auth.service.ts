@@ -17,8 +17,8 @@ export class AuthService {
     return bcrypt.compare(value, hash);
   }
 
-  issueToken(sub: string, role: Role): string {
-    const payload: AuthTokenPayload = { sub, role };
+  issueToken(sub: string, role: Role, tokenVersion?: number): string {
+    const payload: AuthTokenPayload = { sub, role, tokenVersion };
     return this.jwtService.sign(payload);
   }
 }

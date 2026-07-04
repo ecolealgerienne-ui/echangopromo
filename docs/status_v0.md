@@ -161,23 +161,22 @@ local), pas seulement par la compilation.
 Voir `CLAUDE.md` pour les règles générales. Liste concrète des éléments
 non traités par cette session de corrections :
 
-1. Révocation JWT (tokenVersion ou refresh token) pour agent/admin.
-2. Validation de `JWT_SECRET` au démarrage (rejeter les valeurs par défaut
+1. Validation de `JWT_SECRET` au démarrage (rejeter les valeurs par défaut
    en production).
-3. `flutter test` réel (jamais exécuté ; `flutter analyze` fait et propre).
-4. Refactoring `AdminController` (extraire l'orchestration modération dans
+2. `flutter test` réel (jamais exécuté ; `flutter analyze` fait et propre).
+3. Refactoring `AdminController` (extraire l'orchestration modération dans
    un service dédié).
-5. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
+4. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
    développement mobile via émulateur Android + backend WSL continue —
    sinon documenter clairement la procédure pour chaque nouvelle session.
-6. Regex PIN 4-6 chiffres vs 4 fixes dans les specs — décision produit à
+5. Regex PIN 4-6 chiffres vs 4 fixes dans les specs — décision produit à
    trancher (pas un bug).
-7. CORS non configuré explicitement (sans impact tant qu'il n'y a pas de
+6. CORS non configuré explicitement (sans impact tant qu'il n'y a pas de
    frontend web).
-8. Mobile : listes de chemins protégés en dur dans `router.dart` (3
+7. Mobile : listes de chemins protégés en dur dans `router.dart` (3
    techniques différentes cohabitent) au lieu d'associer le rôle à la
    route.
-9. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
+8. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
    par `String` littérale, pas de miroir enum Dart.
 
 ---
@@ -416,3 +415,16 @@ non traités par cette session de corrections :
   multi-wilaya. Persistance locale (`SelectedCommuneStore` /
   `selectedCommuneProvider`) inchangée : le choix reste préchargé à
   l'ouverture de l'écran et réutilisé aux prochains lancements.
+- **2026-07-04 (révocation JWT agent/admin)** — Ajout d'un `tokenVersion`
+  (colonne `int default 0`) sur `Agent` et `Admin`, inclus dans le payload
+  JWT à l'émission (`AuthService.issueToken`). `JwtAuthGuard` recharge le
+  compte (agent/admin uniquement) à chaque requête et compare son
+  `tokenVersion` à celui du token — mismatch = 401 "Token révoqué". Accès
+  direct aux entités `Agent`/`Admin` depuis `AuthModule` (pas leurs
+  modules, pour éviter un cycle — commenté, règle #9). Nouvel endpoint
+  `POST /admin/agent/:id/revoke-token` (admin) incrémente le
+  `tokenVersion` d'un agent — cas d'usage : téléphone perdu/volé, départ
+  d'un agent. Pas d'endpoint équivalent pour l'admin lui-même (compte
+  unique en V0, pas de gestion multi-admin). Pas de migration à écrire à
+  la main : le schéma initial n'a pas encore été généré côté utilisateur,
+  `npm run migration:generate` capturera directement ces colonnes.

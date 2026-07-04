@@ -1,12 +1,18 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Admin } from '../admin/entities/admin.entity';
+import { Agent } from '../agent/entities/agent.entity';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
+    // Entités importées directement (pas AgentModule/AdminModule) pour éviter
+    // un cycle — voir commentaire dans JwtAuthGuard (règle #9).
+    TypeOrmModule.forFeature([Agent, Admin]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService): JwtModuleOptions => ({

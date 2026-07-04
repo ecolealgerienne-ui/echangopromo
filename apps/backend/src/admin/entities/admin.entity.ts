@@ -22,6 +22,10 @@ export class Admin {
   @Column()
   nom: string;
 
+  /** Incrémenté pour révoquer tous les JWT émis avant (audit règle #6). */
+  @Column({ type: 'int', default: 0 })
+  tokenVersion: number;
+
   @CreateDateColumn()
   createdAt: Date;
 }
