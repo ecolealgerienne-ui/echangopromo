@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/models/commercant.dart';
 import '../../../providers/core_providers.dart';
@@ -129,7 +130,25 @@ class _CommercantInfo extends ConsumerWidget {
       data: (commercant) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(commercant.nom, style: Theme.of(context).textTheme.titleMedium),
+          Row(
+            children: [
+              if (commercant.photoUrl != null) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: commercant.photoUrl!,
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Text(commercant.nom, style: Theme.of(context).textTheme.titleMedium),
+              ),
+            ],
+          ),
           const SizedBox(height: 4),
           Row(
             children: [
@@ -138,8 +157,23 @@ class _CommercantInfo extends ConsumerWidget {
               Expanded(child: Text(commercant.adresse)),
             ],
           ),
+          if (commercant.latitude != null && commercant.longitude != null) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.directions_outlined),
+              label: const Text('Itinéraire'),
+              onPressed: () => _openMaps(commercant.latitude!, commercant.longitude!),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _openMaps(double latitude, double longitude) async {
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
+    );
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }

@@ -1,5 +1,8 @@
 import {
   IsEnum,
+  IsLatitude,
+  IsLongitude,
+  IsOptional,
   IsPhoneNumber,
   IsString,
   IsUUID,
@@ -24,4 +27,18 @@ export class CreateCommercantByAgentDto {
 
   @IsUUID()
   communeId: string;
+
+  /** Clé S3 de la photo du commerce, déjà uploadée (optionnel). */
+  @IsOptional()
+  @IsString()
+  photoKey?: string;
+
+  /** Position GPS capturée sur l'appareil de l'agent (optionnel). */
+  @IsOptional()
+  @IsLatitude()
+  latitude?: number;
+
+  @IsOptional()
+  @IsLongitude()
+  longitude?: number;
 }

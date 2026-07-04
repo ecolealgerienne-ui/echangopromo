@@ -97,6 +97,23 @@ export class Commercant {
   @Column({ type: 'varchar', nullable: true })
   pinHash: string | null;
 
+  /**
+   * Clé S3 de la photo du commerce (optionnelle — pour que les clients
+   * identifient facilement le commerce dans la liste/fiche). Jamais
+   * exposée telle quelle : le contrôleur expose `photoUrl` à la place
+   * (même précaution que `Promo.photoKey`).
+   */
+  @Exclude()
+  @Column({ type: 'varchar', nullable: true })
+  photoKey: string | null;
+
+  /** Position GPS du commerce (optionnelle, capturée via le device — pas de Google Maps payant). */
+  @Column({ type: 'double precision', nullable: true })
+  latitude: number | null;
+
+  @Column({ type: 'double precision', nullable: true })
+  longitude: number | null;
+
   @Column({ type: 'enum', enum: RegistreStatus, nullable: true })
   registreStatus: RegistreStatus | null;
 

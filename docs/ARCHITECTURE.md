@@ -49,7 +49,7 @@ Modules NestJS calqués sur les entités des specs (§4) :
 - `admin` — auth email+mot de passe, modération, gestion zones/agents.
 - `report` — signalements anti-fraude par device_id (§5.4).
 - `audit-log` — traçabilité des actions agent/admin.
-- `storage` — intégration S3 OVH, compression déléguée au client, cron de purge à 1 mois (§5.8).
+- `storage` — intégration S3 OVH, compression déléguée au client, cron de purge à 1 mois (§5.8). Préfixe de clé selon l'usage (`promo-photos/` purgé, `commercant-photos/` permanent — photo de commerce optionnelle).
 - `auth` — hash/compare PIN, JWT (pas d'OTP SMS, supprimé du projet).
 
 Tâches planifiées (`@nestjs/schedule`) : expiration des promos (J+fin de validité) et purge des images S3 à 1 mois — deux jobs indépendants (§5.1 et §5.8).
@@ -73,6 +73,10 @@ lib/
     ├── commercant/ # auth PIN, gestion promos, dashboard stats
     └── agent/      # liste commerces de zone, création fiche, capture photo obligatoire
 ```
+
+Position GPS optionnelle du commerce via `geolocator` (localisation native,
+gratuit) ; lien "Itinéraire" côté client via `url_launcher` (ouvre l'app
+Google Maps, pas d'intégration SDK/clé API payante).
 
 ## 3. Points laissés ouverts (non traités par ce document)
 

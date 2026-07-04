@@ -1,5 +1,8 @@
 import {
   IsEnum,
+  IsLatitude,
+  IsLongitude,
+  IsOptional,
   IsPhoneNumber,
   IsString,
   IsUUID,
@@ -28,4 +31,18 @@ export class RegisterCommercantDto {
 
   @Matches(/^\d{4,6}$/, { message: 'Le code PIN doit contenir 4 à 6 chiffres' })
   pin: string;
+
+  /** Clé S3 de la photo du commerce, déjà uploadée (optionnel). */
+  @IsOptional()
+  @IsString()
+  photoKey?: string;
+
+  /** Position GPS capturée sur l'appareil (optionnel, pas de Google Maps payant). */
+  @IsOptional()
+  @IsLatitude()
+  latitude?: number;
+
+  @IsOptional()
+  @IsLongitude()
+  longitude?: number;
 }

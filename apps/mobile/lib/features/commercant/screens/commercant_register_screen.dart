@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +9,9 @@ import '../../../domain/models/auth_session.dart';
 import '../../../providers/auth_provider.dart';
 import '../../client/providers/commune_providers.dart';
 import '../../shared/widgets/category_dropdown.dart';
+import '../../shared/widgets/commune_cascade_field.dart';
+import '../../shared/widgets/location_capture_field.dart';
+import '../../shared/widgets/photo_picker_field.dart';
 import '../../../providers/core_providers.dart';
 
 /// Auto-inscription (specs §3.2, voie 1) — sans passage agent requis, et sans
@@ -24,8 +29,12 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
   final _nomController = TextEditingController();
   final _adresseController = TextEditingController();
   final _pinController = TextEditingController();
+  final _pinConfirmController = TextEditingController();
   Categorie? _categorie;
   String? _communeId;
+  File? _photo;
+  double? _latitude;
+  double? _longitude;
   bool _loading = false;
   String? _error;
 
@@ -35,6 +44,7 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
     _nomController.dispose();
     _adresseController.dispose();
     _pinController.dispose();
+    _pinConfirmController.dispose();
     super.dispose();
   }
 
@@ -51,6 +61,10 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
 
     try {
       final api = ref.read(commercantApiProvider);
+      String? photoKey;
+      if (_photo != null) {
+        photoKey = await ref.read(storageApiProvider).uploadPhoto(_photo!, purpose: 'commercant');
+      }
       final token = await api.register(
         telephone: _telephoneController.text.trim(),
         nom: _nomController.text.trim(),
@@ -58,6 +72,9 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
         categorie: _categorie!,
         communeId: _communeId!,
         pin: _pinController.text.trim(),
+        photoKey: photoKey,
+        latitude: _latitude,
+        longitude: _longitude,
       );
       await ref.read(authControllerProvider.notifier).loginThenResolveId(
             role: AppRole.commercant,
@@ -84,6 +101,8 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
           key: _formKey,
           child: ListView(
             children: [
+              PhotoPickerField(file: _photo, onChanged: (file) => setState(() => _photo = file)),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _telephoneController,
                 decoration: const InputDecoration(labelText: 'Téléphone', hintText: '+213...'),
@@ -103,18 +122,23 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
                 validator: (v) => (v == null || v.isEmpty) ? 'Adresse requise' : null,
               ),
               const SizedBox(height: 12),
+              LocationCaptureField(
+                latitude: _latitude,
+                longitude: _longitude,
+                onChanged: (lat, lng) => setState(() {
+                  _latitude = lat;
+                  _longitude = lng;
+                }),
+              ),
+              const SizedBox(height: 12),
               CategoryDropdown(value: _categorie, onChanged: (v) => setState(() => _categorie = v)),
               const SizedBox(height: 12),
               communesAsync.when(
                 loading: () => const LinearProgressIndicator(),
                 error: (error, _) => Text('Erreur communes : $error'),
-                data: (communes) => DropdownButtonFormField<String>(
-                  initialValue: _communeId,
-                  decoration: const InputDecoration(labelText: 'Commune'),
-                  items: [
-                    for (final commune in communes)
-                      DropdownMenuItem(value: commune.id, child: Text(commune.nom)),
-                  ],
+                data: (communes) => CommuneCascadeField(
+                  communes: communes,
+                  selectedCommuneId: _communeId,
                   onChanged: (v) => setState(() => _communeId = v),
                 ),
               ),
@@ -126,6 +150,15 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
                 obscureText: true,
                 maxLength: 6,
                 validator: (v) => (v == null || v.length < 4) ? 'PIN invalide' : null,
+              ),
+              TextFormField(
+                controller: _pinConfirmController,
+                decoration: const InputDecoration(labelText: 'Confirmez le code PIN'),
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 6,
+                validator: (v) =>
+                    (v != _pinController.text) ? 'Les deux codes PIN ne correspondent pas' : null,
               ),
               if (_error != null) ...[
                 const SizedBox(height: 8),

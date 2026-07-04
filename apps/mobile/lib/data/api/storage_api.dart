@@ -21,9 +21,11 @@ class StorageApi {
   /// X-Device-Id supplémentaire n'a rien à faire dans cette requête.
   final Dio _rawDio;
 
-  Future<String> uploadPhoto(File original) async {
+  /// `purpose` détermine le préfixe de la clé S3 côté backend — 'promo'
+  /// (défaut) ou 'commercant' pour la photo du commerce.
+  Future<String> uploadPhoto(File original, {String purpose = 'promo'}) async {
     final compressed = await _compress(original);
-    final presigned = await _requestPresignedUpload();
+    final presigned = await _requestPresignedUpload(purpose);
 
     final formData = FormData();
     presigned.fields.forEach((key, value) {
@@ -57,10 +59,10 @@ class StorageApi {
     return result != null ? File(result.path) : original;
   }
 
-  Future<_PresignedUpload> _requestPresignedUpload() async {
+  Future<_PresignedUpload> _requestPresignedUpload(String purpose) async {
     final response = await _authenticatedDio.post<Map<String, dynamic>>(
       '/storage/presigned-upload',
-      data: {'contentType': 'image/jpeg'},
+      data: {'contentType': 'image/jpeg', 'purpose': purpose},
     );
     final fields = (response.data!['fields'] as Map<String, dynamic>).map(
       (key, value) => MapEntry(key, value as String),

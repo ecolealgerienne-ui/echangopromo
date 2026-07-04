@@ -9,6 +9,9 @@ class Commercant {
     required this.communeId,
     this.accountState,
     this.telephone,
+    this.photoUrl,
+    this.latitude,
+    this.longitude,
   });
 
   factory Commercant.fromJson(Map<String, dynamic> json) => Commercant(
@@ -19,6 +22,9 @@ class Commercant {
         communeId: json['communeId'] as String,
         accountState: json['accountState'] as String?,
         telephone: json['telephone'] as String?,
+        photoUrl: json['photoUrl'] as String?,
+        latitude: (json['latitude'] as num?)?.toDouble(),
+        longitude: (json['longitude'] as num?)?.toDouble(),
       );
 
   final String id;
@@ -28,4 +34,7 @@ class Commercant {
   final String communeId;
   final String? accountState;
   final String? telephone;
+  final String? photoUrl;
+  final double? latitude;
+  final double? longitude;
 }

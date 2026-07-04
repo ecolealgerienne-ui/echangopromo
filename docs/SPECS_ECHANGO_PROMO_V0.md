@@ -39,7 +39,7 @@ Application mobile mettant en relation commerçants et clients autour des promot
 - Pour les grandes villes : sélection affinée par **commune** (découpage administratif officiel wilaya → commune).
 - **Liste des promos actives**, filtrée par commune sélectionnée.
 - **Filtre par catégorie** (liste fixe, voir §5.6).
-- **Fiche promo** : photo, produit, prix avant/après, nom et adresse du commerçant, date de fin de validité.
+- **Fiche promo** : photo, produit, prix avant/après, nom et adresse du commerçant, date de fin de validité. Si le commerçant a renseigné une photo de son commerce et/ou une position GPS, la fiche affiche aussi la photo du commerce et un bouton "Itinéraire" qui ouvre l'app Google Maps (lien simple, pas d'intégration payante).
 - **Signalement** "promo expirée / incorrecte" : action sans compte, limitée par device ID (voir §5.4). Objectif : limiter les abus côté commerçant autant que côté client.
 - **Recherche par catégorie** : sélection parmi la liste fermée de catégories (§5.6), pas de saisie libre. C'est une recherche guidée, pas un moteur de recherche texte.
 - **Favoris commerçant** : le client peut marquer un commerçant en favori, stocké **en local sur l'appareil** (pas de compte, cohérent avec le reste du parcours client). Affiche les commerçants favoris et leurs promos actives en priorité dans la liste. Sans notifications push (phase 2), c'est un raccourci d'affichage, pas une alerte proactive.
@@ -82,6 +82,22 @@ auto_inscrit → autonome (directement, dès la saisie du PIN à l'inscription)
 > Décision explicite : ne pas exiger le registre de commerce pour publier, afin de ne pas exclure le commerce informel, très présent localement.
 >
 > **Conséquence de l'auto-inscription et de l'absence de vérification téléphonique dès la V0** : ni le niveau `confirmé_agent` ni une preuve de possession du numéro ne filtrent les faux comptes (un commerçant peut publier sans jamais avoir été vérifié physiquement, et un numéro usurpé peut techniquement créer un compte au nom d'un tiers). Le système de signalement/modération (§5.4) est donc la **seule ligne de défense** contre les faux commerces ou contenus abusifs — risque assumé pour le pilote, à réévaluer avant extension.
+
+**Fiche commerçant — données saisies à la création** (auto-inscription ou
+création agent) :
+- Commune sélectionnée par **wilaya puis commune** (même logique de
+  sélection guidée que côté client, §3.1), pas une liste plate.
+- **Photo du commerce, optionnelle** — pour que les clients l'identifient
+  facilement dans la liste/fiche (caméra ou galerie, contrairement à la
+  photo de promo prise par l'agent qui est caméra uniquement).
+- **Position GPS, optionnelle** — capturée via la localisation native de
+  l'appareil (gratuit, aucune intégration Google Maps payante). L'adresse
+  texte reste saisie et affichée en complément, l'adressage informel étant
+  courant localement. Sert uniquement à afficher un bouton "Itinéraire"
+  côté client (§3.1) ; aucune carte interactive en V0.
+- **Confirmation du PIN** : ressaisie obligatoire à la définition du PIN
+  (inscription ou activation d'un compte créé par un agent), pour éviter
+  qu'une faute de frappe bloque le commerçant à la première connexion.
 
 **Gestion des promos** :
 - Jusqu'à **5 promos actives simultanément** par commerçant.

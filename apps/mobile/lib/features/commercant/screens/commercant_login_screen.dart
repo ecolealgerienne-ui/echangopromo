@@ -58,34 +58,53 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
   Future<void> _claim(BuildContext context) async {
     final telephoneController = TextEditingController();
     final pinController = TextEditingController();
+    final pinConfirmController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
     final result = await showDialog<(String, String)>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Définir mon PIN'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: telephoneController,
-              decoration: const InputDecoration(labelText: 'Téléphone', hintText: '+213...'),
-              keyboardType: TextInputType.phone,
-            ),
-            TextField(
-              controller: pinController,
-              decoration: const InputDecoration(labelText: 'Nouveau code PIN'),
-              keyboardType: TextInputType.number,
-              obscureText: true,
-              maxLength: 6,
-            ),
-          ],
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: telephoneController,
+                decoration: const InputDecoration(labelText: 'Téléphone', hintText: '+213...'),
+                keyboardType: TextInputType.phone,
+                validator: (v) => (v == null || v.isEmpty) ? 'Téléphone requis' : null,
+              ),
+              TextFormField(
+                controller: pinController,
+                decoration: const InputDecoration(labelText: 'Nouveau code PIN'),
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 6,
+                validator: (v) => (v == null || v.length < 4) ? 'PIN invalide' : null,
+              ),
+              TextFormField(
+                controller: pinConfirmController,
+                decoration: const InputDecoration(labelText: 'Confirmez le code PIN'),
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 6,
+                validator: (v) =>
+                    (v != pinController.text) ? 'Les deux codes PIN ne correspondent pas' : null,
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
           FilledButton(
-            onPressed: () => Navigator.pop(
-              context,
-              (telephoneController.text.trim(), pinController.text.trim()),
-            ),
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.pop(
+                context,
+                (telephoneController.text.trim(), pinController.text.trim()),
+              );
+            },
             child: const Text('Valider'),
           ),
         ],

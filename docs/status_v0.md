@@ -33,12 +33,15 @@ signalements, séparation Commune/Zone, actions admin, dashboard).
 
 ## Mobile — écrans implémentés
 
-Client (sélection commune, liste promos, détail, favoris, signalement),
-Commerçant (inscription, activation d'un compte créé par agent (`claim`,
-sans OTP), login PIN, dashboard, promos), Agent (login, zone, création
-commerçant, promo avec caméra obligatoire). Pas d'écran admin en V0
-(décision assumée). PIN oublié : plus d'écran self-service, seul l'admin
-peut réinitialiser (voir l'entrée "suppression OTP/SMS" ci-dessous).
+Client (sélection commune, liste promos, détail avec photo/itinéraire
+commerçant, favoris, signalement), Commerçant (inscription avec commune en
+cascade wilaya/commune, confirmation du PIN, photo et géolocalisation
+optionnelles ; activation d'un compte créé par agent (`claim`, sans OTP,
+confirmation du PIN aussi) ; login PIN, dashboard, promos), Agent (login,
+zone, création commerçant avec les mêmes options commune/photo/géoloc,
+promo avec caméra obligatoire). Pas d'écran admin en V0 (décision assumée).
+PIN oublié : plus d'écran self-service, seul l'admin peut réinitialiser
+(voir l'entrée "suppression OTP/SMS" ci-dessous).
 
 ---
 
@@ -226,3 +229,40 @@ non traités par cette session de corrections :
   `context.mounted` explicite (commit `a1395dd`). Reste à confirmer
   `flutter analyze` propre après re-pull, et valider `npm run build && npm
   run lint` côté backend.
+- **2026-07-04 (améliorations inscription commerçant)** — Suite à une
+  demande utilisateur de 4 points sur l'inscription commerçant :
+  - **Commune en cascade wilaya → commune** : nouveau widget partagé
+    `CommuneCascadeField` (`features/shared/widgets/`), utilisé dans
+    `commercant_register_screen.dart` (auto-inscription) et
+    `create_commercant_screen.dart` (agent) — remplace la liste plate de
+    communes, sans changement backend (`GET /commune?wilaya=` existait
+    déjà).
+  - **Confirmation du PIN** : champ de ressaisie ajouté à l'inscription et
+    au dialog `claim` (activation d'un compte créé par un agent), avec
+    validation `Form` que les deux PIN correspondent.
+  - **Photo optionnelle du commerce** : `Commercant.photoKey` (nullable,
+    jamais exposé brut — `photoUrl` calculé côté contrôleur comme pour
+    `Promo`), réutilise le flux d'upload S3 existant
+    (`PhotoPickerField`/`StorageApi`, cette fois avec `purpose: 'commercant'`
+    → préfixe `commercant-photos/`, distinct de `promo-photos/` pour ne pas
+    entrer dans le cron de purge à 30 jours). Affichée en miniature dans la
+    fiche commerçant côté client (`promo_detail_screen.dart`).
+  - **Géolocalisation, décision produit** : après arbitrage utilisateur,
+    approche "GPS gratuit" retenue plutôt qu'une intégration Google Maps
+    payante — `Commercant.latitude`/`longitude` (nullable), capturés via le
+    nouveau widget `LocationCaptureField` (package `geolocator`, aucune clé
+    API). Côté client, bouton "Itinéraire" (`url_launcher`) ouvrant
+    `https://www.google.com/maps/search/?api=1&query=lat,lng` — l'app
+    Google Maps s'ouvre si installée, sinon le navigateur. Permissions
+    ajoutées : `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION` (Android),
+    `NSLocationWhenInUseUsageDescription` (iOS).
+  - Backend : `photoKey`/`latitude`/`longitude` ajoutés aux DTOs
+    `register-commercant` et `create-commercant-by-agent` ; endpoint
+    `POST /storage/presigned-upload` accepte un `purpose` optionnel
+    (`'promo'` par défaut, rétrocompatible).
+  - Specs (`docs/SPECS_ECHANGO_PROMO_V0.md` §3.1/§3.2) et architecture mis
+    à jour dans le même commit.
+  - **Non exécuté dans mon environnement** (pas de `npm install`/`flutter
+    pub get` ici) : à valider avec `npm run build && npm run lint` côté
+    backend, et `flutter pub get && flutter analyze` côté mobile (nouvelles
+    dépendances `geolocator` et `url_launcher` à récupérer).

@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Localisation GPS optionnelle du commerce à l'inscription (gratuit,
+         pas de clé API Google Maps) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
         android:label="echango_promo"
         android:name="${applicationName}"

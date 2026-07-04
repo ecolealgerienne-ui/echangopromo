@@ -38,9 +38,19 @@ export class StorageService {
     });
   }
 
-  /** Structure de bucket prévue pour le nettoyage automatique (specs §5.8). */
-  buildKey(commercantId: string, extension: string): string {
-    return `promo-photos/${commercantId}/${randomUUID()}.${extension}`;
+  /**
+   * Structure de bucket prévue pour le nettoyage automatique (specs §5.8) —
+   * uniquement les photos de promo (`promo-photos/`) sont purgées après
+   * `IMAGE_RETENTION_DAYS` (voir `PromoService.purgeOldPhotosCron`) ; la
+   * photo de commerce (`commercant-photos/`) est permanente, d'où le préfixe
+   * distinct.
+   */
+  buildKey(
+    commercantId: string,
+    extension: string,
+    folder: 'promo-photos' | 'commercant-photos' = 'promo-photos',
+  ): string {
+    return `${folder}/${commercantId}/${randomUUID()}.${extension}`;
   }
 
   /**

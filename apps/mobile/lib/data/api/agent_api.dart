@@ -33,6 +33,9 @@ class AgentApi {
     required String adresse,
     required Categorie categorie,
     required String communeId,
+    String? photoKey,
+    double? latitude,
+    double? longitude,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>('/agent/commercant', data: {
       'telephone': telephone,
@@ -40,6 +43,9 @@ class AgentApi {
       'adresse': adresse,
       'categorie': categorie.value,
       'communeId': communeId,
+      if (photoKey != null) 'photoKey': photoKey,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
     });
     return Commercant.fromJson(response.data!);
   }

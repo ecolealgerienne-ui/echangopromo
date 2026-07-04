@@ -8,8 +8,10 @@ import { AuthService } from '../auth/auth.service';
 import type { AuthTokenPayload } from '../auth/role';
 import { STRICT_THROTTLE } from '../common/throttle';
 import { DeviceId } from '../common/decorators/device-id.decorator';
+import { StorageService } from '../storage/storage.service';
 import { CommercantService } from './commercant.service';
 import { ClaimCommercantDto } from './dto/claim-commercant.dto';
+import { Commercant } from './entities/commercant.entity';
 import { LoginCommercantDto } from './dto/login-commercant.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
 import { RequestRegistreVerificationDto } from './dto/request-registre-verification.dto';
@@ -19,7 +21,14 @@ export class CommercantController {
   constructor(
     private readonly commercantService: CommercantService,
     private readonly authService: AuthService,
+    private readonly storageService: StorageService,
   ) {}
+
+  private photoUrl(commercant: Commercant): string | null {
+    return commercant.photoKey
+      ? this.storageService.buildPublicUrl(commercant.photoKey)
+      : null;
+  }
 
   @Throttle(STRICT_THROTTLE)
   @Post('register')
@@ -63,6 +72,9 @@ export class CommercantController {
       adresse: commercant.adresse,
       categorie: commercant.categorie,
       communeId: commercant.communeId,
+      photoUrl: this.photoUrl(commercant),
+      latitude: commercant.latitude,
+      longitude: commercant.longitude,
     };
   }
 
@@ -70,7 +82,22 @@ export class CommercantController {
   @Roles('commercant')
   @Get('me')
   async me(@CurrentUser() user: AuthTokenPayload) {
-    return this.commercantService.findByIdOrFail(user.sub);
+    const commercant = await this.commercantService.findByIdOrFail(user.sub);
+    return {
+      id: commercant.id,
+      telephone: commercant.telephone,
+      nom: commercant.nom,
+      adresse: commercant.adresse,
+      categorie: commercant.categorie,
+      communeId: commercant.communeId,
+      accountState: commercant.accountState,
+      originVerification: commercant.originVerification,
+      registreStatus: commercant.registreStatus,
+      photoUrl: this.photoUrl(commercant),
+      latitude: commercant.latitude,
+      longitude: commercant.longitude,
+      createdAt: commercant.createdAt,
+    };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
