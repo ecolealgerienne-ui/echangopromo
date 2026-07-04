@@ -167,12 +167,10 @@ non traités par cette session de corrections :
 3. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
    développement mobile via émulateur Android + backend WSL continue —
    sinon documenter clairement la procédure pour chaque nouvelle session.
-4. Regex PIN 4-6 chiffres vs 4 fixes dans les specs — décision produit à
-   trancher (pas un bug).
-5. Mobile : listes de chemins protégés en dur dans `router.dart` (3
+4. Mobile : listes de chemins protégés en dur dans `router.dart` (3
    techniques différentes cohabitent) au lieu d'associer le rôle à la
    route.
-6. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
+5. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
    par `String` littérale, pas de miroir enum Dart.
 
 ---
@@ -437,3 +435,13 @@ non traités par cette session de corrections :
   web autorisée). L'app mobile (Dio natif) n'est pas concernée par le
   CORS ; ce réglage ne sert qu'à préparer un futur frontend web (admin)
   sans laisser la config permissive par défaut de NestJS en attendant.
+- **2026-07-04 (décision PIN 4-6 chiffres)** — Tranché en faveur du code
+  existant (backend + specs disaient déjà 4-6 chiffres depuis la
+  suppression de l'OTP ; seul `AUDIT_V0.md` gardait la mention obsolète
+  "4 fixes"). Côté mobile, les 4 validateurs dupliqués
+  (`v.length < 4`, ne vérifiait ni le max ni que ce sont bien des
+  chiffres) sont remplacés par un validateur partagé
+  `features/shared/validators/pin_validator.dart` (regex `^\d{4,6}$`,
+  miroir exact de la regex backend) utilisé dans
+  `commercant_register_screen.dart` et `commercant_login_screen.dart`
+  (connexion, claim, PIN oublié → nouveau PIN).

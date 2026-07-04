@@ -317,7 +317,10 @@ renvoie `NotFoundException` si le numéro n'existe pas, contrairement à
 `login` qui renvoie un message générique.
 
 **15. Regex PIN 4 à 6 chiffres au lieu de 4 fixes** — divergence mineure
-avec les specs (pas un problème de sécurité en soi).
+avec les specs (pas un problème de sécurité en soi). **Tranché** : specs
+mises à jour en "4-6 chiffres" (cohérent avec le code) lors de la
+suppression de l'OTP ; validateur mobile aligné sur la même regex
+(`docs/status_v0.md`, entrée "décision PIN 4-6 chiffres").
 
 ### Points vérifiés sans finding
 
