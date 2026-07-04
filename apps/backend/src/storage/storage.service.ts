@@ -28,6 +28,10 @@ export class StorageService {
     this.client = new S3Client({
       region: this.configService.get<string>('S3_REGION', 'gra'),
       endpoint: this.configService.get<string>('S3_ENDPOINT'),
+      // Requis par la plupart des S3 non-AWS (OVH, MinIO...) : sans ça, le
+      // SDK génère des URL virtual-hosted-style (bucket en sous-domaine) que
+      // ces fournisseurs ne servent pas.
+      forcePathStyle: true,
       credentials: {
         accessKeyId: this.configService.get<string>('S3_ACCESS_KEY_ID', ''),
         secretAccessKey: this.configService.get<string>(
