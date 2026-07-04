@@ -54,6 +54,26 @@ class CommercantApi {
     return Commercant.fromJson(response.data!);
   }
 
+  /// Édition du profil — téléphone volontairement non modifiable ici.
+  Future<Commercant> updateProfile({
+    String? nom,
+    String? adresse,
+    Categorie? categorie,
+    String? photoKey,
+    double? latitude,
+    double? longitude,
+  }) async {
+    final response = await _dio.patch<Map<String, dynamic>>('/commercant/me', data: {
+      if (nom != null) 'nom': nom,
+      if (adresse != null) 'adresse': adresse,
+      if (categorie != null) 'categorie': categorie.value,
+      if (photoKey != null) 'photoKey': photoKey,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+    });
+    return Commercant.fromJson(response.data!);
+  }
+
   Future<Commercant> publicProfile(String id) async {
     final response = await _dio.get<Map<String, dynamic>>('/commercant/$id/public');
     return Commercant.fromJson(response.data!);

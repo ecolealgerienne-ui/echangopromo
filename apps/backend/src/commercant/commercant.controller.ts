@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -15,6 +23,7 @@ import { Commercant } from './entities/commercant.entity';
 import { LoginCommercantDto } from './dto/login-commercant.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
 import { RequestRegistreVerificationDto } from './dto/request-registre-verification.dto';
+import { UpdateCommercantDto } from './dto/update-commercant.dto';
 
 @Controller('commercant')
 export class CommercantController {
@@ -78,11 +87,7 @@ export class CommercantController {
     };
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('commercant')
-  @Get('me')
-  async me(@CurrentUser() user: AuthTokenPayload) {
-    const commercant = await this.commercantService.findByIdOrFail(user.sub);
+  private toMeJson(commercant: Commercant) {
     return {
       id: commercant.id,
       telephone: commercant.telephone,
@@ -98,6 +103,26 @@ export class CommercantController {
       longitude: commercant.longitude,
       createdAt: commercant.createdAt,
     };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('commercant')
+  @Get('me')
+  async me(@CurrentUser() user: AuthTokenPayload) {
+    const commercant = await this.commercantService.findByIdOrFail(user.sub);
+    return this.toMeJson(commercant);
+  }
+
+  /** Édition du profil par le commerçant lui-même — téléphone non modifiable ici. */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('commercant')
+  @Patch('me')
+  async updateMe(
+    @CurrentUser() user: AuthTokenPayload,
+    @Body() dto: UpdateCommercantDto,
+  ) {
+    const commercant = await this.commercantService.updateProfile(user.sub, dto);
+    return this.toMeJson(commercant);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

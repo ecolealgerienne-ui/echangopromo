@@ -14,6 +14,7 @@ import '../features/client/providers/commune_providers.dart';
 import '../features/commercant/screens/commercant_dashboard_screen.dart';
 import '../features/commercant/screens/commercant_login_screen.dart';
 import '../features/commercant/screens/commercant_register_screen.dart';
+import '../features/commercant/screens/edit_profile_screen.dart';
 import '../features/commercant/screens/my_promos_screen.dart';
 import '../features/commercant/screens/promo_form_screen.dart';
 import '../providers/auth_provider.dart';
@@ -22,6 +23,7 @@ const _commercantProtectedPaths = [
   '/commercant/dashboard',
   '/commercant/promos',
   '/commercant/promos/new',
+  '/commercant/profile/edit',
 ];
 const _agentProtectedPaths = ['/agent/zone', '/agent/commercant/new'];
 
@@ -76,6 +78,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const CommercantDashboardScreen(),
       ),
       GoRoute(path: '/commercant/promos', builder: (context, state) => const MyPromosScreen()),
+      GoRoute(
+        path: '/commercant/profile/edit',
+        builder: (context, state) => const EditProfileScreen(),
+      ),
       GoRoute(
         path: '/commercant/promos/new',
         builder: (context, state) => PromoFormScreen(existingPromo: state.extra as Promo?),

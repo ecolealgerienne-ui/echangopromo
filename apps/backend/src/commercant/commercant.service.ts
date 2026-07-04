@@ -23,6 +23,7 @@ import {
 import { ClaimCommercantDto } from './dto/claim-commercant.dto';
 import { CreateCommercantByAgentDto } from './dto/create-commercant-by-agent.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
+import { UpdateCommercantDto } from './dto/update-commercant.dto';
 
 export type ZoneCommerceStatus = 'jamais_visite' | 'a_jour' | 'a_relancer';
 
@@ -132,6 +133,16 @@ export class CommercantService {
     const commercant = await this.findByIdOrFail(commercantId);
     commercant.pinHash = null;
     await this.commercants.save(commercant);
+  }
+
+  /** Édition du profil par le commerçant lui-même — téléphone non modifiable ici. */
+  async updateProfile(
+    commercantId: string,
+    dto: UpdateCommercantDto,
+  ): Promise<Commercant> {
+    const commercant = await this.findByIdOrFail(commercantId);
+    Object.assign(commercant, dto);
+    return this.commercants.save(commercant);
   }
 
   async findByIdOrFail(id: string): Promise<Commercant> {

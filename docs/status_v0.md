@@ -331,3 +331,16 @@ non traités par cette session de corrections :
     l'ancien enum, le même risque qu'avec l'enum `CommercantAccountState`
     (valeurs absentes du nouveau type) peut se reproduire — repartir d'une
     base vide si erreur `invalid input value for enum` au démarrage.
+- **2026-07-04 (fix schéma)** — `Commercant.adresse` (`string | null`)
+  n'avait pas de `type` explicite sur `@Column()` : TypeORM ne peut pas
+  inférer le type Postgres depuis un union type TS via reflect-metadata,
+  et retombe sur `"Object"`, rejeté par Postgres au démarrage. Fix :
+  `type: 'varchar'` explicite (même précaution déjà appliquée à
+  `zoneId`/`registreKey`). À surveiller pour tout futur champ nullable
+  typé `T | null` sans `type` explicite.
+- **2026-07-04 (édition profil commerçant)** — Gap découvert en testant :
+  aucun moyen de modifier nom/adresse/catégorie/photo/position GPS après
+  l'inscription (aucun endpoint, aucun écran). Ajout de
+  `PATCH /commercant/me` (téléphone volontairement exclu — identifiant de
+  connexion, pas un champ de profil) et d'un écran `EditProfileScreen`
+  accessible depuis le dashboard commerçant.
