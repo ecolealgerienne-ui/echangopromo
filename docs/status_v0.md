@@ -17,7 +17,7 @@ Dernière mise à jour : 2026-07-04
 | Specs fonctionnelles | ✅ `docs/SPECS_ECHANGO_PROMO_V0.md` |
 | Architecture & choix de stack | ✅ `docs/ARCHITECTURE.md` |
 | Backend NestJS (tous modules) | ✅ implémenté, build+lint clean |
-| Mobile Flutter (3 rôles) | ✅ implémenté, **jamais compilé** (SDK indisponible dans l'environnement de dev) |
+| Mobile Flutter (3 rôles) | ✅ implémenté, **compilé et exécuté** sur émulateur Android, connecté au backend |
 | Audit 6 volets (fonctionnel/architecture/sécurité/qualité/mobile/perf) | ✅ terminé — `docs/AUDIT_V0.md` |
 | Corrections critiques/hautes de l'audit | ✅ appliquées et testées manuellement (voir ci-dessous) |
 | Corrections moyennes/basses restantes | 🔄 non traitées, listées ci-dessous |
@@ -129,6 +129,20 @@ local), pas seulement par la compilation.
       `initialValue` (`category_dropdown.dart`, `create_commercant_screen.dart`,
       `commercant_register_screen.dart`). `flutter analyze` propre après
       correction (0 issue restante à vérifier après ce commit).
+- [x] **Dossiers de plateforme absents depuis le début** (`android/`, `ios/`,
+      `web/`, `windows/`, `linux/`, `macos/`) : le projet n'avait jamais eu
+      de `flutter create` abouti — seuls `lib/` et `pubspec.yaml` existaient,
+      ce qui rendait `flutter analyze` possible mais `flutter run`
+      impossible (aucune cible détectée). Générés via `flutter create .`
+      côté Windows natif et commités.
+- [x] **Première exécution réelle de l'app** : lancée sur un émulateur
+      Android (AVD), connectée au backend NestJS tournant dans WSL2. A
+      nécessité un `netsh interface portproxy` (le `localhost forwarding`
+      WSL2 n'écoute que sur la boucle locale, pas sur l'interface réseau
+      virtuelle de l'émulateur) — l'IP WSL change à chaque redémarrage, donc
+      le portproxy est à refaire à chaque session si le réseau ne répond
+      plus. Écran "Choisissez votre commune" affiché et API jointe avec
+      succès.
 
 ---
 
@@ -142,9 +156,12 @@ non traités par cette session de corrections :
    en production).
 3. Migrations TypeORM versionnées (toujours en `synchronize: true` dev).
 4. Vraie intégration SMS (stub qui logge toujours le code).
-5. `flutter analyze` + `flutter test` réels (jamais exécutés).
+5. `flutter test` réel (jamais exécuté ; `flutter analyze` fait et propre).
 6. Refactoring `AdminController` (extraire l'orchestration modération dans
    un service dédié).
+7. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
+   développement mobile via émulateur Android + backend WSL continue —
+   sinon documenter clairement la procédure pour chaque nouvelle session.
 
 ---
 
@@ -158,3 +175,13 @@ non traités par cette session de corrections :
   de zone agent, race condition plafond promos, N+1 zone/modération,
   branchement `AuditLogModule`, index DB manquants, corrections mobile
   (intl, `context.mounted`, garde-fou plafond promos).
+- **2026-07-04 (suite)** — Déploiement et premiers tests réels côté
+  utilisateur (WSL + Windows). Fix port Postgres (5433), fix `workspaces`
+  npm racine cassant l'override `multer`. Premier `flutter analyze` réel :
+  5 issues corrigées (import mort, `AppRole` non importé — bug réel, 3×
+  `DropdownButtonFormField.value` déprécié). Découverte que les dossiers
+  de plateforme (`android/`, etc.) n'avaient jamais été générés ; générés
+  et commités. Première exécution de l'app sur émulateur Android connecté
+  au backend WSL2 (nécessite un `netsh portproxy`, IP WSL changeante).
+  Création de la branche `main` (absente jusque-là, `claude/new-project-
+  setup-t5rs5y` était la branche par défaut).
