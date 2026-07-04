@@ -49,7 +49,12 @@ class PromoCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(promo.produit, style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    promo.description,
+                    style: Theme.of(context).textTheme.titleMedium,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
@@ -67,6 +72,15 @@ class PromoCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (promo.commercantNom != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      promo.commercantNom!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ],
               ),
             ),

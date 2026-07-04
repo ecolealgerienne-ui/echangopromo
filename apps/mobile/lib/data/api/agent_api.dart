@@ -30,21 +30,23 @@ class AgentApi {
   Future<Commercant> createCommercant({
     required String telephone,
     required String nom,
-    required String adresse,
+    String? adresse,
     required Categorie categorie,
     required String communeId,
+    String? photoKey,
+    double? latitude,
+    double? longitude,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>('/agent/commercant', data: {
       'telephone': telephone,
       'nom': nom,
-      'adresse': adresse,
+      if (adresse != null && adresse.isNotEmpty) 'adresse': adresse,
       'categorie': categorie.value,
       'communeId': communeId,
+      if (photoKey != null) 'photoKey': photoKey,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
     });
     return Commercant.fromJson(response.data!);
-  }
-
-  Future<void> initiateClaim(String commercantId) async {
-    await _dio.post<void>('/agent/commercant/$commercantId/initiate-claim');
   }
 }

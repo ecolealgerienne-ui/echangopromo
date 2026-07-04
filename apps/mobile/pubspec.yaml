@@ -32,6 +32,11 @@ dependencies:
   # Photo promo (agent) — capture caméra obligatoire, pas de galerie
   image_picker: ^1.1.0
 
+  # Position GPS du commerce (gratuit, pas de clé API Google Maps) et lien
+  # "Itinéraire" ouvrant l'app Google Maps côté client
+  geolocator: ^13.0.1
+  url_launcher: ^6.3.0
+
   # Compression avant upload — §5.8 des specs
   flutter_image_compress: ^2.3.0
   path_provider: ^2.1.3

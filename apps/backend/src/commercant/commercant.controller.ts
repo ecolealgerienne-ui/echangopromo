@@ -1,53 +1,58 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { OtpPurpose } from '../auth/entities/otp-code.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AuthService } from '../auth/auth.service';
 import type { AuthTokenPayload } from '../auth/role';
 import { STRICT_THROTTLE } from '../common/throttle';
 import { DeviceId } from '../common/decorators/device-id.decorator';
+import { StorageService } from '../storage/storage.service';
 import { CommercantService } from './commercant.service';
-import { ConfirmPhoneDto } from './dto/confirm-phone.dto';
-import { ForgotPinConfirmDto, ForgotPinRequestDto } from './dto/forgot-pin.dto';
+import { ClaimCommercantDto } from './dto/claim-commercant.dto';
+import { Commercant } from './entities/commercant.entity';
 import { LoginCommercantDto } from './dto/login-commercant.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
 import { RequestRegistreVerificationDto } from './dto/request-registre-verification.dto';
+import { UpdateCommercantDto } from './dto/update-commercant.dto';
 
 @Controller('commercant')
 export class CommercantController {
   constructor(
     private readonly commercantService: CommercantService,
     private readonly authService: AuthService,
+    private readonly storageService: StorageService,
   ) {}
+
+  private photoUrl(commercant: Commercant): string | null {
+    return commercant.photoKey
+      ? this.storageService.buildPublicUrl(commercant.photoKey)
+      : null;
+  }
 
   @Throttle(STRICT_THROTTLE)
   @Post('register')
   async register(@Body() dto: RegisterCommercantDto) {
-    return this.commercantService.selfRegister(dto);
-  }
-
-  @Throttle(STRICT_THROTTLE)
-  @Post('confirm-inscription')
-  async confirmInscription(@Body() dto: ConfirmPhoneDto) {
-    const commercant = await this.commercantService.confirmPhoneAndSetPin(
-      OtpPurpose.INSCRIPTION,
-      dto,
-    );
+    const commercant = await this.commercantService.selfRegister(dto);
     return {
       accessToken: this.authService.issueToken(commercant.id, 'commercant'),
     };
   }
 
+  /** Active un compte créé par un agent (ou réinitialisé par l'admin) — pas d'OTP. */
   @Throttle(STRICT_THROTTLE)
-  @Post('confirm-revendication')
-  async confirmRevendication(@Body() dto: ConfirmPhoneDto) {
-    const commercant = await this.commercantService.confirmPhoneAndSetPin(
-      OtpPurpose.REVENDICATION,
-      dto,
-    );
+  @Post('claim')
+  async claim(@Body() dto: ClaimCommercantDto) {
+    const commercant = await this.commercantService.claim(dto);
     return {
       accessToken: this.authService.issueToken(commercant.id, 'commercant'),
     };
@@ -65,24 +70,6 @@ export class CommercantController {
     };
   }
 
-  @Throttle(STRICT_THROTTLE)
-  @Post('forgot-pin/request')
-  async forgotPinRequest(@Body() dto: ForgotPinRequestDto) {
-    await this.commercantService.requestForgotPin(dto.telephone);
-    return { ok: true };
-  }
-
-  @Throttle(STRICT_THROTTLE)
-  @Post('forgot-pin/confirm')
-  async forgotPinConfirm(@Body() dto: ForgotPinConfirmDto) {
-    await this.commercantService.confirmForgotPin(
-      dto.telephone,
-      dto.code,
-      dto.newPin,
-    );
-    return { ok: true };
-  }
-
   /** Fiche publique consultée depuis le détail d'une promo (specs §3.1). */
   @Get(':id/public')
   async publicProfile(@Param('id') id: string, @DeviceId() deviceId: string) {
@@ -94,6 +81,27 @@ export class CommercantController {
       adresse: commercant.adresse,
       categorie: commercant.categorie,
       communeId: commercant.communeId,
+      photoUrl: this.photoUrl(commercant),
+      latitude: commercant.latitude,
+      longitude: commercant.longitude,
+    };
+  }
+
+  private toMeJson(commercant: Commercant) {
+    return {
+      id: commercant.id,
+      telephone: commercant.telephone,
+      nom: commercant.nom,
+      adresse: commercant.adresse,
+      categorie: commercant.categorie,
+      communeId: commercant.communeId,
+      accountState: commercant.accountState,
+      originVerification: commercant.originVerification,
+      registreStatus: commercant.registreStatus,
+      photoUrl: this.photoUrl(commercant),
+      latitude: commercant.latitude,
+      longitude: commercant.longitude,
+      createdAt: commercant.createdAt,
     };
   }
 
@@ -101,7 +109,20 @@ export class CommercantController {
   @Roles('commercant')
   @Get('me')
   async me(@CurrentUser() user: AuthTokenPayload) {
-    return this.commercantService.findByIdOrFail(user.sub);
+    const commercant = await this.commercantService.findByIdOrFail(user.sub);
+    return this.toMeJson(commercant);
+  }
+
+  /** Édition du profil par le commerçant lui-même — téléphone non modifiable ici. */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('commercant')
+  @Patch('me')
+  async updateMe(
+    @CurrentUser() user: AuthTokenPayload,
+    @Body() dto: UpdateCommercantDto,
+  ) {
+    const commercant = await this.commercantService.updateProfile(user.sub, dto);
+    return this.toMeJson(commercant);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

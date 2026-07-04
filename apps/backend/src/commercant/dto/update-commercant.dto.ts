@@ -3,38 +3,34 @@ import {
   IsLatitude,
   IsLongitude,
   IsOptional,
-  IsPhoneNumber,
   IsString,
-  IsUUID,
   MinLength,
 } from 'class-validator';
 import { Categorie } from '../../common/enums/categorie.enum';
 
-export class CreateCommercantByAgentDto {
-  @IsPhoneNumber('DZ')
-  telephone: string;
-
+/**
+ * Édition du profil commerçant après inscription — téléphone volontairement
+ * exclu (identifiant de connexion, pas un champ de profil ordinaire).
+ */
+export class UpdateCommercantDto {
+  @IsOptional()
   @IsString()
   @MinLength(2)
-  nom: string;
+  nom?: string;
 
   @IsOptional()
   @IsString()
   @MinLength(2)
   adresse?: string;
 
+  @IsOptional()
   @IsEnum(Categorie)
-  categorie: Categorie;
+  categorie?: Categorie;
 
-  @IsUUID()
-  communeId: string;
-
-  /** Clé S3 de la photo du commerce, déjà uploadée (optionnel). */
   @IsOptional()
   @IsString()
   photoKey?: string;
 
-  /** Position GPS capturée sur l'appareil de l'agent (optionnel). */
   @IsOptional()
   @IsLatitude()
   latitude?: number;

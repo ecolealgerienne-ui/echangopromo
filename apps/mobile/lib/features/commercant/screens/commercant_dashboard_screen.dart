@@ -66,6 +66,17 @@ class CommercantDashboardScreen extends ConsumerWidget {
               label: const Text('Mes promos'),
               onPressed: () => context.push('/commercant/promos'),
             ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.storefront_outlined),
+              label: const Text('Modifier mon profil'),
+              onPressed: () async {
+                final updated = await context.push<bool>('/commercant/profile/edit');
+                if (updated == true) {
+                  ref.invalidate(_meProvider);
+                }
+              },
+            ),
           ],
         ),
       ),

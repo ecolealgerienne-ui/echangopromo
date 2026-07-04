@@ -3,20 +3,56 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../../data/api/api_exception.dart';
+import '../../../domain/models/promo.dart';
 import '../../../providers/core_providers.dart';
 
 final myPromosProvider = FutureProvider.autoDispose((ref) => ref.watch(promoApiProvider).listMine());
 
-/// Jusqu'à 5 promos actives simultanément (specs §3.2/§5.3).
+/// Jusqu'à 5 promos actives simultanément (specs §3.2/§5.3). Workflow
+/// brouillon → publiée → arrêtée, édition toujours possible quel que soit
+/// le statut (specs §3.2).
 class MyPromosScreen extends ConsumerWidget {
   const MyPromosScreen({super.key});
+
+  Future<void> _editPromo(BuildContext context, WidgetRef ref, Promo promo) async {
+    final updated = await context.push<bool>('/commercant/promos/new', extra: promo);
+    if (updated == true && context.mounted) {
+      ref.invalidate(myPromosProvider);
+    }
+  }
+
+  Future<void> _publish(BuildContext context, WidgetRef ref, Promo promo) async {
+    try {
+      await ref.read(promoApiProvider).publish(promo.id);
+      ref.invalidate(myPromosProvider);
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(extractApiErrorMessage(error, fallback: 'Publication impossible.'))),
+        );
+      }
+    }
+  }
+
+  Future<void> _stop(BuildContext context, WidgetRef ref, Promo promo) async {
+    try {
+      await ref.read(promoApiProvider).stop(promo.id);
+      ref.invalidate(myPromosProvider);
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(extractApiErrorMessage(error, fallback: 'Action impossible.'))),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final promosAsync = ref.watch(myPromosProvider);
     final dateFormat = DateFormat('dd/MM/yyyy');
-    final activeCount =
-        promosAsync.valueOrNull?.where((p) => p.status == 'active').length ?? 0;
+    final activeCount = promosAsync.valueOrNull?.where((p) => p.isPublished).length ?? 0;
     final atCap = activeCount >= 5;
 
     return Scaffold(
@@ -41,7 +77,6 @@ class MyPromosScreen extends ConsumerWidget {
           if (promos.isEmpty) {
             return const Center(child: Text('Aucune promo pour le moment.'));
           }
-          final activeCount = promos.where((p) => p.status == 'active').length;
           return Column(
             children: [
               Padding(
@@ -53,14 +88,36 @@ class MyPromosScreen extends ConsumerWidget {
                   itemCount: promos.length,
                   itemBuilder: (context, index) {
                     final promo = promos[index];
+                    final dateLabel = promo.dateFin != null
+                        ? 'jusqu\'au ${dateFormat.format(promo.dateFin!)}'
+                        : 'pas encore publiée';
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundImage:
                             promo.photoUrl != null ? CachedNetworkImageProvider(promo.photoUrl!) : null,
                       ),
-                      title: Text(promo.produit),
+                      title: Text(promo.description),
                       subtitle: Text(
-                        '${promo.status} · jusqu\'au ${dateFormat.format(promo.dateFin)} · ${promo.viewCount ?? 0} vues',
+                        '${promo.lifecycleLabel} · $dateLabel · ${promo.viewCount ?? 0} vues',
+                      ),
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (action) {
+                          switch (action) {
+                            case 'edit':
+                              _editPromo(context, ref, promo);
+                            case 'publish':
+                              _publish(context, ref, promo);
+                            case 'stop':
+                              _stop(context, ref, promo);
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(value: 'edit', child: Text('Modifier')),
+                          if (promo.isPublished)
+                            const PopupMenuItem(value: 'stop', child: Text('Arrêter'))
+                          else
+                            const PopupMenuItem(value: 'publish', child: Text('Publier')),
+                        ],
                       ),
                     );
                   },

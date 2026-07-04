@@ -10,16 +10,52 @@ services:
       - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U echango -d echango_promo']
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
     build: ./apps/backend
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     env_file:
       - ./apps/backend/.env
     ports:
       - '3000:3000'
 
+  # S3 local pour dev/test tant qu'aucun bucket OVH n'est configuré — même
+  # API que le vrai S3 OVH utilisé en prod, aucun changement de code requis.
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: echango
+      MINIO_ROOT_PASSWORD: echango123
+    ports:
+      - '9000:9000' # API S3
+      - '9001:9001' # console web (http://localhost:9001)
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+  # Crée le bucket et l'ouvre en lecture publique (comme le sera le bucket
+  # OVH réel) au démarrage — s'arrête une fois fait, ce n'est pas un bug si
+  # ce conteneur apparaît "Exited (0)".
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 echango echango123; do sleep 1; done;
+      mc mb -p local/echango-promo;
+      mc anonymous set download local/echango-promo;
+      "
+
 volumes:
   postgres_data:
+  minio_data:

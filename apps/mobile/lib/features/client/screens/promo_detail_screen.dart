@@ -2,13 +2,14 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/models/commercant.dart';
 import '../../../providers/core_providers.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/promo_providers.dart';
 
-/// Fiche promo (specs §3.1) : photo, produit, prix avant/après, nom et
+/// Fiche promo (specs §3.1) : photo, description, prix avant/après, nom et
 /// adresse du commerçant, date de fin de validité, signalement.
 class PromoDetailScreen extends ConsumerWidget {
   const PromoDetailScreen({super.key, required this.promoId});
@@ -46,7 +47,7 @@ class PromoDetailScreen extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(
-                          child: Text(promo.produit, style: Theme.of(context).textTheme.headlineSmall),
+                          child: Text(promo.description, style: Theme.of(context).textTheme.headlineSmall),
                         ),
                         IconButton(
                           icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
@@ -74,7 +75,8 @@ class PromoDetailScreen extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text('Valable jusqu\'au ${dateFormat.format(promo.dateFin)}'),
+                    if (promo.dateFin != null)
+                      Text('Valable jusqu\'au ${dateFormat.format(promo.dateFin!)}'),
                     const Divider(height: 32),
                     _CommercantInfo(commercantId: promo.commercantId),
                     const SizedBox(height: 24),
@@ -129,17 +131,52 @@ class _CommercantInfo extends ConsumerWidget {
       data: (commercant) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(commercant.nom, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 4),
           Row(
             children: [
-              const Icon(Icons.place_outlined, size: 18, color: Colors.grey),
-              const SizedBox(width: 4),
-              Expanded(child: Text(commercant.adresse)),
+              if (commercant.photoUrl != null) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: commercant.photoUrl!,
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Text(commercant.nom, style: Theme.of(context).textTheme.titleMedium),
+              ),
             ],
           ),
+          if (commercant.adresse != null && commercant.adresse!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.place_outlined, size: 18, color: Colors.grey),
+                const SizedBox(width: 4),
+                Expanded(child: Text(commercant.adresse!)),
+              ],
+            ),
+          ],
+          if (commercant.latitude != null && commercant.longitude != null) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.directions_outlined),
+              label: const Text('Itinéraire'),
+              onPressed: () => _openMaps(commercant.latitude!, commercant.longitude!),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _openMaps(double latitude, double longitude) async {
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
+    );
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }

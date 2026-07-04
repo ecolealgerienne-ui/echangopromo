@@ -1,8 +1,12 @@
 import {
   IsEnum,
+  IsLatitude,
+  IsLongitude,
+  IsOptional,
   IsPhoneNumber,
   IsString,
   IsUUID,
+  Matches,
   MinLength,
 } from 'class-validator';
 import { Categorie } from '../../common/enums/categorie.enum';
@@ -15,13 +19,31 @@ export class RegisterCommercantDto {
   @MinLength(2)
   nom: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(2)
-  adresse: string;
+  adresse?: string;
 
   @IsEnum(Categorie)
   categorie: Categorie;
 
   @IsUUID()
   communeId: string;
+
+  @Matches(/^\d{4,6}$/, { message: 'Le code PIN doit contenir 4 à 6 chiffres' })
+  pin: string;
+
+  /** Clé S3 de la photo du commerce, déjà uploadée (optionnel). */
+  @IsOptional()
+  @IsString()
+  photoKey?: string;
+
+  /** Position GPS capturée sur l'appareil (optionnel, pas de Google Maps payant). */
+  @IsOptional()
+  @IsLatitude()
+  latitude?: number;
+
+  @IsOptional()
+  @IsLongitude()
+  longitude?: number;
 }

@@ -12,4 +12,6 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 EXPOSE 3000
-CMD ["node", "dist/main"]
+# Migrations avant démarrage — schéma géré uniquement par des migrations
+# versionnées, plus par `synchronize` (voir src/data-source.ts).
+CMD ["sh", "-c", "npx typeorm migration:run -d dist/data-source.js && node dist/main"]

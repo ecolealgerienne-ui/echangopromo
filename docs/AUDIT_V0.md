@@ -6,6 +6,12 @@ depuis, voir `docs/status_v0.md` (la plupart des findings critiques/hauts
 de sécurité et les bugs d'architecture identifiés ici ont été traités dans
 la foulée). `CLAUDE.md` tire les leçons générales pour la suite du
 développement.
+
+**Note (2026-07-04)** : l'OTP SMS mentionné dans plusieurs findings
+ci-dessous (brute-force OTP, rate limiting d'envoi, index `OtpCode`) a
+depuis été **supprimé du projet** (décision produit : jugé inutile et
+coûteux) — ces findings n'ont plus d'objet, le code correspondant
+n'existe plus. Détail dans `docs/status_v0.md`.
 **Méthode** : 6 audits indépendants menés en parallèle par des agents en
 lecture seule (aucune modification de code), sur la branche
 `claude/new-project-setup-t5rs5y` (commit `e56c015`). L'audit fonctionnel

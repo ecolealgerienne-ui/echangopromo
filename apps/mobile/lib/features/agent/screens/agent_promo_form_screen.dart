@@ -4,17 +4,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
-import '../../shared/widgets/category_dropdown.dart';
-import '../../shared/widgets/photo_picker_field.dart';
+import '../../shared/widgets/error_text.dart';
+import '../../shared/widgets/loading_button.dart';
+import '../../shared/widgets/promo_form_fields.dart';
 import '../../../providers/core_providers.dart';
+
+const _defaultDureeJours = 5;
+const _maxDureeJours = 7;
 
 /// Création/mise à jour d'une promo par l'agent. Photo obligatoirement
 /// prise dans l'app (pas de galerie), avec horodatage côté serveur — preuve
 /// minimale de passage, sans géolocalisation (specs §3.3/§5.5).
 class AgentPromoFormScreen extends ConsumerStatefulWidget {
-  const AgentPromoFormScreen({super.key, required this.commercantId});
+  const AgentPromoFormScreen({super.key, required this.commercantId, this.defaultCategorie});
 
   final String commercantId;
+
+  /// Catégorie du commerçant, passée par l'écran appelant — pré-remplit le
+  /// champ (modifiable ensuite) plutôt que de la redemander à chaque promo.
+  final Categorie? defaultCategorie;
 
   @override
   ConsumerState<AgentPromoFormScreen> createState() => _AgentPromoFormScreenState();
@@ -22,20 +30,37 @@ class AgentPromoFormScreen extends ConsumerStatefulWidget {
 
 class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _produitController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _prixAvantController = TextEditingController();
   final _prixApresController = TextEditingController();
   Categorie? _categorie;
+  int _dureeJours = _defaultDureeJours;
   File? _photo;
   bool _loading = false;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _categorie = widget.defaultCategorie;
+  }
+
+  @override
   void dispose() {
-    _produitController.dispose();
+    _descriptionController.dispose();
     _prixAvantController.dispose();
     _prixApresController.dispose();
     super.dispose();
+  }
+
+  String? _validatePrixApres(String? v) {
+    final prixApres = double.tryParse(v ?? '');
+    if (prixApres == null) return 'Invalide';
+    final prixAvant = double.tryParse(_prixAvantController.text);
+    if (prixAvant != null && prixApres >= prixAvant) {
+      return 'Doit être inférieur au prix avant';
+    }
+    return null;
   }
 
   Future<void> _submit() async {
@@ -54,11 +79,12 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
       final photoKey = await ref.read(storageApiProvider).uploadPhoto(_photo!);
       await ref.read(promoApiProvider).createForCommercant(
             widget.commercantId,
-            produit: _produitController.text.trim(),
+            description: _descriptionController.text.trim(),
             prixAvant: double.parse(_prixAvantController.text.trim()),
             prixApres: double.parse(_prixApresController.text.trim()),
             categorie: _categorie!,
             photoKey: photoKey,
+            dateFin: DateTime.now().add(Duration(days: _dureeJours)),
           );
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
@@ -78,56 +104,23 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
           key: _formKey,
           child: ListView(
             children: [
-              PhotoPickerField(
-                file: _photo,
+              PromoFormFields(
+                photo: _photo,
+                onPhotoChanged: (file) => setState(() => _photo = file),
                 cameraOnly: true,
-                onChanged: (file) => setState(() => _photo = file),
+                descriptionController: _descriptionController,
+                prixAvantController: _prixAvantController,
+                prixApresController: _prixApresController,
+                prixApresValidator: _validatePrixApres,
+                categorie: _categorie,
+                onCategorieChanged: (v) => setState(() => _categorie = v),
+                dureeJours: _dureeJours,
+                maxDureeJours: _maxDureeJours,
+                onDureeJoursChanged: (v) => setState(() => _dureeJours = v ?? _defaultDureeJours),
               ),
+              ErrorText(_error),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _produitController,
-                decoration: const InputDecoration(labelText: 'Produit'),
-                validator: (v) => (v == null || v.isEmpty) ? 'Produit requis' : null,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _prixAvantController,
-                      decoration: const InputDecoration(labelText: 'Prix avant (DA)'),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      validator: (v) => (double.tryParse(v ?? '') == null) ? 'Invalide' : null,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _prixApresController,
-                      decoration: const InputDecoration(labelText: 'Prix après (DA)'),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      validator: (v) => (double.tryParse(v ?? '') == null) ? 'Invalide' : null,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              CategoryDropdown(value: _categorie, onChanged: (v) => setState(() => _categorie = v)),
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(_error!, style: const TextStyle(color: Colors.red)),
-              ],
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _loading ? null : _submit,
-                child: _loading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Publier'),
-              ),
+              LoadingButton(loading: _loading, onPressed: _submit, label: 'Publier'),
             ],
           ),
         ),

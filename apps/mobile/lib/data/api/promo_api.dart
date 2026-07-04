@@ -29,32 +29,34 @@ class PromoApi {
   }
 
   Future<Promo> create({
-    required String produit,
+    required String description,
     required double prixAvant,
     required double prixApres,
     required Categorie categorie,
     required String photoKey,
     DateTime? dateFin,
+    bool asDraft = false,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/promo',
-      data: _buildPayload(produit, prixAvant, prixApres, categorie, photoKey, dateFin),
+      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKey, dateFin, asDraft),
     );
     return Promo.fromJson(response.data!);
   }
 
   Future<Promo> createForCommercant(
     String commercantId, {
-    required String produit,
+    required String description,
     required double prixAvant,
     required double prixApres,
     required Categorie categorie,
     required String photoKey,
     DateTime? dateFin,
+    bool asDraft = false,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/promo/agent/$commercantId',
-      data: _buildPayload(produit, prixAvant, prixApres, categorie, photoKey, dateFin),
+      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKey, dateFin, asDraft),
     );
     return Promo.fromJson(response.data!);
   }
@@ -66,14 +68,14 @@ class PromoApi {
 
   Future<void> update(
     String id, {
-    String? produit,
+    String? description,
     double? prixAvant,
     double? prixApres,
     Categorie? categorie,
     String? photoKey,
   }) async {
     await _dio.patch<void>('/promo/$id', data: {
-      if (produit != null) 'produit': produit,
+      if (description != null) 'description': description,
       if (prixAvant != null) 'prixAvant': prixAvant,
       if (prixApres != null) 'prixApres': prixApres,
       if (categorie != null) 'categorie': categorie.value,
@@ -81,20 +83,33 @@ class PromoApi {
     });
   }
 
+  /// Publie un brouillon, ou republie une promo arrêtée/expirée (nouvelle
+  /// `dateFin` recalculée côté backend).
+  Future<void> publish(String id) async {
+    await _dio.post<void>('/promo/$id/publish');
+  }
+
+  /// Arrêt volontaire (ex. rupture de stock) — libère un slot sur le plafond de 5.
+  Future<void> stop(String id) async {
+    await _dio.post<void>('/promo/$id/stop');
+  }
+
   Map<String, dynamic> _buildPayload(
-    String produit,
+    String description,
     double prixAvant,
     double prixApres,
     Categorie categorie,
     String photoKey,
     DateTime? dateFin,
+    bool asDraft,
   ) =>
       {
-        'produit': produit,
+        'description': description,
         'prixAvant': prixAvant,
         'prixApres': prixApres,
         'categorie': categorie.value,
         'photoKey': photoKey,
         if (dateFin != null) 'dateFin': dateFin.toIso8601String(),
+        if (asDraft) 'asDraft': asDraft,
       };
 }

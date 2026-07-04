@@ -5,6 +5,8 @@ import '../../../data/api/api_exception.dart';
 import '../../../domain/models/auth_session.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/widgets/error_text.dart';
+import '../../shared/widgets/loading_button.dart';
 
 /// Authentification email + mot de passe — compte créé exclusivement par
 /// l'admin, pas d'auto-inscription agent (specs §3.3).
@@ -78,21 +80,9 @@ class _AgentLoginScreenState extends ConsumerState<AgentLoginScreen> {
                 obscureText: true,
                 validator: (v) => (v == null || v.isEmpty) ? 'Mot de passe requis' : null,
               ),
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(_error!, style: const TextStyle(color: Colors.red)),
-              ],
+              ErrorText(_error),
               const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _loading ? null : _submit,
-                child: _loading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Se connecter'),
-              ),
+              LoadingButton(loading: _loading, onPressed: _submit, label: 'Se connecter'),
             ],
           ),
         ),

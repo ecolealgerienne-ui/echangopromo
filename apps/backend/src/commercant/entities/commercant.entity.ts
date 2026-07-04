@@ -14,11 +14,14 @@ import { Commune } from '../../commune/entities/commune.entity';
 import { Zone } from '../../zone/entities/zone.entity';
 import { Agent } from '../../agent/entities/agent.entity';
 
-/** Cycle de vie du compte (specs §3.2). */
+/**
+ * Cycle de vie du compte (specs §3.2). Sans OTP, il n'y a plus d'étape
+ * intermédiaire de revendication : un commerçant créé par un agent reste
+ * `cree_agent` jusqu'à ce qu'il définisse lui-même son PIN (`claim`), ce qui
+ * le fait passer directement à `autonome`.
+ */
 export enum CommercantAccountState {
   CREE_AGENT = 'cree_agent',
-  EN_ATTENTE_REVENDICATION = 'en_attente_revendication',
-  REVENDIQUE = 'revendique',
   AUTONOME = 'autonome',
 }
 
@@ -50,8 +53,8 @@ export class Commercant {
   @Column()
   nom: string;
 
-  @Column()
-  adresse: string;
+  @Column({ type: 'varchar', nullable: true })
+  adresse: string | null;
 
   @Column({ type: 'enum', enum: Categorie })
   categorie: Categorie;
@@ -83,7 +86,7 @@ export class Commercant {
   @Column({
     type: 'enum',
     enum: CommercantAccountState,
-    default: CommercantAccountState.EN_ATTENTE_REVENDICATION,
+    default: CommercantAccountState.CREE_AGENT,
   })
   accountState: CommercantAccountState;
 
@@ -94,8 +97,22 @@ export class Commercant {
   @Column({ type: 'varchar', nullable: true })
   pinHash: string | null;
 
-  @Column({ type: 'timestamptz', nullable: true })
-  telephoneVerifiedAt: Date | null;
+  /**
+   * Clé S3 de la photo du commerce (optionnelle — pour que les clients
+   * identifient facilement le commerce dans la liste/fiche). Jamais
+   * exposée telle quelle : le contrôleur expose `photoUrl` à la place
+   * (même précaution que `Promo.photoKey`).
+   */
+  @Exclude()
+  @Column({ type: 'varchar', nullable: true })
+  photoKey: string | null;
+
+  /** Position GPS du commerce (optionnelle, capturée via le device — pas de Google Maps payant). */
+  @Column({ type: 'double precision', nullable: true })
+  latitude: number | null;
+
+  @Column({ type: 'double precision', nullable: true })
+  longitude: number | null;
 
   @Column({ type: 'enum', enum: RegistreStatus, nullable: true })
   registreStatus: RegistreStatus | null;

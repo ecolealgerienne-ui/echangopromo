@@ -28,6 +28,10 @@ export class StorageService {
     this.client = new S3Client({
       region: this.configService.get<string>('S3_REGION', 'gra'),
       endpoint: this.configService.get<string>('S3_ENDPOINT'),
+      // Requis par la plupart des S3 non-AWS (OVH, MinIO...) : sans ça, le
+      // SDK génère des URL virtual-hosted-style (bucket en sous-domaine) que
+      // ces fournisseurs ne servent pas.
+      forcePathStyle: true,
       credentials: {
         accessKeyId: this.configService.get<string>('S3_ACCESS_KEY_ID', ''),
         secretAccessKey: this.configService.get<string>(
@@ -38,9 +42,19 @@ export class StorageService {
     });
   }
 
-  /** Structure de bucket prévue pour le nettoyage automatique (specs §5.8). */
-  buildKey(commercantId: string, extension: string): string {
-    return `promo-photos/${commercantId}/${randomUUID()}.${extension}`;
+  /**
+   * Structure de bucket prévue pour le nettoyage automatique (specs §5.8) —
+   * uniquement les photos de promo (`promo-photos/`) sont purgées après
+   * `IMAGE_RETENTION_DAYS` (voir `PromoService.purgeOldPhotosCron`) ; la
+   * photo de commerce (`commercant-photos/`) est permanente, d'où le préfixe
+   * distinct.
+   */
+  buildKey(
+    commercantId: string,
+    extension: string,
+    folder: 'promo-photos' | 'commercant-photos' = 'promo-photos',
+  ): string {
+    return `${folder}/${commercantId}/${randomUUID()}.${extension}`;
   }
 
   /**

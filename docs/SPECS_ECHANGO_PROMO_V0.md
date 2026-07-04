@@ -39,7 +39,7 @@ Application mobile mettant en relation commerçants et clients autour des promot
 - Pour les grandes villes : sélection affinée par **commune** (découpage administratif officiel wilaya → commune).
 - **Liste des promos actives**, filtrée par commune sélectionnée.
 - **Filtre par catégorie** (liste fixe, voir §5.6).
-- **Fiche promo** : photo, produit, prix avant/après, nom et adresse du commerçant, date de fin de validité.
+- **Fiche promo** : photo, produit, prix avant/après, nom et adresse du commerçant, date de fin de validité. Si le commerçant a renseigné une photo de son commerce et/ou une position GPS, la fiche affiche aussi la photo du commerce et un bouton "Itinéraire" qui ouvre l'app Google Maps (lien simple, pas d'intégration payante).
 - **Signalement** "promo expirée / incorrecte" : action sans compte, limitée par device ID (voir §5.4). Objectif : limiter les abus côté commerçant autant que côté client.
 - **Recherche par catégorie** : sélection parmi la liste fermée de catégories (§5.6), pas de saisie libre. C'est une recherche guidée, pas un moteur de recherche texte.
 - **Favoris commerçant** : le client peut marquer un commerçant en favori, stocké **en local sur l'appareil** (pas de compte, cohérent avec le reste du parcours client). Affiche les commerçants favoris et leurs promos actives en priorité dans la liste. Sans notifications push (phase 2), c'est un raccourci d'affichage, pas une alerte proactive.
@@ -52,41 +52,82 @@ Application mobile mettant en relation commerçants et clients autour des promot
 1. **Auto-inscription** — le commerçant s'inscrit lui-même dans l'app, sans passage d'agent requis. L'agent existe pour **assister** les commerçants peu à l'aise avec le digital ou pour démarcher activement, mais n'est plus une condition d'accès.
 2. **Création assistée par l'agent** — l'agent crée la fiche lors de sa visite terrain (utile pour aller chercher activement les commerçants qui n'auraient pas spontanément téléchargé l'app).
 
-**Authentification — téléphone + code PIN** (remplace l'OTP à chaque connexion) :
+**Authentification — téléphone + code PIN, sans SMS** (décision produit :
+le SMS est jugé inutile et coûteux pour ce marché, aucune vérification de
+possession du numéro n'est effectuée) :
 
 1. Saisie du numéro de téléphone (auto-inscription) ou saisie par l'agent (création assistée).
-2. **OTP SMS une seule fois**, pour prouver la possession du numéro — obligatoire dans les deux cas, sinon un numéro invalide/usurpé suffirait à créer un compte.
-3. Définition d'un **code PIN** (4-6 chiffres) par le commerçant à ce moment-là.
-4. Connexions suivantes : téléphone + PIN, **sans SMS** (économie de coût récurrent).
-5. **Récupération de PIN oublié** : repasse obligatoirement par un nouvel OTP SMS — seul autre cas d'usage SMS après l'inscription initiale.
+2. Définition d'un **code PIN** (4-6 chiffres) par le commerçant — directement à l'inscription, ou plus tard via l'écran de connexion pour un compte créé par l'agent (`claim`, voir cycle de vie ci-dessous). Aucune preuve de possession du numéro n'est demandée.
+3. Connexions suivantes : téléphone + PIN.
+4. **PIN oublié** : pas de flux libre-service. Seul l'**admin** peut effacer le PIN d'un commerçant (sur demande, hors app) ; le commerçant en redéfinit ensuite un nouveau via `claim`, comme pour un compte créé par un agent.
 
 **Cycle de vie du compte** (états) :
 
 ```
-créé_agent → en_attente_revendication → revendiqué → autonome
-auto_inscrit → autonome (dès l'OTP + PIN validés, pas d'étape "revendication" nécessaire)
+créé_agent → autonome (dès que le commerçant définit son PIN via `claim`)
+auto_inscrit → autonome (directement, dès la saisie du PIN à l'inscription)
 ```
 
-- Un compte créé par l'agent reste en attente de revendication jusqu'à ce que le commerçant valide son OTP + définisse son PIN (ce qui peut se faire pendant la visite de l'agent ou plus tard).
-- Un compte auto-inscrit passe directement en `autonome` une fois l'OTP validé et le PIN défini — pas d'étape intermédiaire, car il n'y a pas de tiers (agent) à qui retirer la main.
+- Un compte créé par l'agent reste `créé_agent` jusqu'à ce que le commerçant définisse lui-même son PIN pour ce numéro (`claim`) — il n'y a plus d'étape "revendication" distincte ni d'OTP intermédiaire.
+- Un compte auto-inscrit passe directement en `autonome` dès l'inscription — pas d'étape intermédiaire, car il n'y a pas de tiers (agent) à qui retirer la main.
 
 **Niveaux de vérification (indépendants du cycle de vie du compte)** :
 
 | Niveau | Condition | Effet |
 |---|---|---|
-| `auto_inscrit` | Inscription autonome, téléphone vérifié par OTP uniquement | **Suffisant pour publier** — aucune vérification physique |
+| `auto_inscrit` | Inscription autonome — aucune vérification du numéro de téléphone | **Suffisant pour publier** — aucune vérification physique |
 | `confirmé_agent` | Constaté physiquement par l'agent lors de sa visite | **Suffisant pour publier** — niveau de confiance supérieur |
 | `vérifié_registre` | Upload volontaire du registre de commerce, validation manuelle par l'admin | Badge de confiance optionnel, **jamais bloquant** pour publier |
 
 > Décision explicite : ne pas exiger le registre de commerce pour publier, afin de ne pas exclure le commerce informel, très présent localement.
 >
-> **Conséquence de l'auto-inscription dès la V0** : le niveau `confirmé_agent` n'est plus un filtre anti-fraude systématique (un commerçant peut publier sans jamais avoir été vérifié physiquement). Le système de signalement/modération (§5.4) devient donc la **principale ligne de défense** contre les faux commerces ou contenus abusifs, et non plus un filet secondaire.
+> **Conséquence de l'auto-inscription et de l'absence de vérification téléphonique dès la V0** : ni le niveau `confirmé_agent` ni une preuve de possession du numéro ne filtrent les faux comptes (un commerçant peut publier sans jamais avoir été vérifié physiquement, et un numéro usurpé peut techniquement créer un compte au nom d'un tiers). Le système de signalement/modération (§5.4) est donc la **seule ligne de défense** contre les faux commerces ou contenus abusifs — risque assumé pour le pilote, à réévaluer avant extension.
 
-**Gestion des promos** :
-- Jusqu'à **5 promos actives simultanément** par commerçant.
-- **Date de fin obligatoire** sur chaque promo (pas de promo "permanente").
-- Valeur par défaut : **5 jours**.
-- À expiration : la promo passe en statut `expirée` (déclenché par tâche planifiée, voir §5.1) et **disparaît de la liste client**. Republication complète requise pour réactiver — pas de simple prolongation de date. Objectif : forcer un geste actif régulier du commerçant, garantir la fraîcheur du contenu.
+**Fiche commerçant — données saisies à la création** (auto-inscription ou
+création agent) :
+- Commune sélectionnée par **wilaya puis commune** (même logique de
+  sélection guidée que côté client, §3.1), pas une liste plate.
+- **Photo du commerce, optionnelle** — pour que les clients l'identifient
+  facilement dans la liste/fiche (caméra ou galerie, contrairement à la
+  photo de promo prise par l'agent qui est caméra uniquement).
+- **Position GPS, optionnelle** — capturée via la localisation native de
+  l'appareil (gratuit, aucune intégration Google Maps payante). L'adresse
+  texte est elle aussi optionnelle (peut être saisie en complément de ou à
+  la place de la position GPS), l'adressage informel étant
+  courant localement. Sert uniquement à afficher un bouton "Itinéraire"
+  côté client (§3.1) ; aucune carte interactive en V0.
+- **Confirmation du PIN** : ressaisie obligatoire à la définition du PIN
+  (inscription ou activation d'un compte créé par un agent), pour éviter
+  qu'une faute de frappe bloque le commerçant à la première connexion.
+
+**Gestion des promos — cycle de vie éditorial** (indépendant du statut de
+modération, voir §5.4 — CLAUDE.md règle 8) :
+
+```
+brouillon → publiée → arrêtée
+              ↓
+           expirée (auto, à dateFin)
+```
+
+- **Édition toujours possible**, quel que soit le statut (description,
+  prix, catégorie, photo) — c'est la publication/republication qui
+  constitue le "geste actif" ci-dessous, pas une restriction sur l'édition.
+- **Brouillon** : la promo est créée et remplie mais pas visible côté
+  client, et ne compte pas dans le plafond de 5.
+- **Publication** (depuis brouillon, arrêtée ou expirée) : fixe une
+  **date de fin obligatoire**, toujours recalculée à neuf (jamais une
+  simple prolongation) — entre **1 et 7 jours**, 5 jours par défaut.
+  Objectif inchangé : forcer un geste actif régulier du commerçant,
+  garantir la fraîcheur du contenu. Compte dans le plafond de 5 actives.
+- **Arrêt** : action volontaire du commerçant (ex. rupture de stock),
+  disparaît immédiatement de la liste client et libère un slot sur le
+  plafond de 5 — republication possible à tout moment (nouveau cycle
+  complet, pas une reprise).
+- **Expiration** : automatique à `dateFin` (tâche planifiée, §5.1),
+  **disparaît de la liste client**. Republication complète requise pour
+  réactiver, comme l'arrêt volontaire.
+- Jusqu'à **5 promos "publiée" simultanément** par commerçant (brouillons
+  et promos arrêtées/expirées illimités, hors plafond).
 
 **Dashboard commerçant (statistiques)** — inclus dès la V0 :
 - Nombre de vues sur la fiche commerçant.
@@ -102,7 +143,7 @@ auto_inscrit → autonome (dès l'OTP + PIN validés, pas d'étape "revendicatio
 - Crée une fiche commerçant (numéro de téléphone, nom, adresse, catégorie) + première promo.
 - Prend la photo de la promo **obligatoirement dans l'app** (pas d'upload depuis la galerie), avec horodatage. **Pas de géolocalisation capturée** (décision explicite — écartée après discussion).
 - Met à jour une promo existante sur un commerce déjà onboardé.
-- Initie la revendication de compte (déclenche l'envoi de l'OTP au commerçant).
+- N'a plus d'action à faire pour activer le compte du commerçant : celui-ci le fait lui-même, quand il le souhaite, en définissant son PIN sur l'écran de connexion (pas d'OTP à initier).
 - **Pas de mode hors-ligne en V0** (décision explicite malgré la couverture réseau variable à Djelfa — voir §7, risque à surveiller pendant le pilote).
 
 ### 3.4 Admin / Modérateur
@@ -114,6 +155,7 @@ auto_inscrit → autonome (dès l'OTP + PIN validés, pas d'étape "revendicatio
 - Crée et gère les comptes agents.
 - Crée et gère les Zones, assigne un agent à une zone.
 - **Transfère une zone** d'un agent à un autre (cas : départ d'un agent — sans ça, les fiches de la zone cessent d'être mises à jour silencieusement).
+- **Réinitialise le PIN** d'un commerçant sur demande (seul recours en cas de PIN oublié, pas de flux libre-service — voir §3.2).
 - Vue globale (dashboard) : nombre de commerces actifs, nombre de promos publiées, nombre de signalements en attente.
 
 ---
@@ -124,12 +166,12 @@ auto_inscrit → autonome (dès l'OTP + PIN validés, pas d'étape "revendicatio
 
 - **Commune** — référentiel administratif officiel (wilaya → commune), utilisé pour le filtre client. Distinct de la Zone agent.
 - **Zone** — découpage opérationnel interne pour les tournées d'agent, sans lien direct avec le découpage administratif.
-- **Commerçant** — fiche + état de compte (`créé_agent` / `en_attente_revendication` / `revendiqué` / `autonome`) + niveau de vérification (`confirmé_agent` / `vérifié_registre`).
+- **Commerçant** — fiche + état de compte (`créé_agent` / `autonome`) + niveau de vérification (`confirmé_agent` / `vérifié_registre`).
 - **Promo** — liée à un commerçant, statut (`active` / `expirée` / `signalée` / `masquée` / `vérifiée_ok`), photo, prix avant/après, catégorie, date de fin, compteur de signalements.
 - **Agent** — compte + zone assignée.
 - **Admin** — compte, rôle unique en V0.
 - **Signalement (Report)** — device_id, promo_id, horodatage. Sert au calcul du seuil de modération.
-- **Journal d'audit (AuditLog)** — recommandé pour tracer les actions des agents (création, modification, initiation de revendication) avec identité + horodatage, notamment utile en cas de zones multiples ou de transfert de zone.
+- **Journal d'audit (AuditLog)** — recommandé pour tracer les actions des agents (création, modification de fiche commerçant) et de l'admin (réinitialisation de PIN, transfert de zone) avec identité + horodatage, notamment utile en cas de zones multiples ou de transfert de zone.
 
 ---
 
@@ -145,7 +187,7 @@ Tâche planifiée (cron, ex. quotidienne) qui bascule automatiquement les promos
 Ce sont deux entités séparées dans le modèle de données.
 
 ### 5.3 Plafond de promos actives
-5 promos actives maximum par commerçant, simultanément. Tri par défaut à définir (proposition : date d'expiration la plus proche en premier) — **point encore ouvert**, à trancher lors du modèle de données/UX.
+5 promos **publiées** maximum par commerçant, simultanément (voir §3.2 pour le cycle de vie brouillon/publiée/arrêtée). Tri par défaut à définir (proposition : date d'expiration la plus proche en premier) — **point encore ouvert**, à trancher lors du modèle de données/UX.
 
 ### 5.4 Anti-fraude sur les signalements
 - Identifiant device anonyme généré à l'installation côté client (pas de compte).
@@ -205,8 +247,8 @@ Ces points ont été identifiés en cours de discussion mais **pas encore défin
 2. **Tri par défaut de la liste des promos actives** côté client (proposition : expiration la plus proche en premier — non confirmé).
 3. **Choix technique (stack)** : non tranché dans cette discussion. Le porteur de projet utilise habituellement NestJS (backend) + Flutter (mobile) sur ses autres projets — à confirmer explicitement comme choix pour ce module ou à rediscuter.
 4. **CGU / consentement** (photo, données commerçant) : non traité, explicitement noté comme hors périmètre pour un pilote à échelle réduite (~30 commerces, connus personnellement), mais **à traiter avant toute ouverture publique plus large**.
-5. **Coût SMS OTP** : négligeable à l'échelle du pilote, mais à chiffrer avant l'extension à plusieurs wilayas (coût variable récurrent).
-6. **Ajustabilité de la date de fin par défaut** (5 jours) — non précisé si le commerçant/agent peut choisir une autre durée à la création, ou si 5 jours est fixe en V0.
+5. ~~**Coût SMS OTP**~~ — **Tranché** : suppression complète de l'OTP SMS (jugé inutile et coûteux pour ce marché). Le commerçant définit son PIN sans preuve de possession du numéro ; le signalement/modération devient la seule ligne de défense anti-fraude (voir §3.2 et le point 7 ci-dessous).
+6. ~~**Ajustabilité de la date de fin par défaut**~~ — **Tranché** : sélecteur de durée 1 à 7 jours à la publication (5 jours par défaut), validé côté serveur (`PROMO_MAX_DURATION_DAYS`). Voir §3.2.
 7. **Impact de l'auto-inscription sur l'anti-fraude** : avec l'auto-inscription ouverte dès la V0, un compte peut publier sans jamais être vérifié physiquement (niveau `auto_inscrit`). Le seuil de signalement actuel (3 devices) a été calibré en pensant à un contenu majoritairement `confirmé_agent`. À réévaluer une fois le pilote lancé : le seuil est-il toujours pertinent avec une proportion significative de comptes `auto_inscrit` non vérifiés ?
 
 ---
