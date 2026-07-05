@@ -52,7 +52,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     });
   }
 
-  private fallbackCode(status: number): ErrorCode {
+  private fallbackCode(status: HttpStatus): ErrorCode {
     switch (status) {
       case HttpStatus.BAD_REQUEST:
         return ErrorCode.VALIDATION_ERROR;
