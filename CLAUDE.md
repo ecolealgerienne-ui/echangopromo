@@ -150,7 +150,15 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
 15. **Tout nouvel endpoint `GET` de liste doit prévoir page/limit dès la
     conception**, même si le volume initial semble négligeable — ce
     produit vise explicitement une extension multi-communes puis
-    multi-wilayas.
+    multi-wilayas. **Exception à vérifier avant de paginer un endpoint
+    existant** : si un client le consomme aujourd'hui comme une liste de
+    référence complète (ex. `/commune` chargé en entier par
+    `CommuneCascadeField` pour construire un sélecteur wilaya → commune),
+    ajouter la pagination sans adapter ce client tronque silencieusement
+    la liste dès que le total dépasse la taille de page par défaut —
+    vérifier les consommateurs existants (mobile, autre service) avant
+    d'activer une pagination par défaut sur un endpoint déjà en
+    production.
 
 16. **Nettoyer le scaffolding généré par un CLI (NestJS, etc.) dès l'ajout
     du premier vrai module métier.** *Trouvé : les seuls tests de tout le
@@ -239,10 +247,6 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
 
 ## Dette connue, non bloquante pour le pilote mais à traiter avant extension
 
-- Pas de pagination sur les listes (`/promo`, `/admin/agent`, `/zone`,
-  `/commune`) — décision assumée pour le pilote, à traiter avant
-  l'extension multi-communes/multi-wilayas (le reste des findings de
-  l'audit V1 a été traité — voir `docs/AUDIT_V1.md`, section "Traité").
 - Couverture de tests backend encore partielle (2 fichiers :
   `jwt-auth.guard.spec.ts`, `image-signature.spec.ts`) — largement
   suffisant pour dépasser 0%, mais pas une vraie couverture des règles

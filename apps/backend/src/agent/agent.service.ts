@@ -7,6 +7,7 @@ import {
   NotFoundAppException,
 } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
+import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { Agent } from './entities/agent.entity';
 
@@ -67,8 +68,13 @@ export class AgentService {
     return agent;
   }
 
-  async findAll(): Promise<Agent[]> {
-    return this.agents.find();
+  async findAll(page: number, limit: number): Promise<PaginatedResult<Agent>> {
+    const [items, total] = await this.agents.findAndCount({
+      order: { nom: 'ASC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    return toPaginatedResult(items, total, page, limit);
   }
 
   async assignZone(agentId: string, zoneId: string | null): Promise<Agent> {

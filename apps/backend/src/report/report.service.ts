@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { ConflictAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
+import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
 import { Promo } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
 import { Report } from './entities/report.entity';
@@ -75,18 +76,18 @@ export class ReportService {
   }
 
   /**
-   * File de modération pour l'admin (specs §3.4). Une seule requête
-   * agrégée (JOIN + GROUP BY + HAVING) plutôt qu'un `countActiveReports`
-   * par promo signalée — l'ancienne version faisait 2 requêtes par promo
-   * (fetch + count), non borné par une zone, potentiellement des centaines
-   * de requêtes à l'échelle multi-wilaya. La fenêtre d'ignore de 30 jours
-   * est répliquée ici en SQL (même seuil, même logique que
-   * `countActiveReports`, appliquée par-signalement plutôt qu'après coup).
+   * Base de la requête agrégée (JOIN + GROUP BY + HAVING) partagée entre
+   * `listPendingModeration` (page de résultats) et `countPendingModeration`
+   * (compteur dashboard) — une seule requête plutôt qu'un
+   * `countActiveReports` par promo signalée : l'ancienne version faisait 2
+   * requêtes par promo (fetch + count), non borné par une zone,
+   * potentiellement des centaines de requêtes à l'échelle multi-wilaya. La
+   * fenêtre d'ignore de 30 jours est répliquée ici en SQL (même seuil,
+   * même logique que `countActiveReports`, appliquée par-signalement
+   * plutôt qu'après coup).
    */
-  async listPendingModeration(): Promise<
-    { promoId: string; activeReportCount: number }[]
-  > {
-    const rows = await this.reports
+  private pendingModerationQueryBuilder(): SelectQueryBuilder<Report> {
+    return this.reports
       .createQueryBuilder('report')
       .innerJoin(Promo, 'promo', 'promo.id = report.promoId')
       .select('report.promoId', 'promoId')
@@ -100,12 +101,30 @@ export class ReportService {
       .groupBy('report.promoId')
       .having('COUNT(DISTINCT report.deviceId) >= :threshold', {
         threshold: MODERATION_THRESHOLD,
-      })
+      });
+  }
+
+  /** File de modération pour l'admin (specs §3.4), paginée. */
+  async listPendingModeration(
+    page: number,
+    limit: number,
+  ): Promise<PaginatedResult<{ promoId: string; activeReportCount: number }>> {
+    const total = await this.countPendingModeration();
+    const rows = await this.pendingModerationQueryBuilder()
+      .orderBy('report.promoId', 'ASC')
+      .offset((page - 1) * limit)
+      .limit(limit)
       .getRawMany<{ promoId: string; count: string }>();
 
-    return rows.map((row) => ({
+    const items = rows.map((row) => ({
       promoId: row.promoId,
       activeReportCount: Number(row.count),
     }));
+    return toPaginatedResult(items, total, page, limit);
+  }
+
+  /** Nombre total de promos en attente de modération (stat dashboard, pas de pagination). */
+  async countPendingModeration(): Promise<number> {
+    return this.pendingModerationQueryBuilder().getCount();
   }
 }

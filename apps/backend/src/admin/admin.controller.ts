@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -21,6 +22,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
+import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
 import { PromoService } from '../promo/promo.service';
 import { ReportService } from '../report/report.service';
@@ -100,8 +102,8 @@ export class AdminController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Get('agent')
-  async listAgents() {
-    return this.agentService.findAll();
+  async listAgents(@Query() query: PaginationQueryDto) {
+    return this.agentService.findAll(query.page, query.limit);
   }
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)
@@ -160,8 +162,8 @@ export class AdminController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Get('moderation/queue')
-  async moderationQueue() {
-    return this.moderationService.queue();
+  async moderationQueue(@Query() query: PaginationQueryDto) {
+    return this.moderationService.queue(query.page, query.limit);
   }
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)
@@ -269,17 +271,17 @@ export class AdminController {
   @Roles('admin')
   @Get('dashboard')
   async dashboard() {
-    const [commercesActifs, promosPubliees, moderationQueue] =
+    const [commercesActifs, promosPubliees, signalementsEnAttente] =
       await Promise.all([
         this.commercantService.countActive(),
         this.promoService.countVisible(),
-        this.reportService.listPendingModeration(),
+        this.reportService.countPendingModeration(),
       ]);
 
     return {
       commercesActifs,
       promosPubliees,
-      signalementsEnAttente: moderationQueue.length,
+      signalementsEnAttente,
     };
   }
 }

@@ -19,6 +19,7 @@ import { CommercantService } from '../commercant/commercant.service';
 import { DeviceId } from '../common/decorators/device-id.decorator';
 import { ForbiddenAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
+import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
@@ -88,8 +89,8 @@ export class PromoController {
 
   @Get()
   async list(@Query() query: ListPromoQueryDto) {
-    const promos = await this.promoService.findActiveForClient(query);
-    return promos.map((promo) => this.toClientJson(promo));
+    const result = await this.promoService.findActiveForClient(query);
+    return { ...result, items: result.items.map((promo) => this.toClientJson(promo)) };
   }
 
   @Get(':id')
@@ -113,15 +114,25 @@ export class PromoController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('commercant')
   @Get('me/all')
-  async mine(@CurrentUser() user: AuthTokenPayload) {
-    const promos = await this.promoService.listByCommercant(user.sub);
-    const viewCounts = await this.promoService.getViewCounts(
-      promos.map((p) => p.id),
+  async mine(
+    @CurrentUser() user: AuthTokenPayload,
+    @Query() query: PaginationQueryDto,
+  ) {
+    const result = await this.promoService.listByCommercant(
+      user.sub,
+      query.page,
+      query.limit,
     );
-    return promos.map((promo) => ({
-      ...this.toClientJson(promo),
-      viewCount: viewCounts[promo.id] ?? 0,
-    }));
+    const viewCounts = await this.promoService.getViewCounts(
+      result.items.map((p) => p.id),
+    );
+    return {
+      ...result,
+      items: result.items.map((promo) => ({
+        ...this.toClientJson(promo),
+        viewCount: viewCounts[promo.id] ?? 0,
+      })),
+    };
   }
 
   /** IDOR corrigé : un agent ne peut publier que pour un commerçant de sa propre zone. */

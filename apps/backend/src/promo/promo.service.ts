@@ -9,6 +9,7 @@ import {
   NotFoundAppException,
 } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
+import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
 import { ListPromoQueryDto } from './dto/list-promo-query.dto';
@@ -191,7 +192,9 @@ export class PromoService {
    * proposition non confirmée (point ouvert §7.2), appliquée par défaut en
    * l'absence d'autre arbitrage.
    */
-  async findActiveForClient(query: ListPromoQueryDto): Promise<Promo[]> {
+  async findActiveForClient(
+    query: ListPromoQueryDto,
+  ): Promise<PaginatedResult<Promo>> {
     const qb = this.promos
       .createQueryBuilder('promo')
       .innerJoinAndSelect('promo.commercant', 'commercant')
@@ -222,8 +225,10 @@ export class PromoService {
       qb.orderBy('favorite_rank', 'ASC');
     }
     qb.addOrderBy('promo.dateFin', 'ASC');
+    qb.skip((query.page - 1) * query.limit).take(query.limit);
 
-    return qb.getMany();
+    const [items, total] = await qb.getManyAndCount();
+    return toPaginatedResult(items, total, query.page, query.limit);
   }
 
   async findByIdOrFail(id: string): Promise<Promo> {
@@ -251,11 +256,18 @@ export class PromoService {
     });
   }
 
-  async listByCommercant(commercantId: string): Promise<Promo[]> {
-    return this.promos.find({
+  async listByCommercant(
+    commercantId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedResult<Promo>> {
+    const [items, total] = await this.promos.findAndCount({
       where: { commercantId },
       order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
+    return toPaginatedResult(items, total, page, limit);
   }
 
   async recordView(promoId: string, deviceId: string): Promise<void> {

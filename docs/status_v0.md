@@ -607,3 +607,34 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     lint && npm test` à confirmer en local ; nouvelle colonne
     `tokenVersion` (Commercant) à intégrer à la prochaine
     `migration:generate`.
+
+- **2026-07-05 (pagination des listes)** — Dernier point de dette restant
+  de l'audit V1 (§5). Nouveau `common/pagination/` (`PaginationQueryDto`
+  : `page`/`limit`, défaut 1/20, max 100 ; `PaginatedResult<T>` :
+  `{items, total, page, limit}`) appliqué à `GET /promo`,
+  `GET /promo/me/all`, `GET /admin/agent`, `GET /zone`, `GET /commune`,
+  `GET /admin/moderation/queue`. Au passage, `ReportService` expose un
+  `countPendingModeration()` séparé (compteur seul, sans pagination) pour
+  le dashboard admin, qui utilisait jusqu'ici `.length` sur la liste
+  complète.
+  - **Décision volontaire : `/commune` n'est pas traité comme un flux
+    paginé côté mobile.** C'est une liste de référence (communes) que
+    `CommuneCascadeField` doit charger en entier pour construire le
+    sélecteur wilaya → commune — paginer sans adapter le mobile aurait
+    silencieusement tronqué la liste (34 communes pour Djelfa seul,
+    au-delà du défaut de 20/page). `CommuneApi.list()` boucle en interne
+    sur toutes les pages (`limit=100`, le max autorisé) et reconstruit la
+    liste complète — signature Dart inchangée, aucun écran à modifier.
+  - Pour `/promo` et `/promo/me/all` (vrais flux, feeds), le mobile
+    récupère une seule page généreuse (`limit=100`) sans construire de
+    défilement infini pour l'instant — largement suffisant à l'échelle du
+    pilote (plafond de 5 promos actives par commerçant, un seul quartier).
+    À revoir si le volume approche cette taille de page.
+  - `/admin/agent` et `/admin/moderation/queue` n'ont aucun consommateur
+    mobile (pas d'UI admin en V0) : pagination backend pure, aucun impact
+    client.
+  - Nouveau test `common/pagination/pagination-query.dto.spec.ts`
+    (défauts, validation page/limit).
+  - **Non exécuté dans mon environnement** : `npm run build && npm run
+    lint && npm test` côté backend, `flutter analyze` côté mobile — à
+    confirmer en local.
