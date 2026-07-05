@@ -542,3 +542,15 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
   2 FK sans index, 0% de tests backend. Rien de corrigé dans ce commit —
   uniquement le rapport, la priorisation reste à discuter avec
   l'utilisateur.
+
+- **2026-07-05 (traitement audit V1, 1/4 — déconnexion mobile automatique)**
+  — `ApiClient` (`data/api/api_client.dart`) détecte maintenant les codes
+  `AUTH_TOKEN_MISSING`/`AUTH_TOKEN_INVALID`/`AUTH_TOKEN_REVOKED` dans
+  l'intercepteur Dio et appelle `authController.logout()`
+  (`providers/core_providers.dart`, nouveau paramètre `onAuthInvalid` sur
+  `ApiClient`). Jusqu'ici le backend rejetait bien un token révoqué/expiré
+  mais rien ne déconnectait l'utilisateur côté mobile — il restait bloqué
+  sur son écran avec un token mort. `router.dart` redirige automatiquement
+  vers le login du rôle concerné dès que `authControllerProvider` repasse
+  à `null` (mécanisme `routerRefreshProvider` déjà en place, aucun
+  changement nécessaire côté routeur).
