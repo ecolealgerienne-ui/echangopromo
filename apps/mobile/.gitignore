@@ -5,3 +5,9 @@
 build/
 *.iml
 .idea/
+
+# Généré par `flutter gen-l10n` (déclenché automatiquement par `flutter pub
+# get` grâce à `generate: true` dans pubspec.yaml) à partir de lib/l10n/*.arb
+# — jamais commité, jamais édité à la main.
+lib/l10n/app_localizations.dart
+lib/l10n/app_localizations_*.dart
