@@ -521,3 +521,24 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
   - **Non exécuté dans mon environnement** : `npm run build`/`lint` côté
     backend, `flutter test`/`flutter analyze` côté mobile — à confirmer en
     local.
+- **2026-07-05 (fix lint + fix démarrage)** — `npm run lint` a relevé
+  `@typescript-eslint/no-unsafe-enum-comparison` dans
+  `AllExceptionsFilter.fallbackCode` (paramètre typé `number` comparé à des
+  membres `HttpStatus`) : corrigé en typant le paramètre `HttpStatus`.
+  Puis au démarrage réel : `UnknownDependenciesException` sur
+  `JwtAuthGuard` dans `StorageModule` — `TypeOrmModule` n'était pas
+  réexporté par `AuthModule`, donc `Repository<Agent>`/`Repository<Admin>`
+  (ajoutés pour le tokenVersion) n'étaient résolvables que dans les
+  modules qui les fournissaient déjà eux-mêmes. Corrigé en ajoutant
+  `TypeOrmModule` à `exports` d'`AuthModule`, même traitement que
+  `JwtModule` déjà réexporté pour `JwtService`.
+- **2026-07-05 (audit V1)** — Audit de suivi après la session
+  révocation JWT/codes d'erreur, voir `docs/AUDIT_V1.md` (détail complet)
+  et 3 nouvelles règles CLAUDE.md (#24-26). Findings principaux : pas de
+  `tokenVersion` sur `Commercant` (reset-pin admin n'invalide pas les JWT
+  déjà émis), pas de déconnexion mobile automatique sur token
+  révoqué/invalide, N+1 réapparu dans `ModerationService.queue()`, rate
+  limiting absent sur plusieurs actions sensibles post-authentification,
+  2 FK sans index, 0% de tests backend. Rien de corrigé dans ce commit —
+  uniquement le rapport, la priorisation reste à discuter avec
+  l'utilisateur.

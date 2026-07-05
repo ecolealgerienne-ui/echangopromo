@@ -1,9 +1,10 @@
 # CLAUDE.md — echango Promo
 
 Instructions pour Claude Code sur ce dépôt. Lire aussi `docs/SPECS_ECHANGO_PROMO_V0.md`
-(specs fonctionnelles), `docs/ARCHITECTURE.md` (choix de stack) et
-`docs/AUDIT_V0.md` (audit complet avec fichier:ligne — ce fichier-ci en est
-la synthèse actionnable).
+(specs fonctionnelles), `docs/ARCHITECTURE.md` (choix de stack),
+`docs/AUDIT_V0.md` (audit initial complet, fichier:ligne) et
+`docs/AUDIT_V1.md` (audit de suivi — révocation JWT, codes d'erreur) —
+ce fichier-ci en est la synthèse actionnable.
 
 ## Consignes de fonctionnement (utilisateur)
 
@@ -205,11 +206,60 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
     complète du mobile — resté faux pendant tout un cycle de
     développement faute de mise à jour.*
 
+### Depuis l'audit V1 (révocation JWT, codes d'erreur)
+
+24. **Un `CanActivate`/intercepteur global qui injecte un `Repository<X>`
+    doit voir son module réexporter `TypeOrmModule`**, pas seulement le
+    provider du guard lui-même. *Trouvé : `JwtAuthGuard` (vérification du
+    `tokenVersion`) dépend de `Repository<Agent>`/`Repository<Admin>`
+    déclarés dans `AuthModule` — tout module n'important que `AuthModule`
+    (ex. `StorageModule`) plantait au démarrage avec
+    `UnknownDependenciesException`, jusqu'à ce que `TypeOrmModule` soit
+    ajouté à `exports` à côté de `JwtModule`.*
+
+25. **Toute exception métier levée dans un service/contrôleur doit être
+    une sous-classe d'`AppException` avec un `ErrorCode` dédié**, ajoutée
+    dans le même commit que l'endpoint — jamais un `throw new
+    BadRequestException(...)` (ou équivalent NestJS) brut, qui casserait
+    le contrat `{statusCode, code, message}` garanti par
+    `AllExceptionsFilter` et sur lequel le mobile
+    (`ApiException`/`errorMessagesFr`) s'appuie pour afficher un texte
+    localisé.
+
+26. **Tout `ErrorCode` ajouté côté backend doit obtenir une entrée dans le
+    mapping mobile** (`errorMessagesFr`, ou son équivalent futur
+    multi-langue) **dans le même commit**, ou être explicitement documenté
+    comme exclusion volontaire (cas des messages intrinsèquement
+    dynamiques, ex. `VALIDATION_ERROR`). Sans ça, une désynchronisation
+    entre l'enum backend et le mapping mobile est silencieuse : le message
+    backend brut s'affiche à la place du texte localisé prévu, sans erreur
+    de compilation d'aucun côté pour le signaler.
+
 ---
 
 ## Dette connue, non bloquante pour le pilote mais à traiter avant extension
 
 - Pas de pagination sur les listes (`/promo`, `/admin/agent`, `/zone`,
-  `/commune`).
+  `/commune`) — et le N+1 associé sur `ModerationService.queue()` (un
+  `SELECT` par promo signalée).
+- `Commercant` n'a pas de `tokenVersion` : `POST
+  /admin/commercant/:id/reset-pin` efface le PIN mais ne révoque pas les
+  JWT déjà émis (valides jusqu'à `JWT_EXPIRES_IN`, 30j par défaut).
+  `Admin.tokenVersion` existe mais n'est jamais incrémenté (pas de route
+  de révocation pour un admin).
+- Mobile : aucune déconnexion automatique quand le backend rejette un
+  token révoqué/invalide (401) — l'utilisateur reste sur son écran avec un
+  token mort tant qu'il n'utilise pas le bouton logout manuel.
+- Rate limiting absent sur des actions sensibles post-authentification
+  (`reset-pin`, `revoke-token`, `presigned-upload`, actions promo) — seule
+  la limite globale (60 req/min) s'applique.
+- `Content-Type` d'un upload S3 toujours purement déclaratif (la taille
+  est bien contrainte par la policy S3 depuis cette session, pas le type
+  réel du fichier).
+- Deux FK sans index (`Agent.zoneId`, `Commercant.createdByAgentId`) —
+  impact nul tant qu'aucune requête ne filtre dessus.
+- 0% de couverture de tests automatisés côté backend (le mobile a une
+  première suite dans `apps/mobile/test/`).
 
-Détail complet, fichier:ligne, sévérités : `docs/AUDIT_V0.md`.
+Détail complet, fichier:ligne, sévérités : `docs/AUDIT_V0.md` et
+`docs/AUDIT_V1.md`.
