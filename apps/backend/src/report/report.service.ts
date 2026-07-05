@@ -1,6 +1,8 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConflictAppException } from '../common/errors/app-exception';
+import { ErrorCode } from '../common/errors/error-code.enum';
 import { Promo } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
 import { Report } from './entities/report.entity';
@@ -28,7 +30,8 @@ export class ReportService {
       where: { promoId, deviceId },
     });
     if (already) {
-      throw new ConflictException(
+      throw new ConflictAppException(
+        ErrorCode.REPORT_ALREADY_SUBMITTED,
         'Ce signalement a déjà été enregistré pour cet appareil',
       );
     }

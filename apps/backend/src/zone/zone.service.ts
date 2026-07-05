@@ -1,6 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { NotFoundAppException } from '../common/errors/app-exception';
+import { ErrorCode } from '../common/errors/error-code.enum';
 import { CreateZoneDto } from './dto/create-zone.dto';
 import { UpdateZoneDto } from './dto/update-zone.dto';
 import { Zone } from './entities/zone.entity';
@@ -24,7 +26,7 @@ export class ZoneService {
   async findByIdOrFail(id: string): Promise<Zone> {
     const zone = await this.zones.findOne({ where: { id } });
     if (!zone) {
-      throw new NotFoundException('Zone introuvable');
+      throw new NotFoundAppException(ErrorCode.ZONE_NOT_FOUND, 'Zone introuvable');
     }
     return zone;
   }

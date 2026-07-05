@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -17,6 +16,8 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
 import { DeviceId } from '../common/decorators/device-id.decorator';
+import { ForbiddenAppException } from '../common/errors/app-exception';
+import { ErrorCode } from '../common/errors/error-code.enum';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
 import { ListPromoQueryDto } from './dto/list-promo-query.dto';
@@ -69,7 +70,10 @@ export class PromoController {
   ): Promise<void> {
     if (user.role === 'commercant') {
       if (promo.commercantId !== user.sub) {
-        throw new ForbiddenException("Cette promo n'appartient pas à ce commerçant");
+        throw new ForbiddenAppException(
+          ErrorCode.PROMO_NOT_OWNED_BY_COMMERCANT,
+          "Cette promo n'appartient pas à ce commerçant",
+        );
       }
       return;
     }

@@ -483,3 +483,41 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
   touche pas au pare-feu (règle entrante à créer une seule fois,
   manuellement). Dernier point de la liste "Reste à faire" — plus aucun
   élément concret restant issu de l'audit à 6 volets.
+- **2026-07-05 (codes d'erreur backend + mapping mobile, préparation i18n)**
+  — Jusqu'ici, aucun code d'erreur : chaque service levait un
+  `BadRequestException('texte français en dur')` et le mobile affichait ce
+  message tel quel (`ApiException`/`extractApiErrorMessage`, un seul point
+  central côté mobile, mais qui ne faisait que relayer le texte backend).
+  Périmètre choisi : codes d'erreur + mapping mobile **français
+  uniquement** pour l'instant (pas de traduction des textes d'écran, pas
+  d'arabe, pas de sélecteur de langue — voir échange avec l'utilisateur).
+  - **Backend** : nouveau `common/errors/error-code.enum.ts` (`ErrorCode`,
+    ~30 codes) + `AppException`/`BadRequestAppException`/
+    `NotFoundAppException`/`UnauthorizedAppException`/
+    `ForbiddenAppException`/`ConflictAppException` (`common/errors/app-exception.ts`)
+    qui portent un `code` dans le corps JSON en plus du `message`. Les 33
+    sites de `throw new XxxException(...)` de tout le backend (auth, admin,
+    agent, commercant, promo, zone, commune, report, device-id decorator)
+    sont passés sur ces nouvelles classes. Nouveau `AllExceptionsFilter`
+    (`common/errors/all-exceptions.filter.ts`, `app.useGlobalFilters` dans
+    `main.ts`) qui garantit `{statusCode, code, message}` même pour les
+    erreurs qui n'en portaient pas par construction : `VALIDATION_ERROR`
+    pour les 400 de `ValidationPipe` (message dynamique par champ, laissé
+    tel quel), `RATE_LIMITED` pour `ThrottlerException`, `INTERNAL_ERROR`
+    pour toute erreur non prévue (500, loggée server-side, jamais son vrai
+    message renvoyé au client).
+  - **Mobile** : `ApiException` porte maintenant `code` en plus de
+    `message` ; nouveau `features/shared/errors/error_messages_fr.dart`
+    (mapping code -> texte français, une seule langue pour l'instant,
+    ajouter une langue = ajouter un fichier `error_messages_<locale>.dart`
+    sur ce modèle sans toucher au backend). `ApiException.displayMessage`
+    utilise le mapping si le code est connu, sinon retombe sur le message
+    backend brut (cas `VALIDATION_ERROR` et des deux codes dont le message
+    backend interpole une valeur dynamique : `PROMO_DATE_FIN_EXCEEDS_MAX`,
+    `PROMO_ACTIVE_CAP_REACHED`, volontairement absents du mapping).
+    `extractApiErrorMessage` (signature inchangée, tous les écrans
+    existants continuent de fonctionner sans modification) délègue à
+    `displayMessage`. Tests ajoutés : `test/data/api/api_exception_test.dart`.
+  - **Non exécuté dans mon environnement** : `npm run build`/`lint` côté
+    backend, `flutter test`/`flutter analyze` côté mobile — à confirmer en
+    local.

@@ -1,14 +1,14 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, IsNull, LessThan, Not, Repository } from 'typeorm';
 import { CommercantService } from '../commercant/commercant.service';
+import {
+  BadRequestAppException,
+  NotFoundAppException,
+} from '../common/errors/app-exception';
+import { ErrorCode } from '../common/errors/error-code.enum';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
 import { ListPromoQueryDto } from './dto/list-promo-query.dto';
@@ -55,10 +55,14 @@ export class PromoService {
       requested ?? new Date(now + this.defaultDureeJours() * 24 * 60 * 60 * 1000);
 
     if (dateFin.getTime() <= now) {
-      throw new BadRequestException('La date de fin doit être dans le futur');
+      throw new BadRequestAppException(
+        ErrorCode.PROMO_DATE_FIN_NOT_FUTURE,
+        'La date de fin doit être dans le futur',
+      );
     }
     if (dateFin.getTime() > max.getTime()) {
-      throw new BadRequestException(
+      throw new BadRequestAppException(
+        ErrorCode.PROMO_DATE_FIN_EXCEEDS_MAX,
         `La date de fin ne peut pas dépasser ${this.maxDureeJours()} jours`,
       );
     }
@@ -80,7 +84,8 @@ export class PromoService {
       where: { commercantId, lifecycleStatus: PromoLifecycleStatus.PUBLIEE },
     });
     if (activeCount >= MAX_PROMOS_ACTIVES) {
-      throw new BadRequestException(
+      throw new BadRequestAppException(
+        ErrorCode.PROMO_ACTIVE_CAP_REACHED,
         `Plafond de ${MAX_PROMOS_ACTIVES} promos actives atteint pour ce commerçant`,
       );
     }
@@ -151,7 +156,10 @@ export class PromoService {
   async publish(promoId: string): Promise<Promo> {
     const promo = await this.findByIdOrFail(promoId);
     if (promo.lifecycleStatus === PromoLifecycleStatus.PUBLIEE) {
-      throw new BadRequestException('Cette promo est déjà publiée');
+      throw new BadRequestAppException(
+        ErrorCode.PROMO_ALREADY_PUBLISHED,
+        'Cette promo est déjà publiée',
+      );
     }
 
     const dateFin = this.resolveDateFin();
@@ -167,7 +175,10 @@ export class PromoService {
   async stop(promoId: string): Promise<Promo> {
     const promo = await this.findByIdOrFail(promoId);
     if (promo.lifecycleStatus !== PromoLifecycleStatus.PUBLIEE) {
-      throw new BadRequestException('Seule une promo publiée peut être arrêtée');
+      throw new BadRequestAppException(
+        ErrorCode.PROMO_NOT_PUBLISHED,
+        'Seule une promo publiée peut être arrêtée',
+      );
     }
     promo.lifecycleStatus = PromoLifecycleStatus.ARRETEE;
     return this.promos.save(promo);
@@ -220,7 +231,7 @@ export class PromoService {
       relations: { commercant: true },
     });
     if (!promo) {
-      throw new NotFoundException('Promo introuvable');
+      throw new NotFoundAppException(ErrorCode.PROMO_NOT_FOUND, 'Promo introuvable');
     }
     return promo;
   }
@@ -333,7 +344,8 @@ export class PromoService {
   /** Une promo est censée être une réduction — le prix après doit être strictement inférieur. */
   private assertPriceOrder(prixAvant: number, prixApres: number): void {
     if (prixApres >= prixAvant) {
-      throw new BadRequestException(
+      throw new BadRequestAppException(
+        ErrorCode.PROMO_PRIX_APRES_NOT_LOWER,
         'Le prix après réduction doit être inférieur au prix avant réduction',
       );
     }

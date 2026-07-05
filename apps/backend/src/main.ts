@@ -1,6 +1,7 @@
 import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/errors/all-exceptions.filter';
 
 function parseCorsOrigins(raw: string | undefined): string[] {
   return (raw ?? '')
@@ -21,6 +22,9 @@ async function bootstrap() {
     credentials: true,
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  // Uniformise les réponses d'erreur en {statusCode, code, message} (codes
+  // d'erreur i18n-ready, voir common/errors/).
+  app.useGlobalFilters(new AllExceptionsFilter());
   // Applique les @Exclude() des entités (passwordHash, pinHash...) aux réponses JSON.
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
   await app.listen(process.env.PORT ?? 3000);

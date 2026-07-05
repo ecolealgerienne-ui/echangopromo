@@ -1,11 +1,4 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { AuditActorType } from '../audit-log/entities/audit-log.entity';
@@ -17,6 +10,8 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
 import { CreateCommercantByAgentDto } from '../commercant/dto/create-commercant-by-agent.dto';
+import { BadRequestAppException } from '../common/errors/app-exception';
+import { ErrorCode } from '../common/errors/error-code.enum';
 import { STRICT_THROTTLE } from '../common/throttle';
 import { AgentService } from './agent.service';
 import { LoginAgentDto } from './dto/login-agent.dto';
@@ -57,7 +52,10 @@ export class AgentController {
   async zoneCommerces(@CurrentUser() user: AuthTokenPayload) {
     const agent = await this.agentService.findByIdOrFail(user.sub);
     if (!agent.zoneId) {
-      throw new BadRequestException("Cet agent n'est rattaché à aucune zone");
+      throw new BadRequestAppException(
+        ErrorCode.AGENT_NO_ZONE_ASSIGNED,
+        "Cet agent n'est rattaché à aucune zone",
+      );
     }
     return this.commercantService.listByZoneWithVisitStatus(agent.zoneId);
   }

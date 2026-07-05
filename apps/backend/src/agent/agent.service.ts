@@ -1,11 +1,12 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
+import {
+  BadRequestAppException,
+  NotFoundAppException,
+} from '../common/errors/app-exception';
+import { ErrorCode } from '../common/errors/error-code.enum';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { Agent } from './entities/agent.entity';
 
@@ -20,7 +21,10 @@ export class AgentService {
   async create(dto: CreateAgentDto): Promise<Agent> {
     const existing = await this.agents.findOne({ where: { email: dto.email } });
     if (existing) {
-      throw new BadRequestException('Cet email est déjà utilisé par un agent');
+      throw new BadRequestAppException(
+        ErrorCode.AGENT_EMAIL_TAKEN,
+        'Cet email est déjà utilisé par un agent',
+      );
     }
 
     const passwordHash = await this.authService.hash(dto.password);
@@ -37,14 +41,20 @@ export class AgentService {
   async login(email: string, password: string): Promise<Agent> {
     const agent = await this.agents.findOne({ where: { email } });
     if (!agent) {
-      throw new BadRequestException('Identifiants invalides');
+      throw new BadRequestAppException(
+        ErrorCode.AUTH_INVALID_CREDENTIALS,
+        'Identifiants invalides',
+      );
     }
     const matches = await this.authService.compare(
       password,
       agent.passwordHash,
     );
     if (!matches) {
-      throw new BadRequestException('Identifiants invalides');
+      throw new BadRequestAppException(
+        ErrorCode.AUTH_INVALID_CREDENTIALS,
+        'Identifiants invalides',
+      );
     }
     return agent;
   }
@@ -52,7 +62,7 @@ export class AgentService {
   async findByIdOrFail(id: string): Promise<Agent> {
     const agent = await this.agents.findOne({ where: { id } });
     if (!agent) {
-      throw new NotFoundException('Agent introuvable');
+      throw new NotFoundAppException(ErrorCode.AGENT_NOT_FOUND, 'Agent introuvable');
     }
     return agent;
   }
@@ -87,7 +97,8 @@ export class AgentService {
     const toAgent = await this.findByIdOrFail(toAgentId);
 
     if (fromAgent.zoneId !== zoneId) {
-      throw new BadRequestException(
+      throw new BadRequestAppException(
+        ErrorCode.AGENT_ZONE_NOT_ASSIGNED_TO_AGENT,
         "Cette zone n'est pas actuellement assignée à cet agent",
       );
     }

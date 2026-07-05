@@ -1,9 +1,7 @@
-import {
-  BadRequestException,
-  createParamDecorator,
-  ExecutionContext,
-} from '@nestjs/common';
+import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { Request } from 'express';
+import { BadRequestAppException } from '../errors/app-exception';
+import { ErrorCode } from '../errors/error-code.enum';
 
 /**
  * Identifiant device anonyme envoyé par l'app client (specs §3.1/§5.4) —
@@ -14,7 +12,10 @@ export const DeviceId = createParamDecorator(
     const request = ctx.switchToHttp().getRequest<Request>();
     const deviceId = request.headers['x-device-id'];
     if (typeof deviceId !== 'string' || deviceId.trim().length === 0) {
-      throw new BadRequestException('En-tête X-Device-Id manquant');
+      throw new BadRequestAppException(
+        ErrorCode.DEVICE_ID_MISSING,
+        'En-tête X-Device-Id manquant',
+      );
     }
     return deviceId;
   },
