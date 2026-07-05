@@ -7,23 +7,35 @@ function configWith(values: Record<string, string>): ConfigService {
   } as ConfigService;
 }
 
-function fakeResponse() {
-  return {
-    redirectedTo: undefined as string | number | undefined,
-    htmlSent: undefined as string | undefined,
-    redirect(status: number, url: string) {
-      this.redirectedTo = `${status} ${url}`;
-    },
-    status() {
-      return this;
-    },
-    type() {
-      return this;
-    },
-    send(body: string) {
-      this.htmlSent = body;
-    },
-  };
+/**
+ * Classe plutôt qu'un objet littéral : `this` dans les méthodes d'un objet
+ * littéral est typé `any` par TypeScript (déclenche
+ * `@typescript-eslint/no-unsafe-*`) ; dans une classe, `this` est
+ * correctement typé comme l'instance.
+ */
+class FakeResponse {
+  redirectedTo: string | undefined;
+  htmlSent: string | undefined;
+
+  redirect(status: number, url: string): void {
+    this.redirectedTo = `${status} ${url}`;
+  }
+
+  status(): this {
+    return this;
+  }
+
+  type(): this {
+    return this;
+  }
+
+  send(body: string): void {
+    this.htmlSent = body;
+  }
+}
+
+function fakeResponse(): FakeResponse {
+  return new FakeResponse();
 }
 
 describe('AppLinksController', () => {
