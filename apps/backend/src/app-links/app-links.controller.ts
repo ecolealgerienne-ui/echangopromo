@@ -1,6 +1,6 @@
 import { Controller, Get, Headers, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Response } from 'express';
+import type { Response } from 'express';
 
 const COMING_SOON_HTML = `<!doctype html>
 <html lang="fr">
