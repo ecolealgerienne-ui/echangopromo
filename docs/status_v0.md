@@ -827,3 +827,29 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     côté backend (nouveau `app-links.controller.spec.ts`), `flutter
     analyze` côté mobile (fichiers de config natifs modifiés, pas de code
     Dart).
+
+- **2026-07-05 (suite) : `promo.echango.com` risquait de partager le
+  backend echango Promo entier, pas juste l'App Links** — en préparant le
+  déploiement VPS (Traefik partagé avec une autre plateforme déjà en
+  place sur `echango.com`), il est apparu que `promo.echango.com`
+  pourrait devenir l'hôte de tout le backend (API mobile comprise), pas
+  seulement des routes App Links. Ça aurait rendu réelle la collision de
+  chemin que le `host` du contrôleur évitait jusque-là artificiellement
+  (`GET /promo/:id` existe des deux côtés : API JSON pour l'app,
+  redirection pour un humain sans l'app).
+  - **Corrigé par un chemin dédié plutôt qu'un artifice de routage** : la
+    redirection App Links est maintenant `GET /p/:id` (au lieu de
+    `/promo/:id`) — ne recoupe plus jamais l'API mobile, quel que soit le
+    sous-domaine final. `AndroidManifest.xml` (`pathPrefix`),
+    `apple-app-site-association` (`paths`) et une nouvelle route
+    `go_router` `/p/:id` (même écran que `/promo/:id`, `app/router.dart`)
+    mis à jour en conséquence. Le commentaire sur l'ordre d'enregistrement
+    des modules dans `app.module.ts` (qui n'a plus lieu d'être) a été
+    retiré.
+  - Fichier `docker-compose.yml` du VPS partagé par l'utilisateur (autre
+    projet : plateforme SaaS multi-boutique sur `echango.com`, Traefik +
+    Vendure) : sa règle `storefront-vendor` (wildcard
+    `*.echango.com` → boutiques vendeur) avalerait `promo.echango.com`
+    tel quel — à exclure explicitement côté Traefik avant d'activer quoi
+    que ce soit. Spec écrite pour une session dédiée dans ce second dépôt
+    (hors périmètre de ce repo).

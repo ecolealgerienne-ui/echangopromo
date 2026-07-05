@@ -17,11 +17,17 @@ const COMING_SOON_HTML = `<!doctype html>
 
 /**
  * Dédié au sous-domaine promo.echango.com (App Links Android / Universal
- * Links iOS, partage d'une promo — croissance organique). Restreint via
- * `host` pour ne jamais entrer en conflit avec `GET /promo/:id` de
- * `PromoController` (API JSON de l'app mobile, sur un tout autre domaine) —
- * le DNS/reverse proxy doit router ce host vers ce même backend sans
- * réécrire l'en-tête Host (voir docs/DEPLOIEMENT_STORES.md).
+ * Links iOS, partage d'une promo — croissance organique). `host` reste une
+ * défense en profondeur utile même si ce sous-domaine finit par héberger
+ * tout le backend echango Promo (API mobile comprise) : en local/dev, où
+ * le backend répond sur `localhost`, ces routes restent simplement
+ * injoignables (elles n'ont aucune utilité hors du vrai sous-domaine).
+ *
+ * Le chemin de redirection est `/p/:id`, volontairement différent de
+ * `GET /promo/:id` (API JSON de `PromoController`, utilisée par l'app
+ * mobile) — même si les deux finissent sur le même host, ils ne se
+ * marchent jamais dessus : pas besoin de compter sur un ordre
+ * d'enregistrement de module ou une résolution d'hôte pour les distinguer.
  *
  * Sert :
  * - les 2 fichiers de vérification qui prouvent à Android/iOS que ce
@@ -74,7 +80,7 @@ export class AppLinksController {
     return {
       applinks: {
         apps: [],
-        details: [{ appID: `${teamId}.${bundleId}`, paths: ['/promo/*'] }],
+        details: [{ appID: `${teamId}.${bundleId}`, paths: ['/p/*'] }],
       },
     };
   }
@@ -85,7 +91,7 @@ export class AppLinksController {
    * uniquement une redirection vers le store — ou la page d'attente si
    * le lien du store n'est pas encore configuré.
    */
-  @Get('promo/:id')
+  @Get('p/:id')
   redirectToStore(
     @Headers('user-agent') userAgent: string | undefined,
     @Res() res: Response,

@@ -34,9 +34,14 @@
                  démarrage : tant qu'il est vide (app pas encore publiée,
                  voir docs/DEPLOIEMENT_STORES.md), la vérification échoue
                  silencieusement et le lien s'ouvre dans le navigateur —
-                 aucun risque à activer ce bloc dès maintenant. go_router
-                 route déjà /promo/:id, aucun code Dart supplémentaire
-                 nécessaire une fois la vérification passée. -->
+                 aucun risque à activer ce bloc dès maintenant. `/p` (pas
+                 `/promo`) : chemin dédié au lien public (voir
+                 AppLinksController côté backend), distinct de la route
+                 interne /promo/:id pour ne jamais entrer en collision avec
+                 l'API JSON GET /promo/:id si les deux finissent sur le même
+                 sous-domaine. go_router route déjà /p/:id vers le même
+                 écran que /promo/:id (router.dart), aucun code Dart
+                 supplémentaire nécessaire une fois la vérification passée. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -44,7 +49,7 @@
                 <data
                     android:scheme="https"
                     android:host="promo.echango.com"
-                    android:pathPrefix="/promo"/>
+                    android:pathPrefix="/p"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

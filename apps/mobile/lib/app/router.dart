@@ -49,6 +49,15 @@ final _appRoutes = <_AppRoute>[
     '/promo/:id',
     (context, state) => PromoDetailScreen(promoId: state.pathParameters['id']!),
   ),
+  // Chemin des liens App Links/Universal Links (promo.echango.com/p/:id,
+  // voir AppLinksController côté backend) — volontairement différent de
+  // /promo/:id (route interne classique, ex. depuis PromoListScreen) pour
+  // ne jamais entrer en collision avec l'API JSON `GET /promo/:id` si les
+  // deux finissent sur le même sous-domaine. Même écran, même id.
+  _AppRoute(
+    '/p/:id',
+    (context, state) => PromoDetailScreen(promoId: state.pathParameters['id']!),
+  ),
 
   // Commerçant
   _AppRoute('/commercant', (context, state) => const CommercantLoginScreen()),
