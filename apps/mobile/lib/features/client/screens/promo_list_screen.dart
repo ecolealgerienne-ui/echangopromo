@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../l10n/app_localizations.dart';
@@ -53,14 +54,17 @@ class PromoListScreen extends ConsumerWidget {
                 }
                 return RefreshIndicator(
                   onRefresh: () => ref.refresh(promoListProvider.future),
-                  child: GridView.builder(
+                  // MasonryGridView (pas GridView) : chaque carte garde sa
+                  // hauteur naturelle — un `childAspectRatio` fixe imposait
+                  // la même hauteur à toutes les cases et laissait un
+                  // espace vide sous les cartes plus courtes (photo + texte
+                  // dont la hauteur varie selon la description et la
+                  // langue).
+                  child: MasonryGridView.count(
                     padding: const EdgeInsets.all(12),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 0.72,
-                    ),
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
                     itemCount: promos.length,
                     itemBuilder: (context, index) {
                       final promo = promos[index];

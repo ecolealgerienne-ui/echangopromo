@@ -686,3 +686,22 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     toute autre vérification — c'est la première fois que ce mécanisme de
     génération de code est utilisé dans ce projet, à valider avant de
     considérer ce point terminé.
+
+- **2026-07-05 (mobile : espace vide en bas des cartes promo)** — Signalé
+  par capture d'écran : un espace blanc apparaissait sous certaines cartes
+  de `promo_list_screen.dart`. Cause : `SliverGridDelegateWithFixedCrossAxisCount`
+  (`childAspectRatio: 0.72`) impose la même hauteur à toutes les cases de
+  la grille, alors que la hauteur réelle d'une carte (photo 16:9 + texte)
+  varie selon la longueur de la description, la présence du nom du
+  commerçant, et désormais la langue (FR/EN/AR) — la `Column` de
+  `PromoCard` s'étirait pour remplir la case et laissait le surplus vide en
+  bas, alignée en haut par défaut. Un ratio fixe alternatif aurait juste
+  déplacé le problème (pas de valeur unique correcte pour un contenu de
+  hauteur variable). Remplacé `GridView.builder` par
+  `MasonryGridView.count` (nouvelle dépendance
+  `flutter_staggered_grid_view`) : chaque carte garde sa hauteur
+  naturelle, plus d'espace vide. Aucun changement dans `promo_card.dart`
+  lui-même — seul le délégué de grille change.
+  - **Non exécuté dans mon environnement** : `flutter pub get` (nouvelle
+    dépendance) puis `flutter analyze`/`flutter run` pour confirmer
+    visuellement sur la liste des promos.

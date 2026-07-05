@@ -23,6 +23,10 @@ dependencies:
 
   # UI
   cached_network_image: ^3.4.0
+  # Grille "masonry" pour la liste des promos : chaque carte garde sa
+  # hauteur naturelle au lieu d'un ratio fixe imposé à toute la grille, qui
+  # laissait un espace vide en bas des cartes plus courtes que la case.
+  flutter_staggered_grid_view: ^0.7.0
 
   # Stockage local (device ID anonyme, favoris, commune sélectionnée)
   shared_preferences: ^2.3.0
