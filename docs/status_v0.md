@@ -6,7 +6,7 @@ d'audit, changement d'architecture) — pas seulement en fin de session.
 Pour le détail historique complet, voir aussi `docs/AUDIT_V0.md`
 (findings) et `CLAUDE.md` (règles à respecter).
 
-Dernière mise à jour : 2026-07-04
+Dernière mise à jour : 2026-07-05
 
 ---
 
@@ -638,3 +638,51 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
   - **Non exécuté dans mon environnement** : `npm run build && npm run
     lint && npm test` côté backend, `flutter analyze` côté mobile — à
     confirmer en local.
+
+- **2026-07-05 (mobile : i18n FR/EN/AR + bouton de changement de langue)**
+  — Le pilote était mono-langue (français codé en dur dans ~130 endroits
+  répartis sur 22 écrans/widgets). Demande produit : ajouter anglais et
+  arabe, avec un bouton pour basculer.
+  - Infra `flutter gen-l10n` : `apps/mobile/l10n.yaml`
+    (`synthetic-package: false`, sortie dans `lib/l10n/` — import relatif
+    classique plutôt que le package synthétique `flutter_gen`),
+    `pubspec.yaml` (`generate: true`), `lib/l10n/app_{fr,en,ar}.arb`
+    (121 clés, français = template source). `app_localizations.dart` est
+    généré par `flutter pub get`/`flutter gen-l10n`, jamais commité
+    (`.gitignore` mis à jour).
+  - `localeProvider` (Riverpod, `providers/locale_provider.dart`) persisté
+    via `SharedPreferences` (`LocaleStore`, même pattern que
+    `selectedCommuneProvider`) — défaut français, mémorisé entre
+    lancements. `LanguageSwitcherButton`
+    (`features/shared/widgets/language_switcher_button.dart`) ajouté à
+    l'`AppBar` de chaque écran (pas de shell/navigation partagée entre les
+    3 rôles, donc pas un seul endroit central possible — même logique de
+    duplication assumée que `ErrorText`/`LoadingButton`).
+  - Les libellés d'enum (`Categorie`, `PromoLifecycleStatus`,
+    `visitStatus`) sont sortis des modèles de domaine vers des fonctions
+    localisées (`features/shared/l10n/enum_labels.dart`) : un modèle de
+    domaine n'a pas accès à un `BuildContext`. `Categorie.label` (champ
+    français figé) supprimé de l'enum.
+  - **Messages d'erreur backend** (`ApiException`/`extractApiErrorMessage`,
+    audit V1) : `error_messages_en.dart`/`error_messages_ar.dart` créés en
+    miroir de `error_messages_fr.dart` (CLAUDE.md règle #26).
+    `ApiException.displayMessage` devient une méthode `(Locale)` au lieu
+    d'un getter figé sur le français ; `extractApiErrorMessage` prend
+    désormais un paramètre `locale` obligatoire (`Localizations.localeOf
+    (context)` à chaque appel, 11 sites). Nouveau code `NETWORK_ERROR`
+    (pas un `ErrorCode` backend — cas "pas de réponse HTTP du tout")
+    ajouté aux 3 mappings.
+  - `validatePin` (validateur PIN partagé) devient une factory
+    `validatePin(context)` retournant le validateur localisé, au lieu
+    d'une fonction figée en français.
+  - Vérifié par script : les 3 fichiers `.arb` ont exactement le même jeu
+    de 121 clés (aucune manquante d'un côté), et chaque clé `l10n.xxx`
+    utilisée dans le code Dart existe dans les `.arb` (et réciproquement,
+    aucune clé orpheline).
+  - RTL (arabe) : automatique via `Localizations.localeOf`/`Directionality`
+    de Flutter, aucun code supplémentaire nécessaire.
+  - **Non exécuté dans mon environnement** : `flutter pub get` (déclenche
+    `flutter gen-l10n`) puis `flutter analyze` à lancer en local avant
+    toute autre vérification — c'est la première fois que ce mécanisme de
+    génération de code est utilisé dans ce projet, à valider avant de
+    considérer ce point terminé.

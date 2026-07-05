@@ -231,17 +231,30 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
     BadRequestException(...)` (ou équivalent NestJS) brut, qui casserait
     le contrat `{statusCode, code, message}` garanti par
     `AllExceptionsFilter` et sur lequel le mobile
-    (`ApiException`/`errorMessagesFr`) s'appuie pour afficher un texte
-    localisé.
+    (`ApiException`/`error_messages_{fr,en,ar}.dart`) s'appuie pour
+    afficher un texte localisé.
 
-26. **Tout `ErrorCode` ajouté côté backend doit obtenir une entrée dans le
-    mapping mobile** (`errorMessagesFr`, ou son équivalent futur
-    multi-langue) **dans le même commit**, ou être explicitement documenté
-    comme exclusion volontaire (cas des messages intrinsèquement
-    dynamiques, ex. `VALIDATION_ERROR`). Sans ça, une désynchronisation
-    entre l'enum backend et le mapping mobile est silencieuse : le message
-    backend brut s'affiche à la place du texte localisé prévu, sans erreur
-    de compilation d'aucun côté pour le signaler.
+26. **Tout `ErrorCode` ajouté côté backend doit obtenir une entrée dans les
+    3 mappings mobile** (`error_messages_fr.dart`/`_en.dart`/`_ar.dart`)
+    **dans le même commit**, ou être explicitement documenté comme
+    exclusion volontaire (cas des messages intrinsèquement dynamiques, ex.
+    `VALIDATION_ERROR`). Sans ça, une désynchronisation entre l'enum
+    backend et un mapping mobile est silencieuse : le message backend brut
+    (toujours en français) s'affiche à la place du texte localisé prévu,
+    sans erreur de compilation d'aucun côté pour le signaler.
+
+27. **Toute chaîne d'interface mobile ajoutée doit passer par
+    `AppLocalizations`** (`lib/l10n/app_{fr,en,ar}.arb`), jamais un littéral
+    français codé en dur dans un widget — et la clé doit exister dans les
+    **3** fichiers `.arb` dans le même commit, pas seulement le template
+    français. *Contexte : l'app était mono-langue jusqu'à l'ajout de
+    l'anglais et de l'arabe (2026-07-05, ~130 chaînes à migrer sur 22
+    fichiers) — repartir d'un seul fichier `.arb` aurait recréé le même
+    problème dès la première chaîne oubliée.* Un modèle de domaine (enum,
+    entité) n'a pas accès à un `BuildContext` : un libellé qui dépend de la
+    langue (`Categorie`, statut de cycle de vie...) se résout côté UI via
+    une fonction localisée (`features/shared/l10n/enum_labels.dart`), pas
+    via un champ figé sur l'enum.
 
 ---
 
