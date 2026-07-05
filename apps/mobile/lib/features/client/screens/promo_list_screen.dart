@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../l10n/app_localizations.dart';
@@ -9,6 +8,10 @@ import '../../shared/widgets/language_switcher_button.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/promo_providers.dart';
 import '../widgets/promo_card.dart';
+
+const _gridCrossAxisCount = 2;
+const _gridSpacing = 12.0;
+const _gridPadding = 12.0;
 
 class PromoListScreen extends ConsumerWidget {
   const PromoListScreen({super.key});
@@ -52,29 +55,45 @@ class PromoListScreen extends ConsumerWidget {
                 if (promos.isEmpty) {
                   return Center(child: Text(l10n.noActivePromos));
                 }
-                return RefreshIndicator(
-                  onRefresh: () => ref.refresh(promoListProvider.future),
-                  // MasonryGridView (pas GridView) : chaque carte garde sa
-                  // hauteur naturelle — un `childAspectRatio` fixe imposait
-                  // la même hauteur à toutes les cases et laissait un
-                  // espace vide sous les cartes plus courtes (photo + texte
-                  // dont la hauteur varie selon la description et la
-                  // langue).
-                  child: MasonryGridView.count(
-                    padding: const EdgeInsets.all(12),
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    itemCount: promos.length,
-                    itemBuilder: (context, index) {
-                      final promo = promos[index];
-                      return PromoCard(
-                        promo: promo,
-                        isFavorite: favorites.contains(promo.commercantId),
-                        onTap: () => context.push('/promo/${promo.id}'),
-                      );
-                    },
-                  ),
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    // `childAspectRatio` calculé pour correspondre
+                    // exactement à la hauteur réelle de la carte (photo
+                    // 16:9 à la largeur de la case + bloc texte de hauteur
+                    // fixe, voir promo_card.dart) — pas de valeur figée qui
+                    // laisserait un espace vide ou déborderait selon la
+                    // largeur d'écran.
+                    final availableWidth = constraints.maxWidth -
+                        _gridPadding * 2 -
+                        _gridSpacing * (_gridCrossAxisCount - 1);
+                    final cardWidth = availableWidth / _gridCrossAxisCount;
+                    final imageHeight = cardWidth * 9 / 16;
+                    final cardHeight =
+                        imageHeight + promoCardTextBlockHeight + promoCardPadding * 2;
+                    final aspectRatio = cardWidth / cardHeight;
+
+                    return RefreshIndicator(
+                      onRefresh: () => ref.refresh(promoListProvider.future),
+                      child: GridView.builder(
+                        padding: const EdgeInsets.all(_gridPadding),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: _gridCrossAxisCount,
+                          mainAxisSpacing: _gridSpacing,
+                          crossAxisSpacing: _gridSpacing,
+                          childAspectRatio: aspectRatio,
+                        ),
+                        itemCount: promos.length,
+                        itemBuilder: (context, index) {
+                          final promo = promos[index];
+                          return PromoCard(
+                            promo: promo,
+                            isFavorite: favorites.contains(promo.commercantId),
+                            onTap: () => context.push('/promo/${promo.id}'),
+                          );
+                        },
+                      ),
+                    );
+                  },
                 );
               },
             ),

@@ -689,19 +689,33 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
 
 - **2026-07-05 (mobile : espace vide en bas des cartes promo)** — Signalé
   par capture d'écran : un espace blanc apparaissait sous certaines cartes
-  de `promo_list_screen.dart`. Cause : `SliverGridDelegateWithFixedCrossAxisCount`
-  (`childAspectRatio: 0.72`) impose la même hauteur à toutes les cases de
-  la grille, alors que la hauteur réelle d'une carte (photo 16:9 + texte)
-  varie selon la longueur de la description, la présence du nom du
-  commerçant, et désormais la langue (FR/EN/AR) — la `Column` de
-  `PromoCard` s'étirait pour remplir la case et laissait le surplus vide en
-  bas, alignée en haut par défaut. Un ratio fixe alternatif aurait juste
-  déplacé le problème (pas de valeur unique correcte pour un contenu de
-  hauteur variable). Remplacé `GridView.builder` par
-  `MasonryGridView.count` (nouvelle dépendance
-  `flutter_staggered_grid_view`) : chaque carte garde sa hauteur
-  naturelle, plus d'espace vide. Aucun changement dans `promo_card.dart`
-  lui-même — seul le délégué de grille change.
-  - **Non exécuté dans mon environnement** : `flutter pub get` (nouvelle
-    dépendance) puis `flutter analyze`/`flutter run` pour confirmer
-    visuellement sur la liste des promos.
+  de `promo_list_screen.dart`. Cause réelle : `SliverGridDelegateWithFixedCrossAxisCount`
+  (`childAspectRatio: 0.72`, valeur figée devinée) ne correspondait pas à
+  la hauteur réelle de la carte, et le bloc texte lui-même n'avait pas de
+  hauteur réservée — une description tenant sur 1 seule ligne (`maxLines:
+  2` ne force pas 2 lignes) ou l'absence de nom de commerçant (bloc
+  simplement omis) raccourcissait la carte davantage.
+  - Premier essai (grille "masonry", chaque carte garde sa hauteur
+    naturelle) **abandonné à la demande explicite de l'utilisateur** :
+    préférence produit pour une grille strictement homogène (2 cartes par
+    ligne, même hauteur), la hauteur du contenu étant par construction
+    quasi fixe (photo, 2 lignes de description, 1 ligne de prix, 1 ligne
+    de nom).
+  - **Solution retenue** : `promo_card.dart` réserve désormais une hauteur
+    fixe (`promoCardTextBlockHeight = 96`) pour tout le bloc texte
+    (au lieu de la hauteur naturelle de chaque `Text`), et rend toujours
+    la ligne du nom du commerçant (chaîne vide si `null`) plutôt que de
+    l'omettre — la hauteur de la carte devient réellement déterministe.
+    `promo_list_screen.dart` calcule `childAspectRatio` dynamiquement via
+    `LayoutBuilder` (largeur de case → hauteur photo 16:9 + hauteur bloc
+    texte + paddings) au lieu d'une valeur devinée — s'adapte à la largeur
+    d'écran réelle, plus de ratio à retoucher à la main.
+  - Limite acceptée (pas de solution parfaite sans mesurer le texte
+    dynamiquement) : une échelle de police accessibilité très agrandie
+    pourrait dépasser les 96px réservés et déborder visuellement — marge
+    incluse dans la valeur choisie mais non testée avec un réglage
+    d'accessibilité extrême.
+  - **Non exécuté dans mon environnement** : `flutter analyze`/`flutter
+    run` pour confirmer visuellement sur la liste des promos (aucune
+    nouvelle dépendance cette fois, la tentative masonry
+    `flutter_staggered_grid_view` a été retirée).
