@@ -719,3 +719,23 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     run` pour confirmer visuellement sur la liste des promos (aucune
     nouvelle dépendance cette fois, la tentative masonry
     `flutter_staggered_grid_view` a été retirée).
+
+- **2026-07-05 (suite) : RenderFlex overflow au lancement** — Confirmé en
+  environnement réel : la `Column` de `promo_card.dart` débordait
+  (`RenderFlex#... OVERFLOWING`, ~3-4px sur une carte de 217px). Cause :
+  le `childAspectRatio` calculé dans `promo_list_screen.dart` visait une
+  correspondance exacte entre la hauteur allouée par la grille et la
+  hauteur théorique de la carte (photo + bloc texte fixe) — le moindre
+  écart entre l'estimation et les métriques de police réellement rendues
+  (thème Material 3, `titleMedium`) suffit à faire déborder une `Column`
+  à contraintes strictes (tight) comme celles d'une grille.
+  - **Fix structurel** (pas un ajustement de valeur) : la photo utilise
+    désormais `Expanded` au lieu d'`AspectRatio` — elle prend toujours
+    exactement l'espace restant après le bloc texte (hauteur fixe),
+    jamais plus. Rend la carte mathématiquement incapable de déborder,
+    quelle que soit la précision du `childAspectRatio` calculé côté
+    grille (qui reste utile pour viser un rendu proche de 16:9, mais
+    n'est plus un contrat strict à respecter).
+  - Le bloc texte à hauteur fixe (`promoCardTextBlockHeight`) garde la
+    même limite déjà documentée ci-dessus (échelle d'accessibilité
+    extrême non testée).

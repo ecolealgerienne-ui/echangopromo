@@ -42,8 +42,17 @@ class PromoCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
+            // `Expanded` plutôt qu'`AspectRatio` : la hauteur totale de la
+            // carte est déjà imposée (tight) par la grille — un `AspectRatio`
+            // fixe redemande sa propre hauteur en plus de celle du bloc
+            // texte ci-dessous, et le moindre écart entre le ratio calculé
+            // côté grille et la hauteur réellement prise par le texte
+            // (métriques de police, échelle d'accessibilité) fait déborder
+            // la `Column`. Avec `Expanded`, la photo prend toujours
+            // exactement l'espace restant, jamais plus — proche de 16:9 en
+            // pratique (le ratio de grille vise ça) mais sans jamais pouvoir
+            // provoquer d'overflow.
+            Expanded(
               child: Stack(
                 fit: StackFit.expand,
                 children: [
