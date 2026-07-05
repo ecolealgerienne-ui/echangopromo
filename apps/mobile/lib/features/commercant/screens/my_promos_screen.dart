@@ -5,7 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/models/promo.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/l10n/enum_labels.dart';
+import '../../shared/widgets/language_switcher_button.dart';
 
 final myPromosProvider = FutureProvider.autoDispose((ref) => ref.watch(promoApiProvider).listMine());
 
@@ -23,26 +26,40 @@ class MyPromosScreen extends ConsumerWidget {
   }
 
   Future<void> _publish(BuildContext context, WidgetRef ref, Promo promo) async {
+    final l10n = AppLocalizations.of(context)!;
     try {
       await ref.read(promoApiProvider).publish(promo.id);
       ref.invalidate(myPromosProvider);
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(extractApiErrorMessage(error, fallback: 'Publication impossible.'))),
+          SnackBar(
+            content: Text(extractApiErrorMessage(
+              error,
+              fallback: l10n.publishFailed,
+              locale: Localizations.localeOf(context),
+            )),
+          ),
         );
       }
     }
   }
 
   Future<void> _stop(BuildContext context, WidgetRef ref, Promo promo) async {
+    final l10n = AppLocalizations.of(context)!;
     try {
       await ref.read(promoApiProvider).stop(promo.id);
       ref.invalidate(myPromosProvider);
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(extractApiErrorMessage(error, fallback: 'Action impossible.'))),
+          SnackBar(
+            content: Text(extractApiErrorMessage(
+              error,
+              fallback: l10n.operationFailed,
+              locale: Localizations.localeOf(context),
+            )),
+          ),
         );
       }
     }
@@ -50,16 +67,20 @@ class MyPromosScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final promosAsync = ref.watch(myPromosProvider);
     final dateFormat = DateFormat('dd/MM/yyyy');
     final activeCount = promosAsync.valueOrNull?.where((p) => p.isPublished).length ?? 0;
     final atCap = activeCount >= 5;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Mes promos')),
+      appBar: AppBar(
+        title: Text(l10n.myPromosTitle),
+        actions: const [LanguageSwitcherButton()],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add),
-        label: Text(atCap ? 'Plafond de 5 promos atteint' : 'Nouvelle promo'),
+        label: Text(atCap ? l10n.capReachedLabel : l10n.newPromoTitle),
         onPressed: atCap
             ? null
             : () async {
@@ -72,16 +93,16 @@ class MyPromosScreen extends ConsumerWidget {
       ),
       body: promosAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Erreur : $error')),
+        error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
         data: (promos) {
           if (promos.isEmpty) {
-            return const Center(child: Text('Aucune promo pour le moment.'));
+            return Center(child: Text(l10n.noPromosYet));
           }
           return Column(
             children: [
               Padding(
                 padding: const EdgeInsets.all(12),
-                child: Text('$activeCount / 5 promos actives'),
+                child: Text(l10n.activeCountLabel(activeCount)),
               ),
               Expanded(
                 child: ListView.builder(
@@ -89,8 +110,8 @@ class MyPromosScreen extends ConsumerWidget {
                   itemBuilder: (context, index) {
                     final promo = promos[index];
                     final dateLabel = promo.dateFin != null
-                        ? 'jusqu\'au ${dateFormat.format(promo.dateFin!)}'
-                        : 'pas encore publiée';
+                        ? l10n.untilDate(dateFormat.format(promo.dateFin!))
+                        : l10n.notPublishedYet;
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundImage:
@@ -98,7 +119,8 @@ class MyPromosScreen extends ConsumerWidget {
                       ),
                       title: Text(promo.description),
                       subtitle: Text(
-                        '${promo.lifecycleLabel} · $dateLabel · ${promo.viewCount ?? 0} vues',
+                        '${promoLifecycleLabel(context, promo.lifecycleStatus, isExpired: promo.isExpired)}'
+                        ' · $dateLabel · ${l10n.myPromosViewsCount(promo.viewCount ?? 0)}',
                       ),
                       trailing: PopupMenuButton<String>(
                         onSelected: (action) {
@@ -112,11 +134,11 @@ class MyPromosScreen extends ConsumerWidget {
                           }
                         },
                         itemBuilder: (context) => [
-                          const PopupMenuItem(value: 'edit', child: Text('Modifier')),
+                          PopupMenuItem(value: 'edit', child: Text(l10n.editItem)),
                           if (promo.isPublished)
-                            const PopupMenuItem(value: 'stop', child: Text('Arrêter'))
+                            PopupMenuItem(value: 'stop', child: Text(l10n.stopItem))
                           else
-                            const PopupMenuItem(value: 'publish', child: Text('Publier')),
+                            PopupMenuItem(value: 'publish', child: Text(l10n.publishLabel)),
                         ],
                       ),
                     );

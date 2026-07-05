@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../shared/widgets/category_dropdown.dart';
 import '../../shared/widgets/error_text.dart';
+import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/loading_button.dart';
 import '../../shared/widgets/location_capture_field.dart';
 import '../../shared/widgets/photo_picker_field.dart';
@@ -43,6 +45,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
@@ -66,7 +69,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ref.invalidate(_editProfileMeProvider);
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
-      setState(() => _error = extractApiErrorMessage(error, fallback: 'Modification impossible.'));
+      setState(() => _error = extractApiErrorMessage(
+            error,
+            fallback: l10n.modifyFailed,
+            locale: Localizations.localeOf(context),
+          ));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -74,6 +81,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final meAsync = ref.watch(_editProfileMeProvider);
 
     ref.listen(_editProfileMeProvider, (previous, next) {
@@ -91,10 +99,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     });
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Modifier mon profil')),
+      appBar: AppBar(
+        title: Text(l10n.editProfileTitle),
+        actions: const [LanguageSwitcherButton()],
+      ),
       body: meAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Erreur : $error')),
+        error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
         data: (_) => Padding(
           padding: const EdgeInsets.all(16),
           child: Form(
@@ -105,13 +116,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _nomController,
-                  decoration: const InputDecoration(labelText: 'Nom du commerce'),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Nom requis' : null,
+                  decoration: InputDecoration(labelText: l10n.nomCommerceLabel),
+                  validator: (v) => (v == null || v.isEmpty) ? l10n.nomRequired : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _adresseController,
-                  decoration: const InputDecoration(labelText: 'Adresse (optionnel)'),
+                  decoration: InputDecoration(labelText: l10n.adresseLabel),
                 ),
                 const SizedBox(height: 12),
                 LocationCaptureField(
@@ -126,7 +137,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 CategoryDropdown(value: _categorie, onChanged: (v) => setState(() => _categorie = v)),
                 ErrorText(_error),
                 const SizedBox(height: 16),
-                LoadingButton(loading: _loading, onPressed: _submit, label: 'Enregistrer'),
+                LoadingButton(loading: _loading, onPressed: _submit, label: l10n.saveLabel),
               ],
             ),
           ),
