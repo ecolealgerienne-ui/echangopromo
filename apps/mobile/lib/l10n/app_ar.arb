@@ -87,6 +87,9 @@
   "reportSent": "تم إرسال البلاغ، شكرًا لك.",
   "reportFailed": "تعذّر إرسال البلاغ.",
   "itineraryButton": "الاتجاهات",
+  "shareTooltip": "مشاركة",
+  "shareMessage": "{description} عند {commercantNom} : {prixApres} دج بدل {prixAvant} دج! شاهدتها على إيشانغو برومو.",
+  "shareInstallCta": "حمّل تطبيق إيشانغو برومو : {url}",
 
   "changeCommuneTooltip": "تغيير البلدية",
   "professionalSpaceTooltip": "الفضاء المهني",

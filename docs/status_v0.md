@@ -739,3 +739,35 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
   - Le bloc texte à hauteur fixe (`promoCardTextBlockHeight`) garde la
     même limite déjà documentée ci-dessus (échelle d'accessibilité
     extrême non testée).
+
+- **2026-07-05 (mobile : partage d'une promo, croissance organique)** —
+  Bouton "Partager" sur la fiche promo (`promo_detail_screen.dart`, icône
+  à côté du cœur favori) : envoie texte + photo vers le sélecteur de
+  partage natif du téléphone (WhatsApp, SMS, email... — pas un bouton
+  WhatsApp dédié, le sélecteur système liste tout ce qui est installé).
+  Décision produit actée avec l'utilisateur : pas de lien profond vers
+  l'app (pas de présence web, un lien nécessiterait un nom de domaine +
+  un fichier `assetlinks.json`/`apple-app-site-association` hébergé) —
+  texte autonome uniquement.
+  - Nouveaux `Env.playStoreUrl`/`Env.appStoreUrl` (`config/env.dart`,
+    `String.fromEnvironment`, vides par défaut) : l'app n'est pas encore
+    publiée (`applicationId` encore la valeur par défaut Flutter
+    `com.example.echango_promo`), mais l'utilisateur prévoit de publier.
+    Le message de partage n'ajoute la ligne "installe l'app" que si le
+    lien de la plateforme courante (`Platform.isIOS` ? App Store : Play
+    Store) est non vide — remplir la valeur à la publication
+    (`--dart-define=PLAY_STORE_URL=...`) suffira, aucun code à retoucher.
+  - Photo : téléchargée à la volée depuis S3 vers un fichier temporaire
+    (`Dio().download` + `path_provider`, même pattern que
+    `storage_api.dart`) puisque `Share.shareXFiles` a besoin d'un fichier
+    local, pas d'une URL — échec de téléchargement non bloquant, retombe
+    sur le texte seul.
+  - Nouvelle dépendance `share_plus` (^7.2.2, API `Share.share`/
+    `Share.shareXFiles` classique — délibérément pas la dernière version
+    majeure, dont l'API `SharePlus.instance`/`ShareParams` plus récente
+    n'a pas pu être vérifiée par compilation dans cet environnement).
+  - Nouvelles clés `.arb` (`shareTooltip`, `shareMessage`,
+    `shareInstallCta`) dans les 3 langues (CLAUDE.md règle #27).
+  - **Non exécuté dans mon environnement** : `flutter pub get` (nouvelle
+    dépendance) puis `flutter analyze`/`flutter run`, et test manuel du
+    partage (texte seul et texte+photo) vers au moins une app installée.

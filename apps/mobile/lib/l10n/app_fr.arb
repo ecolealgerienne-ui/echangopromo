@@ -91,6 +91,18 @@
   "reportSent": "Signalement envoyé, merci.",
   "reportFailed": "Signalement impossible.",
   "itineraryButton": "Itinéraire",
+  "shareTooltip": "Partager",
+  "shareMessage": "{description} chez {commercantNom} : {prixApres} DA au lieu de {prixAvant} DA ! Vu sur echango Promo.",
+  "@shareMessage": {
+    "placeholders": {
+      "description": { "type": "String" },
+      "commercantNom": { "type": "String" },
+      "prixApres": { "type": "String" },
+      "prixAvant": { "type": "String" }
+    }
+  },
+  "shareInstallCta": "Télécharge l'app echango Promo : {url}",
+  "@shareInstallCta": { "placeholders": { "url": { "type": "String" } } },
 
   "changeCommuneTooltip": "Changer de commune",
   "professionalSpaceTooltip": "Espace professionnel",

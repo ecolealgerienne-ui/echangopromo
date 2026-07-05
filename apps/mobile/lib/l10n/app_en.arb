@@ -87,6 +87,9 @@
   "reportSent": "Report sent, thank you.",
   "reportFailed": "Report failed.",
   "itineraryButton": "Directions",
+  "shareTooltip": "Share",
+  "shareMessage": "{description} at {commercantNom}: {prixApres} DZD instead of {prixAvant} DZD! Seen on echango Promo.",
+  "shareInstallCta": "Get the echango Promo app: {url}",
 
   "changeCommuneTooltip": "Change municipality",
   "professionalSpaceTooltip": "Professional area",

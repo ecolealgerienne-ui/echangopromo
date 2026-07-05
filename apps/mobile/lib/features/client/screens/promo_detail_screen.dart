@@ -1,10 +1,18 @@
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../config/env.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/models/commercant.dart';
+import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/language_switcher_button.dart';
@@ -56,6 +64,11 @@ class PromoDetailScreen extends ConsumerWidget {
                           child: Text(promo.description, style: Theme.of(context).textTheme.headlineSmall),
                         ),
                         IconButton(
+                          icon: const Icon(Icons.share_outlined),
+                          tooltip: l10n.shareTooltip,
+                          onPressed: () => _share(context, promo),
+                        ),
+                        IconButton(
                           icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
                           onPressed: () =>
                               ref.read(favoritesProvider.notifier).toggle(promo.commercantId),
@@ -99,6 +112,53 @@ class PromoDetailScreen extends ConsumerWidget {
         },
       ),
     );
+  }
+
+  /// Texte + photo (si disponible) vers le sélecteur de partage natif du
+  /// téléphone (WhatsApp, SMS, email...) — pas de lien profond vers l'app
+  /// (pas de présence web pour l'instant), juste un message autonome. La
+  /// ligne d'installation n'apparaît que si `Env.playStoreUrl`/`appStoreUrl`
+  /// est renseigné (vide tant que l'app n'est pas publiée).
+  Future<void> _share(BuildContext context, Promo promo) async {
+    final l10n = AppLocalizations.of(context)!;
+    final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
+
+    final buffer = StringBuffer(
+      l10n.shareMessage(
+        promo.description,
+        promo.commercantNom ?? '',
+        currency.format(promo.prixApres),
+        currency.format(promo.prixAvant),
+      ),
+    );
+    final storeUrl = Platform.isIOS ? Env.appStoreUrl : Env.playStoreUrl;
+    if (storeUrl.isNotEmpty) {
+      buffer
+        ..writeln()
+        ..write(l10n.shareInstallCta(storeUrl));
+    }
+    final message = buffer.toString();
+
+    final photo = promo.photoUrl != null ? await _downloadForShare(promo.photoUrl!) : null;
+    if (photo != null) {
+      await Share.shareXFiles([XFile(photo.path)], text: message);
+    } else {
+      await Share.share(message);
+    }
+  }
+
+  /// `Share` a besoin d'un fichier local, pas d'une URL S3 — un échec de
+  /// téléchargement (réseau, image absente) ne doit pas empêcher le
+  /// partage, juste le faire retomber sur le texte seul.
+  Future<File?> _downloadForShare(String url) async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final path = p.join(dir.path, 'share_promo_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      await Dio().download(url, path);
+      return File(path);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _report(BuildContext context, WidgetRef ref) async {
