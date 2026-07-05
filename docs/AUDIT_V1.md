@@ -9,17 +9,22 @@ tests mobile) et chercher les régressions ou nouveaux problèmes introduits
 en même temps. Méthode : exploration en lecture seule, fichier:ligne
 systématique, aucune modification de code pendant l'audit lui-même.
 
-| # | Point vérifié | Verdict |
-|---|---|---|
-| 1 | Révocation JWT (tokenVersion) | ⚠️ Fait pour agent/admin, **absent pour commerçant** |
-| 2 | Couverture du rate limiting | ⚠️ Endpoints auth/OTP couverts, **gaps sur actions sensibles post-auth** |
-| 3 | Cohérence `AppException`/`ErrorCode` | ✅ Migration complète, 0 résidu |
-| 4 | Index sur les clés étrangères | ⚠️ 3/5 FK indexées, **2 oublis** |
-| 5 | Pagination des listes | ❌ Toujours absente (dette V0 inchangée) |
-| 6 | Tests automatisés backend | ❌ 0% (aucun fichier `*.spec.ts`) |
-| 7 | Upload S3 (taille / type) | ⚠️ Taille corrigée, **type toujours non vérifié a posteriori** |
-| 8 | Déconnexion mobile sur token révoqué/expiré | ❌ **Nouveau gap** : aucune déconnexion automatique |
-| 9 | Règles CLAUDE.md à ajouter | 3 propositions (voir §9 et CLAUDE.md) |
+**Mise à jour (2026-07-05)** : les findings ci-dessous ont été traités un
+par un, chacun avec commit + doc. Statuts après traitement dans le
+tableau ; détail des corrections dans `docs/status_v0.md` (entrées
+"traitement audit V1").
+
+| # | Point vérifié | Verdict initial | Statut après traitement |
+|---|---|---|---|
+| 1 | Révocation JWT (tokenVersion) | ⚠️ Absent pour commerçant | ✅ `Commercant.tokenVersion` ajouté, `adminResetPin` l'incrémente ; `Admin.tokenVersion` obtient `POST /admin/me/revoke-token` |
+| 2 | Couverture du rate limiting | ⚠️ Gaps sur actions sensibles post-auth | ✅ `SENSITIVE_ACTION_THROTTLE` appliqué (admin, agent→commerçant, promo, presigned-upload) |
+| 3 | Cohérence `AppException`/`ErrorCode` | ✅ Déjà conforme | ✅ Toujours conforme (nouveau code `STORAGE_INVALID_IMAGE` mappé) |
+| 4 | Index sur les clés étrangères | ⚠️ 2 oublis | ✅ `Agent.zoneId`/`Commercant.createdByAgentId` indexés |
+| 5 | Pagination des listes | ❌ Absente | ❌ **Non traité** — dette V0 explicitement différée, hors périmètre de cette passe |
+| 6 | Tests automatisés backend | ❌ 0% | ⚠️ 2 fichiers de test ajoutés (`jwt-auth.guard.spec.ts`, `image-signature.spec.ts`) — première suite, pas une couverture complète |
+| 7 | Upload S3 (taille / type) | ⚠️ Type non vérifié | ✅ `assertValidImage` (magic bytes) après upload |
+| 8 | Déconnexion mobile sur token révoqué/expiré | ❌ Aucune déconnexion automatique | ✅ `ApiClient` détecte les codes `AUTH_TOKEN_*` et appelle `logout()` |
+| 9 | Règles CLAUDE.md à ajouter | 3 propositions | ✅ Ajoutées (#24-26) |
 
 ---
 
@@ -225,15 +230,15 @@ Voir `CLAUDE.md` pour le texte final retenu (règles #24-26). Résumé :
 
 ---
 
-## Priorisation recommandée
+## Traité (2026-07-05)
 
-1. Mobile : déconnexion automatique sur token révoqué/invalide (§8) — sans
-   ça, la révocation JWT construite cette session n'a pas d'effet visible
-   pour l'utilisateur.
-2. Commerçant : ajouter `tokenVersion` (§1) — sinon `reset-pin` ne coupe
-   pas réellement l'accès existant.
-3. N+1 dans `ModerationService.queue()` (§5).
-4. Rate limiting sur les actions admin destructrices (`reset-pin`,
-   `revoke-token`) au minimum (§2).
-5. Le reste (index FK, pagination, tests backend, Content-Type S3) reste
-   de la dette non bloquante pour le pilote, déjà documentée.
+Tous les points ci-dessus ont été traités sauf la pagination (§5,
+explicitement différée — dette V0 assumée, pas un oubli de cette passe) et
+la couverture de tests backend (§6, amorcée avec 2 fichiers mais loin
+d'une couverture complète). Détail des commits dans `docs/status_v0.md`
+("traitement audit V1, 1/4" à "2-5/...").
+
+Dette restante après cette passe, à garder en tête pour l'extension
+multi-wilaya : pagination des listes, couverture de tests backend encore
+partielle, `Admin` reste un compte unique en V0 (pas de gestion
+multi-admin pour la révocation).

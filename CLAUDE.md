@@ -240,26 +240,17 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
 ## Dette connue, non bloquante pour le pilote mais à traiter avant extension
 
 - Pas de pagination sur les listes (`/promo`, `/admin/agent`, `/zone`,
-  `/commune`) — et le N+1 associé sur `ModerationService.queue()` (un
-  `SELECT` par promo signalée).
-- `Commercant` n'a pas de `tokenVersion` : `POST
-  /admin/commercant/:id/reset-pin` efface le PIN mais ne révoque pas les
-  JWT déjà émis (valides jusqu'à `JWT_EXPIRES_IN`, 30j par défaut).
-  `Admin.tokenVersion` existe mais n'est jamais incrémenté (pas de route
-  de révocation pour un admin).
-- Mobile : aucune déconnexion automatique quand le backend rejette un
-  token révoqué/invalide (401) — l'utilisateur reste sur son écran avec un
-  token mort tant qu'il n'utilise pas le bouton logout manuel.
-- Rate limiting absent sur des actions sensibles post-authentification
-  (`reset-pin`, `revoke-token`, `presigned-upload`, actions promo) — seule
-  la limite globale (60 req/min) s'applique.
-- `Content-Type` d'un upload S3 toujours purement déclaratif (la taille
-  est bien contrainte par la policy S3 depuis cette session, pas le type
-  réel du fichier).
-- Deux FK sans index (`Agent.zoneId`, `Commercant.createdByAgentId`) —
-  impact nul tant qu'aucune requête ne filtre dessus.
-- 0% de couverture de tests automatisés côté backend (le mobile a une
-  première suite dans `apps/mobile/test/`).
+  `/commune`) — décision assumée pour le pilote, à traiter avant
+  l'extension multi-communes/multi-wilayas (le reste des findings de
+  l'audit V1 a été traité — voir `docs/AUDIT_V1.md`, section "Traité").
+- Couverture de tests backend encore partielle (2 fichiers :
+  `jwt-auth.guard.spec.ts`, `image-signature.spec.ts`) — largement
+  suffisant pour dépasser 0%, mais pas une vraie couverture des règles
+  métier (plafond de 5 promos, fenêtre d'ignore de 30 jours, etc.).
+- `Admin` reste un compte unique en V0 (pas de gestion multi-admin) —
+  `POST /admin/me/revoke-token` couvre l'auto-révocation, mais aucun
+  mécanisme pour qu'un admin révoque un *autre* admin n'a de sens tant que
+  ce cas n'existe pas.
 
 Détail complet, fichier:ligne, sévérités : `docs/AUDIT_V0.md` et
 `docs/AUDIT_V1.md`.
