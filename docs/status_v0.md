@@ -771,3 +771,59 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
   - **Non exécuté dans mon environnement** : `flutter pub get` (nouvelle
     dépendance) puis `flutter analyze`/`flutter run`, et test manuel du
     partage (texte seul et texte+photo) vers au moins une app installée.
+
+- **2026-07-05 (préparation App Links / stores — pas encore publié)** —
+  Suite de la fonctionnalité de partage : préparer (sans l'activer) le
+  jour où le lien partagé (`promo.echango.com`) ouvrira l'app directement
+  si elle est installée, et redirigera vers le store sinon (jamais vers un
+  site qui affiche la promo — décision produit actée). Nouveau
+  `docs/DEPLOIEMENT_STORES.md` : procédure complète Google Play + App
+  Store, App Links/Universal Links, tableau des variables à remplir,
+  checklist.
+  - **Backend** : `src/app-links/` (`AppLinksModule`/`AppLinksController`,
+    restreint à `host: 'promo.echango.com'`) sert
+    `.well-known/assetlinks.json` et `.well-known/apple-app-site-association`
+    (tableaux/structures vides — donc valides mais no-op — tant que
+    `ANDROID_PACKAGE_NAME`/`ANDROID_SHA256_CERT_FINGERPRINT`/`IOS_TEAM_ID`/
+    `IOS_BUNDLE_ID` ne sont pas renseignées) et `GET /promo/:id` (redirige
+    vers `PLAY_STORE_URL`/`APP_STORE_URL` selon le user-agent, ou affiche
+    une page d'attente tant qu'aucun n'est configuré — jamais la promo).
+    6 nouvelles variables dans `.env.example`, toutes vides, aucune
+    requise au démarrage (contrairement à `JWT_SECRET`).
+    **Point d'attention à vérifier en priorité** : `AppLinksController`
+    partage le chemin `/promo/:id` avec `PromoController` (l'API JSON de
+    l'app, sans restriction de host) — les deux ne se distinguent que par
+    le header `Host`. `AppLinksModule` est enregistré *avant* `PromoModule`
+    dans `app.module.ts` à dessein (Express/Nest essaient les routes dans
+    l'ordre d'enregistrement) ; non vérifié par un test d'intégration réel
+    (`app-links.controller.spec.ts` teste la logique en isolation, pas le
+    routage NestJS complet) — à confirmer avec `npm run start:dev` +
+    `curl -H "Host: promo.echango.com" http://localhost:3000/promo/xyz`
+    avant de considérer ce point terminé.
+  - **Mobile** : intent-filter App Links ajouté dans
+    `android/app/src/main/AndroidManifest.xml` (`autoVerify`, host
+    `promo.echango.com`, pathPrefix `/promo`) — sans risque à activer dès
+    maintenant, la vérification échoue simplement tant qu'`assetlinks.json`
+    est vide. `ios/Runner/Runner.entitlements` créé (Associated Domains)
+    mais **pas encore relié au projet Xcode** (nécessite Xcode/Mac, absent
+    de cet environnement de dev) — voir doc.
+  - **Corrigé au passage** : `Info.plist` n'avait que
+    `NSLocationWhenInUseUsageDescription` — `NSCameraUsageDescription` et
+    `NSPhotoLibraryUsageDescription` manquaient alors que `image_picker`
+    est utilisé pour la caméra ET la galerie (`PhotoPickerField`) ; sans
+    ces clés, iOS **crashe** l'app dès la première demande de permission
+    caméra/galerie (pas juste un rejet de review, un vrai crash en test).
+  - **Préalable bloquant documenté mais pas fait** : `applicationId`
+    encore `com.example.echango_promo` (défaut Flutter jamais changé) — à
+    fixer définitivement avant de générer un certificat de signature ou
+    créer une fiche store (le changer après publication casse les mises à
+    jour). Procédure recommandée (`package rename`) dans le doc.
+  - **Suggéré, pas fait** : les deux stores exigent une politique de
+    confidentialité (URL) — l'app collecte position GPS optionnelle,
+    photo, numéro de téléphone ; à rédiger (je peux en préparer un premier
+    jet factuel si demandé, ce n'est pas un texte juridique que je dois
+    produire sans qu'on me le demande explicitement).
+  - **Non exécuté dans mon environnement** : `npm run build`/`npm test`
+    côté backend (nouveau `app-links.controller.spec.ts`), `flutter
+    analyze` côté mobile (fichiers de config natifs modifiés, pas de code
+    Dart).

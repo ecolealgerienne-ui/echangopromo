@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Universal Links (partage d'une promo) — tant que
+	     https://promo.echango.com/.well-known/apple-app-site-association
+	     ne référence pas le vrai Team ID/Bundle ID (voir
+	     docs/DEPLOIEMENT_STORES.md), Apple ignore ce domaine et le lien
+	     s'ouvre simplement dans Safari, sans casser quoi que ce soit. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:promo.echango.com</string>
+	</array>
+</dict>
+</plist>

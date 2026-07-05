@@ -47,5 +47,9 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Utilisée pour enregistrer la position de votre commerce, afin que les clients puissent le trouver facilement.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Utilisée pour prendre la photo de votre commerce ou d'une promo.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Utilisée pour choisir une photo existante de votre commerce depuis votre galerie.</string>
 </dict>
 </plist>
