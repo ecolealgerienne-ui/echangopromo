@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import '../../../domain/enums/categorie.dart';
+import '../../../l10n/app_localizations.dart';
 import 'category_dropdown.dart';
 import 'photo_picker_field.dart';
 
@@ -45,6 +46,7 @@ class PromoFormFields extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -52,10 +54,10 @@ class PromoFormFields extends StatelessWidget {
         const SizedBox(height: 16),
         TextFormField(
           controller: descriptionController,
-          decoration: const InputDecoration(labelText: 'Description'),
+          decoration: InputDecoration(labelText: l10n.descriptionLabel),
           maxLines: 3,
           maxLength: promoDescriptionMaxLength,
-          validator: (v) => (v == null || v.isEmpty) ? 'Description requise' : null,
+          validator: (v) => (v == null || v.isEmpty) ? l10n.descriptionRequired : null,
         ),
         const SizedBox(height: 12),
         Row(
@@ -63,16 +65,16 @@ class PromoFormFields extends StatelessWidget {
             Expanded(
               child: TextFormField(
                 controller: prixAvantController,
-                decoration: const InputDecoration(labelText: 'Prix avant (DA)'),
+                decoration: InputDecoration(labelText: l10n.prixAvantLabel),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                validator: (v) => (double.tryParse(v ?? '') == null) ? 'Invalide' : null,
+                validator: (v) => (double.tryParse(v ?? '') == null) ? l10n.commonInvalid : null,
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: TextFormField(
                 controller: prixApresController,
-                decoration: const InputDecoration(labelText: 'Prix après (DA)'),
+                decoration: InputDecoration(labelText: l10n.prixApresLabel),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: prixApresValidator,
               ),
@@ -85,10 +87,10 @@ class PromoFormFields extends StatelessWidget {
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             initialValue: dureeJours,
-            decoration: const InputDecoration(labelText: 'Durée de validité'),
+            decoration: InputDecoration(labelText: l10n.dureeValiditeLabel),
             items: [
               for (var jours = 1; jours <= maxDureeJours; jours++)
-                DropdownMenuItem(value: jours, child: Text('$jours jour${jours > 1 ? 's' : ''}')),
+                DropdownMenuItem(value: jours, child: Text(l10n.dureeJoursOption(jours))),
             ],
             onChanged: onDureeJoursChanged,
           ),

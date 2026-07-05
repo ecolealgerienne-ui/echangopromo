@@ -5,8 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../shared/widgets/commercant_fields_form.dart';
 import '../../shared/widgets/error_text.dart';
+import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/loading_button.dart';
 import '../../../providers/core_providers.dart';
 
@@ -43,8 +45,9 @@ class _CreateCommercantScreenState extends ConsumerState<CreateCommercantScreen>
   }
 
   Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate() || _communeId == null) {
-      setState(() => _error = _communeId == null ? 'Commune requise' : null);
+      setState(() => _error = _communeId == null ? l10n.communeRequired : null);
       return;
     }
 
@@ -72,11 +75,11 @@ class _CreateCommercantScreenState extends ConsumerState<CreateCommercantScreen>
         final addPromo = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Commerçant créé'),
-            content: const Text('Ajouter la première promo maintenant ?'),
+            title: Text(l10n.commercantCreatedTitle),
+            content: Text(l10n.addFirstPromoQuestion),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Plus tard')),
-              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Oui')),
+              TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.laterLabel)),
+              FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(l10n.yesLabel)),
             ],
           ),
         );
@@ -98,7 +101,11 @@ class _CreateCommercantScreenState extends ConsumerState<CreateCommercantScreen>
         }
       }
     } catch (error) {
-      setState(() => _error = extractApiErrorMessage(error, fallback: 'Création impossible.'));
+      setState(() => _error = extractApiErrorMessage(
+            error,
+            fallback: l10n.createFailed,
+            locale: Localizations.localeOf(context),
+          ));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -106,8 +113,12 @@ class _CreateCommercantScreenState extends ConsumerState<CreateCommercantScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('Nouveau commerçant')),
+      appBar: AppBar(
+        title: Text(l10n.newCommercantScreenTitle),
+        actions: const [LanguageSwitcherButton()],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -133,7 +144,7 @@ class _CreateCommercantScreenState extends ConsumerState<CreateCommercantScreen>
               ),
               ErrorText(_error),
               const SizedBox(height: 16),
-              LoadingButton(loading: _loading, onPressed: _submit, label: 'Créer'),
+              LoadingButton(loading: _loading, onPressed: _submit, label: l10n.createLabel),
             ],
           ),
         ),

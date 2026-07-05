@@ -1,11 +1,12 @@
 /// Mapping code d'erreur backend (`ErrorCode`, voir
 /// `apps/backend/src/common/errors/error-code.enum.ts`) -> texte français.
 ///
-/// Prépare l'i18n : le backend envoie un `code` stable plutôt qu'un message
-/// figé, et c'est le mobile qui choisit le texte à afficher selon la langue
-/// courante. Une seule langue pour l'instant (pilote mono-langue) — ajouter
-/// une langue plus tard se fait en ajoutant un fichier
-/// `error_messages_<locale>.dart` sur ce modèle, sans toucher au backend.
+/// Le backend envoie un `code` stable plutôt qu'un message figé, et c'est le
+/// mobile qui choisit le texte à afficher selon la langue courante
+/// (`errorMessagesByLocale` dans `api_exception.dart`) — voir aussi
+/// `error_messages_en.dart`/`error_messages_ar.dart` (CLAUDE.md règle #26 :
+/// toute entrée ajoutée ici doit être dupliquée dans les deux autres
+/// fichiers dans le même commit).
 ///
 /// Volontairement absents de ce mapping : `VALIDATION_ERROR` (message par
 /// champ, dynamique, déjà en français côté backend) et les codes dont le
@@ -56,4 +57,8 @@ const Map<String, String> errorMessagesFr = {
   'RATE_LIMITED': 'Trop de tentatives. Réessayez dans quelques instants.',
   'HTTP_ERROR': 'Une erreur est survenue.',
   'INTERNAL_ERROR': 'Une erreur inattendue est survenue. Réessayez plus tard.',
+
+  /// Pas un `ErrorCode` backend — utilisé par [ApiException.fromDioError]
+  /// quand la requête n'a même pas atteint le serveur (pas de réponse HTTP).
+  'NETWORK_ERROR': 'Impossible de contacter le serveur. Vérifiez votre connexion.',
 };

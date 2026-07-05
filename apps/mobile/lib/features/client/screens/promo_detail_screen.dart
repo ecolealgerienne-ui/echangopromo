@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/models/commercant.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/widgets/language_switcher_button.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/promo_providers.dart';
 
@@ -18,13 +20,17 @@ class PromoDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final promoAsync = ref.watch(promoDetailProvider(promoId));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Détail de la promo')),
+      appBar: AppBar(
+        title: Text(l10n.promoDetailTitle),
+        actions: const [LanguageSwitcherButton()],
+      ),
       body: promoAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Erreur : $error')),
+        error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
         data: (promo) {
           final favorites = ref.watch(favoritesProvider);
           final isFavorite = favorites.contains(promo.commercantId);
@@ -76,13 +82,13 @@ class PromoDetailScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     if (promo.dateFin != null)
-                      Text('Valable jusqu\'au ${dateFormat.format(promo.dateFin!)}'),
+                      Text(l10n.validUntil(dateFormat.format(promo.dateFin!))),
                     const Divider(height: 32),
                     _CommercantInfo(commercantId: promo.commercantId),
                     const SizedBox(height: 24),
                     OutlinedButton.icon(
                       icon: const Icon(Icons.flag_outlined),
-                      label: const Text('Signaler (promo expirée ou incorrecte)'),
+                      label: Text(l10n.reportButton),
                       onPressed: () => _report(context, ref),
                     ),
                   ],
@@ -96,14 +102,18 @@ class PromoDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _report(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context)!;
     try {
       await ref.read(reportApiProvider).create(promoId);
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Signalement envoyé, merci.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.reportSent)));
       }
     } catch (error) {
-      final message = extractApiErrorMessage(error, fallback: 'Signalement impossible.');
+      final message = extractApiErrorMessage(
+        error,
+        fallback: l10n.reportFailed,
+        locale: Localizations.localeOf(context),
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       }
@@ -123,11 +133,12 @@ class _CommercantInfo extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final commercantAsync = ref.watch(_commercantPublicProfileProvider(commercantId));
 
     return commercantAsync.when(
       loading: () => const SizedBox(height: 40, child: Center(child: CircularProgressIndicator())),
-      error: (error, _) => Text('Erreur : $error'),
+      error: (error, _) => Text(l10n.commonError(error.toString())),
       data: (commercant) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -164,7 +175,7 @@ class _CommercantInfo extends ConsumerWidget {
             const SizedBox(height: 8),
             OutlinedButton.icon(
               icon: const Icon(Icons.directions_outlined),
-              label: const Text('Itinéraire'),
+              label: Text(l10n.itineraryButton),
               onPressed: () => _openMaps(commercant.latitude!, commercant.longitude!),
             ),
           ],

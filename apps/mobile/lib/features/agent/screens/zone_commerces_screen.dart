@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../domain/enums/commercant_account_state.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/l10n/enum_labels.dart';
+import '../../shared/widgets/language_switcher_button.dart';
 
 final zoneCommercesProvider =
     FutureProvider.autoDispose((ref) => ref.watch(agentApiProvider).zoneCommerces());
@@ -15,15 +18,17 @@ class ZoneCommercesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final commercesAsync = ref.watch(zoneCommercesProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ma zone'),
+        title: Text(l10n.zoneTitle),
         actions: [
+          const LanguageSwitcherButton(),
           IconButton(
             icon: const Icon(Icons.logout),
-            tooltip: 'Déconnexion',
+            tooltip: l10n.logoutTooltip,
             onPressed: () async {
               await ref.read(authControllerProvider.notifier).logout();
               if (context.mounted) context.go('/');
@@ -33,7 +38,7 @@ class ZoneCommercesScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add_business_outlined),
-        label: const Text('Nouveau commerçant'),
+        label: Text(l10n.newCommercantLabel),
         onPressed: () async {
           final created = await context.push<bool>('/agent/commercant/new');
           if (created == true && context.mounted) {
@@ -45,10 +50,10 @@ class ZoneCommercesScreen extends ConsumerWidget {
         onRefresh: () async => ref.invalidate(zoneCommercesProvider),
         child: commercesAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('Erreur : $error')),
+          error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
           data: (commerces) {
             if (commerces.isEmpty) {
-              return const Center(child: Text('Aucun commerce dans cette zone.'));
+              return Center(child: Text(l10n.zoneEmpty));
             }
             return ListView.builder(
               itemCount: commerces.length,
@@ -58,13 +63,15 @@ class ZoneCommercesScreen extends ConsumerWidget {
                 return ListTile(
                   title: Text(commercant.nom),
                   subtitle: Text(
-                    [if (commercant.adresse != null) commercant.adresse!, entry.visitStatusLabel]
-                        .join(' · '),
+                    [
+                      if (commercant.adresse != null) commercant.adresse!,
+                      visitStatusLabel(context, entry.visitStatus),
+                    ].join(' · '),
                   ),
                   trailing: commercant.accountState == CommercantAccountState.creeAgent
-                      ? const Tooltip(
-                          message: "En attente d'activation par le commerçant",
-                          child: Icon(Icons.hourglass_empty),
+                      ? Tooltip(
+                          message: l10n.waitingActivationTooltip,
+                          child: const Icon(Icons.hourglass_empty),
                         )
                       : null,
                   onTap: () => context.push(

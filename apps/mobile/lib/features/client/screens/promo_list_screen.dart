@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../domain/enums/categorie.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../shared/l10n/enum_labels.dart';
+import '../../shared/widgets/language_switcher_button.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/promo_providers.dart';
 import '../widgets/promo_card.dart';
@@ -11,26 +14,28 @@ class PromoListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final promosAsync = ref.watch(promoListProvider);
     final favorites = ref.watch(favoritesProvider);
     final selectedCategorie = ref.watch(categoryFilterProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('echango Promo'),
+        title: Text(l10n.appTitle),
         actions: [
+          const LanguageSwitcherButton(),
           IconButton(
             icon: const Icon(Icons.location_on_outlined),
-            tooltip: 'Changer de commune',
+            tooltip: l10n.changeCommuneTooltip,
             onPressed: () => context.push('/select-commune'),
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.storefront_outlined),
-            tooltip: 'Espace professionnel',
+            tooltip: l10n.professionalSpaceTooltip,
             onSelected: (route) => context.push(route),
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: '/commercant', child: Text('Espace commerçant')),
-              PopupMenuItem(value: '/agent', child: Text('Espace agent terrain')),
+            itemBuilder: (context) => [
+              PopupMenuItem(value: '/commercant', child: Text(l10n.commercantSpaceItem)),
+              PopupMenuItem(value: '/agent', child: Text(l10n.agentSpaceItem)),
             ],
           ),
         ],
@@ -41,10 +46,10 @@ class PromoListScreen extends ConsumerWidget {
           Expanded(
             child: promosAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(child: Text('Erreur : $error')),
+              error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
               data: (promos) {
                 if (promos.isEmpty) {
-                  return const Center(child: Text('Aucune promo active pour le moment.'));
+                  return Center(child: Text(l10n.noActivePromos));
                 }
                 return RefreshIndicator(
                   onRefresh: () => ref.refresh(promoListProvider.future),
@@ -83,6 +88,7 @@ class _CategoryFilterBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     return SizedBox(
       height: 48,
       child: ListView(
@@ -92,7 +98,7 @@ class _CategoryFilterBar extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: ChoiceChip(
-              label: const Text('Toutes'),
+              label: Text(l10n.allCategoriesChip),
               selected: selected == null,
               onSelected: (_) => ref.read(categoryFilterProvider.notifier).state = null,
             ),
@@ -101,7 +107,7 @@ class _CategoryFilterBar extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: ChoiceChip(
-                label: Text(categorie.label),
+                label: Text(categorieLabel(context, categorie)),
                 selected: selected == categorie,
                 onSelected: (_) => ref.read(categoryFilterProvider.notifier).state = categorie,
               ),

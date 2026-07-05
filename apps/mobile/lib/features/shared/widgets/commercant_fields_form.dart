@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/enums/categorie.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../client/providers/commune_providers.dart';
 import 'category_dropdown.dart';
 import 'commune_cascade_field.dart';
@@ -47,6 +48,7 @@ class CommercantFieldsForm extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final communesAsync = ref.watch(communeListProvider);
 
     return Column(
@@ -56,20 +58,20 @@ class CommercantFieldsForm extends ConsumerWidget {
         const SizedBox(height: 16),
         TextFormField(
           controller: telephoneController,
-          decoration: const InputDecoration(labelText: 'Téléphone', hintText: '+213...'),
+          decoration: InputDecoration(labelText: l10n.telephoneLabel, hintText: l10n.telephoneHint),
           keyboardType: TextInputType.phone,
-          validator: (v) => (v == null || v.isEmpty) ? 'Téléphone requis' : null,
+          validator: (v) => (v == null || v.isEmpty) ? l10n.telephoneRequired : null,
         ),
         const SizedBox(height: 12),
         TextFormField(
           controller: nomController,
-          decoration: const InputDecoration(labelText: 'Nom du commerce'),
-          validator: (v) => (v == null || v.isEmpty) ? 'Nom requis' : null,
+          decoration: InputDecoration(labelText: l10n.nomCommerceLabel),
+          validator: (v) => (v == null || v.isEmpty) ? l10n.nomRequired : null,
         ),
         const SizedBox(height: 12),
         TextFormField(
           controller: adresseController,
-          decoration: const InputDecoration(labelText: 'Adresse (optionnel)'),
+          decoration: InputDecoration(labelText: l10n.adresseLabel),
         ),
         const SizedBox(height: 12),
         LocationCaptureField(latitude: latitude, longitude: longitude, onChanged: onLocationChanged),
@@ -78,7 +80,7 @@ class CommercantFieldsForm extends ConsumerWidget {
         const SizedBox(height: 12),
         communesAsync.when(
           loading: () => const LinearProgressIndicator(),
-          error: (error, _) => Text('Erreur communes : $error'),
+          error: (error, _) => Text(l10n.communesError(error.toString())),
           data: (communes) => CommuneCascadeField(
             communes: communes,
             selectedCommuneId: communeId,

@@ -11,17 +11,4 @@ class ZoneCommerce {
 
   final Commercant commercant;
   final String visitStatus;
-
-  String get visitStatusLabel {
-    switch (visitStatus) {
-      case 'jamais_visite':
-        return 'Jamais visité';
-      case 'a_jour':
-        return 'À jour';
-      case 'a_relancer':
-        return 'À relancer';
-      default:
-        return visitStatus;
-    }
-  }
 }

@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/models/auth_session.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/error_text.dart';
+import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/loading_button.dart';
 
 /// Authentification email + mot de passe — compte créé exclusivement par
@@ -32,6 +34,7 @@ class _AgentLoginScreenState extends ConsumerState<AgentLoginScreen> {
   }
 
   Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
     setState(() {
       _loading = true;
@@ -51,7 +54,11 @@ class _AgentLoginScreenState extends ConsumerState<AgentLoginScreen> {
           );
       if (mounted) context.go('/agent/zone');
     } catch (error) {
-      setState(() => _error = extractApiErrorMessage(error, fallback: 'Connexion impossible.'));
+      setState(() => _error = extractApiErrorMessage(
+            error,
+            fallback: l10n.loginFailed,
+            locale: Localizations.localeOf(context),
+          ));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -59,8 +66,12 @@ class _AgentLoginScreenState extends ConsumerState<AgentLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('Espace agent terrain')),
+      appBar: AppBar(
+        title: Text(l10n.agentSpaceTitle),
+        actions: const [LanguageSwitcherButton()],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -69,20 +80,20 @@ class _AgentLoginScreenState extends ConsumerState<AgentLoginScreen> {
             children: [
               TextFormField(
                 controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
+                decoration: InputDecoration(labelText: l10n.emailLabel),
                 keyboardType: TextInputType.emailAddress,
-                validator: (v) => (v == null || !v.contains('@')) ? 'Email invalide' : null,
+                validator: (v) => (v == null || !v.contains('@')) ? l10n.emailInvalid : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Mot de passe'),
+                decoration: InputDecoration(labelText: l10n.passwordLabel),
                 obscureText: true,
-                validator: (v) => (v == null || v.isEmpty) ? 'Mot de passe requis' : null,
+                validator: (v) => (v == null || v.isEmpty) ? l10n.passwordRequired : null,
               ),
               ErrorText(_error),
               const SizedBox(height: 16),
-              LoadingButton(loading: _loading, onPressed: _submit, label: 'Se connecter'),
+              LoadingButton(loading: _loading, onPressed: _submit, label: l10n.loginLabel),
             ],
           ),
         ),

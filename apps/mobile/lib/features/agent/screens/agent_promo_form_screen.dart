@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../shared/widgets/error_text.dart';
+import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/loading_button.dart';
 import '../../shared/widgets/promo_form_fields.dart';
 import '../../../providers/core_providers.dart';
@@ -54,19 +56,21 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
   }
 
   String? _validatePrixApres(String? v) {
+    final l10n = AppLocalizations.of(context)!;
     final prixApres = double.tryParse(v ?? '');
-    if (prixApres == null) return 'Invalide';
+    if (prixApres == null) return l10n.commonInvalid;
     final prixAvant = double.tryParse(_prixAvantController.text);
     if (prixAvant != null && prixApres >= prixAvant) {
-      return 'Doit être inférieur au prix avant';
+      return l10n.prixApresMustBeLower;
     }
     return null;
   }
 
   Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
     if (_photo == null) {
-      setState(() => _error = 'La photo doit être prise avec l\'appareil photo.');
+      setState(() => _error = l10n.photoRequiredCamera);
       return;
     }
 
@@ -88,7 +92,11 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
           );
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
-      setState(() => _error = extractApiErrorMessage(error, fallback: 'Publication impossible.'));
+      setState(() => _error = extractApiErrorMessage(
+            error,
+            fallback: l10n.publishFailed,
+            locale: Localizations.localeOf(context),
+          ));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -96,8 +104,12 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('Nouvelle promo')),
+      appBar: AppBar(
+        title: Text(l10n.newPromoTitle),
+        actions: const [LanguageSwitcherButton()],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -120,7 +132,7 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
               ),
               ErrorText(_error),
               const SizedBox(height: 16),
-              LoadingButton(loading: _loading, onPressed: _submit, label: 'Publier'),
+              LoadingButton(loading: _loading, onPressed: _submit, label: l10n.publishLabel),
             ],
           ),
         ),
