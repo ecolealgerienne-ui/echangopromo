@@ -950,6 +950,7 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     hosts <nom>` que la résolution DNS pointe bien vers le conteneur
     attendu avant de chercher un bug ailleurs (mot de passe, encodage,
     etc.).
-  - **Non vérifié par moi** (pas d'accès au VPS) : que le déploiement
-    aboutit bien de bout en bout (migrations + seeds + routage Traefik)
-    une fois ce fix appliqué — en cours avec l'utilisateur.
+  - **Confirmé par l'utilisateur sur le VPS** : après renommage en
+    `postgres_promo`, migrations passées, backend démarré sans erreur.
+    Reste à confirmer : seeds admin/communes et routage Traefik
+    (`curl https://promo.echango.com/promo`).
