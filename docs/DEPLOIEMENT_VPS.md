@@ -84,6 +84,22 @@ défini dans `docker-compose.promo.yml`), jamais attaché à
 `echango_network` : la base de données n'a aucune raison d'être joignable
 depuis le réseau partagé avec la stack Vendure.
 
+**Incident réel rencontré au premier déploiement** : le service Postgres
+s'appelait initialement `postgres` tout court. Comme la stack Vendure a
+elle aussi un service nommé `postgres` sur le même réseau externe
+`echango_network`, et que `backend` est attaché aux deux réseaux, le nom
+`postgres` se résolvait silencieusement vers **leur** conteneur au lieu du
+nôtre — `getent hosts postgres` depuis `backend` renvoyait l'IP de
+`echango-postgres-1` (Vendure), pas de `echangopromo-postgres-1`. Résultat :
+`password authentication failed for user "echango"` alors que le mot de
+passe était rigoureusement correct des deux côtés (vérifié caractère par
+caractère) — le backend parlait simplement à la mauvaise base. Renommé en
+`postgres_promo` (nom qui ne peut pas collisionner) pour éliminer la classe
+d'erreur. À vérifier systématiquement en cas de nouveau symptôme
+d'authentification similaire sur un réseau Docker partagé entre plusieurs
+stacks : `docker compose run --rm backend getent hosts <nom-du-service>`
+doit résoudre vers l'IP du conteneur attendu.
+
 ## Différence avec `docker-compose.yml` (dev local)
 
 `docker-compose.yml` (racine du repo) reste pour le développement local

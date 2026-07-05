@@ -2,8 +2,15 @@
 # Stack de production pour le VPS (/opt/echangopromo) — distincte de
 # docker-compose.yml (dev local : ports hôte exposés, MinIO en remplacement
 # de S3 OVH). Ici :
-#   - postgres reste interne (pas de port hôte publié, jamais exposé à
-#     Traefik) ;
+#   - postgres_promo reste interne (pas de port hôte publié, jamais exposé à
+#     Traefik) ; nommé `postgres_promo` et non `postgres` volontairement —
+#     la stack Vendure (autre docker-compose, même VPS) a SON PROPRE service
+#     nommé `postgres` attaché au même réseau externe `echango_network` ;
+#     avec un nom générique, le backend (attaché aux deux réseaux) résolvait
+#     le nom `postgres` vers LEUR conteneur au lieu du nôtre — collision de
+#     nom DNS silencieuse, à l'origine d'un incident réel de déploiement
+#     (« password authentication failed » alors que le mot de passe était
+#     correct des deux côtés — voir docs/status_v0.md) ;
 #   - backend rejoint en plus le réseau externe `echango_network`, créé par
 #     la stack principale du VPS (docker-compose.yml de ce même réseau, cf.
 #     Traefik), pour être routable en HTTPS sans publier de port sur l'hôte.
@@ -23,7 +30,7 @@
 # Usage complet (migrations, seeds) : docs/DEPLOIEMENT_VPS.md
 
 services:
-  postgres:
+  postgres_promo:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -44,7 +51,7 @@ services:
     build: ./apps/backend
     restart: unless-stopped
     depends_on:
-      postgres:
+      postgres_promo:
         condition: service_healthy
     env_file:
       - ./.env.production

@@ -918,6 +918,38 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     docker compose et d'`env_file` du service `backend`.
   - `docker-compose.promo.yml` et `docs/DEPLOIEMENT_VPS.md` mis à jour en
     conséquence.
+
+- **2026-07-05 (suite) : cause réelle du `password authentication failed`
+  trouvée — collision de nom DNS entre deux stacks Docker sur le même
+  réseau partagé, pas un problème de mot de passe.** Après avoir vérifié à
+  l'octet près que le mot de passe était identique des deux côtés (aucun
+  caractère invisible, même longueur, même décodage par `pg-connection-string`,
+  la bibliothèque réellement utilisée par `pg`/TypeORM) et que Postgres
+  s'authentifiait correctement en local (socket **et** boucle TCP
+  `127.0.0.1`), le test décisif a été : `docker compose run --rm backend
+  getent hosts postgres` → résolvait vers l'IP de `echango-postgres-1` (la
+  stack **Vendure**, autre projet Compose sur le même VPS), pas vers notre
+  propre conteneur `echangopromo-postgres-1`. Le service Postgres de cette
+  stack et celui de la stack Vendure portaient tous les deux le nom
+  générique `postgres`, tous deux attachés au réseau externe partagé
+  `echango_network` (nécessaire pour que Traefik route `backend`) — le
+  backend, connecté aux deux réseaux, résolvait le nom vers le mauvais
+  conteneur. Le backend tentait donc de s'authentifier sur la base
+  Vendure, où le rôle `echango` n'existe pas, d'où l'échec systématique
+  peu importe les corrections de mot de passe.
+  - **Fix** : service renommé `postgres` → `postgres_promo` dans
+    `docker-compose.promo.yml` (`depends_on`, healthcheck inchangés) et
+    `DATABASE_URL` dans `.env.production.example` mis à jour
+    (`@postgres_promo:5432`). Commentaire ajouté directement dans le
+    fichier compose pour que ce choix de nom ne soit pas défait par
+    inadvertance plus tard.
+  - Leçon générale documentée dans `docs/DEPLOIEMENT_VPS.md` : sur un
+    réseau Docker externe partagé entre plusieurs stacks, ne jamais nommer
+    un service avec un nom générique (`postgres`, `redis`, `db`...) —
+    toujours vérifier avec `docker compose run --rm <service> getent
+    hosts <nom>` que la résolution DNS pointe bien vers le conteneur
+    attendu avant de chercher un bug ailleurs (mot de passe, encodage,
+    etc.).
   - **Non vérifié par moi** (pas d'accès au VPS) : que le déploiement
     aboutit bien de bout en bout (migrations + seeds + routage Traefik)
-    après ces corrections — en cours avec l'utilisateur.
+    une fois ce fix appliqué — en cours avec l'utilisateur.
