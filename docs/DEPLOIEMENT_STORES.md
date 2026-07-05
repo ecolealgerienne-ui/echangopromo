@@ -22,22 +22,25 @@ sont pas renseignées — sans risque, ça ne casse rien en attendant.
   - `lib/config/env.dart` : `Env.playStoreUrl` / `Env.appStoreUrl`, vides
     par défaut (`String.fromEnvironment`).
   - `android/app/src/main/AndroidManifest.xml` : intent-filter App Links
-    (`autoVerify`, host `promo.echango.com`, pathPrefix `/promo`) déjà
-    ajouté.
+    (`autoVerify`, host `promo.echango.com`, pathPrefix `/p`) déjà ajouté.
   - `ios/Runner/Runner.entitlements` : capacité Associated Domains
     (`applinks:promo.echango.com`) déjà créée en fichier — **doit encore
     être reliée au projet Xcode** (voir section iOS, ne peut pas se faire
     sans Xcode/Mac).
-  - `go_router` route déjà `/promo/:id` (`app/router.dart`) : aucun code
-    Dart supplémentaire à écrire pour la navigation elle-même une fois la
-    vérification App Links/Universal Links validée par Android/iOS.
+  - `go_router` route déjà `/p/:id` (`app/router.dart`, même écran que la
+    route interne `/promo/:id`) : aucun code Dart supplémentaire à écrire
+    pour la navigation elle-même une fois la vérification App
+    Links/Universal Links validée par Android/iOS.
 - **Backend** (`apps/backend`) :
   - `src/app-links/` (`AppLinksModule`/`AppLinksController`), branché sur
     `promo.echango.com` (voir `@Controller({ host: ... })`), sert :
     - `GET /.well-known/assetlinks.json`
     - `GET /.well-known/apple-app-site-association`
-    - `GET /promo/:id` → redirige vers le store (ou une page d'attente
-      tant qu'aucun lien store n'est configuré)
+    - `GET /p/:id` → redirige vers le store (ou une page d'attente tant
+      qu'aucun lien store n'est configuré). Volontairement `/p` et pas
+      `/promo` : évite toute collision avec `GET /promo/:id`, l'API JSON
+      de `PromoController` utilisée par l'app mobile — y compris si les
+      deux finissent par partager le même sous-domaine (voir plus bas).
   - `.env.example` : 6 nouvelles variables, toutes vides, listées plus
     bas avec leur provenance exacte.
 
