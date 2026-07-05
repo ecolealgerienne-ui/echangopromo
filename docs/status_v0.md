@@ -853,3 +853,45 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     tel quel — à exclure explicitement côté Traefik avant d'activer quoi
     que ce soit. Spec écrite pour une session dédiée dans ce second dépôt
     (hors périmètre de ce repo).
+
+- **2026-07-05 (suite) : préparation du déploiement backend + DB sur le
+  VPS** (`/opt/echangopromo`, réseau Docker `echango_network` déjà créé par
+  la stack Traefik/Vendure, labels de routage `promo.${BASE_DOMAIN}`
+  fournis par l'utilisateur, entrypoint `websecure`, priorité `20`).
+  - **Trouvé en cours de route** : `npm run seed:admin`/`seed:communes`
+    (scripts `apps/backend/scripts/*.ts` lancés via `ts-node`, une
+    devDependency) étaient **inexécutables dans l'image Docker de
+    production** — le 2ᵉ stage du `Dockerfile` fait `npm ci --omit=dev` et
+    ne copie que `dist/`, ni `ts-node` ni les sources TS. Corrigé
+    structurellement plutôt que par un hack : scripts déplacés vers
+    `apps/backend/src/scripts/` pour être compilés par `nest build` dans
+    `dist/scripts/` comme n'importe quel autre fichier de `src/` — exécutables
+    en prod via `node dist/scripts/seed-admin.js` (nouveaux scripts npm
+    `seed:admin:prod`/`seed:communes:prod`), sans rien changer au
+    fonctionnement en local (`ts-node` inchangé, juste le chemin des fichiers).
+  - **Nouveau `docker-compose.promo.yml`** (racine du repo), distinct du
+    `docker-compose.yml` de dev local : `postgres` reste sur un réseau
+    Docker interne dédié (jamais exposé à `echango_network`, aucun port
+    hôte publié) ; `backend` rejoint en plus `echango_network` (externe,
+    `external: true`) avec les labels Traefik fournis par l'utilisateur,
+    sans publier de port sur l'hôte (Traefik y accède via le réseau Docker
+    interne, port `3000` du conteneur).
+  - Migrations : déjà automatiques au démarrage du conteneur (`Dockerfile`
+    CMD), rien de nouveau à faire pour ça sur le VPS.
+  - Modèles d'env ajoutés (jamais commités en clair, gitignorés) :
+    `.env.promo.example` (racine, variables du fichier compose :
+    `POSTGRES_PASSWORD`, `BASE_DOMAIN`) et
+    `apps/backend/.env.production.example` (variante prod de
+    `.env.example` : hôte Postgres interne `postgres`, S3 OVH au lieu de
+    MinIO, pas de credentials admin en clair — à passer en argument CLI au
+    moment du seed).
+  - Procédure complète (premier déploiement, seeds, redéploiement) :
+    `docs/DEPLOIEMENT_VPS.md`.
+  - **Décision actée avec l'utilisateur** : pas d'automatisation GitHub
+    Actions pour le déploiement pour l'instant (`git pull` manuel sur le
+    VPS) — à revoir plus tard sans remettre en cause le fonctionnement en
+    local.
+  - **Non exécuté dans mon environnement** : build Docker réel, `docker
+    compose config` de validation, exécution des seeds contre un vrai
+    Postgres — à confirmer par l'utilisateur sur le VPS avant de considérer
+    ce point terminé.

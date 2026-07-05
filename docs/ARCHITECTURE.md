@@ -100,7 +100,7 @@ seuil → résolution admin → plafond de 5 promos).
 - Migrations TypeORM versionnées (le schéma utilise `synchronize: true` en
   développement, à remplacer par des migrations avant la prod).
 - La liste des 36 communes de la wilaya de Djelfa dans
-  `scripts/seed-communes.ts` a été reconstituée par recherche web faute
+  `src/scripts/seed-communes.ts` a été reconstituée par recherche web faute
   d'accès direct aux sources officielles depuis cet environnement — **à
   vérifier contre une source officielle (ministère de l'intérieur / ONS)
   avant utilisation en production.**

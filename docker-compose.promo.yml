@@ -1,0 +1,62 @@
+
+# Stack de production pour le VPS (/opt/echangopromo) — distincte de
+# docker-compose.yml (dev local : ports hôte exposés, MinIO en remplacement
+# de S3 OVH). Ici :
+#   - postgres reste interne (pas de port hôte publié, jamais exposé à
+#     Traefik) ;
+#   - backend rejoint en plus le réseau externe `echango_network`, créé par
+#     la stack principale du VPS (docker-compose.yml de ce même réseau, cf.
+#     Traefik), pour être routable en HTTPS sans publier de port sur l'hôte.
+#
+# Prérequis sur le VPS : le réseau `echango_network` doit déjà exister
+# (stack principale démarrée au moins une fois) avant `docker compose -f
+# docker-compose.promo.yml up -d`, sinon Compose échoue à la création du
+# réseau externe introuvable.
+#
+# Usage complet (migrations, seeds) : docs/DEPLOIEMENT_VPS.md
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: echango
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: echango_promo
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U echango -d echango_promo']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  backend:
+    build: ./apps/backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./apps/backend/.env.production
+    networks:
+      - internal
+      - echango_network
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.echango-promo.rule=Host(`promo.${BASE_DOMAIN:-echango.com}`)'
+      - 'traefik.http.routers.echango-promo.entrypoints=websecure'
+      - 'traefik.http.routers.echango-promo.middlewares=security-headers@file,compress@file'
+      - 'traefik.http.routers.echango-promo.service=echango-promo-svc'
+      - 'traefik.http.routers.echango-promo.priority=20'
+      - 'traefik.http.services.echango-promo-svc.loadbalancer.server.port=3000'
+
+networks:
+  internal:
+  echango_network:
+    external: true
+
+volumes:
+  postgres_data:

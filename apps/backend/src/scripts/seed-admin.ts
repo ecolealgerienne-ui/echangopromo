@@ -5,11 +5,17 @@
  * ADMIN_PASSWORD / ADMIN_NOM (pratique pour reseeder après un reset de la
  * base de dev sans retaper la commande) — les arguments CLI restent
  * prioritaires s'ils sont fournis.
+ *
+ * Sous src/ (pas un dossier scripts/ séparé à la racine du backend) pour
+ * être compilé par `nest build` dans dist/scripts/ — l'image Docker de prod
+ * ne contient que dist/ et les dependencies (pas ts-node ni les sources),
+ * donc ce script doit pouvoir tourner en `node dist/scripts/seed-admin.js`
+ * (voir script npm "seed:admin:prod").
  */
 import 'dotenv/config';
 import * as bcrypt from 'bcryptjs';
 import { DataSource } from 'typeorm';
-import { Admin } from '../src/admin/entities/admin.entity';
+import { Admin } from '../admin/entities/admin.entity';
 
 async function main() {
   const [argEmail, argPassword, argNom] = process.argv.slice(2);

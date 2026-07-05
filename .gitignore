@@ -7,6 +7,8 @@ coverage/
 # Env
 .env
 .env.local
+.env.production
+.env.promo
 
 # Flutter (voir aussi apps/mobile/.gitignore)
 apps/mobile/.dart_tool/

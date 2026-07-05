@@ -8,10 +8,14 @@
  * à corriger et relancer si des noms sont manquants ou mal orthographiés.
  *
  * Usage : npm run seed:communes
+ *
+ * Sous src/ pour être compilé par `nest build` dans dist/scripts/ — voir
+ * le commentaire équivalent dans seed-admin.ts (script npm
+ * "seed:communes:prod").
  */
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
-import { Commune } from '../src/commune/entities/commune.entity';
+import { Commune } from '../commune/entities/commune.entity';
 
 const WILAYA = 'Djelfa';
 
