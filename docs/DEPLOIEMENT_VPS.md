@@ -22,13 +22,15 @@ ce document reste la référence des commandes.
 cd /opt/echangopromo
 git clone <url-du-repo> .   # ou git pull si déjà cloné
 
-# Fichiers d'env réels, jamais commités (gitignorés) :
-cp .env.promo.example .env.promo
-cp apps/backend/.env.production.example apps/backend/.env.production
-# éditer les deux fichiers : POSTGRES_PASSWORD, DATABASE_URL (même mot de
-# passe), JWT_SECRET, credentials S3 OVH, BASE_DOMAIN.
+# Fichier d'env réel, jamais commité (gitignoré) — un seul fichier, à la
+# fois lu par `docker compose --env-file` (substitution ${...} dans
+# docker-compose.promo.yml) et injecté dans le conteneur backend (env_file) :
+cp .env.production.example .env.production
+# éditer : POSTGRES_PASSWORD (alphanumérique uniquement, voir commentaire
+# dans le fichier), DATABASE_URL (même mot de passe que POSTGRES_PASSWORD),
+# JWT_SECRET, credentials S3 OVH, BASE_DOMAIN.
 
-docker compose --env-file .env.promo -f docker-compose.promo.yml up -d --build
+docker compose --env-file .env.production -f docker-compose.promo.yml up -d --build
 ```
 
 Le conteneur `backend` lance automatiquement les migrations au démarrage
@@ -44,11 +46,11 @@ sans dépendance dev (`ts-node` n'est pas dans l'image finale) :
 
 ```bash
 # Premier admin (une seule fois)
-docker compose --env-file .env.promo -f docker-compose.promo.yml exec backend \
+docker compose --env-file .env.production -f docker-compose.promo.yml exec backend \
   npm run seed:admin:prod -- admin@echango.com "mot-de-passe" "Nom Admin"
 
 # Référentiel communes (idempotent, à relancer si la liste est corrigée)
-docker compose --env-file .env.promo -f docker-compose.promo.yml exec backend \
+docker compose --env-file .env.production -f docker-compose.promo.yml exec backend \
   npm run seed:communes:prod
 ```
 
@@ -61,7 +63,7 @@ identifiants uniquement en argument CLI au moment du seed.
 ```bash
 cd /opt/echangopromo
 git pull origin main
-docker compose --env-file .env.promo -f docker-compose.promo.yml up -d --build backend
+docker compose --env-file .env.production -f docker-compose.promo.yml up -d --build backend
 ```
 
 Les migrations en attente s'appliquent automatiquement au redémarrage du

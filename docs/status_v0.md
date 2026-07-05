@@ -878,20 +878,46 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     interne, port `3000` du conteneur).
   - Migrations : déjà automatiques au démarrage du conteneur (`Dockerfile`
     CMD), rien de nouveau à faire pour ça sur le VPS.
-  - Modèles d'env ajoutés (jamais commités en clair, gitignorés) :
-    `.env.promo.example` (racine, variables du fichier compose :
-    `POSTGRES_PASSWORD`, `BASE_DOMAIN`) et
-    `apps/backend/.env.production.example` (variante prod de
-    `.env.example` : hôte Postgres interne `postgres`, S3 OVH au lieu de
-    MinIO, pas de credentials admin en clair — à passer en argument CLI au
-    moment du seed).
+  - Modèle d'env ajouté (jamais commité en clair, gitignoré) :
+    `.env.production.example` à la racine du repo — **un seul fichier**
+    (pas deux, voir entrée suivante), utilisé à la fois comme `--env-file`
+    de `docker compose` (substitution `${POSTGRES_PASSWORD}`/`${BASE_DOMAIN}`
+    dans `docker-compose.promo.yml`) et comme `env_file:` du service
+    `backend` (`DATABASE_URL`, `JWT_SECRET`, S3 OVH, etc.).
   - Procédure complète (premier déploiement, seeds, redéploiement) :
     `docs/DEPLOIEMENT_VPS.md`.
   - **Décision actée avec l'utilisateur** : pas d'automatisation GitHub
     Actions pour le déploiement pour l'instant (`git pull` manuel sur le
     VPS) — à revoir plus tard sans remettre en cause le fonctionnement en
     local.
-  - **Non exécuté dans mon environnement** : build Docker réel, `docker
-    compose config` de validation, exécution des seeds contre un vrai
-    Postgres — à confirmer par l'utilisateur sur le VPS avant de considérer
-    ce point terminé.
+
+- **2026-07-05 (suite) : premier déploiement réel sur le VPS — 3 incidents
+  trouvés et corrigés en direct avec l'utilisateur.**
+  - **`package-lock.json` désynchronisé de `package.json`** (`typeorm`
+    verrouillé sur `^1.0.0` dans le lock alors que `package.json` déclare
+    `^0.3.20`, + une dizaine de paquets transitifs manquants du lock) —
+    invisible en local (`npm install` tolère l'écart) mais bloquant en
+    prod (`npm ci`, volontairement strict, utilisé par le `Dockerfile`).
+    Préexistant, sans lien avec les changements de cette session (vérifié
+    par `git log -p` sur le fichier). Corrigé par l'utilisateur (`npm
+    install` local, lock file régénéré et commité).
+  - **Mot de passe Postgres avec caractère réservé URL (`?`) dans
+    `DATABASE_URL`** → `TypeError: Invalid URL` côté `pg-connection-string`
+    (le `?` démarre une query string). Poussé à choisir un mot de passe
+    alphanumérique pur plutôt que d'encoder en `%3F` (plus sûr, évite toute
+    classe d'erreur d'encodage similaire à l'avenir).
+  - **Deux fichiers d'env (`.env.promo` + `apps/backend/.env.production`)
+    fusionnés en un seul** (`.env.production` à la racine) après une
+    session de debug longue sur un `password authentication failed`
+    finalement dû à un volume Postgres déjà initialisé avec un ancien mot
+    de passe (Postgres ne fixe le mot de passe qu'à la création du
+    cluster, jamais après — `down -v` + recréation du volume nécessaires
+    après tout changement de `POSTGRES_PASSWORD`). La duplication du même
+    secret dans deux fichiers séparés était elle-même une source d'erreur
+    évitable ; un seul fichier sert maintenant à la fois de `--env-file`
+    docker compose et d'`env_file` du service `backend`.
+  - `docker-compose.promo.yml` et `docs/DEPLOIEMENT_VPS.md` mis à jour en
+    conséquence.
+  - **Non vérifié par moi** (pas d'accès au VPS) : que le déploiement
+    aboutit bien de bout en bout (migrations + seeds + routage Traefik)
+    après ces corrections — en cours avec l'utilisateur.
