@@ -2,6 +2,13 @@ import 'package:dio/dio.dart';
 import '../../domain/enums/categorie.dart';
 import '../../domain/models/promo.dart';
 
+/// Le backend pagine désormais `/promo` et `/promo/me/all` (`{items, total,
+/// page, limit}`) — le pilote (un seul quartier) reste largement sous cette
+/// taille de page, donc on récupère une seule page généreuse plutôt que de
+/// construire un vrai défilement infini pour l'instant. À revoir quand le
+/// volume de promos actives approchera `_pageSize`.
+const _pageSize = 100;
+
 class PromoApi {
   PromoApi(this._dio);
 
@@ -18,9 +25,11 @@ class PromoApi {
       if (communeId != null) 'communeId': communeId,
       if (categorie != null) 'categorie': categorie.value,
       if (favoriteIds.isNotEmpty) 'favoriteIds': favoriteIds.join(','),
+      'limit': _pageSize,
     };
-    final response = await _dio.get<List<dynamic>>('/promo', queryParameters: query);
-    return response.data!.map((e) => Promo.fromJson(e as Map<String, dynamic>)).toList();
+    final response = await _dio.get<Map<String, dynamic>>('/promo', queryParameters: query);
+    final items = response.data!['items'] as List<dynamic>;
+    return items.map((e) => Promo.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<Promo> detail(String id) async {
@@ -62,8 +71,12 @@ class PromoApi {
   }
 
   Future<List<Promo>> listMine() async {
-    final response = await _dio.get<List<dynamic>>('/promo/me/all');
-    return response.data!.map((e) => Promo.fromJson(e as Map<String, dynamic>)).toList();
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/promo/me/all',
+      queryParameters: {'limit': _pageSize},
+    );
+    final items = response.data!['items'] as List<dynamic>;
+    return items.map((e) => Promo.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<void> update(

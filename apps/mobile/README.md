@@ -47,6 +47,15 @@ fichiers de plateforme sans toucher à `lib/` ni `pubspec.yaml` déjà en place.
 pas depuis un appareil/émulateur (localhost y désigne l'appareil lui-même) —
 passer l'IP locale de la machine qui fait tourner le backend.
 
+### Backend sous WSL2 + émulateur/téléphone physique
+
+Si le backend tourne dans WSL2, son IP change à chaque redémarrage — le
+forwarding `netsh interface portproxy` est à refaire à chaque session.
+Lancer `scripts/windows/sync-wsl-portproxy.ps1` (PowerShell **administrateur**,
+côté Windows) le détecte et recrée automatiquement les règles pour les ports
+3000 (backend) et 9000 (MinIO). La règle de pare-feu entrante correspondante
+ne reste à créer qu'une seule fois, manuellement.
+
 ## Structure
 
 ```

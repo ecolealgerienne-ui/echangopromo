@@ -14,7 +14,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AuthService } from '../auth/auth.service';
 import type { AuthTokenPayload } from '../auth/role';
-import { STRICT_THROTTLE } from '../common/throttle';
+import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
 import { DeviceId } from '../common/decorators/device-id.decorator';
 import { StorageService } from '../storage/storage.service';
 import { CommercantService } from './commercant.service';
@@ -44,7 +44,11 @@ export class CommercantController {
   async register(@Body() dto: RegisterCommercantDto) {
     const commercant = await this.commercantService.selfRegister(dto);
     return {
-      accessToken: this.authService.issueToken(commercant.id, 'commercant'),
+      accessToken: this.authService.issueToken(
+        commercant.id,
+        'commercant',
+        commercant.tokenVersion,
+      ),
     };
   }
 
@@ -54,7 +58,11 @@ export class CommercantController {
   async claim(@Body() dto: ClaimCommercantDto) {
     const commercant = await this.commercantService.claim(dto);
     return {
-      accessToken: this.authService.issueToken(commercant.id, 'commercant'),
+      accessToken: this.authService.issueToken(
+        commercant.id,
+        'commercant',
+        commercant.tokenVersion,
+      ),
     };
   }
 
@@ -66,7 +74,11 @@ export class CommercantController {
       dto.pin,
     );
     return {
-      accessToken: this.authService.issueToken(commercant.id, 'commercant'),
+      accessToken: this.authService.issueToken(
+        commercant.id,
+        'commercant',
+        commercant.tokenVersion,
+      ),
     };
   }
 
@@ -132,6 +144,7 @@ export class CommercantController {
     return this.commercantService.getDashboardStats(user.sub);
   }
 
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('commercant')
   @Post('me/registre')

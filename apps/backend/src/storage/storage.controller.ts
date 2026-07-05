@@ -1,9 +1,11 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
+import { SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
 import { CreatePresignedUploadDto } from './dto/create-presigned-upload.dto';
 import { StorageService } from './storage.service';
 
@@ -18,6 +20,7 @@ import { StorageService } from './storage.service';
 export class StorageController {
   constructor(private readonly storageService: StorageService) {}
 
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @Post('presigned-upload')
   async presignedUpload(
     @CurrentUser() user: AuthTokenPayload,

@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -9,6 +8,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AgentService } from '../agent/agent.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -17,6 +17,10 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
 import { DeviceId } from '../common/decorators/device-id.decorator';
+import { ForbiddenAppException } from '../common/errors/app-exception';
+import { ErrorCode } from '../common/errors/error-code.enum';
+import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
+import { SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
 import { ListPromoQueryDto } from './dto/list-promo-query.dto';
@@ -69,7 +73,10 @@ export class PromoController {
   ): Promise<void> {
     if (user.role === 'commercant') {
       if (promo.commercantId !== user.sub) {
-        throw new ForbiddenException("Cette promo n'appartient pas à ce commerçant");
+        throw new ForbiddenAppException(
+          ErrorCode.PROMO_NOT_OWNED_BY_COMMERCANT,
+          "Cette promo n'appartient pas à ce commerçant",
+        );
       }
       return;
     }
@@ -82,8 +89,8 @@ export class PromoController {
 
   @Get()
   async list(@Query() query: ListPromoQueryDto) {
-    const promos = await this.promoService.findActiveForClient(query);
-    return promos.map((promo) => this.toClientJson(promo));
+    const result = await this.promoService.findActiveForClient(query);
+    return { ...result, items: result.items.map((promo) => this.toClientJson(promo)) };
   }
 
   @Get(':id')
@@ -93,6 +100,7 @@ export class PromoController {
     return this.toClientJson(promo);
   }
 
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('commercant')
   @Post()
@@ -106,18 +114,29 @@ export class PromoController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('commercant')
   @Get('me/all')
-  async mine(@CurrentUser() user: AuthTokenPayload) {
-    const promos = await this.promoService.listByCommercant(user.sub);
-    const viewCounts = await this.promoService.getViewCounts(
-      promos.map((p) => p.id),
+  async mine(
+    @CurrentUser() user: AuthTokenPayload,
+    @Query() query: PaginationQueryDto,
+  ) {
+    const result = await this.promoService.listByCommercant(
+      user.sub,
+      query.page,
+      query.limit,
     );
-    return promos.map((promo) => ({
-      ...this.toClientJson(promo),
-      viewCount: viewCounts[promo.id] ?? 0,
-    }));
+    const viewCounts = await this.promoService.getViewCounts(
+      result.items.map((p) => p.id),
+    );
+    return {
+      ...result,
+      items: result.items.map((promo) => ({
+        ...this.toClientJson(promo),
+        viewCount: viewCounts[promo.id] ?? 0,
+      })),
+    };
   }
 
   /** IDOR corrigé : un agent ne peut publier que pour un commerçant de sa propre zone. */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('agent')
   @Post('agent/:commercantId')
@@ -132,6 +151,7 @@ export class PromoController {
   }
 
   /** Édition ouverte au commerçant propriétaire, en plus de l'agent (auparavant agent uniquement). */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('commercant', 'agent')
   @Patch(':id')
@@ -146,6 +166,7 @@ export class PromoController {
   }
 
   /** Publie un brouillon, ou republie une promo arrêtée/expirée (specs §3.2). */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('commercant', 'agent')
   @Post(':id/publish')
@@ -159,6 +180,7 @@ export class PromoController {
   }
 
   /** Arrêt volontaire (ex. rupture de stock) — libère un slot sur le plafond de 5. */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('commercant', 'agent')
   @Post(':id/stop')

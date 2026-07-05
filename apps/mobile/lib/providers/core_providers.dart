@@ -40,6 +40,11 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(
     getDeviceId: () => ref.read(deviceIdProvider),
     getToken: () => authController.currentToken,
+    // Déconnecte automatiquement dès que le backend rejette le token
+    // (révoqué, invalide/expiré) — sinon router.dart ne redirige jamais
+    // vers le login puisque authControllerProvider ne change jamais tout
+    // seul (audit V1 §8).
+    onAuthInvalid: () => authController.logout(),
   );
 });
 

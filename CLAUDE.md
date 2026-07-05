@@ -1,9 +1,10 @@
 # CLAUDE.md — echango Promo
 
 Instructions pour Claude Code sur ce dépôt. Lire aussi `docs/SPECS_ECHANGO_PROMO_V0.md`
-(specs fonctionnelles), `docs/ARCHITECTURE.md` (choix de stack) et
-`docs/AUDIT_V0.md` (audit complet avec fichier:ligne — ce fichier-ci en est
-la synthèse actionnable).
+(specs fonctionnelles), `docs/ARCHITECTURE.md` (choix de stack),
+`docs/AUDIT_V0.md` (audit initial complet, fichier:ligne) et
+`docs/AUDIT_V1.md` (audit de suivi — révocation JWT, codes d'erreur) —
+ce fichier-ci en est la synthèse actionnable.
 
 ## Consignes de fonctionnement (utilisateur)
 
@@ -149,7 +150,15 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
 15. **Tout nouvel endpoint `GET` de liste doit prévoir page/limit dès la
     conception**, même si le volume initial semble négligeable — ce
     produit vise explicitement une extension multi-communes puis
-    multi-wilayas.
+    multi-wilayas. **Exception à vérifier avant de paginer un endpoint
+    existant** : si un client le consomme aujourd'hui comme une liste de
+    référence complète (ex. `/commune` chargé en entier par
+    `CommuneCascadeField` pour construire un sélecteur wilaya → commune),
+    ajouter la pagination sans adapter ce client tronque silencieusement
+    la liste dès que le total dépasse la taille de page par défaut —
+    vérifier les consommateurs existants (mobile, autre service) avant
+    d'activer une pagination par défaut sur un endpoint déjà en
+    production.
 
 16. **Nettoyer le scaffolding généré par un CLI (NestJS, etc.) dès l'ajout
     du premier vrai module métier.** *Trouvé : les seuls tests de tout le
@@ -205,11 +214,47 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
     complète du mobile — resté faux pendant tout un cycle de
     développement faute de mise à jour.*
 
+### Depuis l'audit V1 (révocation JWT, codes d'erreur)
+
+24. **Un `CanActivate`/intercepteur global qui injecte un `Repository<X>`
+    doit voir son module réexporter `TypeOrmModule`**, pas seulement le
+    provider du guard lui-même. *Trouvé : `JwtAuthGuard` (vérification du
+    `tokenVersion`) dépend de `Repository<Agent>`/`Repository<Admin>`
+    déclarés dans `AuthModule` — tout module n'important que `AuthModule`
+    (ex. `StorageModule`) plantait au démarrage avec
+    `UnknownDependenciesException`, jusqu'à ce que `TypeOrmModule` soit
+    ajouté à `exports` à côté de `JwtModule`.*
+
+25. **Toute exception métier levée dans un service/contrôleur doit être
+    une sous-classe d'`AppException` avec un `ErrorCode` dédié**, ajoutée
+    dans le même commit que l'endpoint — jamais un `throw new
+    BadRequestException(...)` (ou équivalent NestJS) brut, qui casserait
+    le contrat `{statusCode, code, message}` garanti par
+    `AllExceptionsFilter` et sur lequel le mobile
+    (`ApiException`/`errorMessagesFr`) s'appuie pour afficher un texte
+    localisé.
+
+26. **Tout `ErrorCode` ajouté côté backend doit obtenir une entrée dans le
+    mapping mobile** (`errorMessagesFr`, ou son équivalent futur
+    multi-langue) **dans le même commit**, ou être explicitement documenté
+    comme exclusion volontaire (cas des messages intrinsèquement
+    dynamiques, ex. `VALIDATION_ERROR`). Sans ça, une désynchronisation
+    entre l'enum backend et le mapping mobile est silencieuse : le message
+    backend brut s'affiche à la place du texte localisé prévu, sans erreur
+    de compilation d'aucun côté pour le signaler.
+
 ---
 
 ## Dette connue, non bloquante pour le pilote mais à traiter avant extension
 
-- Pas de pagination sur les listes (`/promo`, `/admin/agent`, `/zone`,
-  `/commune`).
+- Couverture de tests backend encore partielle (2 fichiers :
+  `jwt-auth.guard.spec.ts`, `image-signature.spec.ts`) — largement
+  suffisant pour dépasser 0%, mais pas une vraie couverture des règles
+  métier (plafond de 5 promos, fenêtre d'ignore de 30 jours, etc.).
+- `Admin` reste un compte unique en V0 (pas de gestion multi-admin) —
+  `POST /admin/me/revoke-token` couvre l'auto-révocation, mais aucun
+  mécanisme pour qu'un admin révoque un *autre* admin n'a de sens tant que
+  ce cas n'existe pas.
 
-Détail complet, fichier:ligne, sévérités : `docs/AUDIT_V0.md`.
+Détail complet, fichier:ligne, sévérités : `docs/AUDIT_V0.md` et
+`docs/AUDIT_V1.md`.

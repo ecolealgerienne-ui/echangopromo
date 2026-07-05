@@ -3,6 +3,6 @@ export type Role = 'commercant' | 'agent' | 'admin';
 export interface AuthTokenPayload {
   sub: string;
   role: Role;
-  /** Présent uniquement pour agent/admin (rôles à droits d'écriture larges) — permet la révocation. */
-  tokenVersion?: number;
+  /** Permet la révocation (JwtAuthGuard compare à la valeur en base à chaque requête). */
+  tokenVersion: number;
 }

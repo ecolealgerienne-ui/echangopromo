@@ -158,15 +158,13 @@ local), pas seulement par la compilation.
 
 ## Reste à faire avant extension au-delà du pilote Djelfa
 
-Voir `CLAUDE.md` pour les règles générales. Liste concrète des éléments
-non traités par cette session de corrections :
-
-1. `flutter test` réel (jamais exécuté ; `flutter analyze` fait et propre).
-2. Automatiser le `netsh interface portproxy` (IP WSL2 changeante) si le
-   développement mobile via émulateur Android + backend WSL continue —
-   sinon documenter clairement la procédure pour chaque nouvelle session.
-3. Mobile : `lifecycleStatus`/`moderationStatus`/`accountState` comparés
-   par `String` littérale, pas de miroir enum Dart.
+Voir `CLAUDE.md` pour les règles générales. Tous les points identifiés par
+l'audit à 6 volets (`docs/AUDIT_V0.md`) ont été traités un par un (voir
+historique ci-dessous) ; aucun élément concret restant à cette date. Les
+seules réserves sont l'exécution locale (jamais effectuée dans cet
+environnement, faute de SDK Flutter/DB accessible) : `flutter test`,
+`flutter analyze`, `npm run build`/`lint` côté backend, migration initiale
+TypeORM — à confirmer par l'utilisateur sur sa machine.
 
 ---
 
@@ -456,3 +454,187 @@ non traités par cette session de corrections :
   vérification dans `redirect` sont dérivées de cette même source. Un
   écran ajouté sans `requiredRole` est public par construction. Aucun
   changement de comportement (mêmes routes protégées qu'avant).
+- **2026-07-04 (enums Dart miroirs lifecycle/moderation/accountState)** —
+  Trois nouveaux enums `domain/enums/{promo_lifecycle_status,
+  promo_moderation_status, commercant_account_state}.dart`, sur le modèle
+  de `Categorie` (règle #19). `Promo.lifecycleStatus`/`.moderationStatus`
+  et `Commercant.accountState` ne sont plus des `String` comparées par
+  littéral mais ces enums ; les getters `isDraft`/`isPublished`/
+  `isStopped`/`isExpired`/`lifecycleLabel` et la comparaison dans
+  `zone_commerces_screen.dart` (`accountState == 'cree_agent'`)
+  sont mis à jour en conséquence. Erreur de compilation garantie en cas de
+  renommage backend au lieu d'un bug silencieux.
+- **2026-07-04 (première suite de tests mobile)** — `apps/mobile/test/`
+  n'existait pas du tout jusqu'ici. Ajout d'une première suite ciblée sur
+  de la logique pure (pas de widget test, pas besoin d'émulateur) :
+  `pin_validator_test.dart` (regex 4-6 chiffres), `promo_lifecycle_status_test.dart`
+  (`fromValue`), `promo_test.dart` (`Promo.fromJson` + `isDraft`/
+  `isPublished`/`isExpired`/`lifecycleLabel`, dont un cas non trivial :
+  une promo `publiee` dont `dateFin` est déjà dépassée doit être considérée
+  expirée côté mobile sans attendre le cron backend
+  `expireOutdatedPromos`). **Non exécuté dans mon environnement** (pas de
+  SDK Flutter) : lancer `flutter test` en local pour confirmer.
+- **2026-07-04 (automatisation netsh portproxy)** — Nouveau script
+  `scripts/windows/sync-wsl-portproxy.ps1` (PowerShell, à lancer côté
+  Windows en administrateur) : détecte l'IP WSL2 courante (`wsl hostname -I`)
+  et recrée les règles `netsh interface portproxy` pour les ports 3000
+  (backend) et 9000 (MinIO) — jusqu'ici refait à la main à chaque session
+  après un redémarrage WSL. Référencé depuis `apps/mobile/README.md`. Ne
+  touche pas au pare-feu (règle entrante à créer une seule fois,
+  manuellement). Dernier point de la liste "Reste à faire" — plus aucun
+  élément concret restant issu de l'audit à 6 volets.
+- **2026-07-05 (codes d'erreur backend + mapping mobile, préparation i18n)**
+  — Jusqu'ici, aucun code d'erreur : chaque service levait un
+  `BadRequestException('texte français en dur')` et le mobile affichait ce
+  message tel quel (`ApiException`/`extractApiErrorMessage`, un seul point
+  central côté mobile, mais qui ne faisait que relayer le texte backend).
+  Périmètre choisi : codes d'erreur + mapping mobile **français
+  uniquement** pour l'instant (pas de traduction des textes d'écran, pas
+  d'arabe, pas de sélecteur de langue — voir échange avec l'utilisateur).
+  - **Backend** : nouveau `common/errors/error-code.enum.ts` (`ErrorCode`,
+    ~30 codes) + `AppException`/`BadRequestAppException`/
+    `NotFoundAppException`/`UnauthorizedAppException`/
+    `ForbiddenAppException`/`ConflictAppException` (`common/errors/app-exception.ts`)
+    qui portent un `code` dans le corps JSON en plus du `message`. Les 33
+    sites de `throw new XxxException(...)` de tout le backend (auth, admin,
+    agent, commercant, promo, zone, commune, report, device-id decorator)
+    sont passés sur ces nouvelles classes. Nouveau `AllExceptionsFilter`
+    (`common/errors/all-exceptions.filter.ts`, `app.useGlobalFilters` dans
+    `main.ts`) qui garantit `{statusCode, code, message}` même pour les
+    erreurs qui n'en portaient pas par construction : `VALIDATION_ERROR`
+    pour les 400 de `ValidationPipe` (message dynamique par champ, laissé
+    tel quel), `RATE_LIMITED` pour `ThrottlerException`, `INTERNAL_ERROR`
+    pour toute erreur non prévue (500, loggée server-side, jamais son vrai
+    message renvoyé au client).
+  - **Mobile** : `ApiException` porte maintenant `code` en plus de
+    `message` ; nouveau `features/shared/errors/error_messages_fr.dart`
+    (mapping code -> texte français, une seule langue pour l'instant,
+    ajouter une langue = ajouter un fichier `error_messages_<locale>.dart`
+    sur ce modèle sans toucher au backend). `ApiException.displayMessage`
+    utilise le mapping si le code est connu, sinon retombe sur le message
+    backend brut (cas `VALIDATION_ERROR` et des deux codes dont le message
+    backend interpole une valeur dynamique : `PROMO_DATE_FIN_EXCEEDS_MAX`,
+    `PROMO_ACTIVE_CAP_REACHED`, volontairement absents du mapping).
+    `extractApiErrorMessage` (signature inchangée, tous les écrans
+    existants continuent de fonctionner sans modification) délègue à
+    `displayMessage`. Tests ajoutés : `test/data/api/api_exception_test.dart`.
+  - **Non exécuté dans mon environnement** : `npm run build`/`lint` côté
+    backend, `flutter test`/`flutter analyze` côté mobile — à confirmer en
+    local.
+- **2026-07-05 (fix lint + fix démarrage)** — `npm run lint` a relevé
+  `@typescript-eslint/no-unsafe-enum-comparison` dans
+  `AllExceptionsFilter.fallbackCode` (paramètre typé `number` comparé à des
+  membres `HttpStatus`) : corrigé en typant le paramètre `HttpStatus`.
+  Puis au démarrage réel : `UnknownDependenciesException` sur
+  `JwtAuthGuard` dans `StorageModule` — `TypeOrmModule` n'était pas
+  réexporté par `AuthModule`, donc `Repository<Agent>`/`Repository<Admin>`
+  (ajoutés pour le tokenVersion) n'étaient résolvables que dans les
+  modules qui les fournissaient déjà eux-mêmes. Corrigé en ajoutant
+  `TypeOrmModule` à `exports` d'`AuthModule`, même traitement que
+  `JwtModule` déjà réexporté pour `JwtService`.
+- **2026-07-05 (audit V1)** — Audit de suivi après la session
+  révocation JWT/codes d'erreur, voir `docs/AUDIT_V1.md` (détail complet)
+  et 3 nouvelles règles CLAUDE.md (#24-26). Findings principaux : pas de
+  `tokenVersion` sur `Commercant` (reset-pin admin n'invalide pas les JWT
+  déjà émis), pas de déconnexion mobile automatique sur token
+  révoqué/invalide, N+1 réapparu dans `ModerationService.queue()`, rate
+  limiting absent sur plusieurs actions sensibles post-authentification,
+  2 FK sans index, 0% de tests backend. Rien de corrigé dans ce commit —
+  uniquement le rapport, la priorisation reste à discuter avec
+  l'utilisateur.
+
+- **2026-07-05 (traitement audit V1, 1/4 — déconnexion mobile automatique)**
+  — `ApiClient` (`data/api/api_client.dart`) détecte maintenant les codes
+  `AUTH_TOKEN_MISSING`/`AUTH_TOKEN_INVALID`/`AUTH_TOKEN_REVOKED` dans
+  l'intercepteur Dio et appelle `authController.logout()`
+  (`providers/core_providers.dart`, nouveau paramètre `onAuthInvalid` sur
+  `ApiClient`). Jusqu'ici le backend rejetait bien un token révoqué/expiré
+  mais rien ne déconnectait l'utilisateur côté mobile — il restait bloqué
+  sur son écran avec un token mort. `router.dart` redirige automatiquement
+  vers le login du rôle concerné dès que `authControllerProvider` repasse
+  à `null` (mécanisme `routerRefreshProvider` déjà en place, aucun
+  changement nécessaire côté routeur).
+
+- **2026-07-05 (traitement audit V1, 2-5/... — révocation JWT commerçant,
+  N+1 modération, rate limiting élargi, index FK manquants, vérification
+  a posteriori des images S3)** — regroupés dans un seul commit : les
+  fichiers `commercant.service.ts`/`promo.service.ts` portent à la fois la
+  révocation JWT et la vérification d'image (StorageService y est déjà
+  injecté pour d'autres raisons), impossible de les séparer proprement
+  sans réécriture de l'historique :
+  - **`tokenVersion` sur `Commercant`** (`entities/commercant.entity.ts`) :
+    `adminResetPin` l'incrémente désormais — jusqu'ici il effaçait le PIN
+    sans révoquer le JWT déjà émis, qui restait valide jusqu'à expiration
+    (30j par défaut) malgré l'action de l'admin. `JwtAuthGuard` vérifie
+    maintenant `tokenVersion` pour les 3 rôles de façon uniforme (avant :
+    uniquement agent/admin). Par symétrie, `Admin.tokenVersion` (jamais
+    incrémenté jusqu'ici) obtient son propre endpoint
+    `POST /admin/me/revoke-token` (auto-révocation, device perdu/volé).
+  - **N+1 dans `ModerationService.queue()`** : remplacé
+    `pending.map(({promoId}) => promoService.findByIdOrFail(promoId))`
+    (un SELECT par promo signalée) par `PromoService.findByIds()` (une
+    seule requête `IN (...)`) — même règle CLAUDE.md #14 que le premier
+    correctif V0 sur cet écran, réapparue après coup.
+  - **Rate limiting élargi** : nouveau
+    `SENSITIVE_ACTION_THROTTLE` (20 req/min, `common/throttle.ts`) appliqué
+    aux actions authentifiées jusqu'ici sans limite dédiée : toutes les
+    routes `AdminController` hors login (dont `reset-pin`,
+    `revoke-token`), `POST /agent/commercant`, `POST /commercant/me/registre`,
+    les actions promo (`create`/`createByAgent`/`update`/`publish`/`stop`),
+    `POST /storage/presigned-upload`.
+  - **2 FK sans index** : `Agent.zoneId` et `Commercant.createdByAgentId`
+    obtiennent leur `@Index()` (les 3 autres FK du modèle l'avaient déjà).
+  - **Vérification a posteriori des images S3** (`storage.service.ts`) :
+    `assertValidImage(key)` télécharge les 12 premiers octets de l'objet
+    (`GetObjectCommand` + `Range`) et vérifie la signature réelle
+    (jpeg/png/webp) — jusqu'ici seule la taille était contrainte par la
+    policy S3 (session précédente), le `Content-Type` restait purement
+    déclaratif (un exécutable renommé `.jpg` passait sans problème).
+    Supprime le fichier et lève `STORAGE_INVALID_IMAGE` si la signature ne
+    correspond à aucun format supporté. Appelée dans
+    `CommercantService.selfRegister`/`createByAgent`/`updateProfile` et
+    `PromoService.create`/`update` quand un `photoKey` est fourni. Logique
+    de détection extraite dans `storage/image-signature.ts` (fonction pure)
+    pour rester testable sans mock S3 — nouveau
+    `image-signature.spec.ts` (5 cas). Nouveau code d'erreur
+    `STORAGE_INVALID_IMAGE` ajouté au mapping mobile `errorMessagesFr`
+    dans le même commit (règle CLAUDE.md #26).
+  - Nouveau test `auth/guards/jwt-auth.guard.spec.ts` (5 cas : token
+    manquant/invalide/révoqué/compte supprimé/valide) — avec
+    `image-signature.spec.ts`, première suite de tests backend réels (0%
+    jusqu'ici, cf. audit V1 §6).
+  - **Non exécuté dans mon environnement** : `npm run build && npm run
+    lint && npm test` à confirmer en local ; nouvelle colonne
+    `tokenVersion` (Commercant) à intégrer à la prochaine
+    `migration:generate`.
+
+- **2026-07-05 (pagination des listes)** — Dernier point de dette restant
+  de l'audit V1 (§5). Nouveau `common/pagination/` (`PaginationQueryDto`
+  : `page`/`limit`, défaut 1/20, max 100 ; `PaginatedResult<T>` :
+  `{items, total, page, limit}`) appliqué à `GET /promo`,
+  `GET /promo/me/all`, `GET /admin/agent`, `GET /zone`, `GET /commune`,
+  `GET /admin/moderation/queue`. Au passage, `ReportService` expose un
+  `countPendingModeration()` séparé (compteur seul, sans pagination) pour
+  le dashboard admin, qui utilisait jusqu'ici `.length` sur la liste
+  complète.
+  - **Décision volontaire : `/commune` n'est pas traité comme un flux
+    paginé côté mobile.** C'est une liste de référence (communes) que
+    `CommuneCascadeField` doit charger en entier pour construire le
+    sélecteur wilaya → commune — paginer sans adapter le mobile aurait
+    silencieusement tronqué la liste (34 communes pour Djelfa seul,
+    au-delà du défaut de 20/page). `CommuneApi.list()` boucle en interne
+    sur toutes les pages (`limit=100`, le max autorisé) et reconstruit la
+    liste complète — signature Dart inchangée, aucun écran à modifier.
+  - Pour `/promo` et `/promo/me/all` (vrais flux, feeds), le mobile
+    récupère une seule page généreuse (`limit=100`) sans construire de
+    défilement infini pour l'instant — largement suffisant à l'échelle du
+    pilote (plafond de 5 promos actives par commerçant, un seul quartier).
+    À revoir si le volume approche cette taille de page.
+  - `/admin/agent` et `/admin/moderation/queue` n'ont aucun consommateur
+    mobile (pas d'UI admin en V0) : pagination backend pure, aucun impact
+    client.
+  - Nouveau test `common/pagination/pagination-query.dto.spec.ts`
+    (défauts, validation page/limit).
+  - **Non exécuté dans mon environnement** : `npm run build && npm run
+    lint && npm test` côté backend, `flutter analyze` côté mobile — à
+    confirmer en local.

@@ -5,11 +5,13 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { CreateZoneDto } from './dto/create-zone.dto';
 import { UpdateZoneDto } from './dto/update-zone.dto';
 import { ZoneService } from './zone.service';
@@ -27,8 +29,8 @@ export class ZoneController {
   }
 
   @Get()
-  async list() {
-    return this.zoneService.findAll();
+  async list(@Query() query: PaginationQueryDto) {
+    return this.zoneService.findAll(query.page, query.limit);
   }
 
   @Patch(':id')

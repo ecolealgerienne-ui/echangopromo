@@ -1,4 +1,5 @@
 import '../enums/categorie.dart';
+import '../enums/commercant_account_state.dart';
 
 class Commercant {
   const Commercant({
@@ -20,7 +21,9 @@ class Commercant {
         adresse: json['adresse'] as String?,
         categorie: Categorie.fromValue(json['categorie'] as String),
         communeId: json['communeId'] as String,
-        accountState: json['accountState'] as String?,
+        accountState: json['accountState'] != null
+            ? CommercantAccountState.fromValue(json['accountState'] as String)
+            : null,
         telephone: json['telephone'] as String?,
         photoUrl: json['photoUrl'] as String?,
         latitude: (json['latitude'] as num?)?.toDouble(),
@@ -32,7 +35,7 @@ class Commercant {
   final String? adresse;
   final Categorie categorie;
   final String communeId;
-  final String? accountState;
+  final CommercantAccountState? accountState;
   final String? telephone;
   final String? photoUrl;
   final double? latitude;

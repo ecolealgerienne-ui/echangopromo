@@ -1,18 +1,20 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
+import {
+  BadRequestAppException,
+  ConflictAppException,
+  ForbiddenAppException,
+  NotFoundAppException,
+} from '../common/errors/app-exception';
+import { ErrorCode } from '../common/errors/error-code.enum';
 import {
   Promo,
   PromoLifecycleStatus,
   VISIBLE_MODERATION_STATUSES,
 } from '../promo/entities/promo.entity';
+import { StorageService } from '../storage/storage.service';
 import { CommercantView } from './entities/commercant-view.entity';
 import {
   Commercant,
@@ -36,12 +38,16 @@ export class CommercantService {
     private readonly views: Repository<CommercantView>,
     @InjectRepository(Promo) private readonly promos: Repository<Promo>,
     private readonly authService: AuthService,
+    private readonly storageService: StorageService,
   ) {}
 
   private async assertPhoneAvailable(telephone: string): Promise<void> {
     const existing = await this.commercants.findOne({ where: { telephone } });
     if (existing) {
-      throw new ConflictException('Ce numéro de téléphone est déjà enregistré');
+      throw new ConflictAppException(
+        ErrorCode.COMMERCANT_PHONE_TAKEN,
+        'Ce numéro de téléphone est déjà enregistré',
+      );
     }
   }
 
@@ -52,6 +58,7 @@ export class CommercantService {
    */
   async selfRegister(dto: RegisterCommercantDto): Promise<Commercant> {
     await this.assertPhoneAvailable(dto.telephone);
+    if (dto.photoKey) await this.storageService.assertValidImage(dto.photoKey);
 
     const { pin, ...rest } = dto;
     return this.commercants.save(
@@ -72,6 +79,7 @@ export class CommercantService {
     zoneId: string | null,
   ): Promise<Commercant> {
     await this.assertPhoneAvailable(dto.telephone);
+    if (dto.photoKey) await this.storageService.assertValidImage(dto.photoKey);
 
     return this.commercants.save(
       this.commercants.create({
@@ -96,10 +104,11 @@ export class CommercantService {
       where: { telephone: dto.telephone },
     });
     if (!commercant) {
-      throw new NotFoundException('Commerçant introuvable');
+      throw new NotFoundAppException(ErrorCode.COMMERCANT_NOT_FOUND, 'Commerçant introuvable');
     }
     if (commercant.pinHash) {
-      throw new ConflictException(
+      throw new ConflictAppException(
+        ErrorCode.COMMERCANT_PIN_ALREADY_SET,
         'Un PIN est déjà défini pour ce numéro — contactez un administrateur pour le réinitialiser',
       );
     }
@@ -112,12 +121,18 @@ export class CommercantService {
   async login(telephone: string, pin: string): Promise<Commercant> {
     const commercant = await this.commercants.findOne({ where: { telephone } });
     if (!commercant?.pinHash) {
-      throw new BadRequestException('Identifiants invalides');
+      throw new BadRequestAppException(
+        ErrorCode.AUTH_INVALID_CREDENTIALS,
+        'Identifiants invalides',
+      );
     }
 
     const matches = await this.authService.compare(pin, commercant.pinHash);
     if (!matches) {
-      throw new BadRequestException('Identifiants invalides');
+      throw new BadRequestAppException(
+        ErrorCode.AUTH_INVALID_CREDENTIALS,
+        'Identifiants invalides',
+      );
     }
 
     return commercant;
@@ -127,12 +142,15 @@ export class CommercantService {
    * PIN oublié : pas de flux libre-service (pas d'OTP pour reprouver la
    * possession du numéro). Seul l'admin peut effacer le PIN ; le commerçant
    * en définit ensuite un nouveau via `claim`, exactement comme pour un
-   * compte créé par un agent.
+   * compte créé par un agent. Incrémente aussi `tokenVersion` : sans ça,
+   * un JWT déjà émis avant le reset resterait valide jusqu'à expiration
+   * malgré l'action de l'admin (audit V1 §1).
    */
   async adminResetPin(commercantId: string): Promise<void> {
     const commercant = await this.findByIdOrFail(commercantId);
     commercant.pinHash = null;
     await this.commercants.save(commercant);
+    await this.commercants.increment({ id: commercantId }, 'tokenVersion', 1);
   }
 
   /** Édition du profil par le commerçant lui-même — téléphone non modifiable ici. */
@@ -141,6 +159,7 @@ export class CommercantService {
     dto: UpdateCommercantDto,
   ): Promise<Commercant> {
     const commercant = await this.findByIdOrFail(commercantId);
+    if (dto.photoKey) await this.storageService.assertValidImage(dto.photoKey);
     Object.assign(commercant, dto);
     return this.commercants.save(commercant);
   }
@@ -148,7 +167,7 @@ export class CommercantService {
   async findByIdOrFail(id: string): Promise<Commercant> {
     const commercant = await this.commercants.findOne({ where: { id } });
     if (!commercant) {
-      throw new NotFoundException('Commerçant introuvable');
+      throw new NotFoundAppException(ErrorCode.COMMERCANT_NOT_FOUND, 'Commerçant introuvable');
     }
     return commercant;
   }
@@ -174,7 +193,8 @@ export class CommercantService {
   ): Promise<void> {
     const commercant = await this.findByIdOrFail(commercantId);
     if (commercant.registreStatus !== RegistreStatus.EN_ATTENTE) {
-      throw new BadRequestException(
+      throw new BadRequestAppException(
+        ErrorCode.COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION,
         'Aucune demande de vérification en attente',
       );
     }
@@ -282,7 +302,8 @@ export class CommercantService {
   ): Promise<Commercant> {
     const commercant = await this.findByIdOrFail(commercantId);
     if (!agentZoneId || commercant.zoneId !== agentZoneId) {
-      throw new ForbiddenException(
+      throw new ForbiddenAppException(
+        ErrorCode.COMMERCANT_NOT_IN_AGENT_ZONE,
         "Ce commerçant n'est pas dans la zone de cet agent",
       );
     }

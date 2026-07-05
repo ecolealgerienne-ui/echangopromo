@@ -1,6 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { NotFoundAppException } from '../common/errors/app-exception';
+import { ErrorCode } from '../common/errors/error-code.enum';
+import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
 import { CreateZoneDto } from './dto/create-zone.dto';
 import { UpdateZoneDto } from './dto/update-zone.dto';
 import { Zone } from './entities/zone.entity';
@@ -17,14 +20,19 @@ export class ZoneService {
     );
   }
 
-  async findAll(): Promise<Zone[]> {
-    return this.zones.find();
+  async findAll(page: number, limit: number): Promise<PaginatedResult<Zone>> {
+    const [items, total] = await this.zones.findAndCount({
+      order: { nom: 'ASC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    return toPaginatedResult(items, total, page, limit);
   }
 
   async findByIdOrFail(id: string): Promise<Zone> {
     const zone = await this.zones.findOne({ where: { id } });
     if (!zone) {
-      throw new NotFoundException('Zone introuvable');
+      throw new NotFoundAppException(ErrorCode.ZONE_NOT_FOUND, 'Zone introuvable');
     }
     return zone;
   }

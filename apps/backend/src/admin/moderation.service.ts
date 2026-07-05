@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { AuditActorType } from '../audit-log/entities/audit-log.entity';
+import { PaginatedResult } from '../common/pagination/paginated-result';
+import { Promo } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
 import { ReportService } from '../report/report.service';
 
@@ -13,14 +15,22 @@ export class ModerationService {
     private readonly auditLogService: AuditLogService,
   ) {}
 
-  async queue() {
-    const pending = await this.reportService.listPendingModeration();
-    return Promise.all(
-      pending.map(async ({ promoId, activeReportCount }) => ({
-        promo: await this.promoService.findByIdOrFail(promoId),
-        activeReportCount,
-      })),
+  async queue(
+    page: number,
+    limit: number,
+  ): Promise<PaginatedResult<{ promo: Promo; activeReportCount: number }>> {
+    const pending = await this.reportService.listPendingModeration(page, limit);
+    const promos = await this.promoService.findByIds(
+      pending.items.map(({ promoId }) => promoId),
     );
+    const promoById = new Map(promos.map((promo) => [promo.id, promo]));
+    const items = pending.items
+      .filter(({ promoId }) => promoById.has(promoId))
+      .map(({ promoId, activeReportCount }) => ({
+        promo: promoById.get(promoId)!,
+        activeReportCount,
+      }));
+    return { ...pending, items };
   }
 
   async masquer(adminId: string, promoId: string): Promise<void> {

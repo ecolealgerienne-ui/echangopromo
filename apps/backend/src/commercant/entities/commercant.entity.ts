@@ -80,6 +80,7 @@ export class Commercant {
   @JoinColumn({ name: 'createdByAgentId' })
   createdByAgent: Agent | null;
 
+  @Index()
   @Column({ type: 'varchar', nullable: true })
   createdByAgentId: string | null;
 
@@ -96,6 +97,15 @@ export class Commercant {
   @Exclude()
   @Column({ type: 'varchar', nullable: true })
   pinHash: string | null;
+
+  /**
+   * Incrémenté pour révoquer tous les JWT émis avant (même mécanisme que
+   * Agent/Admin, audit règle #6) — notamment lors d'un `adminResetPin` :
+   * sans ça, effacer le PIN n'empêche pas un JWT déjà émis de continuer à
+   * fonctionner jusqu'à expiration (audit V1 §1).
+   */
+  @Column({ type: 'int', default: 0 })
+  tokenVersion: number;
 
   /**
    * Clé S3 de la photo du commerce (optionnelle — pour que les clients

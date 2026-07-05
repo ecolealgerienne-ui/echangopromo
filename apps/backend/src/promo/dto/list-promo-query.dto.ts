@@ -1,8 +1,9 @@
 import { Transform } from 'class-transformer';
 import { IsArray, IsEnum, IsOptional, IsUUID } from 'class-validator';
 import { Categorie } from '../../common/enums/categorie.enum';
+import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
 
-export class ListPromoQueryDto {
+export class ListPromoQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID()
   communeId?: string;
