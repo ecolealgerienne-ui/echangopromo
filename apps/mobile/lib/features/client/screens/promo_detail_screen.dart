@@ -103,17 +103,14 @@ class PromoDetailScreen extends ConsumerWidget {
 
   Future<void> _report(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context)!;
+    final locale = Localizations.localeOf(context);
     try {
       await ref.read(reportApiProvider).create(promoId);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.reportSent)));
       }
     } catch (error) {
-      final message = extractApiErrorMessage(
-        error,
-        fallback: l10n.reportFailed,
-        locale: Localizations.localeOf(context),
-      );
+      final message = extractApiErrorMessage(error, fallback: l10n.reportFailed, locale: locale);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       }

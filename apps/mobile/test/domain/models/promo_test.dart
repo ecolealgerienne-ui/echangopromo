@@ -16,12 +16,16 @@ Promo _promo({required String lifecycleStatus, DateTime? dateFin}) => Promo.from
     });
 
 void main() {
+  // Les libellés localisés (`lifecycleLabel` déplacé vers
+  // `promoLifecycleLabel` dans features/shared/l10n/enum_labels.dart, qui
+  // a besoin d'un `BuildContext`) sont couverts par
+  // test/features/shared/l10n/enum_labels_test.dart — ce fichier ne teste
+  // que la logique pure du modèle.
   test('brouillon : ni publiée ni expirée', () {
     final promo = _promo(lifecycleStatus: 'brouillon');
     expect(promo.isDraft, isTrue);
     expect(promo.isPublished, isFalse);
     expect(promo.isExpired, isFalse);
-    expect(promo.lifecycleLabel, 'Brouillon');
   });
 
   test('publiée avec dateFin future : publiée, pas expirée', () {
@@ -31,7 +35,6 @@ void main() {
     );
     expect(promo.isPublished, isTrue);
     expect(promo.isExpired, isFalse);
-    expect(promo.lifecycleLabel, 'Publiée');
   });
 
   // Cas non trivial : le backend peut ne pas avoir encore tourné le cron
@@ -43,13 +46,11 @@ void main() {
       dateFin: DateTime.now().subtract(const Duration(days: 1)),
     );
     expect(promo.isExpired, isTrue);
-    expect(promo.lifecycleLabel, 'Expirée');
   });
 
-  test('arretee : label Arrêtée', () {
+  test('arretee : isStopped', () {
     final promo = _promo(lifecycleStatus: 'arretee');
     expect(promo.isStopped, isTrue);
-    expect(promo.lifecycleLabel, 'Arrêtée');
   });
 
   test('categorie inconnue retombe sur autre', () {

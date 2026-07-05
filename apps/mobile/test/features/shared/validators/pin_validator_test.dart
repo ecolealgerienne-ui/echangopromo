@@ -1,29 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:echango_promo/features/shared/validators/pin_validator.dart';
+import '../../../support/localized_context.dart';
 
 void main() {
-  group('validatePin', () {
-    test('accepte 4 à 6 chiffres', () {
-      expect(validatePin('1234'), isNull);
-      expect(validatePin('12345'), isNull);
-      expect(validatePin('123456'), isNull);
-    });
+  // `validatePin` retourne désormais un validateur lié au `BuildContext`
+  // (message d'erreur localisé) plutôt qu'une fonction figée en français
+  // — nécessite un contexte avec `AppLocalizations` résolu.
+  testWidgets('validatePin', (tester) async {
+    final context = await pumpLocalizedContext(tester);
+    final validate = validatePin(context);
 
-    test('rejette moins de 4 chiffres', () {
-      expect(validatePin('123'), isNotNull);
-    });
+    expect(validate('1234'), isNull, reason: 'accepte 4 chiffres');
+    expect(validate('12345'), isNull, reason: 'accepte 5 chiffres');
+    expect(validate('123456'), isNull, reason: 'accepte 6 chiffres');
 
-    test('rejette plus de 6 chiffres', () {
-      expect(validatePin('1234567'), isNotNull);
-    });
-
-    test('rejette les caractères non numériques', () {
-      expect(validatePin('12a4'), isNotNull);
-    });
-
-    test('rejette null ou vide', () {
-      expect(validatePin(null), isNotNull);
-      expect(validatePin(''), isNotNull);
-    });
+    expect(validate('123'), isNotNull, reason: 'rejette moins de 4 chiffres');
+    expect(validate('1234567'), isNotNull, reason: 'rejette plus de 6 chiffres');
+    expect(validate('12a4'), isNotNull, reason: 'rejette les caractères non numériques');
+    expect(validate(null), isNotNull, reason: 'rejette null');
+    expect(validate(''), isNotNull, reason: 'rejette vide');
   });
 }
