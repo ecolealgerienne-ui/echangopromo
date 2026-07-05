@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, IsNull, LessThan, Not, Repository } from 'typeorm';
+import { EntityManager, In, IsNull, LessThan, Not, Repository } from 'typeorm';
 import { CommercantService } from '../commercant/commercant.service';
 import {
   BadRequestAppException,
@@ -113,6 +113,7 @@ export class PromoService {
   async create(commercantId: string, dto: CreatePromoDto): Promise<Promo> {
     await this.commercantService.findByIdOrFail(commercantId);
     this.assertPriceOrder(dto.prixAvant, dto.prixApres);
+    await this.storageService.assertValidImage(dto.photoKey);
 
     const base = {
       commercantId,
@@ -236,6 +237,20 @@ export class PromoService {
     return promo;
   }
 
+  /**
+   * Une seule requête pour plusieurs ids (ex. file de modération) — jamais
+   * `ids.map(id => findByIdOrFail(id))`, qui refait un SELECT par élément
+   * (CLAUDE.md règle #14, N+1 réapparu sur ce même écran après le premier
+   * correctif V0, cf. audit V1 §5).
+   */
+  async findByIds(ids: string[]): Promise<Promo[]> {
+    if (ids.length === 0) return [];
+    return this.promos.find({
+      where: { id: In(ids) },
+      relations: { commercant: true },
+    });
+  }
+
   async listByCommercant(commercantId: string): Promise<Promo[]> {
     return this.promos.find({
       where: { commercantId },
@@ -332,6 +347,7 @@ export class PromoService {
     const prixAvant = dto.prixAvant ?? Number(promo.prixAvant);
     const prixApres = dto.prixApres ?? Number(promo.prixApres);
     this.assertPriceOrder(prixAvant, prixApres);
+    if (dto.photoKey) await this.storageService.assertValidImage(dto.photoKey);
 
     Object.assign(promo, {
       ...dto,

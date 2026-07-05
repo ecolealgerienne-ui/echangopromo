@@ -21,7 +21,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
-import { STRICT_THROTTLE } from '../common/throttle';
+import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
 import { PromoService } from '../promo/promo.service';
 import { ReportService } from '../report/report.service';
 import { AdminService } from './admin.service';
@@ -61,6 +61,24 @@ export class AdminController {
     return this.adminService.findByIdOrFail(user.sub);
   }
 
+  /** Révoque tous les JWT déjà émis pour ce compte (device perdu/volé) — audit V1 §1. */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('me/revoke-token')
+  async revokeOwnToken(@CurrentUser() user: AuthTokenPayload) {
+    await this.adminService.revokeOwnTokens(user.sub);
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'revoke_own_token',
+      targetType: 'admin',
+      targetId: user.sub,
+    });
+    return { ok: true };
+  }
+
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('agent')
@@ -86,6 +104,7 @@ export class AdminController {
     return this.agentService.findAll();
   }
 
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Patch('agent/:id/zone')
@@ -94,6 +113,7 @@ export class AdminController {
   }
 
   /** Révoque les JWT déjà émis pour cet agent (device perdu/volé, départ — audit règle #6). */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('agent/:id/revoke-token')
@@ -113,6 +133,7 @@ export class AdminController {
   }
 
   /** Transfère une zone d'un agent à un autre (specs §3.4). */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('agent/transfer-zone')
@@ -143,6 +164,7 @@ export class AdminController {
     return this.moderationService.queue();
   }
 
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('moderation/:promoId/masquer')
@@ -154,6 +176,7 @@ export class AdminController {
     return { ok: true };
   }
 
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('moderation/:promoId/verifier-ok')
@@ -165,6 +188,7 @@ export class AdminController {
     return { ok: true };
   }
 
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('moderation/:promoId/avertir')
@@ -176,6 +200,7 @@ export class AdminController {
     return { ok: true };
   }
 
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('commercant/:id/registre/valider')
@@ -198,6 +223,7 @@ export class AdminController {
   }
 
   /** PIN oublié : pas d'OTP, seul l'admin peut effacer le PIN (§3.2). */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('commercant/:id/reset-pin')
@@ -216,6 +242,7 @@ export class AdminController {
     return { ok: true };
   }
 
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('commercant/:id/registre/rejeter')

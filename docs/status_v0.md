@@ -554,3 +554,56 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
   vers le login du rôle concerné dès que `authControllerProvider` repasse
   à `null` (mécanisme `routerRefreshProvider` déjà en place, aucun
   changement nécessaire côté routeur).
+
+- **2026-07-05 (traitement audit V1, 2-5/... — révocation JWT commerçant,
+  N+1 modération, rate limiting élargi, index FK manquants, vérification
+  a posteriori des images S3)** — regroupés dans un seul commit : les
+  fichiers `commercant.service.ts`/`promo.service.ts` portent à la fois la
+  révocation JWT et la vérification d'image (StorageService y est déjà
+  injecté pour d'autres raisons), impossible de les séparer proprement
+  sans réécriture de l'historique :
+  - **`tokenVersion` sur `Commercant`** (`entities/commercant.entity.ts`) :
+    `adminResetPin` l'incrémente désormais — jusqu'ici il effaçait le PIN
+    sans révoquer le JWT déjà émis, qui restait valide jusqu'à expiration
+    (30j par défaut) malgré l'action de l'admin. `JwtAuthGuard` vérifie
+    maintenant `tokenVersion` pour les 3 rôles de façon uniforme (avant :
+    uniquement agent/admin). Par symétrie, `Admin.tokenVersion` (jamais
+    incrémenté jusqu'ici) obtient son propre endpoint
+    `POST /admin/me/revoke-token` (auto-révocation, device perdu/volé).
+  - **N+1 dans `ModerationService.queue()`** : remplacé
+    `pending.map(({promoId}) => promoService.findByIdOrFail(promoId))`
+    (un SELECT par promo signalée) par `PromoService.findByIds()` (une
+    seule requête `IN (...)`) — même règle CLAUDE.md #14 que le premier
+    correctif V0 sur cet écran, réapparue après coup.
+  - **Rate limiting élargi** : nouveau
+    `SENSITIVE_ACTION_THROTTLE` (20 req/min, `common/throttle.ts`) appliqué
+    aux actions authentifiées jusqu'ici sans limite dédiée : toutes les
+    routes `AdminController` hors login (dont `reset-pin`,
+    `revoke-token`), `POST /agent/commercant`, `POST /commercant/me/registre`,
+    les actions promo (`create`/`createByAgent`/`update`/`publish`/`stop`),
+    `POST /storage/presigned-upload`.
+  - **2 FK sans index** : `Agent.zoneId` et `Commercant.createdByAgentId`
+    obtiennent leur `@Index()` (les 3 autres FK du modèle l'avaient déjà).
+  - **Vérification a posteriori des images S3** (`storage.service.ts`) :
+    `assertValidImage(key)` télécharge les 12 premiers octets de l'objet
+    (`GetObjectCommand` + `Range`) et vérifie la signature réelle
+    (jpeg/png/webp) — jusqu'ici seule la taille était contrainte par la
+    policy S3 (session précédente), le `Content-Type` restait purement
+    déclaratif (un exécutable renommé `.jpg` passait sans problème).
+    Supprime le fichier et lève `STORAGE_INVALID_IMAGE` si la signature ne
+    correspond à aucun format supporté. Appelée dans
+    `CommercantService.selfRegister`/`createByAgent`/`updateProfile` et
+    `PromoService.create`/`update` quand un `photoKey` est fourni. Logique
+    de détection extraite dans `storage/image-signature.ts` (fonction pure)
+    pour rester testable sans mock S3 — nouveau
+    `image-signature.spec.ts` (5 cas). Nouveau code d'erreur
+    `STORAGE_INVALID_IMAGE` ajouté au mapping mobile `errorMessagesFr`
+    dans le même commit (règle CLAUDE.md #26).
+  - Nouveau test `auth/guards/jwt-auth.guard.spec.ts` (5 cas : token
+    manquant/invalide/révoqué/compte supprimé/valide) — avec
+    `image-signature.spec.ts`, première suite de tests backend réels (0%
+    jusqu'ici, cf. audit V1 §6).
+  - **Non exécuté dans mon environnement** : `npm run build && npm run
+    lint && npm test` à confirmer en local ; nouvelle colonne
+    `tokenVersion` (Commercant) à intégrer à la prochaine
+    `migration:generate`.

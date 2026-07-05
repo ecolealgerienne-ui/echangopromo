@@ -8,6 +8,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AgentService } from '../agent/agent.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -18,6 +19,7 @@ import { CommercantService } from '../commercant/commercant.service';
 import { DeviceId } from '../common/decorators/device-id.decorator';
 import { ForbiddenAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
+import { SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
 import { ListPromoQueryDto } from './dto/list-promo-query.dto';
@@ -97,6 +99,7 @@ export class PromoController {
     return this.toClientJson(promo);
   }
 
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('commercant')
   @Post()
@@ -122,6 +125,7 @@ export class PromoController {
   }
 
   /** IDOR corrigé : un agent ne peut publier que pour un commerçant de sa propre zone. */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('agent')
   @Post('agent/:commercantId')
@@ -136,6 +140,7 @@ export class PromoController {
   }
 
   /** Édition ouverte au commerçant propriétaire, en plus de l'agent (auparavant agent uniquement). */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('commercant', 'agent')
   @Patch(':id')
@@ -150,6 +155,7 @@ export class PromoController {
   }
 
   /** Publie un brouillon, ou republie une promo arrêtée/expirée (specs §3.2). */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('commercant', 'agent')
   @Post(':id/publish')
@@ -163,6 +169,7 @@ export class PromoController {
   }
 
   /** Arrêt volontaire (ex. rupture de stock) — libère un slot sur le plafond de 5. */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('commercant', 'agent')
   @Post(':id/stop')

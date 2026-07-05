@@ -15,12 +15,16 @@ export class ModerationService {
 
   async queue() {
     const pending = await this.reportService.listPendingModeration();
-    return Promise.all(
-      pending.map(async ({ promoId, activeReportCount }) => ({
-        promo: await this.promoService.findByIdOrFail(promoId),
-        activeReportCount,
-      })),
+    const promos = await this.promoService.findByIds(
+      pending.map(({ promoId }) => promoId),
     );
+    const promoById = new Map(promos.map((promo) => [promo.id, promo]));
+    return pending
+      .filter(({ promoId }) => promoById.has(promoId))
+      .map(({ promoId, activeReportCount }) => ({
+        promo: promoById.get(promoId)!,
+        activeReportCount,
+      }));
   }
 
   async masquer(adminId: string, promoId: string): Promise<void> {

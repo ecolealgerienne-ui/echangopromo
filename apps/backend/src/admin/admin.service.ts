@@ -44,4 +44,9 @@ export class AdminService {
     }
     return admin;
   }
+
+  /** Révoque tous les JWT déjà émis pour ce compte (device perdu/volé) — même levier que pour un agent. */
+  async revokeOwnTokens(adminId: string): Promise<void> {
+    await this.admins.increment({ id: adminId }, 'tokenVersion', 1);
+  }
 }

@@ -12,7 +12,7 @@ import { CommercantService } from '../commercant/commercant.service';
 import { CreateCommercantByAgentDto } from '../commercant/dto/create-commercant-by-agent.dto';
 import { BadRequestAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
-import { STRICT_THROTTLE } from '../common/throttle';
+import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
 import { AgentService } from './agent.service';
 import { LoginAgentDto } from './dto/login-agent.dto';
 
@@ -60,6 +60,7 @@ export class AgentController {
     return this.commercantService.listByZoneWithVisitStatus(agent.zoneId);
   }
 
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('agent')
   @Post('commercant')

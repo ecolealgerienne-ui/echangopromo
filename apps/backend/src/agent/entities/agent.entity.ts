@@ -3,6 +3,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -33,6 +34,7 @@ export class Agent {
   @JoinColumn({ name: 'zoneId' })
   zone: Zone | null;
 
+  @Index()
   @Column({ type: 'varchar', nullable: true })
   zoneId: string | null;
 
