@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../shared/widgets/commune_cascade_field.dart';
+import '../../shared/widgets/language_switcher_button.dart';
 import '../providers/commune_providers.dart';
 
 /// Demandée au premier lancement, modifiable à tout moment (specs §3.1).
@@ -35,15 +37,19 @@ class _CommuneSelectionScreenState extends ConsumerState<CommuneSelectionScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final communesAsync = ref.watch(communeListProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Choisissez votre commune')),
+      appBar: AppBar(
+        title: Text(l10n.chooseCommuneTitle),
+        actions: const [LanguageSwitcherButton()],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: communesAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('Erreur : $error')),
+          error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
           data: (communes) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -55,7 +61,7 @@ class _CommuneSelectionScreenState extends ConsumerState<CommuneSelectionScreen>
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: _selectedCommuneId == null ? null : _confirm,
-                child: const Text('Valider'),
+                child: Text(l10n.commonConfirm),
               ),
             ],
           ),

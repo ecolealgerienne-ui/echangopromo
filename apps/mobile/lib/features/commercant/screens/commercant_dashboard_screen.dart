@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/widgets/language_switcher_button.dart';
 
 /// Dashboard commerçant (specs §3.2) : donne une raison concrète de revenir
 /// régulièrement dans l'app, en plus de l'obligation de republication.
@@ -11,16 +13,18 @@ class CommercantDashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final meAsync = ref.watch(_meProvider);
     final statsAsync = ref.watch(_statsProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mon espace commerçant'),
+        title: Text(l10n.myCommercantSpaceTitle),
         actions: [
+          const LanguageSwitcherButton(),
           IconButton(
             icon: const Icon(Icons.logout),
-            tooltip: 'Déconnexion',
+            tooltip: l10n.logoutTooltip,
             onPressed: () async {
               await ref.read(authControllerProvider.notifier).logout();
               if (context.mounted) context.go('/');
@@ -38,7 +42,7 @@ class CommercantDashboardScreen extends ConsumerWidget {
           children: [
             meAsync.when(
               loading: () => const LinearProgressIndicator(),
-              error: (error, _) => Text('Erreur : $error'),
+              error: (error, _) => Text(l10n.commonError(error.toString())),
               data: (commercant) => Text(
                 commercant.nom,
                 style: Theme.of(context).textTheme.headlineSmall,
@@ -48,7 +52,7 @@ class CommercantDashboardScreen extends ConsumerWidget {
             Card(
               child: ListTile(
                 leading: const Icon(Icons.visibility_outlined),
-                title: const Text('Vues de votre fiche (devices uniques)'),
+                title: Text(l10n.profileViewsLabel),
                 trailing: statsAsync.when(
                   loading: () => const SizedBox(
                     height: 16,
@@ -63,13 +67,13 @@ class CommercantDashboardScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             FilledButton.icon(
               icon: const Icon(Icons.local_offer_outlined),
-              label: const Text('Mes promos'),
+              label: Text(l10n.myPromosLabel),
               onPressed: () => context.push('/commercant/promos'),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               icon: const Icon(Icons.storefront_outlined),
-              label: const Text('Modifier mon profil'),
+              label: Text(l10n.editProfileLabel),
               onPressed: () async {
                 final updated = await context.push<bool>('/commercant/profile/edit');
                 if (updated == true) {

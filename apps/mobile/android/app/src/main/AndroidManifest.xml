@@ -28,6 +28,24 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- App Links (partage d'une promo, croissance organique) —
+                 android:autoVerify déclenche la vérification du fichier
+                 https://promo.echango.com/.well-known/assetlinks.json au
+                 démarrage : tant qu'il est vide (app pas encore publiée,
+                 voir docs/DEPLOIEMENT_STORES.md), la vérification échoue
+                 silencieusement et le lien s'ouvre dans le navigateur —
+                 aucun risque à activer ce bloc dès maintenant. go_router
+                 route déjà /promo/:id, aucun code Dart supplémentaire
+                 nécessaire une fois la vérification passée. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="promo.echango.com"
+                    android:pathPrefix="/promo"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

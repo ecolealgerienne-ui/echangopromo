@@ -14,6 +14,7 @@ import { ReportModule } from './report/report.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { StorageModule } from './storage/storage.module';
 import { AuthModule } from './auth/auth.module';
+import { AppLinksModule } from './app-links/app-links.module';
 import { validateEnv } from './config/env.validation';
 import { typeOrmBaseOptions } from './data-source';
 
@@ -40,6 +41,16 @@ import { typeOrmBaseOptions } from './data-source';
     // commerçant, signalement) ont une limite plus stricte via @Throttle()
     // (specs d'audit sécurité — @nestjs/throttler n'était pas installé du tout).
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
+    // Enregistré avant PromoModule à dessein : AppLinksController est
+    // restreint à `host: 'promo.echango.com'` et partage le chemin
+    // `/promo/:id` avec PromoController (sans restriction de host, lui) —
+    // Express/Nest essaient les routes dans l'ordre d'enregistrement, donc
+    // le contrôleur à host contraint doit être tenté en premier pour que
+    // sa vérification de host s'applique avant le match "large" de
+    // PromoController. Une requête dont le host ne correspond pas
+    // (l'API mobile, sur un autre domaine) retombe correctement sur
+    // PromoModule ensuite.
+    AppLinksModule,
     CommuneModule,
     ZoneModule,
     CommercantModule,

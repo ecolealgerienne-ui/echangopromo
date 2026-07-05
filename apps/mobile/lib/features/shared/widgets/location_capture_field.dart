@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Capture optionnelle de la position GPS du commerce — gratuit, aucune clé
 /// API Google Maps nécessaire (juste la localisation native de l'appareil).
@@ -24,6 +25,7 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
   String? _error;
 
   Future<void> _locate() async {
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
       _locating = true;
       _error = null;
@@ -31,7 +33,7 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
 
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
-        throw Exception('Active la localisation sur ton téléphone.');
+        throw Exception(l10n.locationEnableService);
       }
 
       var permission = await Geolocator.checkPermission();
@@ -40,7 +42,7 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        throw Exception('Permission de localisation refusée.');
+        throw Exception(l10n.locationPermissionDenied);
       }
 
       final position = await Geolocator.getCurrentPosition(
@@ -56,6 +58,7 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final located = widget.latitude != null && widget.longitude != null;
 
     return Column(
@@ -63,7 +66,7 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
       children: [
         OutlinedButton.icon(
           icon: Icon(located ? Icons.check_circle_outline : Icons.my_location_outlined),
-          label: Text(located ? 'Position enregistrée — relocaliser' : 'Localiser mon commerce (optionnel)'),
+          label: Text(located ? l10n.locationSaved : l10n.locationCapture),
           onPressed: _locating ? null : _locate,
         ),
         if (_locating)

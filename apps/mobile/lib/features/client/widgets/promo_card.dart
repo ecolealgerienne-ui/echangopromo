@@ -3,6 +3,22 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../domain/models/promo.dart';
 
+/// Padding autour du bloc texte (description/prix/nom) — partagé avec
+/// `promo_list_screen.dart` pour calculer un `childAspectRatio` de grille
+/// qui correspond exactement à la hauteur réelle de la carte (photo +
+/// bloc texte), sans espace vide résiduel.
+const promoCardPadding = 12.0;
+
+/// Hauteur réservée au bloc texte, indépendante du contenu réel : la
+/// description est censée tenir sur 2 lignes, le prix sur 1, le nom du
+/// commerçant sur 1 (specs). Fixer cette hauteur (au lieu de laisser
+/// chaque `Text` prendre sa hauteur naturelle, qui varie si la
+/// description tient sur 1 seule ligne) rend les cartes homogènes dans
+/// une grille à ratio fixe. Marge incluse au-delà de l'estimation
+/// theme par défaut (~83) pour absorber une échelle de police
+/// légèrement plus grande sans faire déborder la carte.
+const promoCardTextBlockHeight = 96.0;
+
 class PromoCard extends StatelessWidget {
   const PromoCard({
     super.key,
@@ -26,8 +42,17 @@ class PromoCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
+            // `Expanded` plutôt qu'`AspectRatio` : la hauteur totale de la
+            // carte est déjà imposée (tight) par la grille — un `AspectRatio`
+            // fixe redemande sa propre hauteur en plus de celle du bloc
+            // texte ci-dessous, et le moindre écart entre le ratio calculé
+            // côté grille et la hauteur réellement prise par le texte
+            // (métriques de police, échelle d'accessibilité) fait déborder
+            // la `Column`. Avec `Expanded`, la photo prend toujours
+            // exactement l'espace restant, jamais plus — proche de 16:9 en
+            // pratique (le ratio de grille vise ça) mais sans jamais pouvoir
+            // provoquer d'overflow.
+            Expanded(
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -45,43 +70,51 @@ class PromoCard extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    promo.description,
-                    style: Theme.of(context).textTheme.titleMedium,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        currency.format(promo.prixAvant),
-                        style: const TextStyle(
-                          decoration: TextDecoration.lineThrough,
-                          color: Colors.grey,
+              padding: const EdgeInsets.all(promoCardPadding),
+              // Hauteur fixe : sans ça, une description tenant sur 1 seule
+              // ligne (ou l'absence de nom de commerçant, ci-dessous
+              // toujours rendu même vide) rendrait cette carte plus courte
+              // que ses voisines dans la grille.
+              child: SizedBox(
+                height: promoCardTextBlockHeight,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      promo.description,
+                      style: Theme.of(context).textTheme.titleMedium,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Text(
+                          currency.format(promo.prixAvant),
+                          style: const TextStyle(
+                            decoration: TextDecoration.lineThrough,
+                            color: Colors.grey,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        currency.format(promo.prixApres),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  if (promo.commercantNom != null) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          currency.format(promo.prixApres),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 4),
                     Text(
-                      promo.commercantNom!,
+                      // Toujours rendu (même vide) pour réserver sa ligne —
+                      // sinon la carte d'un commerçant sans nom connu serait
+                      // plus courte que les autres.
+                      promo.commercantNom ?? '',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                ],
+                ),
               ),
             ),
           ],

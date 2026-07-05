@@ -1,16 +1,17 @@
 /// Liste fermée des catégories (specs §5.6) — miroir de l'enum backend.
+/// Le libellé affiché est localisé (`categorieLabel` dans
+/// `features/shared/l10n/enum_labels.dart`), pas porté par l'enum lui-même.
 enum Categorie {
-  alimentation('alimentation', 'Alimentation'),
-  vetementsTextile('vetements_textile', 'Vêtements / Textile'),
-  electromenager('electromenager', 'Électroménager'),
-  beauteHygiene('beaute_hygiene', 'Beauté / Hygiène'),
-  maisonAmeublement('maison_ameublement', 'Maison / Ameublement'),
-  autre('autre', 'Autre');
+  alimentation('alimentation'),
+  vetementsTextile('vetements_textile'),
+  electromenager('electromenager'),
+  beauteHygiene('beaute_hygiene'),
+  maisonAmeublement('maison_ameublement'),
+  autre('autre');
 
-  const Categorie(this.value, this.label);
+  const Categorie(this.value);
 
   final String value;
-  final String label;
 
   static Categorie fromValue(String value) =>
       Categorie.values.firstWhere((c) => c.value == value, orElse: () => Categorie.autre);

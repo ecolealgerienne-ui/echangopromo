@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Sélection de la photo d'une promo. `cameraOnly: true` retire l'option
 /// galerie — utilisé pour l'agent terrain, où la photo doit obligatoirement
@@ -25,6 +26,7 @@ class PhotoPickerField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -49,7 +51,7 @@ class PhotoPickerField extends StatelessWidget {
             Expanded(
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.camera_alt_outlined),
-                label: const Text('Prendre une photo'),
+                label: Text(l10n.photoPickerTakePhoto),
                 onPressed: () => _pick(ImageSource.camera),
               ),
             ),
@@ -58,7 +60,7 @@ class PhotoPickerField extends StatelessWidget {
               Expanded(
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.photo_library_outlined),
-                  label: const Text('Galerie'),
+                  label: Text(l10n.photoPickerGallery),
                   onPressed: () => _pick(ImageSource.gallery),
                 ),
               ),

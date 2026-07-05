@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/models/promo.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../shared/widgets/error_text.dart';
+import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/loading_button.dart';
 import '../../shared/widgets/promo_form_fields.dart';
 import '../../../providers/core_providers.dart';
@@ -60,19 +62,21 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
   }
 
   String? _validatePrixApres(String? v) {
+    final l10n = AppLocalizations.of(context)!;
     final prixApres = double.tryParse(v ?? '');
-    if (prixApres == null) return 'Invalide';
+    if (prixApres == null) return l10n.commonInvalid;
     final prixAvant = double.tryParse(_prixAvantController.text);
     if (prixAvant != null && prixApres >= prixAvant) {
-      return 'Doit être inférieur au prix avant';
+      return l10n.prixApresMustBeLower;
     }
     return null;
   }
 
   Future<void> _submit({required bool asDraft}) async {
+    final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
     if (!_isEditing && _photo == null) {
-      setState(() => _error = 'Une photo est requise.');
+      setState(() => _error = l10n.photoRequired);
       return;
     }
 
@@ -110,7 +114,11 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
       }
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
-      setState(() => _error = extractApiErrorMessage(error, fallback: 'Opération impossible.'));
+      setState(() => _error = extractApiErrorMessage(
+            error,
+            fallback: l10n.operationFailed,
+            locale: Localizations.localeOf(context),
+          ));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -118,6 +126,7 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     // Pré-remplit la catégorie avec celle du commerçant (modifiable ensuite),
     // une seule fois quand le profil est chargé — seulement à la création.
     if (!_isEditing) {
@@ -129,7 +138,10 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(_isEditing ? 'Modifier la promo' : 'Nouvelle promo')),
+      appBar: AppBar(
+        title: Text(_isEditing ? l10n.editPromoTitle : l10n.newPromoTitle),
+        actions: const [LanguageSwitcherButton()],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -155,18 +167,18 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
                 LoadingButton(
                   loading: _loading,
                   onPressed: () => _submit(asDraft: false),
-                  label: 'Enregistrer',
+                  label: l10n.saveLabel,
                 )
               else ...[
                 LoadingButton(
                   loading: _loading,
                   onPressed: () => _submit(asDraft: false),
-                  label: 'Publier',
+                  label: l10n.publishLabel,
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton(
                   onPressed: _loading ? null : () => _submit(asDraft: true),
-                  child: const Text('Enregistrer en brouillon'),
+                  child: Text(l10n.saveDraftLabel),
                 ),
               ],
             ],

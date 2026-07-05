@@ -6,7 +6,7 @@ d'audit, changement d'architecture) — pas seulement en fin de session.
 Pour le détail historique complet, voir aussi `docs/AUDIT_V0.md`
 (findings) et `CLAUDE.md` (règles à respecter).
 
-Dernière mise à jour : 2026-07-04
+Dernière mise à jour : 2026-07-05
 
 ---
 
@@ -638,3 +638,192 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
   - **Non exécuté dans mon environnement** : `npm run build && npm run
     lint && npm test` côté backend, `flutter analyze` côté mobile — à
     confirmer en local.
+
+- **2026-07-05 (mobile : i18n FR/EN/AR + bouton de changement de langue)**
+  — Le pilote était mono-langue (français codé en dur dans ~130 endroits
+  répartis sur 22 écrans/widgets). Demande produit : ajouter anglais et
+  arabe, avec un bouton pour basculer.
+  - Infra `flutter gen-l10n` : `apps/mobile/l10n.yaml`
+    (`synthetic-package: false`, sortie dans `lib/l10n/` — import relatif
+    classique plutôt que le package synthétique `flutter_gen`),
+    `pubspec.yaml` (`generate: true`), `lib/l10n/app_{fr,en,ar}.arb`
+    (121 clés, français = template source). `app_localizations.dart` est
+    généré par `flutter pub get`/`flutter gen-l10n`, jamais commité
+    (`.gitignore` mis à jour).
+  - `localeProvider` (Riverpod, `providers/locale_provider.dart`) persisté
+    via `SharedPreferences` (`LocaleStore`, même pattern que
+    `selectedCommuneProvider`) — défaut français, mémorisé entre
+    lancements. `LanguageSwitcherButton`
+    (`features/shared/widgets/language_switcher_button.dart`) ajouté à
+    l'`AppBar` de chaque écran (pas de shell/navigation partagée entre les
+    3 rôles, donc pas un seul endroit central possible — même logique de
+    duplication assumée que `ErrorText`/`LoadingButton`).
+  - Les libellés d'enum (`Categorie`, `PromoLifecycleStatus`,
+    `visitStatus`) sont sortis des modèles de domaine vers des fonctions
+    localisées (`features/shared/l10n/enum_labels.dart`) : un modèle de
+    domaine n'a pas accès à un `BuildContext`. `Categorie.label` (champ
+    français figé) supprimé de l'enum.
+  - **Messages d'erreur backend** (`ApiException`/`extractApiErrorMessage`,
+    audit V1) : `error_messages_en.dart`/`error_messages_ar.dart` créés en
+    miroir de `error_messages_fr.dart` (CLAUDE.md règle #26).
+    `ApiException.displayMessage` devient une méthode `(Locale)` au lieu
+    d'un getter figé sur le français ; `extractApiErrorMessage` prend
+    désormais un paramètre `locale` obligatoire (`Localizations.localeOf
+    (context)` à chaque appel, 11 sites). Nouveau code `NETWORK_ERROR`
+    (pas un `ErrorCode` backend — cas "pas de réponse HTTP du tout")
+    ajouté aux 3 mappings.
+  - `validatePin` (validateur PIN partagé) devient une factory
+    `validatePin(context)` retournant le validateur localisé, au lieu
+    d'une fonction figée en français.
+  - Vérifié par script : les 3 fichiers `.arb` ont exactement le même jeu
+    de 121 clés (aucune manquante d'un côté), et chaque clé `l10n.xxx`
+    utilisée dans le code Dart existe dans les `.arb` (et réciproquement,
+    aucune clé orpheline).
+  - RTL (arabe) : automatique via `Localizations.localeOf`/`Directionality`
+    de Flutter, aucun code supplémentaire nécessaire.
+  - **Non exécuté dans mon environnement** : `flutter pub get` (déclenche
+    `flutter gen-l10n`) puis `flutter analyze` à lancer en local avant
+    toute autre vérification — c'est la première fois que ce mécanisme de
+    génération de code est utilisé dans ce projet, à valider avant de
+    considérer ce point terminé.
+
+- **2026-07-05 (mobile : espace vide en bas des cartes promo)** — Signalé
+  par capture d'écran : un espace blanc apparaissait sous certaines cartes
+  de `promo_list_screen.dart`. Cause réelle : `SliverGridDelegateWithFixedCrossAxisCount`
+  (`childAspectRatio: 0.72`, valeur figée devinée) ne correspondait pas à
+  la hauteur réelle de la carte, et le bloc texte lui-même n'avait pas de
+  hauteur réservée — une description tenant sur 1 seule ligne (`maxLines:
+  2` ne force pas 2 lignes) ou l'absence de nom de commerçant (bloc
+  simplement omis) raccourcissait la carte davantage.
+  - Premier essai (grille "masonry", chaque carte garde sa hauteur
+    naturelle) **abandonné à la demande explicite de l'utilisateur** :
+    préférence produit pour une grille strictement homogène (2 cartes par
+    ligne, même hauteur), la hauteur du contenu étant par construction
+    quasi fixe (photo, 2 lignes de description, 1 ligne de prix, 1 ligne
+    de nom).
+  - **Solution retenue** : `promo_card.dart` réserve désormais une hauteur
+    fixe (`promoCardTextBlockHeight = 96`) pour tout le bloc texte
+    (au lieu de la hauteur naturelle de chaque `Text`), et rend toujours
+    la ligne du nom du commerçant (chaîne vide si `null`) plutôt que de
+    l'omettre — la hauteur de la carte devient réellement déterministe.
+    `promo_list_screen.dart` calcule `childAspectRatio` dynamiquement via
+    `LayoutBuilder` (largeur de case → hauteur photo 16:9 + hauteur bloc
+    texte + paddings) au lieu d'une valeur devinée — s'adapte à la largeur
+    d'écran réelle, plus de ratio à retoucher à la main.
+  - Limite acceptée (pas de solution parfaite sans mesurer le texte
+    dynamiquement) : une échelle de police accessibilité très agrandie
+    pourrait dépasser les 96px réservés et déborder visuellement — marge
+    incluse dans la valeur choisie mais non testée avec un réglage
+    d'accessibilité extrême.
+  - **Non exécuté dans mon environnement** : `flutter analyze`/`flutter
+    run` pour confirmer visuellement sur la liste des promos (aucune
+    nouvelle dépendance cette fois, la tentative masonry
+    `flutter_staggered_grid_view` a été retirée).
+
+- **2026-07-05 (suite) : RenderFlex overflow au lancement** — Confirmé en
+  environnement réel : la `Column` de `promo_card.dart` débordait
+  (`RenderFlex#... OVERFLOWING`, ~3-4px sur une carte de 217px). Cause :
+  le `childAspectRatio` calculé dans `promo_list_screen.dart` visait une
+  correspondance exacte entre la hauteur allouée par la grille et la
+  hauteur théorique de la carte (photo + bloc texte fixe) — le moindre
+  écart entre l'estimation et les métriques de police réellement rendues
+  (thème Material 3, `titleMedium`) suffit à faire déborder une `Column`
+  à contraintes strictes (tight) comme celles d'une grille.
+  - **Fix structurel** (pas un ajustement de valeur) : la photo utilise
+    désormais `Expanded` au lieu d'`AspectRatio` — elle prend toujours
+    exactement l'espace restant après le bloc texte (hauteur fixe),
+    jamais plus. Rend la carte mathématiquement incapable de déborder,
+    quelle que soit la précision du `childAspectRatio` calculé côté
+    grille (qui reste utile pour viser un rendu proche de 16:9, mais
+    n'est plus un contrat strict à respecter).
+  - Le bloc texte à hauteur fixe (`promoCardTextBlockHeight`) garde la
+    même limite déjà documentée ci-dessus (échelle d'accessibilité
+    extrême non testée).
+
+- **2026-07-05 (mobile : partage d'une promo, croissance organique)** —
+  Bouton "Partager" sur la fiche promo (`promo_detail_screen.dart`, icône
+  à côté du cœur favori) : envoie texte + photo vers le sélecteur de
+  partage natif du téléphone (WhatsApp, SMS, email... — pas un bouton
+  WhatsApp dédié, le sélecteur système liste tout ce qui est installé).
+  Décision produit actée avec l'utilisateur : pas de lien profond vers
+  l'app (pas de présence web, un lien nécessiterait un nom de domaine +
+  un fichier `assetlinks.json`/`apple-app-site-association` hébergé) —
+  texte autonome uniquement.
+  - Nouveaux `Env.playStoreUrl`/`Env.appStoreUrl` (`config/env.dart`,
+    `String.fromEnvironment`, vides par défaut) : l'app n'est pas encore
+    publiée (`applicationId` encore la valeur par défaut Flutter
+    `com.example.echango_promo`), mais l'utilisateur prévoit de publier.
+    Le message de partage n'ajoute la ligne "installe l'app" que si le
+    lien de la plateforme courante (`Platform.isIOS` ? App Store : Play
+    Store) est non vide — remplir la valeur à la publication
+    (`--dart-define=PLAY_STORE_URL=...`) suffira, aucun code à retoucher.
+  - Photo : téléchargée à la volée depuis S3 vers un fichier temporaire
+    (`Dio().download` + `path_provider`, même pattern que
+    `storage_api.dart`) puisque `Share.shareXFiles` a besoin d'un fichier
+    local, pas d'une URL — échec de téléchargement non bloquant, retombe
+    sur le texte seul.
+  - Nouvelle dépendance `share_plus` (^7.2.2, API `Share.share`/
+    `Share.shareXFiles` classique — délibérément pas la dernière version
+    majeure, dont l'API `SharePlus.instance`/`ShareParams` plus récente
+    n'a pas pu être vérifiée par compilation dans cet environnement).
+  - Nouvelles clés `.arb` (`shareTooltip`, `shareMessage`,
+    `shareInstallCta`) dans les 3 langues (CLAUDE.md règle #27).
+  - **Non exécuté dans mon environnement** : `flutter pub get` (nouvelle
+    dépendance) puis `flutter analyze`/`flutter run`, et test manuel du
+    partage (texte seul et texte+photo) vers au moins une app installée.
+
+- **2026-07-05 (préparation App Links / stores — pas encore publié)** —
+  Suite de la fonctionnalité de partage : préparer (sans l'activer) le
+  jour où le lien partagé (`promo.echango.com`) ouvrira l'app directement
+  si elle est installée, et redirigera vers le store sinon (jamais vers un
+  site qui affiche la promo — décision produit actée). Nouveau
+  `docs/DEPLOIEMENT_STORES.md` : procédure complète Google Play + App
+  Store, App Links/Universal Links, tableau des variables à remplir,
+  checklist.
+  - **Backend** : `src/app-links/` (`AppLinksModule`/`AppLinksController`,
+    restreint à `host: 'promo.echango.com'`) sert
+    `.well-known/assetlinks.json` et `.well-known/apple-app-site-association`
+    (tableaux/structures vides — donc valides mais no-op — tant que
+    `ANDROID_PACKAGE_NAME`/`ANDROID_SHA256_CERT_FINGERPRINT`/`IOS_TEAM_ID`/
+    `IOS_BUNDLE_ID` ne sont pas renseignées) et `GET /promo/:id` (redirige
+    vers `PLAY_STORE_URL`/`APP_STORE_URL` selon le user-agent, ou affiche
+    une page d'attente tant qu'aucun n'est configuré — jamais la promo).
+    6 nouvelles variables dans `.env.example`, toutes vides, aucune
+    requise au démarrage (contrairement à `JWT_SECRET`).
+    **Point d'attention à vérifier en priorité** : `AppLinksController`
+    partage le chemin `/promo/:id` avec `PromoController` (l'API JSON de
+    l'app, sans restriction de host) — les deux ne se distinguent que par
+    le header `Host`. `AppLinksModule` est enregistré *avant* `PromoModule`
+    dans `app.module.ts` à dessein (Express/Nest essaient les routes dans
+    l'ordre d'enregistrement) ; non vérifié par un test d'intégration réel
+    (`app-links.controller.spec.ts` teste la logique en isolation, pas le
+    routage NestJS complet) — à confirmer avec `npm run start:dev` +
+    `curl -H "Host: promo.echango.com" http://localhost:3000/promo/xyz`
+    avant de considérer ce point terminé.
+  - **Mobile** : intent-filter App Links ajouté dans
+    `android/app/src/main/AndroidManifest.xml` (`autoVerify`, host
+    `promo.echango.com`, pathPrefix `/promo`) — sans risque à activer dès
+    maintenant, la vérification échoue simplement tant qu'`assetlinks.json`
+    est vide. `ios/Runner/Runner.entitlements` créé (Associated Domains)
+    mais **pas encore relié au projet Xcode** (nécessite Xcode/Mac, absent
+    de cet environnement de dev) — voir doc.
+  - **Corrigé au passage** : `Info.plist` n'avait que
+    `NSLocationWhenInUseUsageDescription` — `NSCameraUsageDescription` et
+    `NSPhotoLibraryUsageDescription` manquaient alors que `image_picker`
+    est utilisé pour la caméra ET la galerie (`PhotoPickerField`) ; sans
+    ces clés, iOS **crashe** l'app dès la première demande de permission
+    caméra/galerie (pas juste un rejet de review, un vrai crash en test).
+  - **Préalable bloquant documenté mais pas fait** : `applicationId`
+    encore `com.example.echango_promo` (défaut Flutter jamais changé) — à
+    fixer définitivement avant de générer un certificat de signature ou
+    créer une fiche store (le changer après publication casse les mises à
+    jour). Procédure recommandée (`package rename`) dans le doc.
+  - **Suggéré, pas fait** : les deux stores exigent une politique de
+    confidentialité (URL) — l'app collecte position GPS optionnelle,
+    photo, numéro de téléphone ; à rédiger (je peux en préparer un premier
+    jet factuel si demandé, ce n'est pas un texte juridique que je dois
+    produire sans qu'on me le demande explicitement).
+  - **Non exécuté dans mon environnement** : `npm run build`/`npm test`
+    côté backend (nouveau `app-links.controller.spec.ts`), `flutter
+    analyze` côté mobile (fichiers de config natifs modifiés, pas de code
+    Dart).

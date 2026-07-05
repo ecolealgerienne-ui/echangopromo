@@ -6,10 +6,12 @@ import 'package:go_router/go_router.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/models/auth_session.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../shared/validators/pin_validator.dart';
 import '../../shared/widgets/commercant_fields_form.dart';
 import '../../shared/widgets/error_text.dart';
+import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/loading_button.dart';
 import '../../../providers/core_providers.dart';
 
@@ -48,8 +50,9 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
   }
 
   Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate() || _communeId == null) {
-      setState(() => _error = _communeId == null ? 'Commune requise' : null);
+      setState(() => _error = _communeId == null ? l10n.communeRequired : null);
       return;
     }
 
@@ -82,7 +85,11 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
           );
       if (mounted) context.go('/commercant/dashboard');
     } catch (error) {
-      setState(() => _error = extractApiErrorMessage(error, fallback: 'Inscription impossible.'));
+      setState(() => _error = extractApiErrorMessage(
+            error,
+            fallback: l10n.registerFailed,
+            locale: Localizations.localeOf(context),
+          ));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -90,8 +97,12 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('Créer un compte commerçant')),
+      appBar: AppBar(
+        title: Text(l10n.registerTitle),
+        actions: const [LanguageSwitcherButton()],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -118,24 +129,23 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
               const SizedBox(height: 12),
               TextFormField(
                 controller: _pinController,
-                decoration: const InputDecoration(labelText: 'Choisissez un code PIN (4-6 chiffres)'),
+                decoration: InputDecoration(labelText: l10n.choosePinLabel),
                 keyboardType: TextInputType.number,
                 obscureText: true,
                 maxLength: 6,
-                validator: validatePin,
+                validator: validatePin(context),
               ),
               TextFormField(
                 controller: _pinConfirmController,
-                decoration: const InputDecoration(labelText: 'Confirmez le code PIN'),
+                decoration: InputDecoration(labelText: l10n.confirmPinLabel),
                 keyboardType: TextInputType.number,
                 obscureText: true,
                 maxLength: 6,
-                validator: (v) =>
-                    (v != _pinController.text) ? 'Les deux codes PIN ne correspondent pas' : null,
+                validator: (v) => (v != _pinController.text) ? l10n.pinMismatch : null,
               ),
               ErrorText(_error),
               const SizedBox(height: 16),
-              LoadingButton(loading: _loading, onPressed: _submit, label: "S'inscrire"),
+              LoadingButton(loading: _loading, onPressed: _submit, label: l10n.registerSubmit),
             ],
           ),
         ),

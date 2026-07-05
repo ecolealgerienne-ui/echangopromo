@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../domain/models/commune.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Sélection guidée wilaya → commune (specs §3.1 : "pour les grandes villes,
 /// sélection affinée par commune") plutôt qu'une liste plate de communes —
@@ -40,6 +41,7 @@ class _CommuneCascadeFieldState extends State<CommuneCascadeField> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final wilayas = widget.communes.map((c) => c.wilaya).toSet().toList()..sort();
     final communesForWilaya =
         widget.communes.where((c) => c.wilaya == _wilaya).toList();
@@ -49,7 +51,7 @@ class _CommuneCascadeFieldState extends State<CommuneCascadeField> {
       children: [
         DropdownButtonFormField<String>(
           initialValue: _wilaya,
-          decoration: const InputDecoration(labelText: 'Wilaya'),
+          decoration: InputDecoration(labelText: l10n.wilayaLabel),
           items: [
             for (final wilaya in wilayas) DropdownMenuItem(value: wilaya, child: Text(wilaya)),
           ],
@@ -61,7 +63,7 @@ class _CommuneCascadeFieldState extends State<CommuneCascadeField> {
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
           initialValue: widget.selectedCommuneId,
-          decoration: const InputDecoration(labelText: 'Commune'),
+          decoration: InputDecoration(labelText: l10n.communeLabel),
           items: [
             for (final commune in communesForWilaya)
               DropdownMenuItem(value: commune.id, child: Text(commune.nom)),

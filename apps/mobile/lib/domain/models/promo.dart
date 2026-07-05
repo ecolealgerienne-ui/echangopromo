@@ -54,17 +54,4 @@ class Promo {
   bool get isExpired =>
       lifecycleStatus == PromoLifecycleStatus.expiree ||
       (dateFin != null && dateFin!.isBefore(DateTime.now()));
-
-  String get lifecycleLabel {
-    switch (lifecycleStatus) {
-      case PromoLifecycleStatus.brouillon:
-        return 'Brouillon';
-      case PromoLifecycleStatus.publiee:
-        return isExpired ? 'Expirée' : 'Publiée';
-      case PromoLifecycleStatus.arretee:
-        return 'Arrêtée';
-      case PromoLifecycleStatus.expiree:
-        return 'Expirée';
-    }
-  }
 }
