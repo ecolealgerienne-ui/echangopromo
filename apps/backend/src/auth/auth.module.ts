@@ -29,6 +29,11 @@ import { RolesGuard } from './guards/roles.guard';
     }),
   ],
   providers: [AuthService, JwtAuthGuard, RolesGuard],
-  exports: [AuthService, JwtModule, JwtAuthGuard, RolesGuard],
+  // TypeOrmModule réexporté pour la même raison que JwtModule : JwtAuthGuard
+  // dépend de Repository<Agent>/Repository<Admin> (vérif tokenVersion), qui
+  // doivent rester résolvables dans tout module import ant AuthModule (ex.
+  // StorageModule) — sinon `UnknownDependenciesException` dès qu'un module
+  // ne les fournit pas lui-même.
+  exports: [AuthService, JwtModule, TypeOrmModule, JwtAuthGuard, RolesGuard],
 })
 export class AuthModule {}
