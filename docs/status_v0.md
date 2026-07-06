@@ -952,5 +952,32 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     etc.).
   - **Confirmé par l'utilisateur sur le VPS** : après renommage en
     `postgres_promo`, migrations passées, backend démarré sans erreur.
-    Reste à confirmer : seeds admin/communes et routage Traefik
-    (`curl https://promo.echango.com/promo`).
+
+- **2026-07-05 (suite) : les seeds échouaient encore (`relation "admin"
+  does not exist`) — cause distincte des incidents précédents, la vraie
+  découverte de cette session de déploiement.** Aucun fichier de migration
+  TypeORM n'avait jamais été commité dans le repo (`apps/backend/src/migrations/`
+  inexistant côté git, confirmé par `git log --all`), alors que
+  `docs/status_v0.md`/`CLAUDE.md` documentaient déjà des migrations comme
+  si elles existaient. `migration:run` s'exécutait "avec succès" sur le VPS
+  (base neuve) sans rien créer, faute de migration à appliquer — d'où un
+  backend qui démarre proprement mais une base totalement vide. La base de
+  dev locale de l'utilisateur avait ses tables, mais via 2 fichiers de
+  migration générés localement à un moment donné et jamais poussés (dette
+  silencieuse : "ça marche chez moi" masquait l'absence complète côté
+  dépôt).
+  - **Fix** : les 2 migrations locales préexistantes
+    (`1783192047695-InitialSchema.ts`,
+    `1783213583514-AddCommercantTokenVersionAndIndexes.ts`) commitées et
+    poussées. Une 3ᵉ migration générée par erreur au passage (diff contre
+    une base vide, donc un doublon complet du schéma) a été détectée et
+    supprimée avant commit — testée en conditions réelles : les 2
+    migrations d'origine créent bien tout le schéma sans erreur
+    (`admin`, `zone`, `agent`, `commercant`, `commune`, `promo`, `report`,
+    `audit_log`, toutes les FK), la 3ᵉ plantait sur `relation "zone"
+    already exists` en tentant de recréer ce que la 1ʳᵉ avait déjà créé.
+  - Sur le VPS : migrations appliquées, `\dt` confirme toutes les tables,
+    `npm run seed:admin:prod` et `seed:communes:prod` **exécutés avec
+    succès** (premier compte admin créé, 35 communes de Djelfa insérées).
+  - Reste à confirmer : routage Traefik (`curl
+    https://promo.echango.com/promo`).
