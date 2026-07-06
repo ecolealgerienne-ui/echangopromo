@@ -979,5 +979,7 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
   - Sur le VPS : migrations appliquées, `\dt` confirme toutes les tables,
     `npm run seed:admin:prod` et `seed:communes:prod` **exécutés avec
     succès** (premier compte admin créé, 35 communes de Djelfa insérées).
-  - Reste à confirmer : routage Traefik (`curl
-    https://promo.echango.com/promo`).
+  - **Routage Traefik confirmé** : `curl -I https://promo.echango.com/promo`
+    → `HTTP/2 200`, headers de sécurité présents (HSTS, CSP-adjacents,
+    rate-limit visible). **Déploiement backend + DB sur le VPS
+    fonctionnel de bout en bout.**
