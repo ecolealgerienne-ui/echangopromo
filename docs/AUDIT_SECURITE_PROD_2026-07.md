@@ -283,3 +283,120 @@ Voir A03 (chaîne d'approvisionnement) et A01 (SSRF) ci-dessus — ces deux
 thèmes cités dans la demande initiale sont traités dans les catégories où
 l'OWASP 2021 les classe réellement, pour éviter la confusion avec la
 liste 2025 non confirmée.
+
+---
+
+## Phase 3 — Sécurité IA / LLM
+
+[Statut] **Sans objet.** Aucune intégration LLM/chatbot/IA générative dans
+ce backend (`grep` sur openai/anthropic/langchain/chatbot : aucun
+résultat). Rien à évaluer sur cette phase pour ce projet.
+
+---
+
+## Phase 4 — Code, cookies, formulaires, API
+
+### Cookies
+
+[Statut] **Sans objet.** Aucun cookie utilisé (`grep` sur
+`cookie-parser`/`res.cookie`/`Set-Cookie` : aucun résultat) — l'app mobile
+authentifie chaque requête par `Authorization: Bearer <JWT>`, pas de
+session serveur ni de cookie. Les critères HttpOnly/Secure/SameSite ne
+s'appliquent pas.
+
+### JavaScript / formulaires web
+
+[Statut] **Sans objet.** Pas de frontend web en V0 (décision produit
+actée) — la seule page HTML servie (`AppLinksController`, page d'attente
+App Links) est statique, sans formulaire ni JavaScript, sans entrée
+utilisateur reflétée. Source maps, SRI, localStorage : non pertinents côté
+backend (à réévaluer côté mobile Flutter si un jour un frontend web admin
+est ajouté).
+
+### API Security
+
+[Statut] **Correct.**
+
+- **Authentification par endpoint** : vérifié sur tous les contrôleurs
+  (`grep @UseGuards` sur chaque `*.controller.ts`). Les endpoints sans
+  guard (`commune.controller.ts`, `report.controller.ts`, une partie de
+  `promo.controller.ts`) sont **intentionnellement publics** par design
+  produit (liste des communes pour le sélecteur cascade, signalement
+  anonyme, liste des promos actives pour le client) — cohérent avec les
+  specs et déjà couvert par le rate-limiting IP (`STRICT_THROTTLE` sur
+  `/report`, CLAUDE.md règle #7). Pas un oubli.
+- **Rate limiting** : présent globalement (60/min) + strict (5/min) sur
+  les endpoints sensibles — sous réserve du fix `trust proxy` (A02) pour
+  qu'il isole vraiment chaque client.
+- **Exposition excessive de données** : `ClassSerializerInterceptor` +
+  `@Exclude()` sur les champs sensibles des entités (`passwordHash`,
+  `pinHash`, `photoKey` agent — finding historique `AUDIT_V0.md` déjà
+  corrigé). DTOs de sortie dédiés (`toClientJson`) plutôt que des spreads
+  d'entité brute.
+- **Versioning API** : aucun (pas de `/v1/`) — acceptable en V0 pilote à
+  client mobile unique et maîtrisé (pas de consommateurs tiers externes à
+  faire cohabiter avec un changement de contrat).
+- **GraphQL** : sans objet, API REST uniquement.
+
+---
+
+## Phase 5 — Rapport final
+
+### Résumé exécutif
+
+- **Score de sécurité global estimé** : 88/100 — base déjà solide grâce
+  aux audits précédents (`AUDIT_V0.md`, `AUDIT_V1.md`), un problème réel
+  élevé trouvé et corrigé dans cette session, le reste étant de la dette
+  mineure déjà connue et documentée.
+- **Vulnérabilités** : Critique : 0 | Élevé : 1 (corrigé) | Moyen : 0 |
+  Faible : 2 | Info : plusieurs points déjà couverts, listés pour mémoire.
+- **Couverture OWASP Top 10:2021** : 9/9 catégories applicables revues
+  (A06 Vulnerable Components fusionné avec A03 par choix éditorial de ce
+  rapport — pas une catégorie 2021 séparée).
+- **Top risques ayant nécessité une action** :
+  1. `trust proxy` manquant → rate-limiting par IP non fonctionnel derrière
+     Traefik — **corrigé** (`main.ts`, commit `544f9a0`).
+  2. `package-lock.json` désynchronisé — **corrigé** en amont de cet audit
+     (voir `docs/status_v0.md`, incident de déploiement du 2026-07-05).
+  3. Aucun 3ᵉ risque nécessitant une action immédiate.
+
+### Tableau des vulnérabilités
+
+| # | Vulnérabilité | OWASP 2021 | Criticité | Endpoint/Fichier | Statut |
+|---|---|---|---|---|---|
+| 1 | `trust proxy` absent — rate-limit IP partagé | A02 | 🟠 Élevé | `src/main.ts` | ✅ Corrigé |
+| 2 | `package-lock.json` désync (`typeorm` 1.0.0 vs 0.3.20) | A06/A03 | 🟠 Élevé (bloquant déploiement) | `apps/backend/package-lock.json` | ✅ Corrigé (avant cet audit) |
+| 3 | `SALT_ROUNDS` bcrypt à 10 plutôt que 12 | A04 | 🟢 Faible | `src/auth/auth.service.ts:6` | À planifier (non urgent) |
+| 4 | Pas de `helmet` côté NestJS (headers posés par Traefik uniquement) | A02 | 🟢 Faible | `src/main.ts` | À planifier (défense en profondeur) |
+| 5 | TLS réel (version/ciphers) non vérifié — limite d'environnement | A04 | 🔵 Info | externe | À vérifier par l'utilisateur (SSL Labs) |
+| 6 | MX/TXT/SPF/DMARC non vérifiés — limite d'environnement | A02 | 🔵 Info | DNS | À vérifier par l'utilisateur |
+| 7 | Chemins exposés (`.env`, `.git`, etc.) non testés — connectivité sandbox dégradée | A02 | 🔵 Info | externe | À vérifier par l'utilisateur (script fourni Phase 1) |
+
+### Feuille de route de remédiation
+
+- 🔴 Immédiat (< 24h) : aucun risque critique actif.
+- 🟠 Urgent (< 1 semaine) : déployer le fix `trust proxy` sur le VPS
+  (`git pull` + rebuild `backend`, déjà commité) ; lancer le script de
+  vérification des chemins exposés (Phase 1) depuis une machine avec
+  connectivité normale.
+- 🟡 Important (< 1 mois) : vérifier la config TLS réelle sur SSL Labs ;
+  vérifier SPF/DMARC/MX pour `echango.com` (protection anti-phishing du
+  domaine, indépendant de cette app mais bon réflexe une fois le domaine
+  en prod publique).
+- 🟢 Amélioration (< 1 trimestre) : `SALT_ROUNDS` bcrypt 10→12 ; ajouter
+  `helmet` en défense en profondeur côté NestJS ; ajouter une étape CI
+  `npm ci` pour détecter les désyncs de lock file avant déploiement.
+
+### Bonnes pratiques déjà en place (à ne pas casser)
+
+- Rate limiting global + strict, révocation JWT par `tokenVersion`,
+  validation stricte de `JWT_SECRET` au démarrage, hashing bcrypt,
+  `synchronize: false` figé, `AuditLogModule` branché, DTOs de sortie
+  dédiés, POST policy S3 avec vérification de contenu a posteriori,
+  headers de sécurité via Traefik (HSTS preload, X-Frame-Options,
+  Permissions-Policy).
+- Recommandation DevSecOps : les incidents de cette session
+  (`package-lock.json`, migration jamais commitée) montrent la valeur d'un
+  pipeline CI minimal (`npm ci && npm run build && npm run lint && npm
+  run test`) qui aurait détecté les deux avant le déploiement — actuellement
+  aucun CI n'est configuré (`.github/workflows` absent du repo).
