@@ -114,7 +114,6 @@ export class PromoService {
   async create(commercantId: string, dto: CreatePromoDto): Promise<Promo> {
     await this.commercantService.findByIdOrFail(commercantId);
     this.assertPriceOrder(dto.prixAvant, dto.prixApres);
-    await this.storageService.assertValidImage(dto.photoKey);
 
     const base = {
       commercantId,
@@ -359,7 +358,6 @@ export class PromoService {
     const prixAvant = dto.prixAvant ?? Number(promo.prixAvant);
     const prixApres = dto.prixApres ?? Number(promo.prixApres);
     this.assertPriceOrder(prixAvant, prixApres);
-    if (dto.photoKey) await this.storageService.assertValidImage(dto.photoKey);
 
     Object.assign(promo, {
       ...dto,

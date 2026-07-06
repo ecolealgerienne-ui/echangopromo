@@ -14,7 +14,6 @@ import {
   PromoLifecycleStatus,
   VISIBLE_MODERATION_STATUSES,
 } from '../promo/entities/promo.entity';
-import { StorageService } from '../storage/storage.service';
 import { CommercantView } from './entities/commercant-view.entity';
 import {
   Commercant,
@@ -38,7 +37,6 @@ export class CommercantService {
     private readonly views: Repository<CommercantView>,
     @InjectRepository(Promo) private readonly promos: Repository<Promo>,
     private readonly authService: AuthService,
-    private readonly storageService: StorageService,
   ) {}
 
   private async assertPhoneAvailable(telephone: string): Promise<void> {
@@ -58,7 +56,6 @@ export class CommercantService {
    */
   async selfRegister(dto: RegisterCommercantDto): Promise<Commercant> {
     await this.assertPhoneAvailable(dto.telephone);
-    if (dto.photoKey) await this.storageService.assertValidImage(dto.photoKey);
 
     const { pin, ...rest } = dto;
     return this.commercants.save(
@@ -79,7 +76,6 @@ export class CommercantService {
     zoneId: string | null,
   ): Promise<Commercant> {
     await this.assertPhoneAvailable(dto.telephone);
-    if (dto.photoKey) await this.storageService.assertValidImage(dto.photoKey);
 
     return this.commercants.save(
       this.commercants.create({
@@ -159,7 +155,6 @@ export class CommercantService {
     dto: UpdateCommercantDto,
   ): Promise<Commercant> {
     const commercant = await this.findByIdOrFail(commercantId);
-    if (dto.photoKey) await this.storageService.assertValidImage(dto.photoKey);
     Object.assign(commercant, dto);
     return this.commercants.save(commercant);
   }

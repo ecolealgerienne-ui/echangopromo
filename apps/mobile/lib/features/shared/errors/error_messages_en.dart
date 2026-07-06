@@ -24,6 +24,7 @@ const Map<String, String> errorMessagesEn = {
   'DEVICE_ID_MISSING': 'Missing device identifier. Restart the app.',
 
   'STORAGE_INVALID_IMAGE': 'The uploaded file is not a valid image. Try again with a photo.',
+  'STORAGE_FILE_TOO_LARGE': 'The photo is too large. Try again with another photo.',
 
   'PROMO_NOT_FOUND': 'Promo not found.',
   'PROMO_NOT_OWNED_BY_COMMERCANT': 'This promo does not belong to this merchant.',

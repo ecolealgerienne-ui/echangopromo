@@ -983,3 +983,40 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     → `HTTP/2 200`, headers de sécurité présents (HSTS, CSP-adjacents,
     rate-limit visible). **Déploiement backend + DB sur le VPS
     fonctionnel de bout en bout.**
+
+- **2026-07-06 : audit de sécurité prod (`docs/AUDIT_SECURITE_PROD_2026-07.md`)
+  et découverte d'une incompatibilité OVH bloquant l'upload de photos.**
+  - Audit mené par phases (reconnaissance passive, revue statique OWASP
+    Top 10:2021, LLM sans objet, API/cookies, rapport final) — 1 problème
+    réel trouvé et corrigé : `main.ts` ne configurait pas `app.set('trust
+    proxy', 1)`, donc `req.ip` valait l'IP interne de Traefik pour toutes
+    les requêtes derrière le reverse proxy, faisant partager le même
+    compteur de rate-limiting (`@nestjs/throttler`) à tous les
+    utilisateurs au lieu d'isoler chaque IP réelle.
+  - **Upload de photo cassé en prod, découvert au premier test réel** :
+    OVH (S3 utilisé en prod) renvoie `501 Not Implemented — "POST Object
+    is disabled on this deployment"` sur l'API S3 "POST Object" — la POST
+    policy pré-signée (choisie initialement pour que `content-length-range`
+    soit imposé par S3 lui-même, `AUDIT_V1.md`) ne fonctionne donc pas sur
+    ce fournisseur. Un simple PUT pré-signé, lui, fonctionne (testé et
+    confirmé), mais perd cette garantie de taille imposée par S3.
+  - **Décision produit (utilisateur)** : upload proxifié par le backend
+    plutôt qu'un PUT pré-signé. Le fichier transite par
+    `POST /storage/upload` (`FileInterceptor`), le backend valide taille
+    (5 Mo) et format (magic bytes, sur les octets déjà en mémoire) *avant*
+    tout envoi à S3 via `PutObject` — remplace l'ancienne vérification a
+    posteriori (`assertValidImage`, un `GetObject` après upload, retirée
+    des 5 sites d'appel dans `promo.service.ts`/`commercant.service.ts`
+    car devenue inutile : un fichier invalide n'atteint plus jamais S3).
+    Mobile (`storage_api.dart`) simplifié en conséquence — un seul Dio
+    authentifié, plus de POST direct vers S3.
+  - Nouveau code d'erreur `STORAGE_FILE_TOO_LARGE` ajouté dans les 3
+    mappings mobile (`error_messages_{fr,en,ar}.dart`) dans le même commit
+    (CLAUDE.md règle #26).
+  - Dépendances backend nettoyées : `@aws-sdk/s3-presigned-post` et
+    `@aws-sdk/s3-request-presigner` retirées (plus utilisées),
+    `@types/multer` ajouté (typage `Express.Multer.File`).
+  - **À faire côté utilisateur** : `npm install` local (nouvelle
+    dépendance `@types/multer`, régénère le lock file), `npm run build`/
+    `lint`, puis déployer sur le VPS (`git pull` + rebuild `backend`) et
+    retester un vrai upload de photo depuis l'app mobile.

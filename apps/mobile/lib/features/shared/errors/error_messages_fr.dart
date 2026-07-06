@@ -38,6 +38,7 @@ const Map<String, String> errorMessagesFr = {
   'DEVICE_ID_MISSING': "Identifiant d'appareil manquant. Redémarrez l'application.",
 
   'STORAGE_INVALID_IMAGE': "Le fichier envoyé n'est pas une image valide. Réessayez avec une photo.",
+  'STORAGE_FILE_TOO_LARGE': 'La photo est trop volumineuse. Réessayez avec une autre photo.',
 
   'PROMO_NOT_FOUND': 'Promotion introuvable.',
   'PROMO_NOT_OWNED_BY_COMMERCANT': "Cette promotion n'appartient pas à ce commerçant.",

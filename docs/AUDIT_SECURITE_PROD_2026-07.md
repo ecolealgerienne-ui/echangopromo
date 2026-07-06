@@ -262,11 +262,23 @@ qu'il soit réellement per-IP).
 
 ### A08:2021 — Software and Data Integrity Failures
 
-[Statut] **Correct.** 🟢 Upload S3 via POST policy avec
-`content-length-range` (5 Mo max) + vérification a posteriori des magic
-bytes (`storage.service.ts:100-116`) — un `Content-Type` déclaré à la
-signature n'engage à rien sur le contenu réel, la vérification après coup
-comble ce point déjà identifié dans `AUDIT_V1.md`.
+[Statut] **Correct, architecture d'upload changée après cet audit.** 🟢
+
+Ce rapport décrivait initialement une POST policy S3 pré-signée avec
+`content-length-range` imposé par S3 — **erroné en pratique** : testé en
+conditions réelles juste après cet audit, OVH (le S3 utilisé en prod)
+renvoie `501 Not Implemented — "POST Object is disabled on this
+deployment"` sur cette API, qui n'est donc pas portable entre fournisseurs
+S3. Remplacé par un **upload proxifié par le backend** : le fichier
+transite par `POST /storage/upload` (`storage.controller.ts`,
+`FileInterceptor`), taille et format (magic bytes) validés sur les octets
+déjà en mémoire **avant** tout envoi à S3 via `PutObject`
+(`storage.service.ts:uploadPhoto`) — la garantie de contenu valide est
+désormais appliquée par notre propre code plutôt que déléguée à une
+fonctionnalité S3 qui s'est révélée non disponible chez ce fournisseur.
+L'ancienne vérification a posteriori (`assertValidImage`, un `GetObject`
+après upload) est devenue inutile et a été retirée : un fichier invalide
+n'atteint plus jamais S3.
 
 ### A09:2021 — Security Logging and Monitoring Failures
 

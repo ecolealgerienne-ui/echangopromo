@@ -24,6 +24,7 @@ const Map<String, String> errorMessagesAr = {
   'DEVICE_ID_MISSING': 'معرّف الجهاز مفقود. أعد تشغيل التطبيق.',
 
   'STORAGE_INVALID_IMAGE': 'الملف المرسل ليس صورة صالحة. أعد المحاولة بصورة.',
+  'STORAGE_FILE_TOO_LARGE': 'الصورة كبيرة جدًا. أعد المحاولة بصورة أخرى.',
 
   'PROMO_NOT_FOUND': 'العرض غير موجود.',
   'PROMO_NOT_OWNED_BY_COMMERCANT': 'هذا العرض لا ينتمي إلى هذا التاجر.',
