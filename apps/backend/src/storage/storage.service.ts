@@ -94,6 +94,12 @@ export class StorageService {
         Key: key,
         Body: buffer,
         ContentType: `image/${format}`,
+        // OVH n'implémente ni les bucket policies (NotImplemented sur
+        // PutBucketPolicy) ni les requêtes anonymes en style path (400 sur
+        // GET sans ACL) — seul l'ACL par objet `public-read` (testé et
+        // confirmé) rend la photo accessible via `buildPublicUrl`
+        // (style virtual-hosted, voir plus bas).
+        ACL: 'public-read',
       }),
     );
     return key;

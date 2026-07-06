@@ -1039,8 +1039,19 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     uniquement dans `.env.production` pour OVH — le client S3 authentifié
     garde `forcePathStyle: true` pour les opérations PUT/DELETE,
     compatible MinIO en dev local, seule l'URL publique change de style).
-  - **Reste à faire côté utilisateur** : appliquer la policy de lecture
-    publique sur le bucket OVH (`s3:GetObject`, `Principal: "*"` — jamais
-    fait jusqu'ici malgré plusieurs rappels), ajouter
-    `S3_PUBLIC_URL_VIRTUAL_HOSTED=true` à `.env.production` sur le VPS,
-    puis redéployer et re-tester l'affichage d'une photo.
+  - **Bucket policy indisponible sur OVH, ni via la console ni via l'API**
+    : pas d'onglet "Confidentialité" dans la console (onglets disponibles :
+    Informations générales/Objets/Réplication/Lifecycle), et
+    `PutBucketPolicyCommand` renvoie `NotImplemented` (testé directement
+    en script). Solution retenue : **ACL par objet** (`ACL: 'public-read'`
+    sur chaque `PutObjectCommand`) — testée isolément et confirmée (`curl`
+    anonyme sur un objet avec cet ACL → `200 OK`).
+  - **Fix appliqué** : `StorageService.uploadPhoto` envoie désormais
+    `ACL: 'public-read'` à chaque upload — les photos sont publiques dès
+    l'upload, sans dépendre d'une config bucket-level indisponible chez ce
+    fournisseur. Les photos uploadées avant ce fix (tests précédents)
+    restent privées et doivent être re-uploadées pour être visibles.
+  - **Reste à faire côté utilisateur** : ajouter
+    `S3_PUBLIC_URL_VIRTUAL_HOSTED=true` à `.env.production` sur le VPS
+    (si pas déjà fait), redéployer, puis re-tester un upload de photo
+    depuis l'app (une nouvelle, pas une ancienne).
