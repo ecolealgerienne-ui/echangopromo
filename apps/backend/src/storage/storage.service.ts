@@ -99,11 +99,30 @@ export class StorageService {
     return key;
   }
 
+  /**
+   * OVH rejette les requêtes anonymes en style "path" (`endpoint/bucket/clé`)
+   * avec `400 InvalidRequest — "Not S3 request"` — découvert au premier test
+   * réel d'affichage de photo. Seul le style "virtual-hosted"
+   * (`bucket.endpoint/clé`) fonctionne pour un accès public non signé.
+   * `forcePathStyle: true` sur le client S3 (voir constructeur) reste
+   * nécessaire pour les opérations authentifiées (PUT/DELETE, compatibles
+   * MinIO en dev local) — seule cette URL construite pour un accès public
+   * anonyme doit basculer en virtual-hosted, activé via
+   * `S3_PUBLIC_URL_VIRTUAL_HOSTED=true` (mis à `true` uniquement pour OVH
+   * en prod, laissé à `false` par défaut pour MinIO en dev local).
+   */
   buildPublicUrl(key: string): string {
     if (this.cdnBaseUrl) {
       return `${this.cdnBaseUrl.replace(/\/$/, '')}/${key}`;
     }
-    return `${this.configService.get<string>('S3_ENDPOINT', '')}/${this.bucket}/${key}`;
+    const endpoint = this.configService.get<string>('S3_ENDPOINT', '');
+    const useVirtualHostedStyle =
+      this.configService.get<string>('S3_PUBLIC_URL_VIRTUAL_HOSTED', 'false') === 'true';
+    if (useVirtualHostedStyle) {
+      const host = endpoint.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      return `https://${this.bucket}.${host}/${key}`;
+    }
+    return `${endpoint}/${this.bucket}/${key}`;
   }
 
   async deleteObject(key: string): Promise<void> {

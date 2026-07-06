@@ -1020,3 +1020,27 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     dépendance `@types/multer`, régénère le lock file), `npm run build`/
     `lint`, puis déployer sur le VPS (`git pull` + rebuild `backend`) et
     retester un vrai upload de photo depuis l'app mobile.
+
+- **2026-07-06 (suite) : upload OK, mais photo non affichée — 2ᵉ
+  incompatibilité OVH trouvée (style d'URL).** Après déploiement du fix
+  précédent, l'upload fonctionnait (fichier bien présent dans le bucket,
+  vérifié via la console OVH), mais la photo ne s'affichait jamais dans
+  l'app. Diagnostic par test `curl` direct de l'URL publique construite
+  par `buildPublicUrl` :
+  - Style "path" (`s3.gra.io.cloud.ovh.net/echango-promo/<clé>`, ce que le
+    code construisait) → `400 InvalidRequest — "Not S3 request"` : **OVH
+    rejette purement et simplement les requêtes anonymes en style path.**
+  - Style "virtual-hosted" (`echango-promo.s3.gra.io.cloud.ovh.net/<clé>`)
+    → `403 AccessDenied` propre (URL correcte, mais lecture publique
+    jamais activée sur le bucket — action restée en attente depuis la
+    configuration S3 initiale).
+  - **Fix code** : `buildPublicUrl` bascule en style virtual-hosted quand
+    `S3_PUBLIC_URL_VIRTUAL_HOSTED=true` (nouvelle variable, à `true`
+    uniquement dans `.env.production` pour OVH — le client S3 authentifié
+    garde `forcePathStyle: true` pour les opérations PUT/DELETE,
+    compatible MinIO en dev local, seule l'URL publique change de style).
+  - **Reste à faire côté utilisateur** : appliquer la policy de lecture
+    publique sur le bucket OVH (`s3:GetObject`, `Principal: "*"` — jamais
+    fait jusqu'ici malgré plusieurs rappels), ajouter
+    `S3_PUBLIC_URL_VIRTUAL_HOSTED=true` à `.env.production` sur le VPS,
+    puis redéployer et re-tester l'affichage d'une photo.
