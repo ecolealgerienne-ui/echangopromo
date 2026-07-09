@@ -358,13 +358,21 @@ export class PromoService {
     const prixAvant = dto.prixAvant ?? Number(promo.prixAvant);
     const prixApres = dto.prixApres ?? Number(promo.prixApres);
     this.assertPriceOrder(prixAvant, prixApres);
+    const previousPhotoKey = promo.photoKey;
 
     Object.assign(promo, {
       ...dto,
       prixAvant: dto.prixAvant?.toFixed(2) ?? promo.prixAvant,
       prixApres: dto.prixApres?.toFixed(2) ?? promo.prixApres,
     });
-    return this.promos.save(promo);
+    const saved = await this.promos.save(promo);
+    // Remplacement de photo : l'ancienne devient orpheline dans S3 si on ne
+    // la supprime pas explicitement (buildKey génère toujours une nouvelle
+    // clé UUID, jamais un remplacement en place).
+    if (dto.photoKey && previousPhotoKey && dto.photoKey !== previousPhotoKey) {
+      await this.storageService.deleteObject(previousPhotoKey);
+    }
+    return saved;
   }
 
   /** Une promo est censée être une réduction — le prix après doit être strictement inférieur. */

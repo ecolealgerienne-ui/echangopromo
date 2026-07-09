@@ -14,6 +14,7 @@ import {
   PromoLifecycleStatus,
   VISIBLE_MODERATION_STATUSES,
 } from '../promo/entities/promo.entity';
+import { StorageService } from '../storage/storage.service';
 import { CommercantView } from './entities/commercant-view.entity';
 import {
   Commercant,
@@ -37,6 +38,7 @@ export class CommercantService {
     private readonly views: Repository<CommercantView>,
     @InjectRepository(Promo) private readonly promos: Repository<Promo>,
     private readonly authService: AuthService,
+    private readonly storageService: StorageService,
   ) {}
 
   private async assertPhoneAvailable(telephone: string): Promise<void> {
@@ -155,8 +157,16 @@ export class CommercantService {
     dto: UpdateCommercantDto,
   ): Promise<Commercant> {
     const commercant = await this.findByIdOrFail(commercantId);
+    const previousPhotoKey = commercant.photoKey;
     Object.assign(commercant, dto);
-    return this.commercants.save(commercant);
+    const saved = await this.commercants.save(commercant);
+    // Remplacement de photo : l'ancienne devient orpheline dans S3 si on ne
+    // la supprime pas explicitement (buildKey génère toujours une nouvelle
+    // clé UUID, jamais un remplacement en place).
+    if (dto.photoKey && previousPhotoKey && dto.photoKey !== previousPhotoKey) {
+      await this.storageService.deleteObject(previousPhotoKey);
+    }
+    return saved;
   }
 
   async findByIdOrFail(id: string): Promise<Commercant> {
