@@ -1093,10 +1093,16 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     (login, dashboard, file de modération, file de vérification registre,
     gestion agents + création, gestion zones + transfert de zone entre
     agents), routes protégées par rôle (`router.dart`, règle CLAUDE.md
-    #22). **Décision produit** : pas d'entrée admin dans le menu public
-    "espace pro" (commerçant/agent uniquement) — accès uniquement par
-    l'URL directe `/admin`, pour ne pas rendre ce point d'entrée
-    découvrable depuis l'app grand public.
+    #22). **Décision produit, affinée après discussion** : pas d'entrée
+    admin dans le menu public "espace pro" ni dans un menu quelconque —
+    le point d'entrée est **caché dans l'écran de login commerçant
+    existant** (`commercant_login_screen.dart`) : taper un email au lieu
+    d'un numéro de téléphone dans le champ "Téléphone" (apparence
+    inchangée) bascule ce même écran vers l'authentification admin
+    (email + mot de passe, clavier/validateur/longueur du 2ᵉ champ
+    ajustés dynamiquement, liens spécifiques commerçant masqués). Un seul
+    compte admin en V0, pas de réel enjeu de découvrabilité au-delà de ça
+    (login toujours protégé par mot de passe + rate limiting).
   - **Reste (wave 2, pas demandée pour l'instant)** : rien d'urgent
     identifié au-delà de ce périmètre — l'API couvre déjà tout ce que
     l'UI expose maintenant.

@@ -24,6 +24,7 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
   final _telephoneController = TextEditingController();
   final _pinController = TextEditingController();
   bool _loading = false;
+  bool _isAdminMode = false;
   String? _error;
 
   @override
@@ -33,6 +34,11 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
     super.dispose();
   }
 
+  /// Point d'entrée admin volontairement caché plutôt qu'une entrée de menu
+  /// (un seul compte admin en V0, CLAUDE.md dette connue) : saisir un email
+  /// au lieu d'un numéro de téléphone bascule ce même écran vers
+  /// l'authentification admin (email + mot de passe) sans rien changer à
+  /// l'apparence du champ "téléphone" ni du reste de l'écran commerçant.
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
@@ -42,16 +48,30 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
     });
 
     try {
-      final token = await ref.read(commercantApiProvider).login(
-            telephone: _telephoneController.text.trim(),
-            pin: _pinController.text.trim(),
-          );
-      await ref.read(authControllerProvider.notifier).loginThenResolveId(
-            role: AppRole.commercant,
-            token: token,
-            fetchId: () async => (await ref.read(commercantApiProvider).me()).id,
-          );
-      if (mounted) context.go('/commercant/dashboard');
+      if (_isAdminMode) {
+        final api = ref.read(adminApiProvider);
+        final token = await api.login(
+          email: _telephoneController.text.trim(),
+          password: _pinController.text,
+        );
+        await ref.read(authControllerProvider.notifier).loginThenResolveId(
+              role: AppRole.admin,
+              token: token,
+              fetchId: () async => (await api.me()).id,
+            );
+        if (mounted) context.go('/admin/dashboard');
+      } else {
+        final token = await ref.read(commercantApiProvider).login(
+              telephone: _telephoneController.text.trim(),
+              pin: _pinController.text.trim(),
+            );
+        await ref.read(authControllerProvider.notifier).loginThenResolveId(
+              role: AppRole.commercant,
+              token: token,
+              fetchId: () async => (await ref.read(commercantApiProvider).me()).id,
+            );
+        if (mounted) context.go('/commercant/dashboard');
+      }
     } catch (error) {
       setState(() => _error = extractApiErrorMessage(
             error,
@@ -178,34 +198,46 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
               TextFormField(
                 controller: _telephoneController,
                 decoration: InputDecoration(labelText: l10n.telephoneLabel, hintText: l10n.telephoneHint),
-                keyboardType: TextInputType.phone,
+                // `emailAddress` plutôt que `phone` : un clavier numérique
+                // pur empêcherait de taper le "@" qui déclenche le bascule
+                // admin ci-dessous ; les chiffres restent tapables
+                // normalement sur ce clavier, un numéro de téléphone n'est
+                // donc pas plus difficile à saisir.
+                keyboardType: TextInputType.emailAddress,
+                onChanged: (v) => setState(() => _isAdminMode = v.contains('@')),
                 validator: (v) => (v == null || v.isEmpty) ? l10n.telephoneRequired : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _pinController,
-                decoration: InputDecoration(labelText: l10n.pinLabel),
-                keyboardType: TextInputType.number,
+                decoration: InputDecoration(labelText: _isAdminMode ? l10n.passwordLabel : l10n.pinLabel),
+                keyboardType: _isAdminMode ? TextInputType.visiblePassword : TextInputType.number,
                 obscureText: true,
-                maxLength: 6,
-                validator: validatePin(context),
+                maxLength: _isAdminMode ? null : 6,
+                validator: _isAdminMode
+                    ? (v) => (v == null || v.length < 8) ? l10n.passwordRequired : null
+                    : validatePin(context),
               ),
               ErrorText(_error),
               const SizedBox(height: 16),
               LoadingButton(loading: _loading, onPressed: _submit, label: l10n.loginLabel),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => context.push('/commercant/register'),
-                child: Text(l10n.notRegisteredYet),
-              ),
-              TextButton(
-                onPressed: () => _showForgotPinInfo(context),
-                child: Text(l10n.forgotPin),
-              ),
-              TextButton(
-                onPressed: () => _claim(context),
-                child: Text(l10n.claimAccount),
-              ),
+              // Liens spécifiques au parcours commerçant — sans objet une
+              // fois basculé en mode admin, et inutilement déroutants.
+              if (!_isAdminMode) ...[
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => context.push('/commercant/register'),
+                  child: Text(l10n.notRegisteredYet),
+                ),
+                TextButton(
+                  onPressed: () => _showForgotPinInfo(context),
+                  child: Text(l10n.forgotPin),
+                ),
+                TextButton(
+                  onPressed: () => _claim(context),
+                  child: Text(l10n.claimAccount),
+                ),
+              ],
             ],
           ),
         ),
