@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/api_exception.dart';
-import '../../../domain/models/commune.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/commune_multi_select_field.dart';

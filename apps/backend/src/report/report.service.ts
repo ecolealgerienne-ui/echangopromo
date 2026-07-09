@@ -65,7 +65,7 @@ export class ReportService {
         promo.verifiedOkAt.getTime() + IGNORE_WINDOW_DAYS * 24 * 60 * 60 * 1000,
       );
       if (windowEnd > new Date()) {
-        qb.andWhere('report.createdAt > :verifiedOkAt', {
+        qb.andWhere('"report"."createdAt" > :verifiedOkAt', {
           verifiedOkAt: promo.verifiedOkAt,
         });
       }
@@ -93,9 +93,14 @@ export class ReportService {
       .select('report.promoId', 'promoId')
       .addSelect('COUNT(DISTINCT report.deviceId)', 'count')
       .where(
-        `(promo.verifiedOkAt IS NULL
-          OR report.createdAt > promo.verifiedOkAt
-          OR NOW() > promo.verifiedOkAt + make_interval(days => :ignoreWindowDays))`,
+        // Identifiants explicitement quotés : TypeORM ne ré-échappe de façon
+        // fiable qu'une des occurrences de `promo.verifiedOkAt` dans une
+        // chaîne where() brute contenant plusieurs répétitions du même
+        // alias.colonne — les autres restent non quotées et Postgres les
+        // met en minuscules (`verifiedokat`), colonne inexistante.
+        `("promo"."verifiedOkAt" IS NULL
+          OR "report"."createdAt" > "promo"."verifiedOkAt"
+          OR NOW() > "promo"."verifiedOkAt" + make_interval(days => :ignoreWindowDays))`,
         { ignoreWindowDays: IGNORE_WINDOW_DAYS },
       )
       .groupBy('report.promoId')
