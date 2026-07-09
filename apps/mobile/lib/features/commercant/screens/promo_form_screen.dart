@@ -151,6 +151,7 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
               PromoFormFields(
                 photo: _photo,
                 onPhotoChanged: (file) => setState(() => _photo = file),
+                existingPhotoUrl: widget.existingPromo?.photoUrl,
                 descriptionController: _descriptionController,
                 prixAvantController: _prixAvantController,
                 prixApresController: _prixApresController,

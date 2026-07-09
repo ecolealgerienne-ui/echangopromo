@@ -106,13 +106,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       body: meAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
-        data: (_) => Padding(
+        data: (me) => Padding(
           padding: const EdgeInsets.all(16),
           child: Form(
             key: _formKey,
             child: ListView(
               children: [
-                PhotoPickerField(file: _photo, onChanged: (file) => setState(() => _photo = file)),
+                PhotoPickerField(
+                  file: _photo,
+                  onChanged: (file) => setState(() => _photo = file),
+                  existingImageUrl: me.photoUrl,
+                ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _nomController,

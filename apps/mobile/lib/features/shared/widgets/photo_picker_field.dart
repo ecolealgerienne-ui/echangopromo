@@ -13,15 +13,43 @@ class PhotoPickerField extends StatelessWidget {
     required this.file,
     required this.onChanged,
     this.cameraOnly = false,
+    this.existingImageUrl,
   });
 
   final File? file;
   final ValueChanged<File> onChanged;
   final bool cameraOnly;
 
+  /// Photo déjà enregistrée côté serveur (édition) — affichée tant que
+  /// l'utilisateur n'a pas choisi de nouvelle photo locale (`file`). Sans
+  /// ça, un écran d'édition n'affiche qu'un placeholder vide même quand une
+  /// photo existe déjà.
+  final String? existingImageUrl;
+
   Future<void> _pick(ImageSource source) async {
     final picked = await ImagePicker().pickImage(source: source, imageQuality: 90);
     if (picked != null) onChanged(File(picked.path));
+  }
+
+  Widget _buildPreview(BuildContext context) {
+    if (file != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.file(file!, fit: BoxFit.cover),
+      );
+    }
+    if (existingImageUrl != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          existingImageUrl!,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) =>
+              const Center(child: Icon(Icons.photo_camera_outlined, size: 48)),
+        ),
+      );
+    }
+    return const Center(child: Icon(Icons.photo_camera_outlined, size: 48));
   }
 
   @override
@@ -37,12 +65,7 @@ class PhotoPickerField extends StatelessWidget {
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: file != null
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.file(file!, fit: BoxFit.cover),
-                  )
-                : const Center(child: Icon(Icons.photo_camera_outlined, size: 48)),
+            child: _buildPreview(context),
           ),
         ),
         const SizedBox(height: 8),
