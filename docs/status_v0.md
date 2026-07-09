@@ -1051,7 +1051,26 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     l'upload, sans dépendre d'une config bucket-level indisponible chez ce
     fournisseur. Les photos uploadées avant ce fix (tests précédents)
     restent privées et doivent être re-uploadées pour être visibles.
-  - **Reste à faire côté utilisateur** : ajouter
-    `S3_PUBLIC_URL_VIRTUAL_HOSTED=true` à `.env.production` sur le VPS
-    (si pas déjà fait), redéployer, puis re-tester un upload de photo
-    depuis l'app (une nouvelle, pas une ancienne).
+  - **Confirmé sur le VPS** : `curl` sur une clé S3 réelle (uploadée après
+    le rebuild avec l'ACL) → `200 OK`. La chaîne backend/S3 fonctionne de
+    bout en bout.
+
+- **2026-07-09 : photo toujours pas visible dans l'app malgré un backend
+  100% fonctionnel — bug distinct, côté mobile cette fois.** L'URL S3
+  confirmée en `200` ne s'affichait pourtant pas en rouvrant l'écran
+  profil commerçant. Cause trouvée en lisant `PhotoPickerField` : ce
+  widget n'affichait qu'une photo **locale** fraîchement choisie
+  (`File?`) — aucune prise en charge d'une photo déjà enregistrée côté
+  serveur, donc un écran d'édition rouvert n'affichait qu'un placeholder
+  vide, indépendamment de tout ce qu'on avait corrigé côté S3.
+  - **Fix** : `PhotoPickerField` accepte désormais `existingImageUrl`
+    (affiché via `Image.network` tant qu'aucune nouvelle photo locale
+    n'est choisie), propagé via `PromoFormFields.existingPhotoUrl` et
+    câblé dans `promo_form_screen.dart`
+    (`widget.existingPromo?.photoUrl`) et `edit_profile_screen.dart`
+    (`me.photoUrl`, qui jetait auparavant cette donnée avec `data: (_) =>`).
+  - Leçon de cette session de debug : les symptômes "photo pas affichée"
+    avaient deux causes complètement indépendantes empilées (S3/ACL côté
+    backend, puis widget mobile jamais câblé pour l'affichage
+    d'une photo existante) — corriger la première n'a naturellement rien
+    changé à la seconde.
