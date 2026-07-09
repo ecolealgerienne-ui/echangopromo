@@ -1,4 +1,4 @@
-enum AppRole { commercant, agent }
+enum AppRole { commercant, agent, admin }
 
 class AuthSession {
   const AuthSession({required this.role, required this.token, required this.userId});

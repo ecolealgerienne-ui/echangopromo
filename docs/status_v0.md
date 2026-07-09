@@ -1074,3 +1074,32 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     backend, puis widget mobile jamais câblé pour l'affichage
     d'une photo existante) — corriger la première n'a naturellement rien
     changé à la seconde.
+
+- **2026-07-09 : première UI admin (jusque-là API seule, decision V0
+  révisée).** L'API admin existait déjà en quasi-totalité (agents,
+  modération, registre, dashboard) — jamais reliée à un écran. Wave 1 :
+  login + dashboard + les 3 files de travail existantes.
+  - **Backend** : 2 lacunes trouvées et corrigées en construisant l'UI
+    dessus.
+    - `GET /admin/moderation/queue` renvoyait l'entité `Promo` brute
+      (sûre grâce à `@Exclude()`, mais sans `photoUrl` jamais calculé ni
+      contact du commerçant) — remplacé par un DTO explicite
+      (`admin.controller.ts`).
+    - Aucun moyen de **lister** les commerçants en attente de vérification
+      registre (seuls valider/rejeter par id existaient) — ajout de
+      `CommercantService.findPendingRegistreVerification` +
+      `GET /admin/commercant/registre/queue`.
+  - **Mobile** : nouveau rôle `AppRole.admin`, module `features/admin/`
+    (login, dashboard, file de modération, file de vérification registre,
+    gestion agents + création, gestion zones + transfert de zone entre
+    agents), routes protégées par rôle (`router.dart`, règle CLAUDE.md
+    #22). **Décision produit** : pas d'entrée admin dans le menu public
+    "espace pro" (commerçant/agent uniquement) — accès uniquement par
+    l'URL directe `/admin`, pour ne pas rendre ce point d'entrée
+    découvrable depuis l'app grand public.
+  - **Reste (wave 2, pas demandée pour l'instant)** : rien d'urgent
+    identifié au-delà de ce périmètre — l'API couvre déjà tout ce que
+    l'UI expose maintenant.
+  - **Non exécuté dans mon environnement** : `flutter analyze` (nouveau
+    module complet, 7 écrans) — à lancer en priorité avant de tester,
+    conformément à la consigne du projet.

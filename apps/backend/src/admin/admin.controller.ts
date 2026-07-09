@@ -26,6 +26,7 @@ import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
 import { PromoService } from '../promo/promo.service';
 import { ReportService } from '../report/report.service';
+import { StorageService } from '../storage/storage.service';
 import { AdminService } from './admin.service';
 import { LoginAdminDto } from './dto/login-admin.dto';
 import { ModerationService } from './moderation.service';
@@ -41,6 +42,7 @@ export class AdminController {
     private readonly authService: AuthService,
     private readonly auditLogService: AuditLogService,
     private readonly moderationService: ModerationService,
+    private readonly storageService: StorageService,
   ) {}
 
   @Throttle(STRICT_THROTTLE)
@@ -163,7 +165,28 @@ export class AdminController {
   @Roles('admin')
   @Get('moderation/queue')
   async moderationQueue(@Query() query: PaginationQueryDto) {
-    return this.moderationService.queue(query.page, query.limit);
+    const result = await this.moderationService.queue(query.page, query.limit);
+    return {
+      ...result,
+      // DTO explicite plutôt qu'un spread d'entité (règle #4) — la file de
+      // modération n'exposait ni photoUrl (jamais calculé, `photoKey` est
+      // @Exclude()) ni le contact du commerçant, rendant la décision de
+      // modération difficile sans ces informations.
+      items: result.items.map(({ promo, activeReportCount }) => ({
+        id: promo.id,
+        description: promo.description,
+        prixAvant: promo.prixAvant,
+        prixApres: promo.prixApres,
+        categorie: promo.categorie,
+        photoUrl: promo.photoKey ? this.storageService.buildPublicUrl(promo.photoKey) : null,
+        lifecycleStatus: promo.lifecycleStatus,
+        moderationStatus: promo.moderationStatus,
+        activeReportCount,
+        commercantId: promo.commercant.id,
+        commercantNom: promo.commercant.nom,
+        commercantTelephone: promo.commercant.telephone,
+      })),
+    };
   }
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)
@@ -200,6 +223,29 @@ export class AdminController {
   ) {
     await this.moderationService.avertir(user.sub, promoId);
     return { ok: true };
+  }
+
+  /** File d'attente des vérifications registre en attente (specs §3.4). */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Get('commercant/registre/queue')
+  async registreQueue(@Query() query: PaginationQueryDto) {
+    const result = await this.commercantService.findPendingRegistreVerification(
+      query.page,
+      query.limit,
+    );
+    return {
+      ...result,
+      items: result.items.map((commercant) => ({
+        id: commercant.id,
+        nom: commercant.nom,
+        telephone: commercant.telephone,
+        registreUrl: commercant.registreKey
+          ? this.storageService.buildPublicUrl(commercant.registreKey)
+          : null,
+        createdAt: commercant.createdAt,
+      })),
+    };
   }
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)

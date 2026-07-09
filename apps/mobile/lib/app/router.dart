@@ -4,6 +4,13 @@ import 'package:go_router/go_router.dart';
 import '../domain/enums/categorie.dart';
 import '../domain/models/auth_session.dart';
 import '../domain/models/promo.dart';
+import '../features/admin/screens/admin_dashboard_screen.dart';
+import '../features/admin/screens/admin_login_screen.dart';
+import '../features/admin/screens/agent_list_screen.dart';
+import '../features/admin/screens/create_agent_screen.dart';
+import '../features/admin/screens/moderation_queue_screen.dart';
+import '../features/admin/screens/registre_queue_screen.dart';
+import '../features/admin/screens/zone_list_screen.dart';
 import '../features/agent/screens/agent_login_screen.dart';
 import '../features/agent/screens/agent_promo_form_screen.dart';
 import '../features/agent/screens/create_commercant_screen.dart';
@@ -105,10 +112,55 @@ final _appRoutes = <_AppRoute>[
     ),
     requiredRole: AppRole.agent,
   ),
+
+  // Admin (specs §3.4) — compte unique en V0, pas d'auto-inscription, pas
+  // d'entrée dans le menu "espace pro" public (accès direct par URL
+  // uniquement, décision produit : ne pas rendre cet écran découvrable
+  // depuis l'app grand public).
+  _AppRoute('/admin', (context, state) => const AdminLoginScreen()),
+  _AppRoute('/admin/login', (context, state) => const AdminLoginScreen()),
+  _AppRoute(
+    '/admin/dashboard',
+    (context, state) => const AdminDashboardScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/moderation',
+    (context, state) => const ModerationQueueScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/registre',
+    (context, state) => const RegistreQueueScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/agents',
+    (context, state) => const AgentListScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/agents/new',
+    (context, state) => const CreateAgentScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/zones',
+    (context, state) => const ZoneListScreen(),
+    requiredRole: AppRole.admin,
+  ),
 ];
 
-String _loginPathFor(AppRole role) =>
-    role == AppRole.commercant ? '/commercant/login' : '/agent/login';
+String _loginPathFor(AppRole role) {
+  switch (role) {
+    case AppRole.commercant:
+      return '/commercant/login';
+    case AppRole.agent:
+      return '/agent/login';
+    case AppRole.admin:
+      return '/admin/login';
+  }
+}
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -132,6 +184,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
       if (path == '/agent') {
         return session?.role == AppRole.agent ? '/agent/zone' : '/agent/login';
+      }
+      if (path == '/admin') {
+        return session?.role == AppRole.admin ? '/admin/dashboard' : '/admin/login';
       }
 
       final requiredRole = _appRoutes

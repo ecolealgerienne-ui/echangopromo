@@ -9,6 +9,7 @@ import {
   NotFoundAppException,
 } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
+import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
 import {
   Promo,
   PromoLifecycleStatus,
@@ -324,6 +325,20 @@ export class CommercantService {
     return this.commercants.count({
       where: { accountState: CommercantAccountState.AUTONOME },
     });
+  }
+
+  /** File d'attente admin des vérifications registre en attente (specs §3.4). */
+  async findPendingRegistreVerification(
+    page: number,
+    limit: number,
+  ): Promise<PaginatedResult<Commercant>> {
+    const [items, total] = await this.commercants.findAndCount({
+      where: { registreStatus: RegistreStatus.EN_ATTENTE },
+      order: { createdAt: 'ASC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    return toPaginatedResult(items, total, page, limit);
   }
 
   /** Garde IDOR : un agent ne peut agir que sur les commerçants de sa propre zone. */
