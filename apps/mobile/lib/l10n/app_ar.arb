@@ -120,6 +120,10 @@
   "editProfileTitle": "تعديل ملفي الشخصي",
   "saveLabel": "حفظ",
   "modifyFailed": "تعذّر التعديل.",
+  "deleteAccountLabel": "حذف حسابي",
+  "deleteAccountConfirmTitle": "هل تريد حذف حسابك؟",
+  "deleteAccountConfirmMessage": "لا يمكن التراجع عن هذا الإجراء من التطبيق — لن تكون عروضك مرئية للعملاء بعد الآن. هل تريد المتابعة؟",
+  "deleteAccountFailed": "تعذّر حذف الحساب.",
 
   "editPromoTitle": "تعديل العرض",
   "photoRequired": "الصورة مطلوبة.",

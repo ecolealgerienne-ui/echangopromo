@@ -203,7 +203,10 @@ export class PromoService {
       .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
         moderationStatuses: VISIBLE_MODERATION_STATUSES,
       })
-      .andWhere('promo.dateFin > NOW()');
+      .andWhere('promo.dateFin > NOW()')
+      // Compte commerçant supprimé (soft delete) : ses promos ne doivent
+      // plus apparaître aux clients, sans avoir à muter chaque promo.
+      .andWhere('commercant.deletedAt IS NULL');
 
     if (query.communeId) {
       qb.andWhere('commercant.communeId = :communeId', {

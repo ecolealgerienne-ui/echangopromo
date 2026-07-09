@@ -112,15 +112,39 @@ class MyPromosScreen extends ConsumerWidget {
                     final dateLabel = promo.dateFin != null
                         ? l10n.untilDate(dateFormat.format(promo.dateFin!))
                         : l10n.notPublishedYet;
+                    final statusColor = promoLifecycleColor(
+                      promo.lifecycleStatus,
+                      isExpired: promo.isExpired,
+                    );
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundImage:
                             promo.photoUrl != null ? CachedNetworkImageProvider(promo.photoUrl!) : null,
                       ),
-                      title: Text(promo.description),
+                      title: Row(
+                        children: [
+                          Expanded(child: Text(promo.description, overflow: TextOverflow.ellipsis)),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: statusColor),
+                            ),
+                            child: Text(
+                              promoLifecycleLabel(context, promo.lifecycleStatus, isExpired: promo.isExpired),
+                              style: TextStyle(
+                                color: statusColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                       subtitle: Text(
-                        '${promoLifecycleLabel(context, promo.lifecycleStatus, isExpired: promo.isExpired)}'
-                        ' · $dateLabel · ${l10n.myPromosViewsCount(promo.viewCount ?? 0)}',
+                        '$dateLabel · ${l10n.myPromosViewsCount(promo.viewCount ?? 0)}',
                       ),
                       trailing: PopupMenuButton<String>(
                         onSelected: (action) {

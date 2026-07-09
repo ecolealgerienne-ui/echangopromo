@@ -136,6 +136,10 @@
   "editProfileTitle": "Modifier mon profil",
   "saveLabel": "Enregistrer",
   "modifyFailed": "Modification impossible.",
+  "deleteAccountLabel": "Supprimer mon compte",
+  "deleteAccountConfirmTitle": "Supprimer votre compte ?",
+  "deleteAccountConfirmMessage": "Cette action est irréversible depuis l'application — vos promos ne seront plus visibles par les clients. Voulez-vous continuer ?",
+  "deleteAccountFailed": "Suppression du compte impossible.",
 
   "editPromoTitle": "Modifier la promo",
   "photoRequired": "Une photo est requise.",

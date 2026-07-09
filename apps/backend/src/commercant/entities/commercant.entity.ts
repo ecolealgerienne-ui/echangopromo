@@ -138,4 +138,13 @@ export class Commercant {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  /**
+   * Suppression de compte (bouton "Supprimer mon compte") — soft delete
+   * uniquement, jamais de suppression physique : conserve l'historique
+   * (promos, signalements) et permet une éventuelle restauration manuelle
+   * par l'admin. `null` = compte actif.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
 }

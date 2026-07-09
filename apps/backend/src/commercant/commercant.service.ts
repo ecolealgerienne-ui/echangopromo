@@ -118,7 +118,10 @@ export class CommercantService {
 
   async login(telephone: string, pin: string): Promise<Commercant> {
     const commercant = await this.commercants.findOne({ where: { telephone } });
-    if (!commercant?.pinHash) {
+    // Un compte supprimé (soft delete) est traité comme des identifiants
+    // invalides plutôt qu'un message dédié — évite de confirmer à un tiers
+    // que ce numéro a un jour eu un compte.
+    if (!commercant?.pinHash || commercant.deletedAt) {
       throw new BadRequestAppException(
         ErrorCode.AUTH_INVALID_CREDENTIALS,
         'Identifiants invalides',
@@ -151,6 +154,21 @@ export class CommercantService {
     await this.commercants.increment({ id: commercantId }, 'tokenVersion', 1);
   }
 
+  /**
+   * Suppression de compte par le commerçant lui-même — soft delete
+   * uniquement (`deletedAt`), jamais de suppression physique (conserve
+   * l'historique promos/signalements). `tokenVersion` incrémenté pour
+   * révoquer immédiatement le token en cours (même mécanisme que
+   * `adminResetPin`) : sans ça, la session active resterait valide jusqu'à
+   * expiration malgré la suppression. Les promos du commerçant cessent
+   * d'être visibles aux clients dès ce moment (filtre `commercant.deletedAt
+   * IS NULL` dans `PromoService.findActiveForClient`).
+   */
+  async deleteAccount(commercantId: string): Promise<void> {
+    await this.commercants.update({ id: commercantId }, { deletedAt: new Date() });
+    await this.commercants.increment({ id: commercantId }, 'tokenVersion', 1);
+  }
+
   /** Édition du profil par le commerçant lui-même — téléphone non modifiable ici. */
   async updateProfile(
     commercantId: string,
@@ -178,7 +196,15 @@ export class CommercantService {
   }
 
   async findPublicProfile(id: string): Promise<Commercant> {
-    return this.findByIdOrFail(id);
+    const commercant = await this.findByIdOrFail(id);
+    // Contrairement aux endpoints authentifiés (déjà bloqués par la
+    // révocation de tokenVersion au moment de la suppression), celui-ci est
+    // atteignable par n'importe quel client à partir d'un id mémorisé avant
+    // la suppression (favoris, lien de partage) — vérification explicite.
+    if (commercant.deletedAt) {
+      throw new NotFoundAppException(ErrorCode.COMMERCANT_NOT_FOUND, 'Commerçant introuvable');
+    }
+    return commercant;
   }
 
   async requestRegistreVerification(

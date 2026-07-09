@@ -120,6 +120,10 @@
   "editProfileTitle": "Edit my profile",
   "saveLabel": "Save",
   "modifyFailed": "Update failed.",
+  "deleteAccountLabel": "Delete my account",
+  "deleteAccountConfirmTitle": "Delete your account?",
+  "deleteAccountConfirmMessage": "This action can't be undone from the app — your promos will no longer be visible to customers. Continue?",
+  "deleteAccountFailed": "Could not delete account.",
 
   "editPromoTitle": "Edit promo",
   "photoRequired": "A photo is required.",
