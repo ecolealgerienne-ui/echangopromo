@@ -3,25 +3,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/models/agent.dart';
-import '../../../domain/models/zone.dart';
+import '../../../domain/models/commune.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/widgets/commune_multi_select_field.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 
 final _agentsProvider = FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).listAgents());
-final _zonesProvider = FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).listZones());
+final _communesProvider = FutureProvider.autoDispose((ref) => ref.watch(communeApiProvider).list());
 
-/// Gestion des agents (specs §3.4) : création, assignation/retrait de zone,
-/// révocation de session, transfert de zone entre deux agents.
+/// Gestion des agents (specs §3.4) : création, assignation/retrait de
+/// communes, révocation de session, transfert de communes entre deux agents.
 class AgentListScreen extends ConsumerWidget {
   const AgentListScreen({super.key});
 
-  String _zoneName(List<Zone> zones, String? zoneId) {
-    if (zoneId == null) return '';
-    for (final zone in zones) {
-      if (zone.id == zoneId) return zone.nom;
-    }
-    return '';
+  String _communeNames(List<Commune> communes) {
+    if (communes.isEmpty) return '';
+    return communes.map((c) => c.nom).join(', ');
   }
 
   Future<void> _reload(WidgetRef ref) async {
@@ -41,22 +39,26 @@ class AgentListScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _assignZone(BuildContext context, WidgetRef ref, Agent agent, List<Zone> zones) async {
+  Future<void> _assignCommunes(
+    BuildContext context,
+    WidgetRef ref,
+    Agent agent,
+    List<Commune> communes,
+  ) async {
     final l10n = AppLocalizations.of(context)!;
-    String? selected = agent.zoneId;
+    var selected = agent.communes.map((c) => c.id).toSet();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: Text(l10n.assignZoneLabel),
-          content: DropdownButtonFormField<String?>(
-            initialValue: selected,
-            decoration: InputDecoration(labelText: l10n.zoneLabel),
-            items: [
-              DropdownMenuItem(value: null, child: Text(l10n.noZoneLabel)),
-              for (final zone in zones) DropdownMenuItem(value: zone.id, child: Text(zone.nom)),
-            ],
-            onChanged: (v) => setState(() => selected = v),
+          title: Text(l10n.assignCommunesLabel),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: CommuneMultiSelectField(
+              communes: communes,
+              selectedCommuneIds: selected,
+              onChanged: (v) => setState(() => selected = v),
+            ),
           ),
           actions: [
             TextButton(
@@ -73,7 +75,10 @@ class AgentListScreen extends ConsumerWidget {
     );
     if (confirmed != true) return;
     try {
-      await ref.read(adminApiProvider).assignZone(agentId: agent.id, zoneId: selected);
+      await ref.read(adminApiProvider).assignCommunes(
+            agentId: agent.id,
+            communeIds: selected.toList(),
+          );
       await _reload(ref);
     } catch (error) {
       if (context.mounted) await _showError(context, error);
@@ -107,58 +112,76 @@ class AgentListScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _transferZone(BuildContext context, WidgetRef ref, List<Agent> agents, List<Zone> zones) async {
+  Future<void> _transferCommunes(
+    BuildContext context,
+    WidgetRef ref,
+    List<Agent> agents,
+    List<Commune> communes,
+  ) async {
     final l10n = AppLocalizations.of(context)!;
-    String? zoneId;
     String? fromAgentId;
     String? toAgentId;
+    var selected = <String>{};
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(l10n.transferZoneLabel),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(labelText: l10n.zoneLabel),
-                items: [for (final z in zones) DropdownMenuItem(value: z.id, child: Text(z.nom))],
-                onChanged: (v) => setState(() => zoneId = v),
+        builder: (context, setState) {
+          Agent? fromAgent;
+          for (final a in agents) {
+            if (a.id == fromAgentId) fromAgent = a;
+          }
+          final availableCommunes = fromAgent?.communes ?? const <Commune>[];
+          return AlertDialog(
+            title: Text(l10n.transferCommunesLabel),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(labelText: l10n.fromAgentLabel),
+                    items: [for (final a in agents) DropdownMenuItem(value: a.id, child: Text(a.nom))],
+                    onChanged: (v) => setState(() {
+                      fromAgentId = v;
+                      selected = {};
+                    }),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(labelText: l10n.toAgentLabel),
+                    items: [for (final a in agents) DropdownMenuItem(value: a.id, child: Text(a.nom))],
+                    onChanged: (v) => setState(() => toAgentId = v),
+                  ),
+                  const SizedBox(height: 8),
+                  if (availableCommunes.isNotEmpty)
+                    CommuneMultiSelectField(
+                      communes: availableCommunes,
+                      selectedCommuneIds: selected,
+                      onChanged: (v) => setState(() => selected = v),
+                    ),
+                ],
               ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(labelText: l10n.fromAgentLabel),
-                items: [for (final a in agents) DropdownMenuItem(value: a.id, child: Text(a.nom))],
-                onChanged: (v) => setState(() => fromAgentId = v),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(l10n.commonCancel),
               ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(labelText: l10n.toAgentLabel),
-                items: [for (final a in agents) DropdownMenuItem(value: a.id, child: Text(a.nom))],
-                onChanged: (v) => setState(() => toAgentId = v),
+              FilledButton(
+                onPressed: fromAgentId != null && toAgentId != null && selected.isNotEmpty
+                    ? () => Navigator.of(context).pop(true)
+                    : null,
+                child: Text(l10n.commonConfirm),
               ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(l10n.commonCancel),
-            ),
-            FilledButton(
-              onPressed: zoneId != null && fromAgentId != null && toAgentId != null
-                  ? () => Navigator.of(context).pop(true)
-                  : null,
-              child: Text(l10n.commonConfirm),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
-    if (confirmed != true || zoneId == null || fromAgentId == null || toAgentId == null) return;
+    if (confirmed != true || fromAgentId == null || toAgentId == null || selected.isEmpty) return;
     try {
-      await ref.read(adminApiProvider).transferZone(
-            zoneId: zoneId!,
+      await ref.read(adminApiProvider).transferCommunes(
+            communeIds: selected.toList(),
             fromAgentId: fromAgentId!,
             toAgentId: toAgentId!,
           );
@@ -172,7 +195,7 @@ class AgentListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final agentsAsync = ref.watch(_agentsProvider);
-    final zonesAsync = ref.watch(_zonesProvider);
+    final communesAsync = ref.watch(_communesProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -180,10 +203,10 @@ class AgentListScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.swap_horiz),
-            tooltip: l10n.transferZoneLabel,
-            onPressed: agentsAsync.valueOrNull == null || zonesAsync.valueOrNull == null
+            tooltip: l10n.transferCommunesLabel,
+            onPressed: agentsAsync.valueOrNull == null || communesAsync.valueOrNull == null
                 ? null
-                : () => _transferZone(context, ref, agentsAsync.value!, zonesAsync.value!),
+                : () => _transferCommunes(context, ref, agentsAsync.value!, communesAsync.value!),
           ),
           const LanguageSwitcherButton(),
         ],
@@ -200,7 +223,7 @@ class AgentListScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
         data: (agents) {
-          final zones = zonesAsync.valueOrNull ?? const <Zone>[];
+          final communes = communesAsync.valueOrNull ?? const <Commune>[];
           if (agents.isEmpty) {
             return Center(child: Text(l10n.noAgentsYet));
           }
@@ -210,21 +233,21 @@ class AgentListScreen extends ConsumerWidget {
               itemCount: agents.length,
               itemBuilder: (context, index) {
                 final agent = agents[index];
-                final zoneName = _zoneName(zones, agent.zoneId);
+                final communeNames = _communeNames(agent.communes);
                 return ListTile(
                   title: Text(agent.nom),
-                  subtitle: Text('${agent.email}${zoneName.isNotEmpty ? ' · $zoneName' : ''}'),
+                  subtitle: Text('${agent.email}${communeNames.isNotEmpty ? ' · $communeNames' : ''}'),
                   trailing: PopupMenuButton<String>(
                     onSelected: (action) {
                       switch (action) {
-                        case 'assignZone':
-                          _assignZone(context, ref, agent, zones);
+                        case 'assignCommunes':
+                          _assignCommunes(context, ref, agent, communes);
                         case 'revoke':
                           _revokeToken(context, ref, agent);
                       }
                     },
                     itemBuilder: (context) => [
-                      PopupMenuItem(value: 'assignZone', child: Text(l10n.assignZoneLabel)),
+                      PopupMenuItem(value: 'assignCommunes', child: Text(l10n.assignCommunesLabel)),
                       PopupMenuItem(value: 'revoke', child: Text(l10n.revokeTokenLabel)),
                     ],
                   ),

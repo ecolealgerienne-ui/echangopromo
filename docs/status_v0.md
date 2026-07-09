@@ -1109,3 +1109,60 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
   - **Non exécuté dans mon environnement** : `flutter analyze` (nouveau
     module complet, 7 écrans) — à lancer en priorité avant de tester,
     conformément à la consigne du projet.
+
+- **2026-07-09 : abandon complet du concept de Zone opérationnelle,
+  remplacé par une relation many-to-many `Agent` ↔ `Commune`.** Décision
+  produit explicite : un agent doit pouvoir couvrir plusieurs communes,
+  voire une wilaya entière, le staffing "un agent par commune" n'étant pas
+  soutenable — et le rôle agent lui-même est amené à disparaître à
+  l'extension multi-wilaya, donc pas d'investissement dans un découpage
+  opérationnel séparé. Déclenché par une confusion utilisateur bien réelle
+  (l'écran de création d'agent montrait un sélecteur "Zone" vide, alors que
+  le référentiel `Commune` était déjà peuplé — les deux avaient toujours
+  été des tables distinctes, specs §5.2).
+  - **Backend** : `src/zone/` supprimé entièrement (entité, service,
+    contrôleur, DTOs). `Agent.zoneId` (`@ManyToOne`) remplacé par
+    `Agent.communes` (`@ManyToMany` + `@JoinTable('agent_communes')`).
+    `Commercant.zoneId` supprimé (redondant avec `Commercant.communeId`,
+    déjà la référence utilisée pour le filtrage/IDOR — pas de perte
+    d'information). `AgentService` : `assignZone`/`transferZone` deviennent
+    `assignCommunes`/`transferCommunes` (remplacent tout l'ensemble
+    assigné plutôt qu'un id unique) ; `CommuneService.findByIds` ajouté
+    pour résoudre un lot d'ids en une requête. `CommercantService` :
+    `assertZoneMatches` → `assertCommuneMatches(commercantId,
+    agentCommuneIds: string[])`, `listByZoneWithVisitStatus` →
+    `listByCommunesWithVisitStatus(communeIds)`. IDOR (règle CLAUDE.md #1)
+    rebranché à l'identique sur `PromoController.assertCanManage`/
+    `.createByAgent` et `AgentController.createCommercant`, désormais basé
+    sur `agent.communes.map(c => c.id)`. `ErrorCode` : `ZONE_NOT_FOUND`
+    supprimé, `AGENT_NO_ZONE_ASSIGNED`/`AGENT_ZONE_NOT_ASSIGNED_TO_AGENT`/
+    `COMMERCANT_NOT_IN_AGENT_ZONE` renommés en leurs équivalents
+    `_COMMUNE_`. Migration `1783670000000-RemoveZoneAddAgentCommunes` :
+    drop des FK/colonnes `zoneId` (agent + commercant), drop de la table
+    `zone`, création de `agent_communes`. **Pas de migration de données**
+    (une Zone ne correspond à aucune Commune précise — réassignation
+    manuelle à refaire côté admin après déploiement).
+  - **Mobile** : `domain/models/zone.dart` et `zone_commerce.dart`
+    supprimés (`zone_commerce.dart` → `commune_commerce.dart`,
+    `Agent.zoneId` → `Agent.communes: List<Commune>`). Nouveau widget
+    partagé `CommuneMultiSelectField` (sélection wilaya → cases à cocher
+    communes + "tout sélectionner dans cette wilaya", commodité d'UI qui
+    ne fait que cocher en masse — pas un champ distinct). Écran
+    `zone_list_screen.dart` supprimé entièrement (plus de CRUD Zone côté
+    admin) ; bouton "Zones" retiré du dashboard admin.
+    `zone_commerces_screen.dart` → `commune_commerces_screen.dart`
+    (`ZoneCommercesScreen` → `CommuneCommercesScreen`, route `/agent/zone`
+    → `/agent/communes`). `agent_list_screen.dart`/`create_agent_screen.dart`
+    reconstruits sur `CommuneMultiSelectField` ; le transfert entre deux
+    agents restreint désormais la sélection aux communes réellement
+    assignées à l'agent source. `error_messages_{fr,en,ar}.dart` et les 3
+    `.arb` mis à jour dans le même commit (règles CLAUDE.md #26/#27) :
+    `zoneTitle`/`zoneEmpty` → `myCommunesTitle`/`communesEmptyForAgent`,
+    `assignZoneLabel`/`transferZoneLabel` → `assignCommunesLabel`/
+    `transferCommunesLabel`, `zonesLabel`/`noZonesYet`/`newZoneLabel`/
+    `zoneLabel`/`noZoneLabel`/`zoneDescriptionLabel` supprimés (plus
+    d'écran CRUD Zone), `selectAllInWilayaLabel`/`communesSelectedCount`
+    ajoutés pour le nouveau widget.
+  - **Non exécuté dans mon environnement** : `flutter analyze` — nouveau
+    widget + 4 écrans réécrits, à lancer avant tout autre travail sur ce
+    module (consigne du projet).

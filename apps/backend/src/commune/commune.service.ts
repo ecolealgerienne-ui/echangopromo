@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { NotFoundAppException } from '../common/errors/app-exception';
+import { In, Repository } from 'typeorm';
+import { BadRequestAppException, NotFoundAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
 import { Commune } from './entities/commune.entity';
@@ -32,5 +32,15 @@ export class CommuneService {
       throw new NotFoundAppException(ErrorCode.COMMUNE_NOT_FOUND, 'Commune introuvable');
     }
     return commune;
+  }
+
+  /** Résout un lot d'ids (assignation de communes à un agent) — échoue si l'un d'eux est invalide. */
+  async findByIds(ids: string[]): Promise<Commune[]> {
+    if (ids.length === 0) return [];
+    const communes = await this.communes.find({ where: { id: In(ids) } });
+    if (communes.length !== new Set(ids).size) {
+      throw new BadRequestAppException(ErrorCode.COMMUNE_NOT_FOUND, 'Commune introuvable');
+    }
+    return communes;
   }
 }

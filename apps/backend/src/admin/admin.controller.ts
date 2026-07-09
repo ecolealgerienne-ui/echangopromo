@@ -10,9 +10,9 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AgentService } from '../agent/agent.service';
-import { AssignZoneDto } from '../agent/dto/assign-zone.dto';
+import { AssignCommunesDto } from '../agent/dto/assign-communes.dto';
 import { CreateAgentDto } from '../agent/dto/create-agent.dto';
-import { TransferZoneDto } from '../agent/dto/transfer-zone.dto';
+import { TransferCommunesDto } from '../agent/dto/transfer-communes.dto';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { AuditActorType } from '../audit-log/entities/audit-log.entity';
 import { AuthService } from '../auth/auth.service';
@@ -111,9 +111,12 @@ export class AdminController {
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  @Patch('agent/:id/zone')
-  async assignZone(@Param('id') agentId: string, @Body() dto: AssignZoneDto) {
-    return this.agentService.assignZone(agentId, dto.zoneId ?? null);
+  @Patch('agent/:id/communes')
+  async assignCommunes(
+    @Param('id') agentId: string,
+    @Body() dto: AssignCommunesDto,
+  ) {
+    return this.agentService.assignCommunes(agentId, dto.communeIds);
   }
 
   /** Révoque les JWT déjà émis pour cet agent (device perdu/volé, départ — audit règle #6). */
@@ -136,27 +139,27 @@ export class AdminController {
     return { ok: true };
   }
 
-  /** Transfère une zone d'un agent à un autre (specs §3.4). */
+  /** Transfère un lot de communes d'un agent à un autre (specs §3.4). */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  @Post('agent/transfer-zone')
-  async transferZone(
+  @Post('agent/transfer-communes')
+  async transferCommunes(
     @CurrentUser() user: AuthTokenPayload,
-    @Body() dto: TransferZoneDto,
+    @Body() dto: TransferCommunesDto,
   ) {
-    await this.agentService.transferZone(
-      dto.zoneId,
+    await this.agentService.transferCommunes(
+      dto.communeIds,
       dto.fromAgentId,
       dto.toAgentId,
     );
     await this.auditLogService.record({
       actorType: AuditActorType.ADMIN,
       actorId: user.sub,
-      action: 'transfer_zone',
-      targetType: 'zone',
-      targetId: dto.zoneId,
-      metadata: { fromAgentId: dto.fromAgentId, toAgentId: dto.toAgentId },
+      action: 'transfer_communes',
+      targetType: 'agent',
+      targetId: dto.toAgentId,
+      metadata: { communeIds: dto.communeIds, fromAgentId: dto.fromAgentId },
     });
     return { ok: true };
   }

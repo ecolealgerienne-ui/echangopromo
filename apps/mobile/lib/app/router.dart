@@ -10,11 +10,10 @@ import '../features/admin/screens/agent_list_screen.dart';
 import '../features/admin/screens/create_agent_screen.dart';
 import '../features/admin/screens/moderation_queue_screen.dart';
 import '../features/admin/screens/registre_queue_screen.dart';
-import '../features/admin/screens/zone_list_screen.dart';
 import '../features/agent/screens/agent_login_screen.dart';
 import '../features/agent/screens/agent_promo_form_screen.dart';
 import '../features/agent/screens/create_commercant_screen.dart';
-import '../features/agent/screens/zone_commerces_screen.dart';
+import '../features/agent/screens/commune_commerces_screen.dart';
 import '../features/client/screens/commune_selection_screen.dart';
 import '../features/client/screens/promo_detail_screen.dart';
 import '../features/client/screens/promo_list_screen.dart';
@@ -95,8 +94,8 @@ final _appRoutes = <_AppRoute>[
   _AppRoute('/agent', (context, state) => const AgentLoginScreen()),
   _AppRoute('/agent/login', (context, state) => const AgentLoginScreen()),
   _AppRoute(
-    '/agent/zone',
-    (context, state) => const ZoneCommercesScreen(),
+    '/agent/communes',
+    (context, state) => const CommuneCommercesScreen(),
     requiredRole: AppRole.agent,
   ),
   _AppRoute(
@@ -144,11 +143,6 @@ final _appRoutes = <_AppRoute>[
     (context, state) => const CreateAgentScreen(),
     requiredRole: AppRole.admin,
   ),
-  _AppRoute(
-    '/admin/zones',
-    (context, state) => const ZoneListScreen(),
-    requiredRole: AppRole.admin,
-  ),
 ];
 
 String _loginPathFor(AppRole role) {
@@ -183,7 +177,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         return session?.role == AppRole.commercant ? '/commercant/dashboard' : '/commercant/login';
       }
       if (path == '/agent') {
-        return session?.role == AppRole.agent ? '/agent/zone' : '/agent/login';
+        return session?.role == AppRole.agent ? '/agent/communes' : '/agent/login';
       }
       if (path == '/admin') {
         return session?.role == AppRole.admin ? '/admin/dashboard' : '/admin/login';

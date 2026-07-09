@@ -10,7 +10,10 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
 import { CreateCommercantByAgentDto } from '../commercant/dto/create-commercant-by-agent.dto';
-import { BadRequestAppException } from '../common/errors/app-exception';
+import {
+  BadRequestAppException,
+  ForbiddenAppException,
+} from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
 import { AgentService } from './agent.service';
@@ -45,19 +48,21 @@ export class AgentController {
     return this.agentService.findByIdOrFail(user.sub);
   }
 
-  /** Liste des commerces de la zone de l'agent connecté, avec statut de tournée (specs §3.3). */
+  /** Liste des commerces des communes de l'agent connecté, avec statut de tournée (specs §3.3). */
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('agent')
-  @Get('zone/commerces')
-  async zoneCommerces(@CurrentUser() user: AuthTokenPayload) {
+  @Get('communes/commerces')
+  async communesCommerces(@CurrentUser() user: AuthTokenPayload) {
     const agent = await this.agentService.findByIdOrFail(user.sub);
-    if (!agent.zoneId) {
+    if (agent.communes.length === 0) {
       throw new BadRequestAppException(
-        ErrorCode.AGENT_NO_ZONE_ASSIGNED,
-        "Cet agent n'est rattaché à aucune zone",
+        ErrorCode.AGENT_NO_COMMUNE_ASSIGNED,
+        "Cet agent n'est rattaché à aucune commune",
       );
     }
-    return this.commercantService.listByZoneWithVisitStatus(agent.zoneId);
+    return this.commercantService.listByCommunesWithVisitStatus(
+      agent.communes.map((commune) => commune.id),
+    );
   }
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)
@@ -69,11 +74,13 @@ export class AgentController {
     @Body() dto: CreateCommercantByAgentDto,
   ) {
     const agent = await this.agentService.findByIdOrFail(user.sub);
-    const commercant = await this.commercantService.createByAgent(
-      dto,
-      agent.id,
-      agent.zoneId,
-    );
+    if (!agent.communes.some((commune) => commune.id === dto.communeId)) {
+      throw new ForbiddenAppException(
+        ErrorCode.COMMERCANT_NOT_IN_AGENT_COMMUNES,
+        "Cette commune n'est pas rattachée à cet agent",
+      );
+    }
+    const commercant = await this.commercantService.createByAgent(dto, agent.id);
     await this.auditLogService.record({
       actorType: AuditActorType.AGENT,
       actorId: agent.id,

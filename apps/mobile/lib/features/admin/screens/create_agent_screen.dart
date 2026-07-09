@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/api_exception.dart';
+import '../../../domain/models/commune.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/widgets/commune_multi_select_field.dart';
 import '../../shared/widgets/error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/loading_button.dart';
 
-final _zonesForCreateAgentProvider =
-    FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).listZones());
+final _communesForCreateAgentProvider =
+    FutureProvider.autoDispose((ref) => ref.watch(communeApiProvider).list());
 
 /// Création d'un compte agent — pas d'auto-inscription (specs §3.3), seul
 /// l'admin en crée.
@@ -24,7 +26,7 @@ class _CreateAgentScreenState extends ConsumerState<CreateAgentScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nomController = TextEditingController();
-  String? _zoneId;
+  Set<String> _communeIds = {};
   bool _loading = false;
   String? _error;
 
@@ -48,7 +50,7 @@ class _CreateAgentScreenState extends ConsumerState<CreateAgentScreen> {
             email: _emailController.text.trim(),
             password: _passwordController.text,
             nom: _nomController.text.trim(),
-            zoneId: _zoneId,
+            communeIds: _communeIds.toList(),
           );
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
@@ -65,7 +67,7 @@ class _CreateAgentScreenState extends ConsumerState<CreateAgentScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final zonesAsync = ref.watch(_zonesForCreateAgentProvider);
+    final communesAsync = ref.watch(_communesForCreateAgentProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -98,18 +100,13 @@ class _CreateAgentScreenState extends ConsumerState<CreateAgentScreen> {
                 validator: (v) => (v == null || v.length < 8) ? l10n.passwordRequired : null,
               ),
               const SizedBox(height: 12),
-              zonesAsync.when(
+              communesAsync.when(
                 loading: () => const LinearProgressIndicator(),
                 error: (error, _) => Text(l10n.commonError(error.toString())),
-                data: (zones) => DropdownButtonFormField<String?>(
-                  initialValue: _zoneId,
-                  decoration: InputDecoration(labelText: l10n.zoneLabel),
-                  items: [
-                    DropdownMenuItem(value: null, child: Text(l10n.noZoneLabel)),
-                    for (final zone in zones)
-                      DropdownMenuItem(value: zone.id, child: Text(zone.nom)),
-                  ],
-                  onChanged: (v) => setState(() => _zoneId = v),
+                data: (communes) => CommuneMultiSelectField(
+                  communes: communes,
+                  selectedCommuneIds: _communeIds,
+                  onChanged: (v) => setState(() => _communeIds = v),
                 ),
               ),
               ErrorText(_error),

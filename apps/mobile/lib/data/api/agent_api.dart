@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 import '../../domain/enums/categorie.dart';
 import '../../domain/models/agent.dart';
 import '../../domain/models/commercant.dart';
-import '../../domain/models/zone_commerce.dart';
+import '../../domain/models/commune_commerce.dart';
 
 class AgentApi {
   AgentApi(this._dio);
@@ -22,9 +22,9 @@ class AgentApi {
     return Agent.fromJson(response.data!);
   }
 
-  Future<List<ZoneCommerce>> zoneCommerces() async {
-    final response = await _dio.get<List<dynamic>>('/agent/zone/commerces');
-    return response.data!.map((e) => ZoneCommerce.fromJson(e as Map<String, dynamic>)).toList();
+  Future<List<CommuneCommerce>> communesCommerces() async {
+    final response = await _dio.get<List<dynamic>>('/agent/communes/commerces');
+    return response.data!.map((e) => CommuneCommerce.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<Commercant> createCommercant({

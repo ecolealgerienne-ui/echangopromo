@@ -3,7 +3,6 @@ import '../../domain/models/admin.dart';
 import '../../domain/models/agent.dart';
 import '../../domain/models/moderation_item.dart';
 import '../../domain/models/registre_item.dart';
-import '../../domain/models/zone.dart';
 
 /// Page unique généreuse plutôt qu'une vraie pagination UI — même décision
 /// que `PromoApi` (pilote un seul quartier, volume largement sous ce seuil).
@@ -98,53 +97,34 @@ class AdminApi {
     required String email,
     required String password,
     required String nom,
-    String? zoneId,
+    List<String>? communeIds,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>('/admin/agent', data: {
       'email': email,
       'password': password,
       'nom': nom,
-      if (zoneId != null) 'zoneId': zoneId,
+      if (communeIds != null) 'communeIds': communeIds,
     });
     return Agent.fromJson(response.data!);
   }
 
-  Future<void> assignZone({required String agentId, String? zoneId}) async {
-    await _dio.patch<void>('/admin/agent/$agentId/zone', data: {'zoneId': zoneId});
+  Future<void> assignCommunes({required String agentId, required List<String> communeIds}) async {
+    await _dio.patch<void>('/admin/agent/$agentId/communes', data: {'communeIds': communeIds});
   }
 
   Future<void> revokeAgentToken(String agentId) async {
     await _dio.post<void>('/admin/agent/$agentId/revoke-token');
   }
 
-  Future<void> transferZone({
-    required String zoneId,
+  Future<void> transferCommunes({
+    required List<String> communeIds,
     required String fromAgentId,
     required String toAgentId,
   }) async {
-    await _dio.post<void>('/admin/agent/transfer-zone', data: {
-      'zoneId': zoneId,
+    await _dio.post<void>('/admin/agent/transfer-communes', data: {
+      'communeIds': communeIds,
       'fromAgentId': fromAgentId,
       'toAgentId': toAgentId,
     });
-  }
-
-  // --- Zones ---
-
-  Future<List<Zone>> listZones() async {
-    final response = await _dio.get<Map<String, dynamic>>(
-      '/zone',
-      queryParameters: {'limit': _pageSize},
-    );
-    final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => Zone.fromJson(e as Map<String, dynamic>)).toList();
-  }
-
-  Future<Zone> createZone({required String nom, String? description}) async {
-    final response = await _dio.post<Map<String, dynamic>>('/zone', data: {
-      'nom': nom,
-      if (description != null && description.isNotEmpty) 'description': description,
-    });
-    return Zone.fromJson(response.data!);
   }
 }

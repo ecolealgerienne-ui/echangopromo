@@ -8,8 +8,8 @@ import '../../shared/widgets/language_switcher_button.dart';
 
 final _dashboardProvider = FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).dashboard());
 
-/// Dashboard admin (specs §3.4) : stats globales + accès aux 3 files de
-/// travail (modération, registre, agents/zones).
+/// Dashboard admin (specs §3.4) : stats globales + accès aux files de
+/// travail (modération, registre, agents).
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
 
@@ -91,12 +91,6 @@ class AdminDashboardScreen extends ConsumerWidget {
               icon: const Icon(Icons.badge_outlined),
               label: Text(l10n.agentsLabel),
               onPressed: () => context.push('/admin/agents'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.map_outlined),
-              label: Text(l10n.zonesLabel),
-              onPressed: () => context.push('/admin/zones'),
             ),
           ],
         ),

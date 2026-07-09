@@ -10,12 +10,10 @@ const Map<String, String> errorMessagesAr = {
 
   'ADMIN_NOT_FOUND': 'المسؤول غير موجود.',
 
-  'ZONE_NOT_FOUND': 'المنطقة غير موجودة.',
-
   'AGENT_EMAIL_TAKEN': 'هذا البريد الإلكتروني مستخدم بالفعل من طرف عون آخر.',
   'AGENT_NOT_FOUND': 'العون غير موجود.',
-  'AGENT_NO_ZONE_ASSIGNED': 'هذا العون غير مرتبط بأي منطقة.',
-  'AGENT_ZONE_NOT_ASSIGNED_TO_AGENT': 'هذه المنطقة غير مسندة حاليًا لهذا العون.',
+  'AGENT_NO_COMMUNE_ASSIGNED': 'هذا العون غير مرتبط بأي بلدية.',
+  'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT': 'إحدى هذه البلديات غير مسندة حاليًا لهذا العون.',
 
   'COMMUNE_NOT_FOUND': 'البلدية غير موجودة.',
 
@@ -37,7 +35,7 @@ const Map<String, String> errorMessagesAr = {
   'COMMERCANT_NOT_FOUND': 'التاجر غير موجود.',
   'COMMERCANT_PIN_ALREADY_SET': 'تم بالفعل تحديد رمز PIN لهذا الرقم — اتصل بالمسؤول لإعادة تعيينه.',
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'لا يوجد طلب تحقق في الانتظار.',
-  'COMMERCANT_NOT_IN_AGENT_ZONE': 'هذا التاجر ليس ضمن منطقة هذا العون.',
+  'COMMERCANT_NOT_IN_AGENT_COMMUNES': 'هذا التاجر ليس ضمن بلديات هذا العون.',
 
   'RATE_LIMITED': 'عدد كبير جدًا من المحاولات. أعد المحاولة بعد قليل.',
   'HTTP_ERROR': 'حدث خطأ ما.',

@@ -137,9 +137,14 @@ brouillon → publiée → arrêtée
 
 ### 3.3 Agent terrain
 
-- **Rattaché à une Zone** interne (zone opérationnelle de tournée, distincte du découpage Commune — voir §5.2).
+- **Rattaché à zéro, une ou plusieurs Commune(s)** (relation many-to-many) — le
+  concept de Zone opérationnelle séparée a été abandonné (2026-07-09) : un
+  agent doit pouvoir couvrir plusieurs communes, voire une wilaya entière
+  ("assigner toute la wilaya" est une commodité d'UI qui sélectionne en masse
+  les communes de cette wilaya, pas un champ distinct), le staffing "un agent
+  par commune" n'étant pas soutenable.
 - Authentification **email + mot de passe**, compte créé exclusivement par l'Admin (pas d'auto-inscription agent).
-- Voit la liste des commerces de sa zone avec statut : jamais visité / à jour / à relancer.
+- Voit la liste des commerces de ses communes avec statut : jamais visité / à jour / à relancer.
 - Crée une fiche commerçant (numéro de téléphone, nom, adresse, catégorie) + première promo.
 - Prend la photo de la promo **obligatoirement dans l'app** (pas d'upload depuis la galerie), avec horodatage. **Pas de géolocalisation capturée** (décision explicite — écartée après discussion).
 - Met à jour une promo existante sur un commerce déjà onboardé.
@@ -152,9 +157,8 @@ brouillon → publiée → arrêtée
 - **Un seul rôle en V0** (pas de séparation admin/modérateur pour le pilote — à réévaluer si recrutement d'un modérateur dédié).
 - Valide ou rejette les demandes de badge `vérifié_registre`.
 - Traite la file de modération des promos signalées (masquer / valider en `vérifiée_ok` / avertir le commerçant).
-- Crée et gère les comptes agents.
-- Crée et gère les Zones, assigne un agent à une zone.
-- **Transfère une zone** d'un agent à un autre (cas : départ d'un agent — sans ça, les fiches de la zone cessent d'être mises à jour silencieusement).
+- Crée et gère les comptes agents, assigne un agent à une ou plusieurs communes.
+- **Transfère des communes** d'un agent à un autre (cas : départ d'un agent — sans ça, les fiches des communes concernées cessent d'être mises à jour silencieusement).
 - **Réinitialise le PIN** d'un commerçant sur demande (seul recours en cas de PIN oublié, pas de flux libre-service — voir §3.2).
 - Vue globale (dashboard) : nombre de commerces actifs, nombre de promos publiées, nombre de signalements en attente.
 
@@ -164,14 +168,13 @@ brouillon → publiée → arrêtée
 
 > Détail des schémas/relations à faire dans une passe dédiée "modèle de données" — ceci n'est qu'un inventaire d'entités et de leurs statuts/cycles de vie, nécessaire pour cadrer le développement.
 
-- **Commune** — référentiel administratif officiel (wilaya → commune), utilisé pour le filtre client. Distinct de la Zone agent.
-- **Zone** — découpage opérationnel interne pour les tournées d'agent, sans lien direct avec le découpage administratif.
+- **Commune** — référentiel administratif officiel (wilaya → commune), utilisé pour le filtre client et pour le rattachement territorial d'un agent (many-to-many `Agent` ↔ `Commune` — le concept de Zone séparée a été abandonné).
 - **Commerçant** — fiche + état de compte (`créé_agent` / `autonome`) + niveau de vérification (`confirmé_agent` / `vérifié_registre`).
 - **Promo** — liée à un commerçant, statut (`active` / `expirée` / `signalée` / `masquée` / `vérifiée_ok`), photo, prix avant/après, catégorie, date de fin, compteur de signalements.
-- **Agent** — compte + zone assignée.
+- **Agent** — compte + communes assignées (many-to-many).
 - **Admin** — compte, rôle unique en V0.
 - **Signalement (Report)** — device_id, promo_id, horodatage. Sert au calcul du seuil de modération.
-- **Journal d'audit (AuditLog)** — recommandé pour tracer les actions des agents (création, modification de fiche commerçant) et de l'admin (réinitialisation de PIN, transfert de zone) avec identité + horodatage, notamment utile en cas de zones multiples ou de transfert de zone.
+- **Journal d'audit (AuditLog)** — recommandé pour tracer les actions des agents (création, modification de fiche commerçant) et de l'admin (réinitialisation de PIN, transfert de communes) avec identité + horodatage, notamment utile en cas de communes multiples ou de transfert.
 
 ---
 
@@ -180,11 +183,15 @@ brouillon → publiée → arrêtée
 ### 5.1 Expiration des promos
 Tâche planifiée (cron, ex. quotidienne) qui bascule automatiquement les promos ayant dépassé leur date de fin vers le statut `expirée`. Aucune action utilisateur ne déclenche ce changement — c'est un point critique à ne pas oublier en développement, sans quoi l'objectif de fraîcheur du contenu est compromis silencieusement.
 
-### 5.2 Commune vs Zone — ne pas fusionner
+### 5.2 Commune — territoire agent et filtre client (Zone abandonnée)
 - **Commune** : découpage officiel, filtre visible côté client, doit permettre l'extension vers d'autres wilayas sans refonte.
-- **Zone** : découpage interne, purement opérationnel pour organiser les tournées d'agents, invisible côté client.
-
-Ce sont deux entités séparées dans le modèle de données.
+- Le découpage opérationnel interne "Zone" (distinct de Commune) a été
+  abandonné le 2026-07-09 : un agent est rattaché directement à une ou
+  plusieurs `Commune` (relation many-to-many), un agent par commune n'étant
+  pas soutenable et le rôle agent lui-même étant amené à disparaître à
+  l'extension multi-wilaya. "Assigner toute la wilaya" reste une commodité
+  d'UI (sélection en masse des communes de cette wilaya), pas un champ
+  distinct — une seule source de vérité pour le territoire d'un agent.
 
 ### 5.3 Plafond de promos actives
 5 promos **publiées** maximum par commerçant, simultanément (voir §3.2 pour le cycle de vie brouillon/publiée/arrêtée). Tri par défaut à définir (proposition : date d'expiration la plus proche en premier) — **point encore ouvert**, à trancher lors du modèle de données/UX.

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
 import {
   BadRequestAppException,
@@ -28,7 +28,7 @@ import { CreateCommercantByAgentDto } from './dto/create-commercant-by-agent.dto
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
 import { UpdateCommercantDto } from './dto/update-commercant.dto';
 
-export type ZoneCommerceStatus = 'jamais_visite' | 'a_jour' | 'a_relancer';
+export type CommuneCommerceStatus = 'jamais_visite' | 'a_jour' | 'a_relancer';
 
 @Injectable()
 export class CommercantService {
@@ -76,14 +76,12 @@ export class CommercantService {
   async createByAgent(
     dto: CreateCommercantByAgentDto,
     agentId: string,
-    zoneId: string | null,
   ): Promise<Commercant> {
     await this.assertPhoneAvailable(dto.telephone);
 
     return this.commercants.save(
       this.commercants.create({
         ...dto,
-        zoneId,
         createdByAgentId: agentId,
         accountState: CommercantAccountState.CREE_AGENT,
         originVerification: CommercantOriginVerification.CONFIRME_AGENT,
@@ -260,10 +258,10 @@ export class CommercantService {
   }
 
   /**
-   * Commerces d'une zone avec statut de tournée (specs §3.3). Faute d'un
-   * horodatage explicite de "dernière visite" dans les specs, le statut est
-   * dérivé de l'état des promos : jamais publié / a une promo visible / n'a
-   * plus que des promos expirées ou masquées.
+   * Commerces des communes couvertes par un agent, avec statut de tournée
+   * (specs §3.3). Faute d'un horodatage explicite de "dernière visite" dans
+   * les specs, le statut est dérivé de l'état des promos : jamais publié /
+   * a une promo visible / n'a plus que des promos expirées ou masquées.
    *
    * Deux requêtes agrégées (pas une par commerçant) : le statut "à jour"
    * doit utiliser la même définition de "promo visible" que le client
@@ -271,10 +269,13 @@ export class CommercantService {
    * seulement `publiee` — sinon une promo `verifiee_ok` fait apparaître à
    * tort le commerçant comme "à relancer".
    */
-  async listByZoneWithVisitStatus(
-    zoneId: string,
-  ): Promise<Array<Commercant & { visitStatus: ZoneCommerceStatus }>> {
-    const commercants = await this.commercants.find({ where: { zoneId } });
+  async listByCommunesWithVisitStatus(
+    communeIds: string[],
+  ): Promise<Array<Commercant & { visitStatus: CommuneCommerceStatus }>> {
+    if (communeIds.length === 0) return [];
+    const commercants = await this.commercants.find({
+      where: { communeId: In(communeIds) },
+    });
     if (commercants.length === 0) return [];
 
     const commercantIds = commercants.map((c) => c.id);
@@ -312,7 +313,7 @@ export class CommercantService {
       const total = totalByCommercant.get(commercant.id) ?? 0;
       const visible = visibleByCommercant.get(commercant.id) ?? 0;
 
-      let visitStatus: ZoneCommerceStatus;
+      let visitStatus: CommuneCommerceStatus;
       if (total === 0) visitStatus = 'jamais_visite';
       else if (visible > 0) visitStatus = 'a_jour';
       else visitStatus = 'a_relancer';
@@ -341,16 +342,16 @@ export class CommercantService {
     return toPaginatedResult(items, total, page, limit);
   }
 
-  /** Garde IDOR : un agent ne peut agir que sur les commerçants de sa propre zone. */
-  async assertZoneMatches(
+  /** Garde IDOR : un agent ne peut agir que sur les commerçants de ses propres communes. */
+  async assertCommuneMatches(
     commercantId: string,
-    agentZoneId: string | null,
+    agentCommuneIds: string[],
   ): Promise<Commercant> {
     const commercant = await this.findByIdOrFail(commercantId);
-    if (!agentZoneId || commercant.zoneId !== agentZoneId) {
+    if (!agentCommuneIds.includes(commercant.communeId)) {
       throw new ForbiddenAppException(
-        ErrorCode.COMMERCANT_NOT_IN_AGENT_ZONE,
-        "Ce commerçant n'est pas dans la zone de cet agent",
+        ErrorCode.COMMERCANT_NOT_IN_AGENT_COMMUNES,
+        "Ce commerçant n'est dans aucune des communes de cet agent",
       );
     }
     return commercant;

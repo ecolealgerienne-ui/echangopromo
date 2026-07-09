@@ -8,22 +8,22 @@ import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 
-final zoneCommercesProvider =
-    FutureProvider.autoDispose((ref) => ref.watch(agentApiProvider).zoneCommerces());
+final communeCommercesProvider =
+    FutureProvider.autoDispose((ref) => ref.watch(agentApiProvider).communesCommerces());
 
-/// Liste des commerces de la zone de l'agent avec statut de tournée
+/// Liste des commerces des communes de l'agent avec statut de tournée
 /// (specs §3.3) : jamais visité / à jour / à relancer.
-class ZoneCommercesScreen extends ConsumerWidget {
-  const ZoneCommercesScreen({super.key});
+class CommuneCommercesScreen extends ConsumerWidget {
+  const CommuneCommercesScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final commercesAsync = ref.watch(zoneCommercesProvider);
+    final commercesAsync = ref.watch(communeCommercesProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.zoneTitle),
+        title: Text(l10n.myCommunesTitle),
         actions: [
           const LanguageSwitcherButton(),
           PopupMenuButton<String>(
@@ -47,18 +47,18 @@ class ZoneCommercesScreen extends ConsumerWidget {
         onPressed: () async {
           final created = await context.push<bool>('/agent/commercant/new');
           if (created == true && context.mounted) {
-            ref.invalidate(zoneCommercesProvider);
+            ref.invalidate(communeCommercesProvider);
           }
         },
       ),
       body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(zoneCommercesProvider),
+        onRefresh: () async => ref.invalidate(communeCommercesProvider),
         child: commercesAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
           data: (commerces) {
             if (commerces.isEmpty) {
-              return Center(child: Text(l10n.zoneEmpty));
+              return Center(child: Text(l10n.communesEmptyForAgent));
             }
             return ListView.builder(
               itemCount: commerces.length,
