@@ -26,13 +26,18 @@ class ZoneCommercesScreen extends ConsumerWidget {
         title: Text(l10n.zoneTitle),
         actions: [
           const LanguageSwitcherButton(),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: l10n.logoutTooltip,
-            onPressed: () async {
-              await ref.read(authControllerProvider.notifier).logout();
-              if (context.mounted) context.go('/');
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.account_circle_outlined),
+            onSelected: (action) async {
+              switch (action) {
+                case 'logout':
+                  await ref.read(authControllerProvider.notifier).logout();
+                  if (context.mounted) context.go('/');
+              }
             },
+            itemBuilder: (context) => [
+              PopupMenuItem(value: 'logout', child: Text(l10n.logoutTooltip)),
+            ],
           ),
         ],
       ),
