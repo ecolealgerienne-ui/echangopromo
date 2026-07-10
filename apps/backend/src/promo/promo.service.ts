@@ -339,15 +339,24 @@ export class PromoService {
     );
   }
 
-  /** Décision admin : avertir le commerçant sans changer la visibilité de la promo. */
+  /**
+   * Décision admin : avertir le commerçant — repasse la promo en brouillon
+   * (donc invisible côté client, `dateFin` remise à null comme tout
+   * brouillon) le temps que le commerçant la vérifie et la republie
+   * explicitement via `publish` (pas de republication automatique).
+   */
   async resolveAvertir(promoId: string): Promise<void> {
     const promo = await this.findByIdOrFail(promoId);
-    if (promo.moderationStatus === PromoModerationStatus.SIGNALEE) {
-      await this.promos.update(
-        { id: promoId },
-        { moderationStatus: PromoModerationStatus.NORMALE },
-      );
-    }
+    await this.promos.update(
+      { id: promoId },
+      {
+        ...(promo.moderationStatus === PromoModerationStatus.SIGNALEE
+          ? { moderationStatus: PromoModerationStatus.NORMALE }
+          : {}),
+        lifecycleStatus: PromoLifecycleStatus.BROUILLON,
+        dateFin: null,
+      },
+    );
   }
 
   /**

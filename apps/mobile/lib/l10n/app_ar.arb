@@ -113,6 +113,7 @@
   "notificationHoursAgo": "{count, plural, one{منذ {count} ساعة} other{منذ {count} ساعة}}",
   "@notificationHoursAgo": { "placeholders": { "count": { "type": "int" } } },
   "notificationYesterday": "أمس",
+  "reviewPromoCta": "مراجعة",
 
   "myPromosTitle": "عروضي",
   "capReachedLabel": "تم بلوغ الحد الأقصى (5 عروض)",

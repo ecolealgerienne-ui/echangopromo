@@ -53,6 +53,30 @@ class NotificationsPanel extends ConsumerWidget {
   }
 }
 
+/// Couleur/icône par type — partagées entre le panneau plein écran et le
+/// bandeau du dashboard (CLAUDE.md #21 : extraire dès la 2e duplication).
+Color notificationIconColor(domain.NotificationType type) {
+  switch (type) {
+    case domain.NotificationType.promoWarned:
+      return Colors.orange;
+    case domain.NotificationType.promoHidden:
+      return Colors.red;
+    case domain.NotificationType.promoVerified:
+      return Colors.green;
+  }
+}
+
+IconData notificationIcon(domain.NotificationType type) {
+  switch (type) {
+    case domain.NotificationType.promoWarned:
+      return Icons.warning_rounded;
+    case domain.NotificationType.promoHidden:
+      return Icons.visibility_off_rounded;
+    case domain.NotificationType.promoVerified:
+      return Icons.check_circle_rounded;
+  }
+}
+
 class _NotificationTile extends ConsumerWidget {
   const _NotificationTile({
     required this.notification,
@@ -62,36 +86,14 @@ class _NotificationTile extends ConsumerWidget {
   final domain.Notification notification;
   final VoidCallback onMarkAsRead;
 
-  Color _getIconColor(domain.NotificationType type) {
-    switch (type) {
-      case domain.NotificationType.promoWarned:
-        return Colors.orange;
-      case domain.NotificationType.promoHidden:
-        return Colors.red;
-      case domain.NotificationType.promoVerified:
-        return Colors.green;
-    }
-  }
-
-  IconData _getIcon(domain.NotificationType type) {
-    switch (type) {
-      case domain.NotificationType.promoWarned:
-        return Icons.warning_rounded;
-      case domain.NotificationType.promoHidden:
-        return Icons.visibility_off_rounded;
-      case domain.NotificationType.promoVerified:
-        return Icons.check_circle_rounded;
-    }
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: ListTile(
         leading: Icon(
-          _getIcon(notification.type),
-          color: _getIconColor(notification.type),
+          notificationIcon(notification.type),
+          color: notificationIconColor(notification.type),
         ),
         title: Text(notification.message),
         subtitle: Text(notificationRelativeDate(context, notification.createdAt)),

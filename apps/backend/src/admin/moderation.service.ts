@@ -43,7 +43,7 @@ export class ModerationService {
       NotificationType.PROMO_HIDDEN,
       NotificationRecipientType.COMMERCANT,
       promo.commercantId,
-      'Votre promo a été masquée suite à des signalements.',
+      `Votre promo « ${promo.description} » a été masquée suite à des signalements.`,
       promoId,
       {
         promoDescription: promo.description,
@@ -59,7 +59,7 @@ export class ModerationService {
       NotificationType.PROMO_VERIFIED,
       NotificationRecipientType.COMMERCANT,
       promo.commercantId,
-      'Votre promo a été vérifiée et validée.',
+      `Votre promo « ${promo.description} » a été vérifiée et validée.`,
       promoId,
       {
         promoDescription: promo.description,
@@ -75,7 +75,7 @@ export class ModerationService {
       NotificationType.PROMO_WARNED,
       NotificationRecipientType.COMMERCANT,
       promo.commercantId,
-      'Votre promo a reçu plusieurs signalements. Veuillez la vérifier.',
+      `Votre promo « ${promo.description} » a reçu plusieurs signalements et a été repassée en brouillon. Vérifiez-la puis republiez-la.`,
       promoId,
       {
         promoDescription: promo.description,

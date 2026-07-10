@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/providers/notification_provider.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/notifications_panel.dart';
 
@@ -51,6 +52,7 @@ class CommercantDashboardScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            const _UnreadNotificationsBanner(),
             meAsync.when(
               loading: () => const LinearProgressIndicator(),
               error: (error, _) => Text(l10n.commonError(error.toString())),
@@ -102,3 +104,49 @@ class CommercantDashboardScreen extends ConsumerWidget {
 final _meProvider = FutureProvider.autoDispose((ref) => ref.watch(commercantApiProvider).me());
 final _statsProvider =
     FutureProvider.autoDispose((ref) => ref.watch(commercantApiProvider).dashboardProfileViewCount());
+
+/// Alertes de modération affichées directement sur le dashboard — pas
+/// seulement derrière l'icône cloche, pour que le commerçant ne les
+/// découvre pas seulement s'il pense à cliquer dessus. Reste affichée tant
+/// que le commerçant n'a pas marqué la notification comme lue (aucune
+/// republication automatique de la promo).
+class _UnreadNotificationsBanner extends ConsumerWidget {
+  const _UnreadNotificationsBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final notificationsAsync = ref.watch(notificationsProvider);
+
+    return notificationsAsync.maybeWhen(
+      data: (paginated) {
+        final unread = paginated.items;
+        if (unread.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final notification in unread)
+              Card(
+                color: notificationIconColor(notification.type).withValues(alpha: 0.1),
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: Icon(
+                    notificationIcon(notification.type),
+                    color: notificationIconColor(notification.type),
+                  ),
+                  title: Text(notification.message),
+                  trailing: TextButton(
+                    onPressed: () => context.push('/commercant/promos'),
+                    child: Text(l10n.reviewPromoCta),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 8),
+          ],
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
