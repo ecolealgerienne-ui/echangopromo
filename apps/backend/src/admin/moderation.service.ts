@@ -5,6 +5,8 @@ import { PaginatedResult } from '../common/pagination/paginated-result';
 import { Promo } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
 import { ReportService } from '../report/report.service';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationRecipientType, NotificationType } from '../notification/entities/notification.entity';
 
 /** Orchestration modération (file d'attente + résolutions) — extrait d'AdminController (audit). */
 @Injectable()
@@ -13,6 +15,7 @@ export class ModerationService {
     private readonly promoService: PromoService,
     private readonly reportService: ReportService,
     private readonly auditLogService: AuditLogService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async queue(
@@ -34,17 +37,50 @@ export class ModerationService {
   }
 
   async masquer(adminId: string, promoId: string): Promise<void> {
+    const promo = await this.promoService.findByIdOrFail(promoId);
     await this.promoService.resolveMasquer(promoId);
+    await this.notificationService.create(
+      NotificationType.PROMO_HIDDEN,
+      NotificationRecipientType.COMMERCANT,
+      promo.commercantId,
+      'Votre promo a été masquée suite à des signalements.',
+      promoId,
+      {
+        promoDescription: promo.description,
+      },
+    );
     await this.record(adminId, 'moderation_masquer', promoId);
   }
 
   async verifierOk(adminId: string, promoId: string): Promise<void> {
+    const promo = await this.promoService.findByIdOrFail(promoId);
     await this.promoService.resolveVerifieOk(promoId);
+    await this.notificationService.create(
+      NotificationType.PROMO_VERIFIED,
+      NotificationRecipientType.COMMERCANT,
+      promo.commercantId,
+      'Votre promo a été vérifiée et validée.',
+      promoId,
+      {
+        promoDescription: promo.description,
+      },
+    );
     await this.record(adminId, 'moderation_verifier_ok', promoId);
   }
 
   async avertir(adminId: string, promoId: string): Promise<void> {
+    const promo = await this.promoService.findByIdOrFail(promoId);
     await this.promoService.resolveAvertir(promoId);
+    await this.notificationService.create(
+      NotificationType.PROMO_WARNED,
+      NotificationRecipientType.COMMERCANT,
+      promo.commercantId,
+      'Votre promo a reçu plusieurs signalements. Veuillez la vérifier.',
+      promoId,
+      {
+        promoDescription: promo.description,
+      },
+    );
     await this.record(adminId, 'moderation_avertir', promoId);
   }
 
