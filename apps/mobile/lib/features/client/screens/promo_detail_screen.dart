@@ -41,7 +41,7 @@ class PromoDetailScreen extends ConsumerWidget {
         error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
         data: (promo) {
           final favorites = ref.watch(favoritesProvider);
-          final isFavorite = favorites.contains(promo.commercantId);
+          final isFavorite = favorites.contains(promo.id);
           final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
           final dateFormat = DateFormat('dd/MM/yyyy');
 
@@ -71,7 +71,7 @@ class PromoDetailScreen extends ConsumerWidget {
                         IconButton(
                           icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
                           onPressed: () =>
-                              ref.read(favoritesProvider.notifier).toggle(promo.commercantId),
+                              ref.read(favoritesProvider.notifier).toggle(promo.id),
                         ),
                       ],
                     ),
