@@ -8,7 +8,7 @@ import { Promo } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
 import { Report } from './entities/report.entity';
 
-const MODERATION_THRESHOLD = 3;
+const MODERATION_THRESHOLD = 1;
 const IGNORE_WINDOW_DAYS = 30;
 
 @Injectable()
