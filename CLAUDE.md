@@ -19,12 +19,21 @@ ce fichier-ci en est la synthèse actionnable.
 ## Projet en un coup d'œil
 
 Backend NestJS + TypeORM + PostgreSQL (`apps/backend`), app mobile Flutter
-multi-rôles Client/Commerçant/Agent (`apps/mobile`). Pilote V0 sur un
-quartier de Djelfa. Pas d'admin UI en V0 (API seule, décision assumée).
+multi-rôles Client/Commerçant/Agent/Admin (`apps/mobile`). Pilote V0 sur un
+quartier de Djelfa. UI admin ajoutée le 2026-07-09 (modération, registre,
+agents) — pas d'entrée dans le menu public "espace pro" (accès direct par
+URL `/admin`, décision produit : ne pas la rendre découvrable depuis l'app
+grand public). Le concept de Zone opérationnelle (découpage interne dédié
+aux tournées d'agent) a été abandonné le 2026-07-09 : un agent est
+désormais rattaché directement à zéro, une ou plusieurs `Commune`
+(relation many-to-many), "assigner toute la wilaya" n'étant qu'une
+commodité d'UI qui sélectionne en masse les communes de cette wilaya —
+un agent par commune n'étant pas soutenable et le rôle agent lui-même
+étant amené à disparaître à l'extension multi-wilaya.
 
 ```
-apps/backend/src/{commune,zone,agent,admin,commercant,promo,report,audit-log,storage,auth}
-apps/mobile/lib/{app,data,domain,providers,features/{client,commercant,agent,shared}}
+apps/backend/src/{commune,agent,admin,commercant,promo,report,audit-log,storage,auth}
+apps/mobile/lib/{app,data,domain,providers,features/{client,commercant,agent,admin,shared}}
 ```
 
 Commandes utiles :

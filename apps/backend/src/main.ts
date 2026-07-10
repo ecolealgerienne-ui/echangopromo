@@ -1,5 +1,6 @@
 import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import { NestFactory, Reflector } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/errors/all-exceptions.filter';
 
@@ -11,7 +12,17 @@ function parseCorsOrigins(raw: string | undefined): string[] {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Fait confiance au 1er hop (Traefik en prod) pour dériver la vraie IP
+  // client depuis X-Forwarded-For — sans ça, `req.ip` (utilisé par
+  // @nestjs/throttler pour le rate-limiting par IP, CLAUDE.md règles
+  // #2/#7) vaut l'IP interne du reverse proxy pour TOUTES les requêtes,
+  // faisant partager le même compteur de rate-limit à tous les clients
+  // (audit sécurité 2026-07-06 : docs/AUDIT_SECURITE_PROD_2026-07.md).
+  // `1` (pas `true`) : ne fait confiance qu'au proxy immédiat, pas à toute
+  // la chaîne X-Forwarded-For (qu'un client pourrait sinon falsifier pour
+  // usurper une IP et contourner la limite).
+  app.set('trust proxy', 1);
   // L'app mobile (Dio natif) n'est pas soumise au CORS — seul un futur
   // frontend web (admin) en aurait besoin. Pas d'origine par défaut tant
   // qu'aucun frontend web n'existe (CORS_ORIGINS vide = aucune origine

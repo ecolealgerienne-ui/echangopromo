@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../data/api/admin_api.dart';
 import '../data/api/agent_api.dart';
 import '../data/api/api_client.dart';
 import '../data/api/commercant_api.dart';
@@ -54,3 +55,4 @@ final commercantApiProvider = Provider((ref) => CommercantApi(ref.watch(apiClien
 final agentApiProvider = Provider((ref) => AgentApi(ref.watch(apiClientProvider).dio));
 final reportApiProvider = Provider((ref) => ReportApi(ref.watch(apiClientProvider).dio));
 final storageApiProvider = Provider((ref) => StorageApi(ref.watch(apiClientProvider).dio));
+final adminApiProvider = Provider((ref) => AdminApi(ref.watch(apiClientProvider).dio));

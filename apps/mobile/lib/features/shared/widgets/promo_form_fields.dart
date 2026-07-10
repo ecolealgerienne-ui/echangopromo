@@ -18,6 +18,7 @@ class PromoFormFields extends StatelessWidget {
     required this.photo,
     required this.onPhotoChanged,
     this.cameraOnly = false,
+    this.existingPhotoUrl,
     required this.descriptionController,
     required this.prixAvantController,
     required this.prixApresController,
@@ -32,6 +33,10 @@ class PromoFormFields extends StatelessWidget {
   final File? photo;
   final ValueChanged<File> onPhotoChanged;
   final bool cameraOnly;
+
+  /// Photo déjà enregistrée (édition) — affichée tant qu'aucune nouvelle
+  /// photo locale n'a été choisie. Null en création (rien à afficher).
+  final String? existingPhotoUrl;
   final TextEditingController descriptionController;
   final TextEditingController prixAvantController;
   final TextEditingController prixApresController;
@@ -50,7 +55,12 @@ class PromoFormFields extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        PhotoPickerField(file: photo, cameraOnly: cameraOnly, onChanged: onPhotoChanged),
+        PhotoPickerField(
+          file: photo,
+          cameraOnly: cameraOnly,
+          onChanged: onPhotoChanged,
+          existingImageUrl: existingPhotoUrl,
+        ),
         const SizedBox(height: 16),
         TextFormField(
           controller: descriptionController,

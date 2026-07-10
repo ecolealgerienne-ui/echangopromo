@@ -64,8 +64,8 @@ export class PromoController {
 
   /**
    * Un commerçant ne peut agir que sur ses propres promos ; un agent, que
-   * sur celles des commerçants de sa zone (même pattern IDOR que le reste
-   * du module commerçant).
+   * sur celles des commerçants de ses communes (même pattern IDOR que le
+   * reste du module commerçant).
    */
   private async assertCanManage(
     user: AuthTokenPayload,
@@ -81,9 +81,9 @@ export class PromoController {
       return;
     }
     const agent = await this.agentService.findByIdOrFail(user.sub);
-    await this.commercantService.assertZoneMatches(
+    await this.commercantService.assertCommuneMatches(
       promo.commercantId,
-      agent.zoneId,
+      agent.communes.map((commune) => commune.id),
     );
   }
 
@@ -135,7 +135,7 @@ export class PromoController {
     };
   }
 
-  /** IDOR corrigé : un agent ne peut publier que pour un commerçant de sa propre zone. */
+  /** IDOR corrigé : un agent ne peut publier que pour un commerçant de ses propres communes. */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('agent')
@@ -146,7 +146,10 @@ export class PromoController {
     @Body() dto: CreatePromoDto,
   ) {
     const agent = await this.agentService.findByIdOrFail(user.sub);
-    await this.commercantService.assertZoneMatches(commercantId, agent.zoneId);
+    await this.commercantService.assertCommuneMatches(
+      commercantId,
+      agent.communes.map((commune) => commune.id),
+    );
     return this.promoService.create(commercantId, dto);
   }
 

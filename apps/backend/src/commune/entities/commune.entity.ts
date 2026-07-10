@@ -1,9 +1,6 @@
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
-/**
- * Référentiel administratif officiel (wilaya -> commune), distinct de la
- * Zone opérationnelle agent (specs §5.2 — ne pas fusionner les deux).
- */
+/** Référentiel administratif officiel (wilaya -> commune). */
 @Entity()
 export class Commune {
   @PrimaryGeneratedColumn('uuid')

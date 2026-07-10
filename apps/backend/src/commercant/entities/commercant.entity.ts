@@ -11,7 +11,6 @@ import {
 } from 'typeorm';
 import { Categorie } from '../../common/enums/categorie.enum';
 import { Commune } from '../../commune/entities/commune.entity';
-import { Zone } from '../../zone/entities/zone.entity';
 import { Agent } from '../../agent/entities/agent.entity';
 
 /**
@@ -66,15 +65,6 @@ export class Commercant {
   @Index()
   @Column()
   communeId: string;
-
-  /** Zone opérationnelle de l'agent qui a onboardé ce commerçant, si applicable. */
-  @ManyToOne(() => Zone, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'zoneId' })
-  zone: Zone | null;
-
-  @Index()
-  @Column({ type: 'varchar', nullable: true })
-  zoneId: string | null;
 
   @ManyToOne(() => Agent, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'createdByAgentId' })
@@ -138,4 +128,13 @@ export class Commercant {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  /**
+   * Suppression de compte (bouton "Supprimer mon compte") — soft delete
+   * uniquement, jamais de suppression physique : conserve l'historique
+   * (promos, signalements) et permet une éventuelle restauration manuelle
+   * par l'admin. `null` = compte actif.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
 }

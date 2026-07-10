@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/enums/promo_lifecycle_status.dart';
 import '../../../l10n/app_localizations.dart';
@@ -37,6 +37,22 @@ String promoLifecycleLabel(BuildContext context, PromoLifecycleStatus status, {r
       return l10n.lifecycleStopped;
     case PromoLifecycleStatus.expiree:
       return l10n.lifecycleExpired;
+  }
+}
+
+/// Couleur du badge de statut affiché dans "Mes promos" — indépendante de
+/// la localisation du texte, juste un repère visuel rapide.
+Color promoLifecycleColor(PromoLifecycleStatus status, {required bool isExpired}) {
+  if (isExpired) return Colors.grey;
+  switch (status) {
+    case PromoLifecycleStatus.brouillon:
+      return Colors.blueGrey;
+    case PromoLifecycleStatus.publiee:
+      return Colors.green;
+    case PromoLifecycleStatus.arretee:
+      return Colors.orange;
+    case PromoLifecycleStatus.expiree:
+      return Colors.grey;
   }
 }
 

@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsEmail,
   IsOptional,
   IsString,
@@ -19,6 +20,7 @@ export class CreateAgentDto {
   nom: string;
 
   @IsOptional()
-  @IsUUID()
-  zoneId?: string;
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  communeIds?: string[];
 }

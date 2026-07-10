@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
+import { CommuneService } from '../commune/commune.service';
 import {
   BadRequestAppException,
   NotFoundAppException,
@@ -16,6 +17,7 @@ export class AgentService {
   constructor(
     @InjectRepository(Agent) private readonly agents: Repository<Agent>,
     private readonly authService: AuthService,
+    private readonly communeService: CommuneService,
   ) {}
 
   /** Créé exclusivement par l'admin — pas d'auto-inscription agent (specs §3.3). */
@@ -28,13 +30,14 @@ export class AgentService {
       );
     }
 
+    const communes = await this.communeService.findByIds(dto.communeIds ?? []);
     const passwordHash = await this.authService.hash(dto.password);
     return this.agents.save(
       this.agents.create({
         email: dto.email,
         nom: dto.nom,
         passwordHash,
-        zoneId: dto.zoneId ?? null,
+        communes,
       }),
     );
   }
@@ -61,7 +64,10 @@ export class AgentService {
   }
 
   async findByIdOrFail(id: string): Promise<Agent> {
-    const agent = await this.agents.findOne({ where: { id } });
+    const agent = await this.agents.findOne({
+      where: { id },
+      relations: ['communes'],
+    });
     if (!agent) {
       throw new NotFoundAppException(ErrorCode.AGENT_NOT_FOUND, 'Agent introuvable');
     }
@@ -70,6 +76,7 @@ export class AgentService {
 
   async findAll(page: number, limit: number): Promise<PaginatedResult<Agent>> {
     const [items, total] = await this.agents.findAndCount({
+      relations: ['communes'],
       order: { nom: 'ASC' },
       skip: (page - 1) * limit,
       take: limit,
@@ -77,9 +84,10 @@ export class AgentService {
     return toPaginatedResult(items, total, page, limit);
   }
 
-  async assignZone(agentId: string, zoneId: string | null): Promise<Agent> {
+  /** Remplace l'ensemble des communes assignées à l'agent (liste vide = désassignation totale). */
+  async assignCommunes(agentId: string, communeIds: string[]): Promise<Agent> {
     const agent = await this.findByIdOrFail(agentId);
-    agent.zoneId = zoneId;
+    agent.communes = await this.communeService.findByIds(communeIds);
     return this.agents.save(agent);
   }
 
@@ -90,27 +98,34 @@ export class AgentService {
   }
 
   /**
-   * Transfère une zone d'un agent à un autre (specs §3.4) — cas type :
-   * départ d'un agent, pour éviter que les fiches de la zone cessent d'être
-   * mises à jour silencieusement.
+   * Transfère un lot de communes d'un agent à un autre (specs §3.4) — cas
+   * type : départ d'un agent, pour éviter que les commerces de ces communes
+   * cessent d'être suivis silencieusement.
    */
-  async transferZone(
-    zoneId: string,
+  async transferCommunes(
+    communeIds: string[],
     fromAgentId: string,
     toAgentId: string,
   ): Promise<void> {
     const fromAgent = await this.findByIdOrFail(fromAgentId);
     const toAgent = await this.findByIdOrFail(toAgentId);
 
-    if (fromAgent.zoneId !== zoneId) {
+    const fromAgentCommuneIds = new Set(fromAgent.communes.map((c) => c.id));
+    if (!communeIds.every((id) => fromAgentCommuneIds.has(id))) {
       throw new BadRequestAppException(
-        ErrorCode.AGENT_ZONE_NOT_ASSIGNED_TO_AGENT,
-        "Cette zone n'est pas actuellement assignée à cet agent",
+        ErrorCode.AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT,
+        "Au moins une de ces communes n'est pas actuellement assignée à cet agent",
       );
     }
 
-    fromAgent.zoneId = null;
-    toAgent.zoneId = zoneId;
+    const transferredIds = new Set(communeIds);
+    const communesToTransfer = fromAgent.communes.filter((c) => transferredIds.has(c.id));
+    fromAgent.communes = fromAgent.communes.filter((c) => !transferredIds.has(c.id));
+    const toAgentCommuneIds = new Set(toAgent.communes.map((c) => c.id));
+    toAgent.communes = [
+      ...toAgent.communes,
+      ...communesToTransfer.filter((c) => !toAgentCommuneIds.has(c.id)),
+    ];
     await this.agents.save([fromAgent, toAgent]);
   }
 }

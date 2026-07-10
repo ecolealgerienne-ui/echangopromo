@@ -87,4 +87,9 @@ class CommercantApi {
   Future<void> requestRegistreVerification(String registreKey) async {
     await _dio.post<void>('/commercant/me/registre', data: {'registreKey': registreKey});
   }
+
+  /// Soft delete côté backend (deletedAt) — jamais de suppression physique.
+  Future<void> deleteAccount() async {
+    await _dio.delete<void>('/commercant/me');
+  }
 }

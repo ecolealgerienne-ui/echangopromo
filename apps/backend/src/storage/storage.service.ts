@@ -1,28 +1,17 @@
-import {
-  DeleteObjectCommand,
-  GetObjectCommand,
-  S3Client,
-} from '@aws-sdk/client-s3';
-import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { BadRequestAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
-import { hasValidImageSignature } from './image-signature';
-
-const PRESIGNED_URL_TTL_SECONDS = 5 * 60;
-
-/** 12 octets suffisent pour distinguer les signatures JPEG/PNG/WEBP. */
-const MAGIC_BYTES_RANGE = 'bytes=0-11';
+import { detectImageFormat } from './image-signature';
 
 /**
- * Limite haute généreuse vu la compression obligatoire côté app avant
- * upload (max ~1200px, JPEG qualité ~80, specs §5.8) — sert uniquement de
- * garde-fou contre un upload arbitrairement volumineux (audit sécurité :
- * un PUT pré-signé simple n'imposait aucune limite de taille).
+ * Limite haute vu la compression obligatoire côté app avant upload (max
+ * ~1200px, JPEG qualité ~80, specs §5.8) — sert de garde-fou contre un
+ * upload arbitrairement volumineux (audit sécurité).
  */
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 @Injectable()
 export class StorageService {
@@ -68,66 +57,78 @@ export class StorageService {
   }
 
   /**
-   * POST policy S3 (pas un simple PUT pré-signé) : `content-length-range`
-   * est une contrainte appliquée par S3 lui-même, contrairement à un PUT où
-   * le `Content-Type` déclaré à la signature n'engage à rien lors de
-   * l'upload réel.
+   * Upload proxifié par le backend (pas de POST policy S3 pré-signée) : OVH
+   * (le S3 utilisé en prod) renvoie `501 Not Implemented — "POST Object is
+   * disabled on this deployment"` sur cette API — découvert au premier test
+   * réel post-déploiement, cette API n'est donc pas portable entre
+   * fournisseurs S3. Taille et format (magic bytes) sont validés ici, sur
+   * les octets déjà en mémoire, AVANT tout envoi à S3 via `PutObject`
+   * (universellement supporté) — remplace l'ancienne vérification a
+   * posteriori (`assertValidImage`, qui refaisait un `GetObject` après
+   * upload) devenue inutile : un fichier invalide n'atteint plus jamais S3.
    */
-  async createPresignedUpload(
-    key: string,
-    contentType: string,
-  ): Promise<{ url: string; fields: Record<string, string>; key: string }> {
-    const { url, fields } = await createPresignedPost(this.client, {
-      Bucket: this.bucket,
-      Key: key,
-      Conditions: [
-        ['content-length-range', 0, MAX_UPLOAD_BYTES],
-        { 'Content-Type': contentType },
-      ],
-      Fields: { 'Content-Type': contentType },
-      Expires: PRESIGNED_URL_TTL_SECONDS,
-    });
-    return { url, fields, key };
-  }
-
-  /**
-   * Vérifie a posteriori que le fichier uploadé est réellement une image
-   * (magic bytes) — le `Content-Type` déclaré à la signature (§ci-dessus)
-   * n'engage à rien sur le contenu réel envoyé lors du POST (audit V1 §7).
-   * Supprime le fichier et lève une erreur si la signature ne correspond à
-   * aucun format supporté (jpeg/png/webp).
-   */
-  async assertValidImage(key: string): Promise<void> {
-    const response = await this.client.send(
-      new GetObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Range: MAGIC_BYTES_RANGE,
-      }),
-    );
-    const bytes = await this.readBody(response.Body);
-    if (!hasValidImageSignature(bytes)) {
-      await this.deleteObject(key);
+  async uploadPhoto(
+    commercantId: string,
+    buffer: Buffer,
+    folder: 'promo-photos' | 'commercant-photos' = 'promo-photos',
+  ): Promise<string> {
+    if (buffer.length > MAX_UPLOAD_BYTES) {
+      throw new BadRequestAppException(
+        ErrorCode.STORAGE_FILE_TOO_LARGE,
+        'Le fichier dépasse la taille maximale autorisée (5 Mo).',
+      );
+    }
+    const format = detectImageFormat(buffer);
+    if (!format) {
       throw new BadRequestAppException(
         ErrorCode.STORAGE_INVALID_IMAGE,
         "Le fichier envoyé n'est pas une image valide (jpeg/png/webp)",
       );
     }
+
+    const extension = format === 'jpeg' ? 'jpg' : format;
+    const key = this.buildKey(commercantId, extension, folder);
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: `image/${format}`,
+        // OVH n'implémente ni les bucket policies (NotImplemented sur
+        // PutBucketPolicy) ni les requêtes anonymes en style path (400 sur
+        // GET sans ACL) — seul l'ACL par objet `public-read` (testé et
+        // confirmé) rend la photo accessible via `buildPublicUrl`
+        // (style virtual-hosted, voir plus bas).
+        ACL: 'public-read',
+      }),
+    );
+    return key;
   }
 
-  private async readBody(body: unknown): Promise<Buffer> {
-    const chunks: Buffer[] = [];
-    for await (const chunk of body as AsyncIterable<Buffer>) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    }
-    return Buffer.concat(chunks);
-  }
-
+  /**
+   * OVH rejette les requêtes anonymes en style "path" (`endpoint/bucket/clé`)
+   * avec `400 InvalidRequest — "Not S3 request"` — découvert au premier test
+   * réel d'affichage de photo. Seul le style "virtual-hosted"
+   * (`bucket.endpoint/clé`) fonctionne pour un accès public non signé.
+   * `forcePathStyle: true` sur le client S3 (voir constructeur) reste
+   * nécessaire pour les opérations authentifiées (PUT/DELETE, compatibles
+   * MinIO en dev local) — seule cette URL construite pour un accès public
+   * anonyme doit basculer en virtual-hosted, activé via
+   * `S3_PUBLIC_URL_VIRTUAL_HOSTED=true` (mis à `true` uniquement pour OVH
+   * en prod, laissé à `false` par défaut pour MinIO en dev local).
+   */
   buildPublicUrl(key: string): string {
     if (this.cdnBaseUrl) {
       return `${this.cdnBaseUrl.replace(/\/$/, '')}/${key}`;
     }
-    return `${this.configService.get<string>('S3_ENDPOINT', '')}/${this.bucket}/${key}`;
+    const endpoint = this.configService.get<string>('S3_ENDPOINT', '');
+    const useVirtualHostedStyle =
+      this.configService.get<string>('S3_PUBLIC_URL_VIRTUAL_HOSTED', 'false') === 'true';
+    if (useVirtualHostedStyle) {
+      const host = endpoint.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      return `https://${this.bucket}.${host}/${key}`;
+    }
+    return `${endpoint}/${this.bucket}/${key}`;
   }
 
   async deleteObject(key: string): Promise<void> {

@@ -5,7 +5,6 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CommuneModule } from './commune/commune.module';
-import { ZoneModule } from './zone/zone.module';
 import { CommercantModule } from './commercant/commercant.module';
 import { PromoModule } from './promo/promo.module';
 import { AgentModule } from './agent/agent.module';
@@ -48,7 +47,6 @@ import { typeOrmBaseOptions } from './data-source';
     // modules ici, contrairement à un chemin partagé.
     AppLinksModule,
     CommuneModule,
-    ZoneModule,
     CommercantModule,
     PromoModule,
     AgentModule,

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -135,6 +136,19 @@ export class CommercantController {
   ) {
     const commercant = await this.commercantService.updateProfile(user.sub, dto);
     return this.toMeJson(commercant);
+  }
+
+  /**
+   * Suppression de compte par le commerçant lui-même — soft delete
+   * uniquement (`deletedAt`), jamais de suppression physique.
+   */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('commercant')
+  @Delete('me')
+  async deleteMe(@CurrentUser() user: AuthTokenPayload): Promise<{ ok: true }> {
+    await this.commercantService.deleteAccount(user.sub);
+    return { ok: true };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

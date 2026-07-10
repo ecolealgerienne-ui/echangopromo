@@ -878,20 +878,291 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
     interne, port `3000` du conteneur).
   - Migrations : déjà automatiques au démarrage du conteneur (`Dockerfile`
     CMD), rien de nouveau à faire pour ça sur le VPS.
-  - Modèles d'env ajoutés (jamais commités en clair, gitignorés) :
-    `.env.promo.example` (racine, variables du fichier compose :
-    `POSTGRES_PASSWORD`, `BASE_DOMAIN`) et
-    `apps/backend/.env.production.example` (variante prod de
-    `.env.example` : hôte Postgres interne `postgres`, S3 OVH au lieu de
-    MinIO, pas de credentials admin en clair — à passer en argument CLI au
-    moment du seed).
+  - Modèle d'env ajouté (jamais commité en clair, gitignoré) :
+    `.env.production.example` à la racine du repo — **un seul fichier**
+    (pas deux, voir entrée suivante), utilisé à la fois comme `--env-file`
+    de `docker compose` (substitution `${POSTGRES_PASSWORD}`/`${BASE_DOMAIN}`
+    dans `docker-compose.promo.yml`) et comme `env_file:` du service
+    `backend` (`DATABASE_URL`, `JWT_SECRET`, S3 OVH, etc.).
   - Procédure complète (premier déploiement, seeds, redéploiement) :
     `docs/DEPLOIEMENT_VPS.md`.
   - **Décision actée avec l'utilisateur** : pas d'automatisation GitHub
     Actions pour le déploiement pour l'instant (`git pull` manuel sur le
     VPS) — à revoir plus tard sans remettre en cause le fonctionnement en
     local.
-  - **Non exécuté dans mon environnement** : build Docker réel, `docker
-    compose config` de validation, exécution des seeds contre un vrai
-    Postgres — à confirmer par l'utilisateur sur le VPS avant de considérer
-    ce point terminé.
+
+- **2026-07-05 (suite) : premier déploiement réel sur le VPS — 3 incidents
+  trouvés et corrigés en direct avec l'utilisateur.**
+  - **`package-lock.json` désynchronisé de `package.json`** (`typeorm`
+    verrouillé sur `^1.0.0` dans le lock alors que `package.json` déclare
+    `^0.3.20`, + une dizaine de paquets transitifs manquants du lock) —
+    invisible en local (`npm install` tolère l'écart) mais bloquant en
+    prod (`npm ci`, volontairement strict, utilisé par le `Dockerfile`).
+    Préexistant, sans lien avec les changements de cette session (vérifié
+    par `git log -p` sur le fichier). Corrigé par l'utilisateur (`npm
+    install` local, lock file régénéré et commité).
+  - **Mot de passe Postgres avec caractère réservé URL (`?`) dans
+    `DATABASE_URL`** → `TypeError: Invalid URL` côté `pg-connection-string`
+    (le `?` démarre une query string). Poussé à choisir un mot de passe
+    alphanumérique pur plutôt que d'encoder en `%3F` (plus sûr, évite toute
+    classe d'erreur d'encodage similaire à l'avenir).
+  - **Deux fichiers d'env (`.env.promo` + `apps/backend/.env.production`)
+    fusionnés en un seul** (`.env.production` à la racine) après une
+    session de debug longue sur un `password authentication failed`
+    finalement dû à un volume Postgres déjà initialisé avec un ancien mot
+    de passe (Postgres ne fixe le mot de passe qu'à la création du
+    cluster, jamais après — `down -v` + recréation du volume nécessaires
+    après tout changement de `POSTGRES_PASSWORD`). La duplication du même
+    secret dans deux fichiers séparés était elle-même une source d'erreur
+    évitable ; un seul fichier sert maintenant à la fois de `--env-file`
+    docker compose et d'`env_file` du service `backend`.
+  - `docker-compose.promo.yml` et `docs/DEPLOIEMENT_VPS.md` mis à jour en
+    conséquence.
+
+- **2026-07-05 (suite) : cause réelle du `password authentication failed`
+  trouvée — collision de nom DNS entre deux stacks Docker sur le même
+  réseau partagé, pas un problème de mot de passe.** Après avoir vérifié à
+  l'octet près que le mot de passe était identique des deux côtés (aucun
+  caractère invisible, même longueur, même décodage par `pg-connection-string`,
+  la bibliothèque réellement utilisée par `pg`/TypeORM) et que Postgres
+  s'authentifiait correctement en local (socket **et** boucle TCP
+  `127.0.0.1`), le test décisif a été : `docker compose run --rm backend
+  getent hosts postgres` → résolvait vers l'IP de `echango-postgres-1` (la
+  stack **Vendure**, autre projet Compose sur le même VPS), pas vers notre
+  propre conteneur `echangopromo-postgres-1`. Le service Postgres de cette
+  stack et celui de la stack Vendure portaient tous les deux le nom
+  générique `postgres`, tous deux attachés au réseau externe partagé
+  `echango_network` (nécessaire pour que Traefik route `backend`) — le
+  backend, connecté aux deux réseaux, résolvait le nom vers le mauvais
+  conteneur. Le backend tentait donc de s'authentifier sur la base
+  Vendure, où le rôle `echango` n'existe pas, d'où l'échec systématique
+  peu importe les corrections de mot de passe.
+  - **Fix** : service renommé `postgres` → `postgres_promo` dans
+    `docker-compose.promo.yml` (`depends_on`, healthcheck inchangés) et
+    `DATABASE_URL` dans `.env.production.example` mis à jour
+    (`@postgres_promo:5432`). Commentaire ajouté directement dans le
+    fichier compose pour que ce choix de nom ne soit pas défait par
+    inadvertance plus tard.
+  - Leçon générale documentée dans `docs/DEPLOIEMENT_VPS.md` : sur un
+    réseau Docker externe partagé entre plusieurs stacks, ne jamais nommer
+    un service avec un nom générique (`postgres`, `redis`, `db`...) —
+    toujours vérifier avec `docker compose run --rm <service> getent
+    hosts <nom>` que la résolution DNS pointe bien vers le conteneur
+    attendu avant de chercher un bug ailleurs (mot de passe, encodage,
+    etc.).
+  - **Confirmé par l'utilisateur sur le VPS** : après renommage en
+    `postgres_promo`, migrations passées, backend démarré sans erreur.
+
+- **2026-07-05 (suite) : les seeds échouaient encore (`relation "admin"
+  does not exist`) — cause distincte des incidents précédents, la vraie
+  découverte de cette session de déploiement.** Aucun fichier de migration
+  TypeORM n'avait jamais été commité dans le repo (`apps/backend/src/migrations/`
+  inexistant côté git, confirmé par `git log --all`), alors que
+  `docs/status_v0.md`/`CLAUDE.md` documentaient déjà des migrations comme
+  si elles existaient. `migration:run` s'exécutait "avec succès" sur le VPS
+  (base neuve) sans rien créer, faute de migration à appliquer — d'où un
+  backend qui démarre proprement mais une base totalement vide. La base de
+  dev locale de l'utilisateur avait ses tables, mais via 2 fichiers de
+  migration générés localement à un moment donné et jamais poussés (dette
+  silencieuse : "ça marche chez moi" masquait l'absence complète côté
+  dépôt).
+  - **Fix** : les 2 migrations locales préexistantes
+    (`1783192047695-InitialSchema.ts`,
+    `1783213583514-AddCommercantTokenVersionAndIndexes.ts`) commitées et
+    poussées. Une 3ᵉ migration générée par erreur au passage (diff contre
+    une base vide, donc un doublon complet du schéma) a été détectée et
+    supprimée avant commit — testée en conditions réelles : les 2
+    migrations d'origine créent bien tout le schéma sans erreur
+    (`admin`, `zone`, `agent`, `commercant`, `commune`, `promo`, `report`,
+    `audit_log`, toutes les FK), la 3ᵉ plantait sur `relation "zone"
+    already exists` en tentant de recréer ce que la 1ʳᵉ avait déjà créé.
+  - Sur le VPS : migrations appliquées, `\dt` confirme toutes les tables,
+    `npm run seed:admin:prod` et `seed:communes:prod` **exécutés avec
+    succès** (premier compte admin créé, 35 communes de Djelfa insérées).
+  - **Routage Traefik confirmé** : `curl -I https://promo.echango.com/promo`
+    → `HTTP/2 200`, headers de sécurité présents (HSTS, CSP-adjacents,
+    rate-limit visible). **Déploiement backend + DB sur le VPS
+    fonctionnel de bout en bout.**
+
+- **2026-07-06 : audit de sécurité prod (`docs/AUDIT_SECURITE_PROD_2026-07.md`)
+  et découverte d'une incompatibilité OVH bloquant l'upload de photos.**
+  - Audit mené par phases (reconnaissance passive, revue statique OWASP
+    Top 10:2021, LLM sans objet, API/cookies, rapport final) — 1 problème
+    réel trouvé et corrigé : `main.ts` ne configurait pas `app.set('trust
+    proxy', 1)`, donc `req.ip` valait l'IP interne de Traefik pour toutes
+    les requêtes derrière le reverse proxy, faisant partager le même
+    compteur de rate-limiting (`@nestjs/throttler`) à tous les
+    utilisateurs au lieu d'isoler chaque IP réelle.
+  - **Upload de photo cassé en prod, découvert au premier test réel** :
+    OVH (S3 utilisé en prod) renvoie `501 Not Implemented — "POST Object
+    is disabled on this deployment"` sur l'API S3 "POST Object" — la POST
+    policy pré-signée (choisie initialement pour que `content-length-range`
+    soit imposé par S3 lui-même, `AUDIT_V1.md`) ne fonctionne donc pas sur
+    ce fournisseur. Un simple PUT pré-signé, lui, fonctionne (testé et
+    confirmé), mais perd cette garantie de taille imposée par S3.
+  - **Décision produit (utilisateur)** : upload proxifié par le backend
+    plutôt qu'un PUT pré-signé. Le fichier transite par
+    `POST /storage/upload` (`FileInterceptor`), le backend valide taille
+    (5 Mo) et format (magic bytes, sur les octets déjà en mémoire) *avant*
+    tout envoi à S3 via `PutObject` — remplace l'ancienne vérification a
+    posteriori (`assertValidImage`, un `GetObject` après upload, retirée
+    des 5 sites d'appel dans `promo.service.ts`/`commercant.service.ts`
+    car devenue inutile : un fichier invalide n'atteint plus jamais S3).
+    Mobile (`storage_api.dart`) simplifié en conséquence — un seul Dio
+    authentifié, plus de POST direct vers S3.
+  - Nouveau code d'erreur `STORAGE_FILE_TOO_LARGE` ajouté dans les 3
+    mappings mobile (`error_messages_{fr,en,ar}.dart`) dans le même commit
+    (CLAUDE.md règle #26).
+  - Dépendances backend nettoyées : `@aws-sdk/s3-presigned-post` et
+    `@aws-sdk/s3-request-presigner` retirées (plus utilisées),
+    `@types/multer` ajouté (typage `Express.Multer.File`).
+  - **À faire côté utilisateur** : `npm install` local (nouvelle
+    dépendance `@types/multer`, régénère le lock file), `npm run build`/
+    `lint`, puis déployer sur le VPS (`git pull` + rebuild `backend`) et
+    retester un vrai upload de photo depuis l'app mobile.
+
+- **2026-07-06 (suite) : upload OK, mais photo non affichée — 2ᵉ
+  incompatibilité OVH trouvée (style d'URL).** Après déploiement du fix
+  précédent, l'upload fonctionnait (fichier bien présent dans le bucket,
+  vérifié via la console OVH), mais la photo ne s'affichait jamais dans
+  l'app. Diagnostic par test `curl` direct de l'URL publique construite
+  par `buildPublicUrl` :
+  - Style "path" (`s3.gra.io.cloud.ovh.net/echango-promo/<clé>`, ce que le
+    code construisait) → `400 InvalidRequest — "Not S3 request"` : **OVH
+    rejette purement et simplement les requêtes anonymes en style path.**
+  - Style "virtual-hosted" (`echango-promo.s3.gra.io.cloud.ovh.net/<clé>`)
+    → `403 AccessDenied` propre (URL correcte, mais lecture publique
+    jamais activée sur le bucket — action restée en attente depuis la
+    configuration S3 initiale).
+  - **Fix code** : `buildPublicUrl` bascule en style virtual-hosted quand
+    `S3_PUBLIC_URL_VIRTUAL_HOSTED=true` (nouvelle variable, à `true`
+    uniquement dans `.env.production` pour OVH — le client S3 authentifié
+    garde `forcePathStyle: true` pour les opérations PUT/DELETE,
+    compatible MinIO en dev local, seule l'URL publique change de style).
+  - **Bucket policy indisponible sur OVH, ni via la console ni via l'API**
+    : pas d'onglet "Confidentialité" dans la console (onglets disponibles :
+    Informations générales/Objets/Réplication/Lifecycle), et
+    `PutBucketPolicyCommand` renvoie `NotImplemented` (testé directement
+    en script). Solution retenue : **ACL par objet** (`ACL: 'public-read'`
+    sur chaque `PutObjectCommand`) — testée isolément et confirmée (`curl`
+    anonyme sur un objet avec cet ACL → `200 OK`).
+  - **Fix appliqué** : `StorageService.uploadPhoto` envoie désormais
+    `ACL: 'public-read'` à chaque upload — les photos sont publiques dès
+    l'upload, sans dépendre d'une config bucket-level indisponible chez ce
+    fournisseur. Les photos uploadées avant ce fix (tests précédents)
+    restent privées et doivent être re-uploadées pour être visibles.
+  - **Confirmé sur le VPS** : `curl` sur une clé S3 réelle (uploadée après
+    le rebuild avec l'ACL) → `200 OK`. La chaîne backend/S3 fonctionne de
+    bout en bout.
+
+- **2026-07-09 : photo toujours pas visible dans l'app malgré un backend
+  100% fonctionnel — bug distinct, côté mobile cette fois.** L'URL S3
+  confirmée en `200` ne s'affichait pourtant pas en rouvrant l'écran
+  profil commerçant. Cause trouvée en lisant `PhotoPickerField` : ce
+  widget n'affichait qu'une photo **locale** fraîchement choisie
+  (`File?`) — aucune prise en charge d'une photo déjà enregistrée côté
+  serveur, donc un écran d'édition rouvert n'affichait qu'un placeholder
+  vide, indépendamment de tout ce qu'on avait corrigé côté S3.
+  - **Fix** : `PhotoPickerField` accepte désormais `existingImageUrl`
+    (affiché via `Image.network` tant qu'aucune nouvelle photo locale
+    n'est choisie), propagé via `PromoFormFields.existingPhotoUrl` et
+    câblé dans `promo_form_screen.dart`
+    (`widget.existingPromo?.photoUrl`) et `edit_profile_screen.dart`
+    (`me.photoUrl`, qui jetait auparavant cette donnée avec `data: (_) =>`).
+  - Leçon de cette session de debug : les symptômes "photo pas affichée"
+    avaient deux causes complètement indépendantes empilées (S3/ACL côté
+    backend, puis widget mobile jamais câblé pour l'affichage
+    d'une photo existante) — corriger la première n'a naturellement rien
+    changé à la seconde.
+
+- **2026-07-09 : première UI admin (jusque-là API seule, decision V0
+  révisée).** L'API admin existait déjà en quasi-totalité (agents,
+  modération, registre, dashboard) — jamais reliée à un écran. Wave 1 :
+  login + dashboard + les 3 files de travail existantes.
+  - **Backend** : 2 lacunes trouvées et corrigées en construisant l'UI
+    dessus.
+    - `GET /admin/moderation/queue` renvoyait l'entité `Promo` brute
+      (sûre grâce à `@Exclude()`, mais sans `photoUrl` jamais calculé ni
+      contact du commerçant) — remplacé par un DTO explicite
+      (`admin.controller.ts`).
+    - Aucun moyen de **lister** les commerçants en attente de vérification
+      registre (seuls valider/rejeter par id existaient) — ajout de
+      `CommercantService.findPendingRegistreVerification` +
+      `GET /admin/commercant/registre/queue`.
+  - **Mobile** : nouveau rôle `AppRole.admin`, module `features/admin/`
+    (login, dashboard, file de modération, file de vérification registre,
+    gestion agents + création, gestion zones + transfert de zone entre
+    agents), routes protégées par rôle (`router.dart`, règle CLAUDE.md
+    #22). **Décision produit, affinée après discussion** : pas d'entrée
+    admin dans le menu public "espace pro" ni dans un menu quelconque —
+    le point d'entrée est **caché dans l'écran de login commerçant
+    existant** (`commercant_login_screen.dart`) : taper un email au lieu
+    d'un numéro de téléphone dans le champ "Téléphone" (apparence
+    inchangée) bascule ce même écran vers l'authentification admin
+    (email + mot de passe, clavier/validateur/longueur du 2ᵉ champ
+    ajustés dynamiquement, liens spécifiques commerçant masqués). Un seul
+    compte admin en V0, pas de réel enjeu de découvrabilité au-delà de ça
+    (login toujours protégé par mot de passe + rate limiting).
+  - **Reste (wave 2, pas demandée pour l'instant)** : rien d'urgent
+    identifié au-delà de ce périmètre — l'API couvre déjà tout ce que
+    l'UI expose maintenant.
+  - **Non exécuté dans mon environnement** : `flutter analyze` (nouveau
+    module complet, 7 écrans) — à lancer en priorité avant de tester,
+    conformément à la consigne du projet.
+
+- **2026-07-09 : abandon complet du concept de Zone opérationnelle,
+  remplacé par une relation many-to-many `Agent` ↔ `Commune`.** Décision
+  produit explicite : un agent doit pouvoir couvrir plusieurs communes,
+  voire une wilaya entière, le staffing "un agent par commune" n'étant pas
+  soutenable — et le rôle agent lui-même est amené à disparaître à
+  l'extension multi-wilaya, donc pas d'investissement dans un découpage
+  opérationnel séparé. Déclenché par une confusion utilisateur bien réelle
+  (l'écran de création d'agent montrait un sélecteur "Zone" vide, alors que
+  le référentiel `Commune` était déjà peuplé — les deux avaient toujours
+  été des tables distinctes, specs §5.2).
+  - **Backend** : `src/zone/` supprimé entièrement (entité, service,
+    contrôleur, DTOs). `Agent.zoneId` (`@ManyToOne`) remplacé par
+    `Agent.communes` (`@ManyToMany` + `@JoinTable('agent_communes')`).
+    `Commercant.zoneId` supprimé (redondant avec `Commercant.communeId`,
+    déjà la référence utilisée pour le filtrage/IDOR — pas de perte
+    d'information). `AgentService` : `assignZone`/`transferZone` deviennent
+    `assignCommunes`/`transferCommunes` (remplacent tout l'ensemble
+    assigné plutôt qu'un id unique) ; `CommuneService.findByIds` ajouté
+    pour résoudre un lot d'ids en une requête. `CommercantService` :
+    `assertZoneMatches` → `assertCommuneMatches(commercantId,
+    agentCommuneIds: string[])`, `listByZoneWithVisitStatus` →
+    `listByCommunesWithVisitStatus(communeIds)`. IDOR (règle CLAUDE.md #1)
+    rebranché à l'identique sur `PromoController.assertCanManage`/
+    `.createByAgent` et `AgentController.createCommercant`, désormais basé
+    sur `agent.communes.map(c => c.id)`. `ErrorCode` : `ZONE_NOT_FOUND`
+    supprimé, `AGENT_NO_ZONE_ASSIGNED`/`AGENT_ZONE_NOT_ASSIGNED_TO_AGENT`/
+    `COMMERCANT_NOT_IN_AGENT_ZONE` renommés en leurs équivalents
+    `_COMMUNE_`. Migration `1783670000000-RemoveZoneAddAgentCommunes` :
+    drop des FK/colonnes `zoneId` (agent + commercant), drop de la table
+    `zone`, création de `agent_communes`. **Pas de migration de données**
+    (une Zone ne correspond à aucune Commune précise — réassignation
+    manuelle à refaire côté admin après déploiement).
+  - **Mobile** : `domain/models/zone.dart` et `zone_commerce.dart`
+    supprimés (`zone_commerce.dart` → `commune_commerce.dart`,
+    `Agent.zoneId` → `Agent.communes: List<Commune>`). Nouveau widget
+    partagé `CommuneMultiSelectField` (sélection wilaya → cases à cocher
+    communes + "tout sélectionner dans cette wilaya", commodité d'UI qui
+    ne fait que cocher en masse — pas un champ distinct). Écran
+    `zone_list_screen.dart` supprimé entièrement (plus de CRUD Zone côté
+    admin) ; bouton "Zones" retiré du dashboard admin.
+    `zone_commerces_screen.dart` → `commune_commerces_screen.dart`
+    (`ZoneCommercesScreen` → `CommuneCommercesScreen`, route `/agent/zone`
+    → `/agent/communes`). `agent_list_screen.dart`/`create_agent_screen.dart`
+    reconstruits sur `CommuneMultiSelectField` ; le transfert entre deux
+    agents restreint désormais la sélection aux communes réellement
+    assignées à l'agent source. `error_messages_{fr,en,ar}.dart` et les 3
+    `.arb` mis à jour dans le même commit (règles CLAUDE.md #26/#27) :
+    `zoneTitle`/`zoneEmpty` → `myCommunesTitle`/`communesEmptyForAgent`,
+    `assignZoneLabel`/`transferZoneLabel` → `assignCommunesLabel`/
+    `transferCommunesLabel`, `zonesLabel`/`noZonesYet`/`newZoneLabel`/
+    `zoneLabel`/`noZoneLabel`/`zoneDescriptionLabel` supprimés (plus
+    d'écran CRUD Zone), `selectAllInWilayaLabel`/`communesSelectedCount`
+    ajoutés pour le nouveau widget.
+  - **Non exécuté dans mon environnement** : `flutter analyze` — nouveau
+    widget + 4 écrans réécrits, à lancer avant tout autre travail sur ce
+    module (consigne du projet).

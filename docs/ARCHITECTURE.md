@@ -13,7 +13,7 @@ stack technique**, avec les adaptations suivantes propres à son domaine
 
 | Sujet | Décision | Raison |
 |---|---|---|
-| Moteur backend | **NestJS "nu"**, sans le framework e-commerce Vendure | Vendure modélise catalogue/commandes/paiement — inadapté au domaine promo (commerçant/promo/zone/signalement). Reprendre uniquement NestJS + TypeScript + PostgreSQL évite de détourner un moteur e-commerce pour un besoin différent. |
+| Moteur backend | **NestJS "nu"**, sans le framework e-commerce Vendure | Vendure modélise catalogue/commandes/paiement — inadapté au domaine promo (commerçant/promo/commune/signalement). Reprendre uniquement NestJS + TypeScript + PostgreSQL évite de détourner un moteur e-commerce pour un besoin différent. |
 | Style d'API | **REST** | Le domaine ne justifie pas la complexité GraphQL (pas de requêtes imbriquées type catalogue). REST est plus rapide à mettre en place et à faire évoluer pour ce périmètre. |
 | Base de données | **PostgreSQL** + TypeORM | Cohérent avec l'écosystème echango existant. |
 | Stockage images | **S3 OVH** (compatible API S3), via `@aws-sdk/client-s3` | Décision explicite des specs (§5.8), même SDK que le projet Vendure. |
@@ -41,12 +41,11 @@ echangopromo/
 
 Modules NestJS calqués sur les entités des specs (§4) :
 
-- `commune` — référentiel administratif (wilaya → commune), lecture seule côté client.
-- `zone` — découpage opérationnel agent, distinct de `commune` (§5.2, ne pas fusionner).
+- `commune` — référentiel administratif (wilaya → commune), lecture seule côté client, et utilisé aussi pour rattacher un agent à son territoire (le concept de Zone opérationnelle séparée a été abandonné le 2026-07-09).
 - `commercant` — fiche, cycle de vie du compte, niveau de vérification, auth téléphone+PIN (pas d'OTP — décision produit, §3.2 des specs).
 - `promo` — CRUD promo, plafond de 5 actives (§5.3), job d'expiration (§5.1).
-- `agent` — compte agent, auth email+mot de passe, rattachement à une zone.
-- `admin` — auth email+mot de passe, modération, gestion zones/agents.
+- `agent` — compte agent, auth email+mot de passe, rattaché à zéro, une ou plusieurs `Commune` (many-to-many) — "assigner toute la wilaya" est une commodité d'UI qui sélectionne en masse les communes de cette wilaya, pas un champ distinct.
+- `admin` — auth email+mot de passe, modération, gestion agents/communes.
 - `report` — signalements anti-fraude par device_id (§5.4).
 - `audit-log` — traçabilité des actions agent/admin.
 - `storage` — intégration S3 OVH, compression déléguée au client, cron de purge à 1 mois (§5.8). Préfixe de clé selon l'usage (`promo-photos/` purgé, `commercant-photos/` permanent — photo de commerce optionnelle).
@@ -67,11 +66,11 @@ lib/
 ├── data/
 │   ├── api/        # clients REST (dio/http)
 │   └── local/      # device ID, favoris, ville/commune sélectionnée
-├── domain/         # modèles (Promo, Commercant, Zone, ...)
+├── domain/         # modèles (Promo, Commercant, Commune, ...)
 └── features/
     ├── client/     # liste promos, fiche promo, favoris, signalement
     ├── commercant/ # auth PIN, gestion promos, dashboard stats
-    └── agent/      # liste commerces de zone, création fiche, capture photo obligatoire
+    └── agent/      # liste commerces des communes couvertes, création fiche, capture photo obligatoire
 ```
 
 Position GPS optionnelle du commerce via `geolocator` (localisation native,
@@ -91,8 +90,8 @@ L'API REST (`apps/backend`) implémente l'ensemble des règles métier des
 specs V0 : cycle de vie commerçant (auto-inscription et création agent,
 PIN sans OTP, PIN oublié réinitialisé par l'admin), plafond et expiration
 des promos, anti-fraude signalements avec fenêtre d'ignore 30 jours,
-zones/transfert d'agent, modération et dashboard admin, upload S3
-pré-signé, communes. Vérifié de bout en bout localement (build, lint, et
+assignation/transfert de communes entre agents, modération et dashboard
+admin, upload S3, communes. Vérifié de bout en bout localement (build, lint, et
 parcours API réel via curl : inscription → publication → signalement →
 seuil → résolution admin → plafond de 5 promos).
 

@@ -23,13 +23,11 @@ const Map<String, String> errorMessagesFr = {
 
   'ADMIN_NOT_FOUND': 'Administrateur introuvable.',
 
-  'ZONE_NOT_FOUND': 'Zone introuvable.',
-
   'AGENT_EMAIL_TAKEN': 'Cet email est déjà utilisé par un agent.',
   'AGENT_NOT_FOUND': 'Agent introuvable.',
-  'AGENT_NO_ZONE_ASSIGNED': "Cet agent n'est rattaché à aucune zone.",
-  'AGENT_ZONE_NOT_ASSIGNED_TO_AGENT':
-      "Cette zone n'est pas actuellement assignée à cet agent.",
+  'AGENT_NO_COMMUNE_ASSIGNED': "Cet agent n'est rattaché à aucune commune.",
+  'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT':
+      "Au moins une de ces communes n'est pas actuellement assignée à cet agent.",
 
   'COMMUNE_NOT_FOUND': 'Commune introuvable.',
 
@@ -38,6 +36,7 @@ const Map<String, String> errorMessagesFr = {
   'DEVICE_ID_MISSING': "Identifiant d'appareil manquant. Redémarrez l'application.",
 
   'STORAGE_INVALID_IMAGE': "Le fichier envoyé n'est pas une image valide. Réessayez avec une photo.",
+  'STORAGE_FILE_TOO_LARGE': 'La photo est trop volumineuse. Réessayez avec une autre photo.',
 
   'PROMO_NOT_FOUND': 'Promotion introuvable.',
   'PROMO_NOT_OWNED_BY_COMMERCANT': "Cette promotion n'appartient pas à ce commerçant.",
@@ -52,7 +51,7 @@ const Map<String, String> errorMessagesFr = {
   'COMMERCANT_PIN_ALREADY_SET':
       'Un PIN est déjà défini pour ce numéro — contactez un administrateur pour le réinitialiser.',
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'Aucune demande de vérification en attente.',
-  'COMMERCANT_NOT_IN_AGENT_ZONE': "Ce commerçant n'est pas dans la zone de cet agent.",
+  'COMMERCANT_NOT_IN_AGENT_COMMUNES': "Ce commerçant n'est dans aucune des communes de cet agent.",
 
   'RATE_LIMITED': 'Trop de tentatives. Réessayez dans quelques instants.',
   'HTTP_ERROR': 'Une erreur est survenue.',

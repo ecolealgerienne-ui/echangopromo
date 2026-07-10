@@ -114,7 +114,6 @@ export class PromoService {
   async create(commercantId: string, dto: CreatePromoDto): Promise<Promo> {
     await this.commercantService.findByIdOrFail(commercantId);
     this.assertPriceOrder(dto.prixAvant, dto.prixApres);
-    await this.storageService.assertValidImage(dto.photoKey);
 
     const base = {
       commercantId,
@@ -204,7 +203,10 @@ export class PromoService {
       .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
         moderationStatuses: VISIBLE_MODERATION_STATUSES,
       })
-      .andWhere('promo.dateFin > NOW()');
+      .andWhere('promo.dateFin > NOW()')
+      // Compte commerçant supprimé (soft delete) : ses promos ne doivent
+      // plus apparaître aux clients, sans avoir à muter chaque promo.
+      .andWhere('commercant.deletedAt IS NULL');
 
     if (query.communeId) {
       qb.andWhere('commercant.communeId = :communeId', {
@@ -359,14 +361,21 @@ export class PromoService {
     const prixAvant = dto.prixAvant ?? Number(promo.prixAvant);
     const prixApres = dto.prixApres ?? Number(promo.prixApres);
     this.assertPriceOrder(prixAvant, prixApres);
-    if (dto.photoKey) await this.storageService.assertValidImage(dto.photoKey);
+    const previousPhotoKey = promo.photoKey;
 
     Object.assign(promo, {
       ...dto,
       prixAvant: dto.prixAvant?.toFixed(2) ?? promo.prixAvant,
       prixApres: dto.prixApres?.toFixed(2) ?? promo.prixApres,
     });
-    return this.promos.save(promo);
+    const saved = await this.promos.save(promo);
+    // Remplacement de photo : l'ancienne devient orpheline dans S3 si on ne
+    // la supprime pas explicitement (buildKey génère toujours une nouvelle
+    // clé UUID, jamais un remplacement en place).
+    if (dto.photoKey && previousPhotoKey && dto.photoKey !== previousPhotoKey) {
+      await this.storageService.deleteObject(previousPhotoKey);
+    }
+    return saved;
   }
 
   /** Une promo est censée être une réduction — le prix après doit être strictement inférieur. */

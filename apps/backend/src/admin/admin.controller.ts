@@ -10,9 +10,9 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AgentService } from '../agent/agent.service';
-import { AssignZoneDto } from '../agent/dto/assign-zone.dto';
+import { AssignCommunesDto } from '../agent/dto/assign-communes.dto';
 import { CreateAgentDto } from '../agent/dto/create-agent.dto';
-import { TransferZoneDto } from '../agent/dto/transfer-zone.dto';
+import { TransferCommunesDto } from '../agent/dto/transfer-communes.dto';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { AuditActorType } from '../audit-log/entities/audit-log.entity';
 import { AuthService } from '../auth/auth.service';
@@ -26,6 +26,7 @@ import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
 import { PromoService } from '../promo/promo.service';
 import { ReportService } from '../report/report.service';
+import { StorageService } from '../storage/storage.service';
 import { AdminService } from './admin.service';
 import { LoginAdminDto } from './dto/login-admin.dto';
 import { ModerationService } from './moderation.service';
@@ -41,6 +42,7 @@ export class AdminController {
     private readonly authService: AuthService,
     private readonly auditLogService: AuditLogService,
     private readonly moderationService: ModerationService,
+    private readonly storageService: StorageService,
   ) {}
 
   @Throttle(STRICT_THROTTLE)
@@ -109,9 +111,12 @@ export class AdminController {
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  @Patch('agent/:id/zone')
-  async assignZone(@Param('id') agentId: string, @Body() dto: AssignZoneDto) {
-    return this.agentService.assignZone(agentId, dto.zoneId ?? null);
+  @Patch('agent/:id/communes')
+  async assignCommunes(
+    @Param('id') agentId: string,
+    @Body() dto: AssignCommunesDto,
+  ) {
+    return this.agentService.assignCommunes(agentId, dto.communeIds);
   }
 
   /** Révoque les JWT déjà émis pour cet agent (device perdu/volé, départ — audit règle #6). */
@@ -134,27 +139,27 @@ export class AdminController {
     return { ok: true };
   }
 
-  /** Transfère une zone d'un agent à un autre (specs §3.4). */
+  /** Transfère un lot de communes d'un agent à un autre (specs §3.4). */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  @Post('agent/transfer-zone')
-  async transferZone(
+  @Post('agent/transfer-communes')
+  async transferCommunes(
     @CurrentUser() user: AuthTokenPayload,
-    @Body() dto: TransferZoneDto,
+    @Body() dto: TransferCommunesDto,
   ) {
-    await this.agentService.transferZone(
-      dto.zoneId,
+    await this.agentService.transferCommunes(
+      dto.communeIds,
       dto.fromAgentId,
       dto.toAgentId,
     );
     await this.auditLogService.record({
       actorType: AuditActorType.ADMIN,
       actorId: user.sub,
-      action: 'transfer_zone',
-      targetType: 'zone',
-      targetId: dto.zoneId,
-      metadata: { fromAgentId: dto.fromAgentId, toAgentId: dto.toAgentId },
+      action: 'transfer_communes',
+      targetType: 'agent',
+      targetId: dto.toAgentId,
+      metadata: { communeIds: dto.communeIds, fromAgentId: dto.fromAgentId },
     });
     return { ok: true };
   }
@@ -163,7 +168,28 @@ export class AdminController {
   @Roles('admin')
   @Get('moderation/queue')
   async moderationQueue(@Query() query: PaginationQueryDto) {
-    return this.moderationService.queue(query.page, query.limit);
+    const result = await this.moderationService.queue(query.page, query.limit);
+    return {
+      ...result,
+      // DTO explicite plutôt qu'un spread d'entité (règle #4) — la file de
+      // modération n'exposait ni photoUrl (jamais calculé, `photoKey` est
+      // @Exclude()) ni le contact du commerçant, rendant la décision de
+      // modération difficile sans ces informations.
+      items: result.items.map(({ promo, activeReportCount }) => ({
+        id: promo.id,
+        description: promo.description,
+        prixAvant: promo.prixAvant,
+        prixApres: promo.prixApres,
+        categorie: promo.categorie,
+        photoUrl: promo.photoKey ? this.storageService.buildPublicUrl(promo.photoKey) : null,
+        lifecycleStatus: promo.lifecycleStatus,
+        moderationStatus: promo.moderationStatus,
+        activeReportCount,
+        commercantId: promo.commercant.id,
+        commercantNom: promo.commercant.nom,
+        commercantTelephone: promo.commercant.telephone,
+      })),
+    };
   }
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)
@@ -200,6 +226,29 @@ export class AdminController {
   ) {
     await this.moderationService.avertir(user.sub, promoId);
     return { ok: true };
+  }
+
+  /** File d'attente des vérifications registre en attente (specs §3.4). */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Get('commercant/registre/queue')
+  async registreQueue(@Query() query: PaginationQueryDto) {
+    const result = await this.commercantService.findPendingRegistreVerification(
+      query.page,
+      query.limit,
+    );
+    return {
+      ...result,
+      items: result.items.map((commercant) => ({
+        id: commercant.id,
+        nom: commercant.nom,
+        telephone: commercant.telephone,
+        registreUrl: commercant.registreKey
+          ? this.storageService.buildPublicUrl(commercant.registreKey)
+          : null,
+        createdAt: commercant.createdAt,
+      })),
+    };
   }
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)

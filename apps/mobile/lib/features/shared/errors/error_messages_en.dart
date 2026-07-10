@@ -10,12 +10,11 @@ const Map<String, String> errorMessagesEn = {
 
   'ADMIN_NOT_FOUND': 'Administrator not found.',
 
-  'ZONE_NOT_FOUND': 'Zone not found.',
-
   'AGENT_EMAIL_TAKEN': 'This email is already used by an agent.',
   'AGENT_NOT_FOUND': 'Agent not found.',
-  'AGENT_NO_ZONE_ASSIGNED': 'This agent is not assigned to any zone.',
-  'AGENT_ZONE_NOT_ASSIGNED_TO_AGENT': 'This zone is not currently assigned to this agent.',
+  'AGENT_NO_COMMUNE_ASSIGNED': 'This agent is not assigned to any commune.',
+  'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT':
+      'At least one of these communes is not currently assigned to this agent.',
 
   'COMMUNE_NOT_FOUND': 'Municipality not found.',
 
@@ -24,6 +23,7 @@ const Map<String, String> errorMessagesEn = {
   'DEVICE_ID_MISSING': 'Missing device identifier. Restart the app.',
 
   'STORAGE_INVALID_IMAGE': 'The uploaded file is not a valid image. Try again with a photo.',
+  'STORAGE_FILE_TOO_LARGE': 'The photo is too large. Try again with another photo.',
 
   'PROMO_NOT_FOUND': 'Promo not found.',
   'PROMO_NOT_OWNED_BY_COMMERCANT': 'This promo does not belong to this merchant.',
@@ -37,7 +37,7 @@ const Map<String, String> errorMessagesEn = {
   'COMMERCANT_PIN_ALREADY_SET':
       'A PIN is already set for this number — contact an administrator to reset it.',
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'No pending verification request.',
-  'COMMERCANT_NOT_IN_AGENT_ZONE': 'This merchant is not in this agent\'s zone.',
+  'COMMERCANT_NOT_IN_AGENT_COMMUNES': 'This merchant is not in any of this agent\'s communes.',
 
   'RATE_LIMITED': 'Too many attempts. Please try again shortly.',
   'HTTP_ERROR': 'An error occurred.',
