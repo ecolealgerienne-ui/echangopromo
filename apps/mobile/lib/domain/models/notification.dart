@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show Locale;
 import 'package:intl/intl.dart';
 
 enum NotificationType {

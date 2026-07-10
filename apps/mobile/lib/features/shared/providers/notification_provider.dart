@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/notification_api.dart';
-import '../../../domain/models/notification.dart';
 import '../../../providers/core_providers.dart';
 
 /// Liste des notifications non lues (paginées)

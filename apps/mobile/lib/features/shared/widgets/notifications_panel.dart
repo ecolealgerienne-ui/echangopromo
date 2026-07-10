@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../domain/models/notification.dart';
+import '../../../domain/models/notification.dart' as domain;
 import '../providers/notification_provider.dart';
 
 class NotificationsPanel extends ConsumerWidget {
@@ -56,27 +56,27 @@ class _NotificationTile extends ConsumerWidget {
     required this.onMarkAsRead,
   });
 
-  final Notification notification;
+  final domain.Notification notification;
   final VoidCallback onMarkAsRead;
 
-  Color _getIconColor(NotificationType type) {
+  Color _getIconColor(domain.NotificationType type) {
     switch (type) {
-      case NotificationType.promoWarned:
+      case domain.NotificationType.promoWarned:
         return Colors.orange;
-      case NotificationType.promoHidden:
+      case domain.NotificationType.promoHidden:
         return Colors.red;
-      case NotificationType.promoVerified:
+      case domain.NotificationType.promoVerified:
         return Colors.green;
     }
   }
 
-  IconData _getIcon(NotificationType type) {
+  IconData _getIcon(domain.NotificationType type) {
     switch (type) {
-      case NotificationType.promoWarned:
+      case domain.NotificationType.promoWarned:
         return Icons.warning_rounded;
-      case NotificationType.promoHidden:
+      case domain.NotificationType.promoHidden:
         return Icons.visibility_off_rounded;
-      case NotificationType.promoVerified:
+      case domain.NotificationType.promoVerified:
         return Icons.check_circle_rounded;
     }
   }
