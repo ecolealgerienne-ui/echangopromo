@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
@@ -141,7 +142,17 @@ class PromoDetailScreen extends ConsumerWidget {
 
     final photo = promo.photoUrl != null ? await _downloadForShare(promo.photoUrl!) : null;
     if (photo != null) {
+      // Certaines applis (Messenger notamment) ignorent le texte joint à une
+      // image dans l'intent de partage natif et n'affichent que la photo —
+      // on copie donc le texte dans le presse-papier en complément, pour que
+      // l'utilisateur puisse le coller manuellement si l'appli le laisse tomber.
+      await Clipboard.setData(ClipboardData(text: message));
       await Share.shareXFiles([XFile(photo.path)], text: message);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.shareTextCopiedNotice)),
+        );
+      }
     } else {
       await Share.share(message);
     }

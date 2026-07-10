@@ -90,6 +90,7 @@
   "shareTooltip": "مشاركة",
   "shareMessage": "{description} عند {commercantNom} : {prixApres} دج بدل {prixAvant} دج! شاهدتها على إيشانغو برومو.",
   "shareInstallCta": "حمّل تطبيق إيشانغو برومو : {url}",
+  "shareTextCopiedNotice": "تم نسخ النص: بعض التطبيقات (مثل ماسنجر) تشارك الصورة فقط، الصق النص يدويًا عند الحاجة.",
 
   "changeCommuneTooltip": "تغيير البلدية",
   "professionalSpaceTooltip": "الفضاء المهني",

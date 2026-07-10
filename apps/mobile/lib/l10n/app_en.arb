@@ -90,6 +90,7 @@
   "shareTooltip": "Share",
   "shareMessage": "{description} at {commercantNom}: {prixApres} DZD instead of {prixAvant} DZD! Seen on echango Promo.",
   "shareInstallCta": "Get the echango Promo app: {url}",
+  "shareTextCopiedNotice": "Text copied: some apps (e.g. Messenger) only share the photo, paste the text manually if needed.",
 
   "changeCommuneTooltip": "Change municipality",
   "professionalSpaceTooltip": "Professional area",

@@ -103,6 +103,7 @@
   },
   "shareInstallCta": "Télécharge l'app echango Promo : {url}",
   "@shareInstallCta": { "placeholders": { "url": { "type": "String" } } },
+  "shareTextCopiedNotice": "Texte copié : certaines applis (ex. Messenger) n'affichent que la photo, collez le texte manuellement si besoin.",
 
   "changeCommuneTooltip": "Changer de commune",
   "professionalSpaceTooltip": "Espace professionnel",
