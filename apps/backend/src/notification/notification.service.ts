@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
 import {
   Notification,
@@ -52,7 +52,7 @@ export class NotificationService {
       where: {
         recipientType,
         recipientId,
-        readAt: null,
+        readAt: IsNull(),
       },
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
@@ -82,7 +82,7 @@ export class NotificationService {
       {
         recipientType,
         recipientId,
-        readAt: null,
+        readAt: IsNull(),
       },
       { readAt: new Date() },
     );
@@ -99,7 +99,7 @@ export class NotificationService {
       where: {
         recipientType,
         recipientId,
-        readAt: null,
+        readAt: IsNull(),
       },
     });
   }
