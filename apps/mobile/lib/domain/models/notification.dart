@@ -1,6 +1,3 @@
-import 'package:flutter/material.dart' show Locale;
-import 'package:intl/intl.dart';
-
 enum NotificationType {
   promoWarned('promo_warned'),
   promoHidden('promo_hidden'),
@@ -43,17 +40,5 @@ class Notification {
           ? DateTime.parse(json['readAt'] as String)
           : null,
     );
-  }
-
-  String formatDate(Locale locale) {
-    final now = DateTime.now();
-    final diff = now.difference(createdAt);
-
-    if (diff.inMinutes < 1) return 'À l\'instant';
-    if (diff.inHours < 1) return 'Il y a ${diff.inMinutes}m';
-    if (diff.inDays < 1) return 'Il y a ${diff.inHours}h';
-    if (diff.inDays == 1) return 'Hier';
-
-    return DateFormat('d MMM', 'fr_FR').format(createdAt);
   }
 }

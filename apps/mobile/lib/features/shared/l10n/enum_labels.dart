@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/enums/promo_lifecycle_status.dart';
 import '../../../l10n/app_localizations.dart';
@@ -54,6 +55,18 @@ Color promoLifecycleColor(PromoLifecycleStatus status, {required bool isExpired}
     case PromoLifecycleStatus.expiree:
       return Colors.grey;
   }
+}
+
+String notificationRelativeDate(BuildContext context, DateTime createdAt) {
+  final l10n = AppLocalizations.of(context)!;
+  final diff = DateTime.now().difference(createdAt);
+
+  if (diff.inMinutes < 1) return l10n.notificationJustNow;
+  if (diff.inHours < 1) return l10n.notificationMinutesAgo(diff.inMinutes);
+  if (diff.inDays < 1) return l10n.notificationHoursAgo(diff.inHours);
+  if (diff.inDays == 1) return l10n.notificationYesterday;
+
+  return DateFormat('dd/MM/yyyy').format(createdAt);
 }
 
 String visitStatusLabel(BuildContext context, String visitStatus) {

@@ -24,6 +24,7 @@ import '../features/commercant/screens/commercant_register_screen.dart';
 import '../features/commercant/screens/edit_profile_screen.dart';
 import '../features/commercant/screens/my_promos_screen.dart';
 import '../features/commercant/screens/promo_form_screen.dart';
+import '../features/shared/screens/notifications_screen.dart';
 import '../providers/auth_provider.dart';
 
 /// Associe le rôle requis directement à la déclaration de route plutôt qu'à
@@ -87,6 +88,11 @@ final _appRoutes = <_AppRoute>[
   _AppRoute(
     '/commercant/promos/new',
     (context, state) => PromoFormScreen(existingPromo: state.extra as Promo?),
+    requiredRole: AppRole.commercant,
+  ),
+  _AppRoute(
+    '/commercant/notifications',
+    (context, state) => const NotificationsScreen(),
     requiredRole: AppRole.commercant,
   ),
 

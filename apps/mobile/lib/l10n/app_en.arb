@@ -103,6 +103,17 @@
   "myPromosLabel": "My promos",
   "editProfileLabel": "Edit my profile",
 
+  "notificationsTooltip": "Notifications",
+  "notificationsTitle": "Notifications",
+  "noNotifications": "No notifications",
+  "markAllReadLabel": "Mark all as read",
+  "notificationJustNow": "Just now",
+  "notificationMinutesAgo": "{count, plural, one{{count} minute ago} other{{count} minutes ago}}",
+  "@notificationMinutesAgo": { "placeholders": { "count": { "type": "int" } } },
+  "notificationHoursAgo": "{count, plural, one{{count} hour ago} other{{count} hours ago}}",
+  "@notificationHoursAgo": { "placeholders": { "count": { "type": "int" } } },
+  "notificationYesterday": "Yesterday",
+
   "myPromosTitle": "My promos",
   "capReachedLabel": "Cap of 5 promos reached",
   "noPromosYet": "No promo yet.",

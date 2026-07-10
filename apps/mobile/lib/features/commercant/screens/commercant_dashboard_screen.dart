@@ -5,6 +5,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/notifications_panel.dart';
 
 /// Dashboard commerçant (specs §3.2) : donne une raison concrète de revenir
 /// régulièrement dans l'app, en plus de l'obligation de republication.
@@ -22,6 +23,11 @@ class CommercantDashboardScreen extends ConsumerWidget {
         title: Text(l10n.myCommercantSpaceTitle),
         actions: [
           const LanguageSwitcherButton(),
+          IconButton(
+            icon: const NotificationBadge(),
+            tooltip: l10n.notificationsTooltip,
+            onPressed: () => context.push('/commercant/notifications'),
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.account_circle_outlined),
             onSelected: (action) async {

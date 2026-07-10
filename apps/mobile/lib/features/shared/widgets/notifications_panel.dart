@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/models/notification.dart' as domain;
+import '../../../l10n/app_localizations.dart';
+import '../l10n/enum_labels.dart';
 import '../providers/notification_provider.dart';
 
 class NotificationsPanel extends ConsumerWidget {
@@ -8,6 +10,7 @@ class NotificationsPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final notificationsAsync = ref.watch(notificationsProvider);
     final controller = ref.watch(notificationControllerProvider);
 
@@ -20,7 +23,7 @@ class NotificationsPanel extends ConsumerWidget {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                'Aucune notification',
+                l10n.noNotifications,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
@@ -44,7 +47,7 @@ class NotificationsPanel extends ConsumerWidget {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, st) => Center(
-        child: Text('Erreur : $error'),
+        child: Text(l10n.commonError(error.toString())),
       ),
     );
   }
@@ -83,8 +86,6 @@ class _NotificationTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final locale = Localizations.localeOf(context);
-
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: ListTile(
@@ -93,7 +94,7 @@ class _NotificationTile extends ConsumerWidget {
           color: _getIconColor(notification.type),
         ),
         title: Text(notification.message),
-        subtitle: Text(notification.formatDate(locale)),
+        subtitle: Text(notificationRelativeDate(context, notification.createdAt)),
         trailing: !notification.isRead
             ? IconButton(
                 icon: const Icon(Icons.check),

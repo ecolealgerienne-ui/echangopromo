@@ -116,6 +116,17 @@
   "myPromosLabel": "Mes promos",
   "editProfileLabel": "Modifier mon profil",
 
+  "notificationsTooltip": "Notifications",
+  "notificationsTitle": "Notifications",
+  "noNotifications": "Aucune notification",
+  "markAllReadLabel": "Tout marquer comme lu",
+  "notificationJustNow": "À l'instant",
+  "notificationMinutesAgo": "{count, plural, one{Il y a {count} minute} other{Il y a {count} minutes}}",
+  "@notificationMinutesAgo": { "placeholders": { "count": { "type": "int" } } },
+  "notificationHoursAgo": "{count, plural, one{Il y a {count} heure} other{Il y a {count} heures}}",
+  "@notificationHoursAgo": { "placeholders": { "count": { "type": "int" } } },
+  "notificationYesterday": "Hier",
+
   "myPromosTitle": "Mes promos",
   "capReachedLabel": "Plafond de 5 promos atteint",
   "noPromosYet": "Aucune promo pour le moment.",
