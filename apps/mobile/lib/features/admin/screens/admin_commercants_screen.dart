@@ -16,6 +16,9 @@ final _commercantSearchProvider = StateProvider.autoDispose<String>((ref) => '')
 /// affiche désormais le registre et permet de le valider/rejeter.
 final _registrePendingFilterProvider = StateProvider.autoDispose<bool>((ref) => false);
 
+/// Même pattern que `ModerationQueueScreen._inFlightProvider` (audit UX 2026-07-11).
+final _inFlightProvider = StateProvider.autoDispose<Set<String>>((ref) => {});
+
 final _commercantsProvider = FutureProvider.autoDispose((ref) {
   final search = ref.watch(_commercantSearchProvider);
   final pendingOnly = ref.watch(_registrePendingFilterProvider);
@@ -44,15 +47,22 @@ class AdminCommercantsScreen extends ConsumerWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    await _act(context, ref, () => ref.read(adminApiProvider).suspendCommercant(commercantId));
+    await _act(
+      context,
+      ref,
+      commercantId,
+      () => ref.read(adminApiProvider).suspendCommercant(commercantId),
+    );
   }
 
   Future<void> _act(
     BuildContext context,
     WidgetRef ref,
+    String commercantId,
     Future<void> Function() action,
   ) async {
     final l10n = AppLocalizations.of(context)!;
+    ref.read(_inFlightProvider.notifier).update((ids) => {...ids, commercantId});
     try {
       await action();
       ref.invalidate(_commercantsProvider);
@@ -68,6 +78,8 @@ class AdminCommercantsScreen extends ConsumerWidget {
           ),
         );
       }
+    } finally {
+      ref.read(_inFlightProvider.notifier).update((ids) => {...ids}..remove(commercantId));
     }
   }
 
@@ -76,6 +88,7 @@ class AdminCommercantsScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final commercantsAsync = ref.watch(_commercantsProvider);
     final pendingOnly = ref.watch(_registrePendingFilterProvider);
+    final inFlight = ref.watch(_inFlightProvider);
     final warningColor = Theme.of(context).extension<AppSemanticColors>()!.warning;
 
     return Scaffold(
@@ -135,19 +148,26 @@ class AdminCommercantsScreen extends ConsumerWidget {
                                 style: TextStyle(color: warningColor),
                               )
                             : Text(item.telephone),
-                        trailing: item.suspended
-                            ? TextButton(
-                                onPressed: () => _act(
-                                  context,
-                                  ref,
-                                  () => ref.read(adminApiProvider).reactivateCommercant(item.id),
-                                ),
-                                child: Text(l10n.reactivateLabel),
+                        trailing: inFlight.contains(item.id)
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
                               )
-                            : TextButton(
-                                onPressed: () => _confirmAndSuspend(context, ref, item.id),
-                                child: Text(l10n.suspendLabel),
-                              ),
+                            : item.suspended
+                                ? TextButton(
+                                    onPressed: () => _act(
+                                      context,
+                                      ref,
+                                      item.id,
+                                      () => ref.read(adminApiProvider).reactivateCommercant(item.id),
+                                    ),
+                                    child: Text(l10n.reactivateLabel),
+                                  )
+                                : TextButton(
+                                    onPressed: () => _confirmAndSuspend(context, ref, item.id),
+                                    child: Text(l10n.suspendLabel),
+                                  ),
                         leading: item.suspended
                             ? Icon(Icons.block, color: Theme.of(context).colorScheme.error)
                             : const Icon(Icons.storefront_outlined),

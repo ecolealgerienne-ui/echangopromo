@@ -75,8 +75,9 @@ class PromoDetailScreen extends ConsumerWidget {
                         ),
                         IconButton(
                           icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
+                          tooltip: isFavorite ? l10n.removeFavoriteTooltip : l10n.addFavoriteTooltip,
                           onPressed: () =>
-                              ref.read(favoritesProvider.notifier).toggle(promo.id),
+                              ref.read(favoritesProvider.notifier).toggle(promo.commercantId),
                         ),
                       ],
                     ),

@@ -93,6 +93,8 @@
   "reportReasonAutre": "سبب آخر",
   "itineraryButton": "الاتجاهات",
   "shareTooltip": "مشاركة",
+  "addFavoriteTooltip": "إضافة إلى المفضلة",
+  "removeFavoriteTooltip": "إزالة من المفضلة",
   "shareMessage": "{description} عند {commercantNom} : {prixApres} دج بدل {prixAvant} دج! شاهدتها على إيشانغو برومو.",
   "shareInstallCta": "حمّل تطبيق إيشانغو برومو : {url}",
   "shareTextCopiedNotice": "تم نسخ النص: بعض التطبيقات (مثل ماسنجر) تشارك الصورة فقط، الصق النص يدويًا عند الحاجة.",

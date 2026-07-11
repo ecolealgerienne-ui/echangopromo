@@ -13,6 +13,11 @@ import '../../shared/widgets/language_switcher_button.dart';
 final _agentsProvider = FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).listAgents());
 final _communesProvider = FutureProvider.autoDispose((ref) => ref.watch(communeApiProvider).list());
 
+/// Même pattern que `ModerationQueueScreen._inFlightProvider` (audit UX
+/// 2026-07-11) : agent dont une action (assigner/révoquer) est en cours.
+final _inFlightAgentsProvider = StateProvider.autoDispose<Set<String>>((ref) => {});
+final _transferInFlightProvider = StateProvider.autoDispose<bool>((ref) => false);
+
 /// Gestion des agents (specs §3.4) : création, assignation/retrait de
 /// communes, révocation de session, transfert de communes entre deux agents.
 class AgentListScreen extends ConsumerWidget {
@@ -75,6 +80,7 @@ class AgentListScreen extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
+    ref.read(_inFlightAgentsProvider.notifier).update((ids) => {...ids, agent.id});
     try {
       await ref.read(adminApiProvider).assignCommunes(
             agentId: agent.id,
@@ -83,6 +89,8 @@ class AgentListScreen extends ConsumerWidget {
       await _reload(ref);
     } catch (error) {
       if (context.mounted) await _showError(context, error);
+    } finally {
+      ref.read(_inFlightAgentsProvider.notifier).update((ids) => {...ids}..remove(agent.id));
     }
   }
 
@@ -106,10 +114,13 @@ class AgentListScreen extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
+    ref.read(_inFlightAgentsProvider.notifier).update((ids) => {...ids, agent.id});
     try {
       await ref.read(adminApiProvider).revokeAgentToken(agent.id);
     } catch (error) {
       if (context.mounted) await _showError(context, error);
+    } finally {
+      ref.read(_inFlightAgentsProvider.notifier).update((ids) => {...ids}..remove(agent.id));
     }
   }
 
@@ -180,6 +191,7 @@ class AgentListScreen extends ConsumerWidget {
       ),
     );
     if (confirmed != true || fromAgentId == null || toAgentId == null || selected.isEmpty) return;
+    ref.read(_transferInFlightProvider.notifier).state = true;
     try {
       await ref.read(adminApiProvider).transferCommunes(
             communeIds: selected.toList(),
@@ -189,6 +201,8 @@ class AgentListScreen extends ConsumerWidget {
       await _reload(ref);
     } catch (error) {
       if (context.mounted) await _showError(context, error);
+    } finally {
+      ref.read(_transferInFlightProvider.notifier).state = false;
     }
   }
 
@@ -197,15 +211,25 @@ class AgentListScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final agentsAsync = ref.watch(_agentsProvider);
     final communesAsync = ref.watch(_communesProvider);
+    final inFlightAgents = ref.watch(_inFlightAgentsProvider);
+    final transferInFlight = ref.watch(_transferInFlightProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.agentsLabel),
         actions: [
           IconButton(
-            icon: const Icon(Icons.swap_horiz),
+            icon: transferInFlight
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.swap_horiz),
             tooltip: l10n.transferCommunesLabel,
-            onPressed: agentsAsync.valueOrNull == null || communesAsync.valueOrNull == null
+            onPressed: transferInFlight ||
+                    agentsAsync.valueOrNull == null ||
+                    communesAsync.valueOrNull == null
                 ? null
                 : () => _transferCommunes(context, ref, agentsAsync.value!, communesAsync.value!),
           ),
@@ -239,20 +263,27 @@ class AgentListScreen extends ConsumerWidget {
                   onTap: () => context.push('/admin/agents/detail', extra: agent),
                   title: Text(agent.nom),
                   subtitle: Text('${agent.email}${communeNames.isNotEmpty ? ' · $communeNames' : ''}'),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (action) {
-                      switch (action) {
-                        case 'assignCommunes':
-                          _assignCommunes(context, ref, agent, communes);
-                        case 'revoke':
-                          _revokeToken(context, ref, agent);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      PopupMenuItem(value: 'assignCommunes', child: Text(l10n.assignCommunesLabel)),
-                      PopupMenuItem(value: 'revoke', child: Text(l10n.revokeTokenLabel)),
-                    ],
-                  ),
+                  trailing: inFlightAgents.contains(agent.id)
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : PopupMenuButton<String>(
+                          onSelected: (action) {
+                            switch (action) {
+                              case 'assignCommunes':
+                                _assignCommunes(context, ref, agent, communes);
+                              case 'revoke':
+                                _revokeToken(context, ref, agent);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                                value: 'assignCommunes', child: Text(l10n.assignCommunesLabel)),
+                            PopupMenuItem(value: 'revoke', child: Text(l10n.revokeTokenLabel)),
+                          ],
+                        ),
                 );
               },
             ),

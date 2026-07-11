@@ -97,6 +97,8 @@
   "reportReasonAutre": "Autre raison",
   "itineraryButton": "Itinéraire",
   "shareTooltip": "Partager",
+  "addFavoriteTooltip": "Ajouter aux favoris",
+  "removeFavoriteTooltip": "Retirer des favoris",
   "shareMessage": "{description} chez {commercantNom} : {prixApres} DA au lieu de {prixAvant} DA ! Vu sur echango Promo.",
   "@shareMessage": {
     "placeholders": {

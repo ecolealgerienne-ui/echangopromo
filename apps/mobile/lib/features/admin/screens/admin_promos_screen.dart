@@ -17,6 +17,9 @@ final _allPromosProvider = FutureProvider.autoDispose((ref) {
   return ref.watch(adminApiProvider).listAllPromos(search: search);
 });
 
+/// Même pattern que `ModerationQueueScreen._inFlightProvider` (audit UX 2026-07-11).
+final _inFlightProvider = StateProvider.autoDispose<Set<String>>((ref) => {});
+
 /// Vue globale de toutes les promos (plan de correction, Phase 2) —
 /// contrairement à la file de modération, pas seulement celles ayant
 /// atteint le seuil de signalements. Accessible admin + agent (le rôle du
@@ -28,9 +31,11 @@ class AdminPromosScreen extends ConsumerWidget {
   Future<void> _act(
     BuildContext context,
     WidgetRef ref,
+    String promoId,
     Future<void> Function() action,
   ) async {
     final l10n = AppLocalizations.of(context)!;
+    ref.read(_inFlightProvider.notifier).update((ids) => {...ids, promoId});
     try {
       await action();
       ref.invalidate(_allPromosProvider);
@@ -46,6 +51,8 @@ class AdminPromosScreen extends ConsumerWidget {
           ),
         );
       }
+    } finally {
+      ref.read(_inFlightProvider.notifier).update((ids) => {...ids}..remove(promoId));
     }
   }
 
@@ -53,6 +60,7 @@ class AdminPromosScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final promosAsync = ref.watch(_allPromosProvider);
+    final inFlight = ref.watch(_inFlightProvider);
     final api = ref.read(adminApiProvider);
     final role = ref.read(authControllerProvider).value?.role;
     final detailPath = role == AppRole.agent ? '/agent/promo-detail' : '/admin/promo-detail';
@@ -92,13 +100,15 @@ class AdminPromosScreen extends ConsumerWidget {
                       final item = items[index];
                       return PromoModerationTile(
                         item: item,
+                        loading: inFlight.contains(item.id),
                         onTap: () async {
                           final changed = await context.push<bool>(detailPath, extra: item);
                           if (changed == true) ref.invalidate(_allPromosProvider);
                         },
-                        onMasquer: () => _act(context, ref, () => api.masquerPromo(item.id)),
-                        onVerifierOk: () => _act(context, ref, () => api.verifierOkPromo(item.id)),
-                        onAvertir: () => _act(context, ref, () => api.avertirPromo(item.id)),
+                        onMasquer: () => _act(context, ref, item.id, () => api.masquerPromo(item.id)),
+                        onVerifierOk: () =>
+                            _act(context, ref, item.id, () => api.verifierOkPromo(item.id)),
+                        onAvertir: () => _act(context, ref, item.id, () => api.avertirPromo(item.id)),
                       );
                     },
                   ),

@@ -13,6 +13,11 @@ import '../widgets/promo_moderation_tile.dart';
 final _moderationQueueProvider =
     FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).moderationQueue());
 
+/// Id de la promo dont une action (masquer/vérifier/avertir) est en cours —
+/// désactive le menu de sa ligne le temps de l'appel réseau, pour éviter un
+/// double-tap qui déclencherait l'action deux fois (audit UX 2026-07-11).
+final _inFlightProvider = StateProvider.autoDispose<Set<String>>((ref) => {});
+
 /// File de modération (specs §3.4/§5.7) : promos signalées par des clients,
 /// en attente d'une décision admin (masquer / vérifier OK / avertir).
 class ModerationQueueScreen extends ConsumerWidget {
@@ -21,9 +26,11 @@ class ModerationQueueScreen extends ConsumerWidget {
   Future<void> _act(
     BuildContext context,
     WidgetRef ref,
+    String promoId,
     Future<void> Function() action,
   ) async {
     final l10n = AppLocalizations.of(context)!;
+    ref.read(_inFlightProvider.notifier).update((ids) => {...ids, promoId});
     try {
       await action();
       ref.invalidate(_moderationQueueProvider);
@@ -39,6 +46,8 @@ class ModerationQueueScreen extends ConsumerWidget {
           ),
         );
       }
+    } finally {
+      ref.read(_inFlightProvider.notifier).update((ids) => {...ids}..remove(promoId));
     }
   }
 
@@ -46,6 +55,7 @@ class ModerationQueueScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final queueAsync = ref.watch(_moderationQueueProvider);
+    final inFlight = ref.watch(_inFlightProvider);
     final api = ref.read(adminApiProvider);
     final role = ref.read(authControllerProvider).value?.role;
     final detailPath = role == AppRole.agent ? '/agent/promo-detail' : '/admin/promo-detail';
@@ -70,13 +80,14 @@ class ModerationQueueScreen extends ConsumerWidget {
                 final item = items[index];
                 return PromoModerationTile(
                   item: item,
+                  loading: inFlight.contains(item.id),
                   onTap: () async {
                     final changed = await context.push<bool>(detailPath, extra: item);
                     if (changed == true) ref.invalidate(_moderationQueueProvider);
                   },
-                  onMasquer: () => _act(context, ref, () => api.masquerPromo(item.id)),
-                  onVerifierOk: () => _act(context, ref, () => api.verifierOkPromo(item.id)),
-                  onAvertir: () => _act(context, ref, () => api.avertirPromo(item.id)),
+                  onMasquer: () => _act(context, ref, item.id, () => api.masquerPromo(item.id)),
+                  onVerifierOk: () => _act(context, ref, item.id, () => api.verifierOkPromo(item.id)),
+                  onAvertir: () => _act(context, ref, item.id, () => api.avertirPromo(item.id)),
                 );
               },
             ),

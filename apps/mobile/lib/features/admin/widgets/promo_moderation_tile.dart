@@ -18,6 +18,7 @@ class PromoModerationTile extends StatelessWidget {
     required this.onMasquer,
     required this.onVerifierOk,
     required this.onAvertir,
+    this.loading = false,
   });
 
   final ModerationItem item;
@@ -25,6 +26,11 @@ class PromoModerationTile extends StatelessWidget {
   final Future<void> Function() onMasquer;
   final Future<void> Function() onVerifierOk;
   final Future<void> Function() onAvertir;
+
+  /// Action en cours (masquer/vérifier/avertir) sur cette ligne — désactive
+  /// le menu et affiche un spinner, sans quoi un double-tap pendant la
+  /// latence réseau peut déclencher l'action deux fois (audit UX 2026-07-11).
+  final bool loading;
 
   String _reasonBreakdownText(BuildContext context) {
     final breakdown = item.reasonBreakdown;
@@ -54,23 +60,29 @@ class PromoModerationTile extends StatelessWidget {
       title: Text(item.description, maxLines: 2, overflow: TextOverflow.ellipsis),
       subtitle: Text(subtitle),
       isThreeLine: true,
-      trailing: PopupMenuButton<String>(
-        onSelected: (action) {
-          switch (action) {
-            case 'masquer':
-              onMasquer();
-            case 'verifier':
-              onVerifierOk();
-            case 'avertir':
-              onAvertir();
-          }
-        },
-        itemBuilder: (context) => [
-          PopupMenuItem(value: 'masquer', child: Text(l10n.masquerLabel)),
-          PopupMenuItem(value: 'verifier', child: Text(l10n.verifierOkLabel)),
-          PopupMenuItem(value: 'avertir', child: Text(l10n.avertirLabel)),
-        ],
-      ),
+      trailing: loading
+          ? const SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : PopupMenuButton<String>(
+              onSelected: (action) {
+                switch (action) {
+                  case 'masquer':
+                    onMasquer();
+                  case 'verifier':
+                    onVerifierOk();
+                  case 'avertir':
+                    onAvertir();
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(value: 'masquer', child: Text(l10n.masquerLabel)),
+                PopupMenuItem(value: 'verifier', child: Text(l10n.verifierOkLabel)),
+                PopupMenuItem(value: 'avertir', child: Text(l10n.avertirLabel)),
+              ],
+            ),
     );
   }
 }
