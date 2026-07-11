@@ -27,6 +27,7 @@ import '../features/commercant/screens/commercant_register_screen.dart';
 import '../features/commercant/screens/edit_profile_screen.dart';
 import '../features/commercant/screens/my_promos_screen.dart';
 import '../features/commercant/screens/promo_form_screen.dart';
+import '../features/dev/screens/dev_profile_switcher_screen.dart';
 import '../features/shared/screens/legal_document_screen.dart';
 import '../features/shared/screens/notifications_screen.dart';
 import '../providers/auth_provider.dart';
@@ -60,6 +61,9 @@ final _appRoutes = <_AppRoute>[
   // et un lien général (plan de correction, Phase 4).
   _AppRoute('/legal/cgu', (context, state) => const LegalDocumentScreen.cgu()),
   _AppRoute('/legal/confidentialite', (context, state) => const LegalDocumentScreen.privacy()),
+  // TEMPORAIRE — écran de test pour basculer entre profils, à supprimer
+  // avant l'ouverture publique (voir commentaire en tête du fichier).
+  _AppRoute('/dev/profiles', (context, state) => const DevProfileSwitcherScreen()),
   _AppRoute(
     '/promo/:id',
     (context, state) => PromoDetailScreen(promoId: state.pathParameters['id']!),
