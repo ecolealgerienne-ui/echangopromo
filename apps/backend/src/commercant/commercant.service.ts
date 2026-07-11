@@ -216,10 +216,24 @@ export class CommercantService {
     return commercant;
   }
 
+  /**
+   * Vérifie que `registreKey` a bien été uploadée par ce commerçant
+   * (préfixe `registre-documents/{commercantId}/` posé par
+   * `StorageService.buildKey`), avant de la faire passer en attente de
+   * validation admin — sans ça, rien n'empêchait un commerçant de soumettre
+   * une clé arbitraire, y compris celle d'un tiers (audit sécurité
+   * 2026-07-11).
+   */
   async requestRegistreVerification(
     commercantId: string,
     registreKey: string,
   ): Promise<void> {
+    if (!registreKey.startsWith(`registre-documents/${commercantId}/`)) {
+      throw new ForbiddenAppException(
+        ErrorCode.COMMERCANT_REGISTRE_KEY_MISMATCH,
+        "Ce document n'appartient pas à ce commerçant",
+      );
+    }
     const commercant = await this.findByIdOrFail(commercantId);
     commercant.registreKey = registreKey;
     commercant.registreStatus = RegistreStatus.EN_ATTENTE;

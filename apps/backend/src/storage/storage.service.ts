@@ -1,4 +1,10 @@
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
@@ -14,6 +20,23 @@ import { detectImageFormat } from './image-signature';
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 export type UploadFolder = 'promo-photos' | 'commercant-photos' | 'registre-documents';
+
+/**
+ * Le registre de commerce est un justificatif d'identité professionnelle,
+ * pas une photo destinée au public (contrairement aux deux autres dossiers)
+ * — ACL privée + URL pré-signée à la demande (`getPresignedUrl`), plutôt que
+ * `public-read` (audit sécurité 2026-07-11 : la clé S3 fuitait déjà côté
+ * agent, une ACL publique la rendait exploitable sans même cette fuite).
+ */
+const PRIVATE_FOLDERS: readonly UploadFolder[] = ['registre-documents'];
+
+/**
+ * Régénérée à chaque `GET /admin/commercant`, jamais stockée telle quelle.
+ * 15 min plutôt qu'une durée très courte : l'URL est passée à l'écran détail
+ * via la navigation (`extra: item`, pas un nouveau fetch), le temps de
+ * consultation admin doit tenir dans cette fenêtre sans re-signer.
+ */
+const PRESIGNED_URL_TTL_SECONDS = 15 * 60;
 
 @Injectable()
 export class StorageService {
@@ -100,9 +123,11 @@ export class StorageService {
         // OVH n'implémente ni les bucket policies (NotImplemented sur
         // PutBucketPolicy) ni les requêtes anonymes en style path (400 sur
         // GET sans ACL) — seul l'ACL par objet `public-read` (testé et
-        // confirmé) rend la photo accessible via `buildPublicUrl`
-        // (style virtual-hosted, voir plus bas).
-        ACL: 'public-read',
+        // confirmé) rend la photo accessible via `buildPublicUrl` (style
+        // virtual-hosted, voir plus bas). `registre-documents/` reste privé
+        // (voir `PRIVATE_FOLDERS`) : consulté uniquement via
+        // `getPresignedUrl`, jamais via une URL publique permanente.
+        ACL: PRIVATE_FOLDERS.includes(folder) ? 'private' : 'public-read',
       }),
     );
     return key;
@@ -132,6 +157,20 @@ export class StorageService {
       return `https://${this.bucket}.${host}/${key}`;
     }
     return `${endpoint}/${this.bucket}/${key}`;
+  }
+
+  /**
+   * URL temporaire signée pour un objet privé (`registre-documents/`) —
+   * appelée à la demande par un admin authentifié uniquement (jamais
+   * stockée), contrairement à `buildPublicUrl` qui pointe vers un objet
+   * `public-read` permanent.
+   */
+  async getPresignedUrl(key: string): Promise<string> {
+    return getSignedUrl(
+      this.client,
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      { expiresIn: PRESIGNED_URL_TTL_SECONDS },
+    );
   }
 
   async deleteObject(key: string): Promise<void> {

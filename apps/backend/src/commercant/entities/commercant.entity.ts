@@ -117,6 +117,16 @@ export class Commercant {
   @Column({ type: 'enum', enum: RegistreStatus, nullable: true })
   registreStatus: RegistreStatus | null;
 
+  /**
+   * Clé S3 du justificatif de registre de commerce. Jamais exposée telle
+   * quelle (même précaution que `pinHash`/`photoKey`) : un endpoint qui
+   * renvoie l'entité brute (ex. `GET /agent/communes/commerces`) ne doit
+   * jamais fuiter cette clé — seul l'admin y accède, via
+   * `StorageService.getPresignedUrl` (audit sécurité 2026-07-11 : un agent
+   * pouvait reconstruire l'URL du document d'un commerçant de sa commune,
+   * hors du contrôle "admin only" voulu par le design).
+   */
+  @Exclude()
   @Column({ type: 'varchar', nullable: true })
   registreKey: string | null;
 

@@ -24,6 +24,7 @@ const Map<String, String> errorMessagesEn = {
 
   'STORAGE_INVALID_IMAGE': 'The uploaded file is not a valid image. Try again with a photo.',
   'STORAGE_FILE_TOO_LARGE': 'The photo is too large. Try again with another photo.',
+  'STORAGE_PURPOSE_NOT_ALLOWED': 'This upload type is not allowed for this account.',
 
   'PROMO_NOT_FOUND': 'Promo not found.',
   'PROMO_NOT_OWNED_BY_COMMERCANT': 'This promo does not belong to this merchant.',
@@ -41,6 +42,7 @@ const Map<String, String> errorMessagesEn = {
   'COMMERCANT_TERMS_NOT_ACCEPTED': 'You must accept the terms of use to create an account.',
   'COMMERCANT_REGISTRE_NOT_VALIDATED':
       'Your business registration must be validated by an administrator before you can publish promos.',
+  'COMMERCANT_REGISTRE_KEY_MISMATCH': 'This document does not belong to this merchant.',
 
   'RATE_LIMITED': 'Too many attempts. Please try again shortly.',
   'HTTP_ERROR': 'An error occurred.',

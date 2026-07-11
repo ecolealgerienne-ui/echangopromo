@@ -23,6 +23,7 @@ const Map<String, String> errorMessagesAr = {
 
   'STORAGE_INVALID_IMAGE': 'الملف المرسل ليس صورة صالحة. أعد المحاولة بصورة.',
   'STORAGE_FILE_TOO_LARGE': 'الصورة كبيرة جدًا. أعد المحاولة بصورة أخرى.',
+  'STORAGE_PURPOSE_NOT_ALLOWED': 'نوع الرفع هذا غير مسموح لهذا الحساب.',
 
   'PROMO_NOT_FOUND': 'العرض غير موجود.',
   'PROMO_NOT_OWNED_BY_COMMERCANT': 'هذا العرض لا ينتمي إلى هذا التاجر.',
@@ -38,6 +39,7 @@ const Map<String, String> errorMessagesAr = {
   'COMMERCANT_NOT_IN_AGENT_COMMUNES': 'هذا التاجر ليس ضمن بلديات هذا العون.',
   'COMMERCANT_TERMS_NOT_ACCEPTED': 'يجب عليك قبول شروط الاستخدام لإنشاء حساب.',
   'COMMERCANT_REGISTRE_NOT_VALIDATED': 'يجب أن يصادق مسؤول على سجلك التجاري قبل أن تتمكن من نشر العروض.',
+  'COMMERCANT_REGISTRE_KEY_MISMATCH': 'هذا المستند لا يخص هذا التاجر.',
 
   'RATE_LIMITED': 'عدد كبير جدًا من المحاولات. أعد المحاولة بعد قليل.',
   'HTTP_ERROR': 'حدث خطأ ما.',

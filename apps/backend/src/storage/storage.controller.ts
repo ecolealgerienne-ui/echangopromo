@@ -55,6 +55,17 @@ export class StorageController {
         'Aucun fichier reçu.',
       );
     }
+    // Le flux registre est un self-service commerçant (`POST
+    // /commercant/me/registre` est `@Roles('commercant')` exclusivement) —
+    // aucun endpoint n'exploite un upload `registre` fait par un agent,
+    // restreint explicitement plutôt que de compter sur cette absence
+    // d'usage (audit sécurité 2026-07-11).
+    if (dto.purpose === 'registre' && user.role !== 'commercant') {
+      throw new BadRequestAppException(
+        ErrorCode.STORAGE_PURPOSE_NOT_ALLOWED,
+        "Ce type d'upload est réservé au commerçant.",
+      );
+    }
     const folder =
       dto.purpose === 'commercant'
         ? 'commercant-photos'

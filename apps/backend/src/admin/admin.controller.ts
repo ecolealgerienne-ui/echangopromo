@@ -312,27 +312,33 @@ export class AdminController {
     const result = await this.commercantService.findAllForAdmin(query);
     return {
       ...result,
-      items: result.items.map((commercant) => ({
-        id: commercant.id,
-        nom: commercant.nom,
-        telephone: commercant.telephone,
-        adresse: commercant.adresse,
-        categorie: commercant.categorie,
-        communeId: commercant.communeId,
-        photoUrl: commercant.photoKey
-          ? this.storageService.buildPublicUrl(commercant.photoKey)
-          : null,
-        latitude: commercant.latitude,
-        longitude: commercant.longitude,
-        accountState: commercant.accountState,
-        originVerification: commercant.originVerification,
-        registreStatus: commercant.registreStatus,
-        registreUrl: commercant.registreKey
-          ? this.storageService.buildPublicUrl(commercant.registreKey)
-          : null,
-        suspended: commercant.deletedAt !== null,
-        createdAt: commercant.createdAt,
-      })),
+      items: await Promise.all(
+        result.items.map(async (commercant) => ({
+          id: commercant.id,
+          nom: commercant.nom,
+          telephone: commercant.telephone,
+          adresse: commercant.adresse,
+          categorie: commercant.categorie,
+          communeId: commercant.communeId,
+          photoUrl: commercant.photoKey
+            ? this.storageService.buildPublicUrl(commercant.photoKey)
+            : null,
+          latitude: commercant.latitude,
+          longitude: commercant.longitude,
+          accountState: commercant.accountState,
+          originVerification: commercant.originVerification,
+          registreStatus: commercant.registreStatus,
+          // URL pré-signée à courte durée de vie, jamais l'ACL publique
+          // permanente utilisée pour les photos (audit sécurité
+          // 2026-07-11 : le registre est un justificatif d'identité, pas
+          // un contenu destiné au public — voir `StorageService.PRIVATE_FOLDERS`).
+          registreUrl: commercant.registreKey
+            ? await this.storageService.getPresignedUrl(commercant.registreKey)
+            : null,
+          suspended: commercant.deletedAt !== null,
+          createdAt: commercant.createdAt,
+        })),
+      ),
     };
   }
 
