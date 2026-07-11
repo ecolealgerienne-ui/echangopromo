@@ -93,7 +93,7 @@ class AppTheme {
         titleTextStyle: textTheme.titleLarge?.copyWith(color: colorScheme.onPrimary),
         iconTheme: IconThemeData(color: colorScheme.onPrimary),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 0,
         color: colorScheme.surface,
         margin: EdgeInsets.zero,
