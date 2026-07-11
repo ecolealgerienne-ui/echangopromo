@@ -235,6 +235,7 @@ class AgentListScreen extends ConsumerWidget {
                 final agent = agents[index];
                 final communeNames = _communeNames(agent.communes);
                 return ListTile(
+                  onTap: () => context.push('/admin/agents/detail', extra: agent),
                   title: Text(agent.nom),
                   subtitle: Text('${agent.email}${communeNames.isNotEmpty ? ' · $communeNames' : ''}'),
                   trailing: PopupMenuButton<String>(

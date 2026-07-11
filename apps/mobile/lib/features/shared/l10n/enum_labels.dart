@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../../../domain/enums/audit_actor_type.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/enums/promo_lifecycle_status.dart';
+import '../../../domain/enums/promo_moderation_status.dart';
 import '../../../domain/enums/report_reason.dart';
 import '../../../l10n/app_localizations.dart';
 
@@ -56,6 +57,35 @@ Color promoLifecycleColor(PromoLifecycleStatus status, {required bool isExpired}
       return Colors.orange;
     case PromoLifecycleStatus.expiree:
       return Colors.grey;
+  }
+}
+
+String moderationStatusLabel(BuildContext context, PromoModerationStatus status) {
+  final l10n = AppLocalizations.of(context)!;
+  switch (status) {
+    case PromoModerationStatus.normale:
+      return l10n.moderationNormale;
+    case PromoModerationStatus.signalee:
+      return l10n.moderationSignalee;
+    case PromoModerationStatus.masquee:
+      return l10n.moderationMasquee;
+    case PromoModerationStatus.verifieeOk:
+      return l10n.moderationVerifieeOk;
+  }
+}
+
+/// Couleur du badge de statut de modération — indépendante de la
+/// localisation du texte, même logique que `promoLifecycleColor`.
+Color moderationStatusColor(PromoModerationStatus status) {
+  switch (status) {
+    case PromoModerationStatus.normale:
+      return Colors.green;
+    case PromoModerationStatus.signalee:
+      return Colors.orange;
+    case PromoModerationStatus.masquee:
+      return Colors.red;
+    case PromoModerationStatus.verifieeOk:
+      return Colors.blueGrey;
   }
 }
 

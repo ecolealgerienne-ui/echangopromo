@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../data/api/api_exception.dart';
+import '../../../domain/models/auth_session.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../widgets/promo_moderation_tile.dart';
@@ -50,6 +53,8 @@ class AdminPromosScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final promosAsync = ref.watch(_allPromosProvider);
     final api = ref.read(adminApiProvider);
+    final role = ref.read(authControllerProvider).value?.role;
+    final detailPath = role == AppRole.agent ? '/agent/promo-detail' : '/admin/promo-detail';
 
     return Scaffold(
       appBar: AppBar(
@@ -86,6 +91,10 @@ class AdminPromosScreen extends ConsumerWidget {
                       final item = items[index];
                       return PromoModerationTile(
                         item: item,
+                        onTap: () async {
+                          final changed = await context.push<bool>(detailPath, extra: item);
+                          if (changed == true) ref.invalidate(_allPromosProvider);
+                        },
                         onMasquer: () => _act(context, ref, () => api.masquerPromo(item.id)),
                         onVerifierOk: () => _act(context, ref, () => api.verifierOkPromo(item.id)),
                         onAvertir: () => _act(context, ref, () => api.avertirPromo(item.id)),

@@ -3,11 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../domain/enums/categorie.dart';
 import '../domain/models/auth_session.dart';
+import '../domain/models/admin_commercant_item.dart';
+import '../domain/models/agent.dart';
+import '../domain/models/moderation_item.dart';
 import '../domain/models/promo.dart';
+import '../features/admin/screens/admin_agent_detail_screen.dart';
 import '../features/admin/screens/admin_audit_log_screen.dart';
+import '../features/admin/screens/admin_commercant_detail_screen.dart';
 import '../features/admin/screens/admin_commercants_screen.dart';
 import '../features/admin/screens/admin_dashboard_screen.dart';
 import '../features/admin/screens/admin_login_screen.dart';
+import '../features/admin/screens/admin_promo_detail_screen.dart';
 import '../features/admin/screens/admin_promos_screen.dart';
 import '../features/admin/screens/agent_list_screen.dart';
 import '../features/admin/screens/create_agent_screen.dart';
@@ -142,6 +148,13 @@ final _appRoutes = <_AppRoute>[
     (context, state) => const AdminPromosScreen(),
     requiredRole: AppRole.agent,
   ),
+  // Fiche promo modération — mêmes deux chemins par rôle que
+  // moderation/promos ci-dessus (widget partagé, backend scope par JWT).
+  _AppRoute(
+    '/agent/promo-detail',
+    (context, state) => AdminPromoDetailScreen(item: state.extra as ModerationItem),
+    requiredRole: AppRole.agent,
+  ),
 
   // Admin (specs §3.4) — compte unique en V0, pas d'auto-inscription, pas
   // d'entrée dans le menu "espace pro" public (accès direct par URL
@@ -165,8 +178,18 @@ final _appRoutes = <_AppRoute>[
     requiredRole: AppRole.admin,
   ),
   _AppRoute(
+    '/admin/promo-detail',
+    (context, state) => AdminPromoDetailScreen(item: state.extra as ModerationItem),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
     '/admin/commercants',
     (context, state) => const AdminCommercantsScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/commercants/detail',
+    (context, state) => AdminCommercantDetailScreen(item: state.extra as AdminCommercantItem),
     requiredRole: AppRole.admin,
   ),
   _AppRoute(
@@ -182,6 +205,11 @@ final _appRoutes = <_AppRoute>[
   _AppRoute(
     '/admin/agents',
     (context, state) => const AgentListScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/agents/detail',
+    (context, state) => AdminAgentDetailScreen(agent: state.extra as Agent),
     requiredRole: AppRole.admin,
   ),
   _AppRoute(

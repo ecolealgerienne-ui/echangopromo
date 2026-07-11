@@ -14,12 +14,14 @@ class PromoModerationTile extends StatelessWidget {
   const PromoModerationTile({
     super.key,
     required this.item,
+    required this.onTap,
     required this.onMasquer,
     required this.onVerifierOk,
     required this.onAvertir,
   });
 
   final ModerationItem item;
+  final VoidCallback onTap;
   final Future<void> Function() onMasquer;
   final Future<void> Function() onVerifierOk;
   final Future<void> Function() onAvertir;
@@ -45,6 +47,7 @@ class PromoModerationTile extends StatelessWidget {
     ].join('\n');
 
     return ListTile(
+      onTap: onTap,
       leading: CircleAvatar(
         backgroundImage: item.photoUrl != null ? CachedNetworkImageProvider(item.photoUrl!) : null,
       ),

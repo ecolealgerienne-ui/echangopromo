@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
@@ -98,6 +99,11 @@ class AdminCommercantsScreen extends ConsumerWidget {
                     itemBuilder: (context, index) {
                       final item = items[index];
                       return ListTile(
+                        onTap: () async {
+                          final changed = await context
+                              .push<bool>('/admin/commercants/detail', extra: item);
+                          if (changed == true) ref.invalidate(_commercantsProvider);
+                        },
                         title: Text(item.nom),
                         subtitle: Text(item.telephone),
                         trailing: item.suspended
