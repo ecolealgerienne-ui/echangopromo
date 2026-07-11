@@ -33,12 +33,15 @@ class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScr
   static const _keyAdminEmail = 'dev_switcher_admin_email';
   static const _keyAdminPassword = 'dev_switcher_admin_password';
 
-  final _commercantTelephone = TextEditingController();
-  final _commercantPin = TextEditingController();
-  final _agentEmail = TextEditingController();
-  final _agentPassword = TextEditingController();
-  final _adminEmail = TextEditingController();
-  final _adminPassword = TextEditingController();
+  // Identifiants du pilote pré-remplis pour ne pas avoir à les ressaisir à
+  // chaque test — écrasés par les valeurs sauvegardées si elles diffèrent
+  // (voir _loadSaved).
+  final _commercantTelephone = TextEditingController(text: '0555545352');
+  final _commercantPin = TextEditingController(text: '010203');
+  final _agentEmail = TextEditingController(text: 'agent1@echangopromo.com');
+  final _agentPassword = TextEditingController(text: '123456789');
+  final _adminEmail = TextEditingController(text: 'superadmin@echangopromo.com');
+  final _adminPassword = TextEditingController(text: '123456789');
 
   bool _loading = false;
   String? _busyProfile;
@@ -72,12 +75,15 @@ class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScr
       _storage.read(key: _keyAdminPassword),
     ]);
     if (!mounted) return;
-    _commercantTelephone.text = values[0] ?? '';
-    _commercantPin.text = values[1] ?? '';
-    _agentEmail.text = values[2] ?? '';
-    _agentPassword.text = values[3] ?? '';
-    _adminEmail.text = values[4] ?? '';
-    _adminPassword.text = values[5] ?? '';
+    // Ne remplace le préremplissage par défaut que si une valeur a déjà été
+    // sauvegardée explicitement — sinon `read()` renvoie `null` et
+    // effacerait les identifiants pilote pré-remplis ci-dessus.
+    if (values[0] != null) _commercantTelephone.text = values[0]!;
+    if (values[1] != null) _commercantPin.text = values[1]!;
+    if (values[2] != null) _agentEmail.text = values[2]!;
+    if (values[3] != null) _agentPassword.text = values[3]!;
+    if (values[4] != null) _adminEmail.text = values[4]!;
+    if (values[5] != null) _adminPassword.text = values[5]!;
     setState(() {});
   }
 
