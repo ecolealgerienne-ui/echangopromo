@@ -17,6 +17,7 @@ export enum NotificationType {
   PROMO_WARNED = 'promo_warned', // Admin a averti sur une promo signalée
   PROMO_HIDDEN = 'promo_hidden', // Admin a masqué une promo
   PROMO_VERIFIED = 'promo_verified', // Admin a validé une promo après signalements
+  PROMO_EXPIRING_SOON = 'promo_expiring_soon', // Promo publiée expirant sous 24h (plan de correction, Phase 6)
 }
 
 export enum NotificationRecipientType {

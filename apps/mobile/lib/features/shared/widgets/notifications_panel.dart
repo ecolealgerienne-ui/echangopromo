@@ -69,6 +69,8 @@ Color notificationIconColor(domain.NotificationType type) {
       return Colors.red;
     case domain.NotificationType.promoVerified:
       return Colors.green;
+    case domain.NotificationType.promoExpiringSoon:
+      return Colors.blue;
   }
 }
 
@@ -80,6 +82,8 @@ IconData notificationIcon(domain.NotificationType type) {
       return Icons.visibility_off_rounded;
     case domain.NotificationType.promoVerified:
       return Icons.check_circle_rounded;
+    case domain.NotificationType.promoExpiringSoon:
+      return Icons.schedule_rounded;
   }
 }
 

@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, In, IsNull, LessThan, Not, Repository } from 'typeorm';
+import { Between, EntityManager, In, IsNull, LessThan, Not, Repository } from 'typeorm';
 import { CommercantService } from '../commercant/commercant.service';
 import {
   BadRequestAppException,
@@ -10,6 +10,11 @@ import {
 } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
+import {
+  NotificationRecipientType,
+  NotificationType,
+} from '../notification/entities/notification.entity';
+import { NotificationService } from '../notification/notification.service';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
 import { ListPromoAdminQueryDto } from './dto/list-promo-admin-query.dto';
@@ -35,6 +40,7 @@ export class PromoService {
     private readonly commercantService: CommercantService,
     private readonly storageService: StorageService,
     private readonly configService: ConfigService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   private defaultDureeJours(): number {
@@ -366,6 +372,34 @@ export class PromoService {
       })
       .execute();
     return result.affected ?? 0;
+  }
+
+  /**
+   * Relance avant expiration (plan de correction, Phase 6) — jusqu'ici rien
+   * ne notifiait le commerçant qu'une promo allait bientôt expirer, tout
+   * reposait sur lui pour penser à republier. Fenêtre de 24h alignée sur la
+   * cadence quotidienne du cron : chaque promo ne peut croiser cette
+   * fenêtre qu'une seule fois (pas de doublon, pas de promo manquée).
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_9AM)
+  async notifyExpiringSoonCron(): Promise<void> {
+    const expiring = await this.promos.find({
+      where: {
+        lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
+        dateFin: Between(new Date(), new Date(Date.now() + 24 * 60 * 60 * 1000)),
+      },
+    });
+
+    for (const promo of expiring) {
+      await this.notificationService.create(
+        NotificationType.PROMO_EXPIRING_SOON,
+        NotificationRecipientType.COMMERCANT,
+        promo.commercantId,
+        `Votre promo « ${promo.description} » expire bientôt. Pensez à la republier.`,
+        promo.id,
+      );
+    }
+    this.logger.log(`${expiring.length} promo(s) notifiée(s) avant expiration`);
   }
 
   async markSignalee(promoId: string): Promise<void> {

@@ -1,7 +1,8 @@
 enum NotificationType {
   promoWarned('promo_warned'),
   promoHidden('promo_hidden'),
-  promoVerified('promo_verified');
+  promoVerified('promo_verified'),
+  promoExpiringSoon('promo_expiring_soon');
 
   const NotificationType(this.value);
   final String value;
