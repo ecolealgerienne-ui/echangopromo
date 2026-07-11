@@ -115,7 +115,10 @@ class _NotificationTile extends ConsumerWidget {
                 onPressed: onMarkAsRead,
               )
             : null,
-        tileColor: notification.isRead ? null : Colors.grey.shade100,
+        // `colorScheme.primaryContainer` plutôt qu'un gris fixe : ce dernier
+        // restait clair en mode sombre alors que le texte du ListTile suit
+        // le thème (clair sur fond sombre) — contraste cassé.
+        tileColor: notification.isRead ? null : Theme.of(context).colorScheme.primaryContainer,
       ),
     );
   }
