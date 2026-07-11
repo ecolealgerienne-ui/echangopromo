@@ -114,7 +114,11 @@ class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScr
             token: token,
             fetchId: () async => (await api.me()).id,
           );
-      if (mounted) context.go('/commercant/dashboard');
+      // `push` plutôt que `go` : contrairement aux écrans de connexion
+      // normaux, ici on veut explicitement pouvoir revenir en arrière vers
+      // le sélecteur de profil pour enchaîner les tests (`go` viderait la
+      // pile de navigation et ferait disparaître le bouton retour).
+      if (mounted) context.push('/commercant/dashboard');
     } catch (error) {
       _showError(error);
     } finally {
@@ -137,7 +141,7 @@ class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScr
             token: token,
             fetchId: () async => (await api.me()).id,
           );
-      if (mounted) context.go('/agent/communes');
+      if (mounted) context.push('/agent/communes');
     } catch (error) {
       _showError(error);
     } finally {
@@ -160,7 +164,7 @@ class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScr
             token: token,
             fetchId: () async => (await api.me()).id,
           );
-      if (mounted) context.go('/admin/dashboard');
+      if (mounted) context.push('/admin/dashboard');
     } catch (error) {
       _showError(error);
     } finally {
@@ -175,7 +179,7 @@ class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScr
     });
     try {
       await ref.read(authControllerProvider.notifier).logout();
-      if (mounted) context.go('/');
+      if (mounted) context.push('/');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
