@@ -11,6 +11,11 @@ import {
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
 import {
+  NotificationRecipientType,
+  NotificationType,
+} from '../notification/entities/notification.entity';
+import { NotificationService } from '../notification/notification.service';
+import {
   Promo,
   PromoLifecycleStatus,
   VISIBLE_MODERATION_STATUSES,
@@ -41,6 +46,7 @@ export class CommercantService {
     @InjectRepository(Promo) private readonly promos: Repository<Promo>,
     private readonly authService: AuthService,
     private readonly storageService: StorageService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   private async assertPhoneAvailable(telephone: string): Promise<void> {
@@ -263,6 +269,18 @@ export class CommercantService {
       : RegistreStatus.REJETE;
     commercant.registreValidatedAt = approve ? new Date() : null;
     await this.commercants.save(commercant);
+
+    // Sans notification, le seul moyen de découvrir une validation/un rejet
+    // était de rouvrir le dashboard — pourtant l'événement le plus bloquant
+    // pour un commerçant auto-inscrit (audit fonctionnel 2026-07-11).
+    await this.notificationService.create(
+      approve ? NotificationType.REGISTRE_VALIDATED : NotificationType.REGISTRE_REJECTED,
+      NotificationRecipientType.COMMERCANT,
+      commercantId,
+      approve
+        ? 'Votre registre de commerce a été validé — vous pouvez maintenant publier vos promos.'
+        : "Votre registre de commerce a été rejeté. Vérifiez la photo envoyée et renvoyez-la depuis votre espace commerçant.",
+    );
   }
 
   async recordProfileView(
@@ -354,6 +372,13 @@ export class CommercantService {
   async countActive(): Promise<number> {
     return this.commercants.count({
       where: { accountState: CommercantAccountState.AUTONOME },
+    });
+  }
+
+  /** Registres en attente de validation (stat dashboard admin, plan de correction). */
+  async countPendingRegistre(): Promise<number> {
+    return this.commercants.count({
+      where: { registreStatus: RegistreStatus.EN_ATTENTE },
     });
   }
 

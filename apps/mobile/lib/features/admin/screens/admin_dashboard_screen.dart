@@ -53,29 +53,42 @@ class AdminDashboardScreen extends ConsumerWidget {
             statsAsync.when(
               loading: () => const LinearProgressIndicator(),
               error: (error, _) => ApiErrorText(error),
-              data: (stats) => Row(
+              data: (stats) => Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  Expanded(
+                  SizedBox(
+                    width: (MediaQuery.of(context).size.width - 40) / 2,
                     child: _StatCard(
                       icon: Icons.storefront_outlined,
                       label: l10n.commercesActifsLabel,
                       value: stats.commercesActifs,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
+                  SizedBox(
+                    width: (MediaQuery.of(context).size.width - 40) / 2,
                     child: _StatCard(
                       icon: Icons.local_offer_outlined,
                       label: l10n.promosPublieesLabel,
                       value: stats.promosPubliees,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
+                  SizedBox(
+                    width: (MediaQuery.of(context).size.width - 40) / 2,
                     child: _StatCard(
                       icon: Icons.flag_outlined,
                       label: l10n.signalementsEnAttenteLabel,
                       value: stats.signalementsEnAttente,
+                      onTap: () => context.push('/admin/moderation'),
+                    ),
+                  ),
+                  SizedBox(
+                    width: (MediaQuery.of(context).size.width - 40) / 2,
+                    child: _StatCard(
+                      icon: Icons.assignment_outlined,
+                      label: l10n.registresEnAttenteLabel,
+                      value: stats.registresEnAttente,
+                      onTap: () => context.push('/admin/commercants'),
                     ),
                   ),
                 ],
@@ -119,24 +132,29 @@ class AdminDashboardScreen extends ConsumerWidget {
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard({required this.icon, required this.label, required this.value});
+  const _StatCard({required this.icon, required this.label, required this.value, this.onTap});
 
   final IconData icon;
   final String label;
   final int value;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            Icon(icon),
-            const SizedBox(height: 4),
-            Text('$value', style: Theme.of(context).textTheme.titleLarge),
-            Text(label, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
-          ],
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              Icon(icon),
+              const SizedBox(height: 4),
+              Text('$value', style: Theme.of(context).textTheme.titleLarge),
+              Text(label, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
         ),
       ),
     );

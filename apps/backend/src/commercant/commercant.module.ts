@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module';
+import { NotificationModule } from '../notification/notification.module';
 import { Promo } from '../promo/entities/promo.entity';
 import { StorageModule } from '../storage/storage.module';
 import { CommercantController } from './commercant.controller';
@@ -13,6 +14,7 @@ import { Commercant } from './entities/commercant.entity';
     TypeOrmModule.forFeature([Commercant, CommercantView, Promo]),
     AuthModule,
     StorageModule,
+    NotificationModule,
   ],
   controllers: [CommercantController],
   providers: [CommercantService],

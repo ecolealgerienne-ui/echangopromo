@@ -191,13 +191,13 @@ class _UnreadNotificationsBanner extends ConsumerWidget {
 /// peut être publiée tant qu'il n'est pas `validé` par un admin (revert du
 /// 2026-07-11, voir `CommercantService.assertRegistreValidated`). Un
 /// commerçant confirmé par un agent n'est jamais concerné.
-class _RegistreStatusBanner extends StatelessWidget {
+class _RegistreStatusBanner extends ConsumerWidget {
   const _RegistreStatusBanner({required this.commercant});
 
   final Commercant commercant;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (commercant.originVerification != CommercantOriginVerification.autoInscrit) {
       return const SizedBox.shrink();
     }
@@ -207,9 +207,9 @@ class _RegistreStatusBanner extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
 
-    // `null` (jamais envoyé) traité comme "en attente" — même bannière,
-    // rien d'actionnable de plus à proposer tant qu'aucun écran de
-    // renvoi du registre n'existe après l'inscription initiale.
+    // `null` (jamais envoyé) traité comme "en attente" — même bannière.
+    // Seul le cas rejeté propose une action (`RegistreResendScreen`) : un
+    // "en attente" n'a rien de plus à faire qu'attendre la décision admin.
     final isRejected = commercant.registreStatus == RegistreStatus.rejete;
     final title = isRejected ? l10n.registreRejectedBannerTitle : l10n.registrePendingBannerTitle;
     final message =
@@ -234,6 +234,16 @@ class _RegistreStatusBanner extends StatelessWidget {
                     Text(title, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 4),
                     Text(message),
+                    if (isRejected) ...[
+                      const SizedBox(height: 8),
+                      OutlinedButton(
+                        onPressed: () async {
+                          final sent = await context.push<bool>('/commercant/registre/resend');
+                          if (sent == true && context.mounted) ref.invalidate(_meProvider);
+                        },
+                        child: Text(l10n.registreResendSubmit),
+                      ),
+                    ],
                   ],
                 ),
               ),

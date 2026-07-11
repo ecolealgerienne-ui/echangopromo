@@ -472,17 +472,19 @@ export class AdminController {
   @Roles('admin')
   @Get('dashboard')
   async dashboard() {
-    const [commercesActifs, promosPubliees, signalementsEnAttente] =
+    const [commercesActifs, promosPubliees, signalementsEnAttente, registresEnAttente] =
       await Promise.all([
         this.commercantService.countActive(),
         this.promoService.countVisible(),
         this.reportService.countPendingModeration(),
+        this.commercantService.countPendingRegistre(),
       ]);
 
     return {
       commercesActifs,
       promosPubliees,
       signalementsEnAttente,
+      registresEnAttente,
     };
   }
 }

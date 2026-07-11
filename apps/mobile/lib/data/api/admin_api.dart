@@ -28,13 +28,20 @@ class AdminApi {
     return Admin.fromJson(response.data!);
   }
 
-  Future<({int commercesActifs, int promosPubliees, int signalementsEnAttente})> dashboard() async {
+  Future<
+      ({
+        int commercesActifs,
+        int promosPubliees,
+        int signalementsEnAttente,
+        int registresEnAttente,
+      })> dashboard() async {
     final response = await _dio.get<Map<String, dynamic>>('/admin/dashboard');
     final data = response.data!;
     return (
       commercesActifs: data['commercesActifs'] as int,
       promosPubliees: data['promosPubliees'] as int,
       signalementsEnAttente: data['signalementsEnAttente'] as int,
+      registresEnAttente: data['registresEnAttente'] as int,
     );
   }
 

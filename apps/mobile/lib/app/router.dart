@@ -32,6 +32,7 @@ import '../features/commercant/screens/commercant_register_screen.dart';
 import '../features/commercant/screens/edit_profile_screen.dart';
 import '../features/commercant/screens/my_promos_screen.dart';
 import '../features/commercant/screens/promo_form_screen.dart';
+import '../features/commercant/screens/registre_resend_screen.dart';
 import '../features/dev/screens/dev_profile_switcher_screen.dart';
 import '../features/shared/screens/legal_document_screen.dart';
 import '../features/shared/screens/notifications_screen.dart';
@@ -110,6 +111,11 @@ final _appRoutes = <_AppRoute>[
   _AppRoute(
     '/commercant/notifications',
     (context, state) => const NotificationsScreen(),
+    requiredRole: AppRole.commercant,
+  ),
+  _AppRoute(
+    '/commercant/registre/resend',
+    (context, state) => const RegistreResendScreen(),
     requiredRole: AppRole.commercant,
   ),
 

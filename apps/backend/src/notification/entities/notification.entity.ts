@@ -18,6 +18,8 @@ export enum NotificationType {
   PROMO_HIDDEN = 'promo_hidden', // Admin a masqué une promo
   PROMO_VERIFIED = 'promo_verified', // Admin a validé une promo après signalements
   PROMO_EXPIRING_SOON = 'promo_expiring_soon', // Promo publiée expirant sous 24h (plan de correction, Phase 6)
+  REGISTRE_VALIDATED = 'registre_validated', // Admin a validé le registre de commerce
+  REGISTRE_REJECTED = 'registre_rejected', // Admin a rejeté le registre de commerce
 }
 
 export enum NotificationRecipientType {

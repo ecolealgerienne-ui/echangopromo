@@ -26,11 +26,22 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
 
   final AdminCommercantItem item;
 
-  Future<void> _act(BuildContext context, WidgetRef ref, Future<void> Function() action) async {
+  Future<void> _act(
+    BuildContext context,
+    WidgetRef ref,
+    Future<void> Function() action, {
+    bool popOnSuccess = true,
+    String? successMessage,
+  }) async {
     final l10n = AppLocalizations.of(context)!;
     try {
       await action();
-      if (context.mounted) Navigator.of(context).pop(true);
+      if (!context.mounted) return;
+      if (popOnSuccess) {
+        Navigator.of(context).pop(true);
+      } else if (successMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(successMessage)));
+      }
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -44,6 +55,29 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
         );
       }
     }
+  }
+
+  Future<void> _confirmAndResetPin(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.resetPinConfirmTitle),
+        content: Text(l10n.resetPinConfirmMessage),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.commonCancel)),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(l10n.resetPinLabel)),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await _act(
+      context,
+      ref,
+      () => ref.read(adminApiProvider).resetPin(item.id),
+      popOnSuccess: false,
+      successMessage: l10n.resetPinSuccessMessage,
+    );
   }
 
   @override
@@ -187,19 +221,29 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                   ],
                 ],
                 const SizedBox(height: 24),
-                item.suspended
-                    ? FilledButton(
-                        onPressed: () => _act(
-                          context,
-                          ref,
-                          () => ref.read(adminApiProvider).reactivateCommercant(item.id),
-                        ),
-                        child: Text(l10n.reactivateLabel),
-                      )
-                    : OutlinedButton(
-                        onPressed: () => _confirmAndSuspend(context, ref),
-                        child: Text(l10n.suspendLabel),
-                      ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    item.suspended
+                        ? FilledButton(
+                            onPressed: () => _act(
+                              context,
+                              ref,
+                              () => ref.read(adminApiProvider).reactivateCommercant(item.id),
+                            ),
+                            child: Text(l10n.reactivateLabel),
+                          )
+                        : OutlinedButton(
+                            onPressed: () => _confirmAndSuspend(context, ref),
+                            child: Text(l10n.suspendLabel),
+                          ),
+                    OutlinedButton(
+                      onPressed: () => _confirmAndResetPin(context, ref),
+                      child: Text(l10n.resetPinLabel),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
