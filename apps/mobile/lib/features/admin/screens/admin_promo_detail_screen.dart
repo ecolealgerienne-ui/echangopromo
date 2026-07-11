@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../app/theme.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/report_reason.dart';
 import '../../../domain/models/moderation_item.dart';
@@ -10,6 +9,7 @@ import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/promo_photo_hero.dart';
 import '../../shared/widgets/promo_price_row.dart';
+import '../../shared/widgets/status_chip.dart';
 
 /// Fiche promo côté admin/agent (modération) — même `ModerationItem` que
 /// `PromoModerationTile`, en vue complète : photo, statuts lifecycle +
@@ -75,11 +75,11 @@ class AdminPromoDetailScreen extends ConsumerWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _StatusChip(
+                    StatusChip(
                       label: promoLifecycleLabel(context, item.lifecycleStatus, isExpired: false),
                       color: promoLifecycleColor(item.lifecycleStatus, isExpired: false),
                     ),
-                    _StatusChip(
+                    StatusChip(
                       label: moderationStatusLabel(context, item.moderationStatus),
                       color: moderationStatusColor(item.moderationStatus),
                     ),
@@ -133,29 +133,6 @@ class AdminPromoDetailScreen extends ConsumerWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(AppRadii.pill),
-        border: Border.all(color: color),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
       ),
     );
   }

@@ -9,7 +9,6 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../config/env.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/report_reason.dart';
@@ -18,6 +17,7 @@ import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
+import '../../shared/utils/maps_launcher.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/promo_photo_hero.dart';
@@ -257,18 +257,11 @@ class _CommercantInfo extends ConsumerWidget {
             OutlinedButton.icon(
               icon: const Icon(Icons.directions_outlined),
               label: Text(l10n.itineraryButton),
-              onPressed: () => _openMaps(commercant.latitude!, commercant.longitude!),
+              onPressed: () => openMapsAt(commercant.latitude!, commercant.longitude!),
             ),
           ],
         ],
       ),
     );
-  }
-
-  Future<void> _openMaps(double latitude, double longitude) async {
-    final uri = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
-    );
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }

@@ -199,6 +199,8 @@
   "reactivateLabel": "Reactivate",
   "suspendedBadge": "Suspended",
   "memberSinceLabel": "Member since",
+  "originAutoInscrit": "Self-registered",
+  "originConfirmeAgent": "Confirmed by an agent",
   "suspendConfirmTitle": "Suspend this merchant?",
   "suspendConfirmMessage": "Their promos will no longer be visible until reactivated.",
   "reportCountLabel": "{count, plural, one{{count} report} other{{count} reports}}",

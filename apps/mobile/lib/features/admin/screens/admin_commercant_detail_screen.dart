@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -6,13 +7,18 @@ import '../../../domain/models/admin_commercant_item.dart';
 import '../../../domain/models/commune.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/l10n/enum_labels.dart';
+import '../../shared/utils/maps_launcher.dart';
 import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/status_chip.dart';
 
 final _communesProvider = FutureProvider.autoDispose((ref) => ref.watch(communeApiProvider).list());
 
 /// Fiche commerçant côté admin — la liste (`AdminCommercantsScreen`)
-/// n'affichait que nom/téléphone tronqués, sans vue détail ni accès à la
-/// date d'inscription ou à la commune.
+/// n'affichait que nom/téléphone tronqués. `GET /admin/commercant` charge
+/// déjà l'entité complète (aucune requête supplémentaire) mais n'en
+/// exposait qu'une fraction ; complété côté backend (adresse, catégorie,
+/// photo, position GPS, origine de vérification) pour cette fiche.
 class AdminCommercantDetailScreen extends ConsumerWidget {
   const AdminCommercantDetailScreen({super.key, required this.item});
 
@@ -58,58 +64,94 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
         actions: const [LanguageSwitcherButton()],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
         children: [
-          if (item.suspended)
-            Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: colorScheme.error.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: colorScheme.error),
-              ),
-              child: Text(
-                l10n.suspendedBadge,
-                style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.w600),
-              ),
+          if (item.photoUrl != null)
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: CachedNetworkImage(imageUrl: item.photoUrl!, fit: BoxFit.cover),
             ),
-          Row(
-            children: [
-              Icon(Icons.phone_outlined, size: 18, color: colorScheme.onSurfaceVariant),
-              const SizedBox(width: 8),
-              Text(item.telephone),
-            ],
-          ),
-          if (communeName != null) ...[
-            const SizedBox(height: 8),
-            Row(
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.place_outlined, size: 18, color: colorScheme.onSurfaceVariant),
-                const SizedBox(width: 8),
-                Text(communeName),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (item.suspended)
+                      StatusChip(label: l10n.suspendedBadge, color: colorScheme.error),
+                    if (item.originVerification != null)
+                      StatusChip(
+                        label: commercantOriginVerificationLabel(context, item.originVerification!),
+                        color: colorScheme.secondary,
+                      ),
+                  ],
+                ),
+                if (item.suspended || item.originVerification != null) const SizedBox(height: 12),
+                Text(categorieLabel(context, item.categorie), style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.phone_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 8),
+                    Text(item.telephone),
+                  ],
+                ),
+                if (item.adresse != null && item.adresse!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.home_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(item.adresse!)),
+                    ],
+                  ),
+                ],
+                if (communeName != null) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.place_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 8),
+                      Text(communeName),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.calendar_today_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 8),
+                    Text('${l10n.memberSinceLabel} ${dateFormat.format(item.createdAt)}'),
+                  ],
+                ),
+                if (item.latitude != null && item.longitude != null) ...[
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.directions_outlined),
+                    label: Text(l10n.itineraryButton),
+                    onPressed: () => openMapsAt(item.latitude!, item.longitude!),
+                  ),
+                ],
+                const SizedBox(height: 24),
+                item.suspended
+                    ? FilledButton(
+                        onPressed: () => _act(
+                          context,
+                          ref,
+                          () => ref.read(adminApiProvider).reactivateCommercant(item.id),
+                        ),
+                        child: Text(l10n.reactivateLabel),
+                      )
+                    : OutlinedButton(
+                        onPressed: () => _confirmAndSuspend(context, ref),
+                        child: Text(l10n.suspendLabel),
+                      ),
               ],
             ),
-          ],
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(Icons.calendar_today_outlined, size: 18, color: colorScheme.onSurfaceVariant),
-              const SizedBox(width: 8),
-              Text('${l10n.memberSinceLabel} ${dateFormat.format(item.createdAt)}'),
-            ],
           ),
-          const SizedBox(height: 24),
-          item.suspended
-              ? FilledButton(
-                  onPressed: () =>
-                      _act(context, ref, () => ref.read(adminApiProvider).reactivateCommercant(item.id)),
-                  child: Text(l10n.reactivateLabel),
-                )
-              : OutlinedButton(
-                  onPressed: () => _confirmAndSuspend(context, ref),
-                  child: Text(l10n.suspendLabel),
-                ),
         ],
       ),
     );

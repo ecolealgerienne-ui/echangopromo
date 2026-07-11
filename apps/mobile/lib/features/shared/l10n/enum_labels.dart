@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../domain/enums/audit_actor_type.dart';
 import '../../../domain/enums/categorie.dart';
+import '../../../domain/enums/commercant_origin_verification.dart';
 import '../../../domain/enums/promo_lifecycle_status.dart';
 import '../../../domain/enums/promo_moderation_status.dart';
 import '../../../domain/enums/report_reason.dart';
@@ -86,6 +87,19 @@ Color moderationStatusColor(PromoModerationStatus status) {
       return Colors.red;
     case PromoModerationStatus.verifieeOk:
       return Colors.blueGrey;
+  }
+}
+
+String commercantOriginVerificationLabel(
+  BuildContext context,
+  CommercantOriginVerification origin,
+) {
+  final l10n = AppLocalizations.of(context)!;
+  switch (origin) {
+    case CommercantOriginVerification.autoInscrit:
+      return l10n.originAutoInscrit;
+    case CommercantOriginVerification.confirmeAgent:
+      return l10n.originConfirmeAgent;
   }
 }
 
