@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/locale_provider.dart';
 import 'router.dart';
+import 'theme.dart';
 
 class EchangoPromoApp extends ConsumerWidget {
   const EchangoPromoApp({super.key});
@@ -24,7 +25,9 @@ class EchangoPromoApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: supportedAppLocales,
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.teal),
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.system,
     );
   }
 }

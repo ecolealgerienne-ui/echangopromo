@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../app/theme.dart';
 import '../../../config/env.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/report_reason.dart';
@@ -47,13 +48,36 @@ class PromoDetailScreen extends ConsumerWidget {
           final isFavorite = favorites.contains(promo.id);
           final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
           final dateFormat = DateFormat('dd/MM/yyyy');
+          final colorScheme = Theme.of(context).colorScheme;
 
           return ListView(
             children: [
               if (promo.photoUrl != null)
-                AspectRatio(
-                  aspectRatio: 4 / 3,
-                  child: CachedNetworkImage(imageUrl: promo.photoUrl!, fit: BoxFit.cover),
+                Stack(
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 4 / 3,
+                      child: CachedNetworkImage(imageUrl: promo.photoUrl!, fit: BoxFit.cover),
+                    ),
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary,
+                          borderRadius: BorderRadius.circular(AppRadii.pill),
+                        ),
+                        child: Text(
+                          '-${promo.discountPercent}%',
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                color: colorScheme.onPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -83,16 +107,20 @@ class PromoDetailScreen extends ConsumerWidget {
                       children: [
                         Text(
                           currency.format(promo.prixAvant),
-                          style: const TextStyle(
+                          style: TextStyle(
                             decoration: TextDecoration.lineThrough,
-                            color: Colors.grey,
+                            color: colorScheme.onSurfaceVariant,
                             fontSize: 16,
                           ),
                         ),
                         const SizedBox(width: 12),
                         Text(
                           currency.format(promo.prixApres),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 20,
+                            color: colorScheme.primary,
+                          ),
                         ),
                       ],
                     ),
@@ -256,7 +284,11 @@ class _CommercantInfo extends ConsumerWidget {
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.place_outlined, size: 18, color: Colors.grey),
+                Icon(
+                  Icons.place_outlined,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
                 const SizedBox(width: 4),
                 Expanded(child: Text(commercant.adresse!)),
               ],

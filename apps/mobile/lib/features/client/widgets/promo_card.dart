@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../app/theme.dart';
 import '../../../domain/models/promo.dart';
 
 /// Padding autour du bloc texte (description/prix/nom) — partagé avec
@@ -34,6 +35,7 @@ class PromoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -59,7 +61,25 @@ class PromoCard extends StatelessWidget {
                   if (promo.photoUrl != null)
                     CachedNetworkImage(imageUrl: promo.photoUrl!, fit: BoxFit.cover)
                   else
-                    Container(color: Theme.of(context).colorScheme.surfaceContainerHighest),
+                    Container(color: colorScheme.surfaceContainerHighest),
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary,
+                        borderRadius: BorderRadius.circular(AppRadii.pill),
+                      ),
+                      child: Text(
+                        '-${promo.discountPercent}%',
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelSmall
+                            ?.copyWith(color: colorScheme.onPrimary, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
                   if (isFavorite)
                     const Positioned(
                       top: 8,
@@ -91,15 +111,15 @@ class PromoCard extends StatelessWidget {
                       children: [
                         Text(
                           currency.format(promo.prixAvant),
-                          style: const TextStyle(
+                          style: TextStyle(
                             decoration: TextDecoration.lineThrough,
-                            color: Colors.grey,
+                            color: colorScheme.onSurfaceVariant,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Text(
                           currency.format(promo.prixApres),
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary),
                         ),
                       ],
                     ),
@@ -109,7 +129,10 @@ class PromoCard extends StatelessWidget {
                       // sinon la carte d'un commerçant sans nom connu serait
                       // plus courte que les autres.
                       promo.commercantNom ?? '',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: colorScheme.onSurfaceVariant),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
