@@ -14,6 +14,7 @@ import { AssignCommunesDto } from '../agent/dto/assign-communes.dto';
 import { CreateAgentDto } from '../agent/dto/create-agent.dto';
 import { TransferCommunesDto } from '../agent/dto/transfer-communes.dto';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { ListAuditLogQueryDto } from '../audit-log/dto/list-audit-log-query.dto';
 import { AuditActorType } from '../audit-log/entities/audit-log.entity';
 import { AuthService } from '../auth/auth.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -447,6 +448,19 @@ export class AdminController {
       targetId: commercantId,
     });
     return { ok: true };
+  }
+
+  /**
+   * Journal d'audit consultable (plan de correction, Phase 3) — admin only,
+   * y compris les actions enregistrées par un agent (transfert de communes,
+   * modération...) : un agent ne voit pas ce journal, seul l'admin doit
+   * pouvoir retracer "qui a fait quoi".
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Get('audit-log')
+  async auditLog(@Query() query: ListAuditLogQueryDto) {
+    return this.auditLogService.findAll(query.page, query.limit, query.actorType);
   }
 
   /** Dashboard global admin (specs §3.4). */

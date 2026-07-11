@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../domain/enums/audit_actor_type.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/enums/promo_lifecycle_status.dart';
 import '../../../l10n/app_localizations.dart';
@@ -67,6 +68,16 @@ String notificationRelativeDate(BuildContext context, DateTime createdAt) {
   if (diff.inDays == 1) return l10n.notificationYesterday;
 
   return DateFormat('dd/MM/yyyy').format(createdAt);
+}
+
+String auditActorTypeLabel(BuildContext context, AuditActorType actorType) {
+  final l10n = AppLocalizations.of(context)!;
+  switch (actorType) {
+    case AuditActorType.admin:
+      return l10n.auditActorAdmin;
+    case AuditActorType.agent:
+      return l10n.auditActorAgent;
+  }
 }
 
 String visitStatusLabel(BuildContext context, String visitStatus) {

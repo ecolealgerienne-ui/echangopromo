@@ -104,6 +104,12 @@ class AdminDashboardScreen extends ConsumerWidget {
               label: Text(l10n.agentsLabel),
               onPressed: () => context.push('/admin/agents'),
             ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.history_outlined),
+              label: Text(l10n.auditLogLabel),
+              onPressed: () => context.push('/admin/audit-log'),
+            ),
           ],
         ),
       ),

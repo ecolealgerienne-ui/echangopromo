@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../domain/enums/categorie.dart';
 import '../domain/models/auth_session.dart';
 import '../domain/models/promo.dart';
+import '../features/admin/screens/admin_audit_log_screen.dart';
 import '../features/admin/screens/admin_commercants_screen.dart';
 import '../features/admin/screens/admin_dashboard_screen.dart';
 import '../features/admin/screens/admin_login_screen.dart';
@@ -157,6 +158,11 @@ final _appRoutes = <_AppRoute>[
   _AppRoute(
     '/admin/commercants',
     (context, state) => const AdminCommercantsScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/audit-log',
+    (context, state) => const AdminAuditLogScreen(),
     requiredRole: AppRole.admin,
   ),
   _AppRoute(

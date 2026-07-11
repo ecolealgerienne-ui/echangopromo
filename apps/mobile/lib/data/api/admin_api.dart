@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import '../../domain/models/admin.dart';
 import '../../domain/models/admin_commercant_item.dart';
 import '../../domain/models/agent.dart';
+import '../../domain/models/audit_log_entry.dart';
 import '../../domain/models/moderation_item.dart';
 import '../../domain/models/registre_item.dart';
 
@@ -158,5 +159,16 @@ class AdminApi {
       'fromAgentId': fromAgentId,
       'toAgentId': toAgentId,
     });
+  }
+
+  // --- Journal d'audit (plan de correction, Phase 3) ---
+
+  Future<List<AuditLogEntry>> auditLog() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/admin/audit-log',
+      queryParameters: {'limit': _pageSize},
+    );
+    final items = response.data!['items'] as List<dynamic>;
+    return items.map((e) => AuditLogEntry.fromJson(e as Map<String, dynamic>)).toList();
   }
 }
