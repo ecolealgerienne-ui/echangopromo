@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../data/api/api_exception.dart';
+import '../../../domain/enums/registre_status.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/api_error_text.dart';
@@ -9,14 +10,22 @@ import '../../shared/widgets/language_switcher_button.dart';
 
 final _commercantSearchProvider = StateProvider.autoDispose<String>((ref) => '');
 
+/// Filtre "en attente de validation registre" — remplace l'ancienne file
+/// dédiée (`/admin/registre`, retirée le 2026-07-11), la fiche commerçant
+/// affiche désormais le registre et permet de le valider/rejeter.
+final _registrePendingFilterProvider = StateProvider.autoDispose<bool>((ref) => false);
+
 final _commercantsProvider = FutureProvider.autoDispose((ref) {
   final search = ref.watch(_commercantSearchProvider);
-  return ref.watch(adminApiProvider).listCommercants(search: search);
+  final pendingOnly = ref.watch(_registrePendingFilterProvider);
+  return ref.watch(adminApiProvider).listCommercants(
+        search: search,
+        registreStatus: pendingOnly ? RegistreStatus.enAttente : null,
+      );
 });
 
 /// Liste + recherche sur l'ensemble des commerçants (plan de correction,
-/// Phase 2) — jusqu'ici seule la file registre (en attente) était
-/// consultable côté admin.
+/// Phase 2), avec filtre "en attente de validation registre".
 class AdminCommercantsScreen extends ConsumerWidget {
   const AdminCommercantsScreen({super.key});
 
@@ -65,6 +74,7 @@ class AdminCommercantsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final commercantsAsync = ref.watch(_commercantsProvider);
+    final pendingOnly = ref.watch(_registrePendingFilterProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -74,7 +84,7 @@ class AdminCommercantsScreen extends ConsumerWidget {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
             child: TextField(
               decoration: InputDecoration(
                 hintText: l10n.searchHint,
@@ -83,6 +93,17 @@ class AdminCommercantsScreen extends ConsumerWidget {
                 isDense: true,
               ),
               onChanged: (value) => ref.read(_commercantSearchProvider.notifier).state = value,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FilterChip(
+                label: Text(l10n.pendingRegistreFilterLabel),
+                selected: pendingOnly,
+                onSelected: (v) => ref.read(_registrePendingFilterProvider.notifier).state = v,
+              ),
             ),
           ),
           Expanded(
@@ -106,7 +127,12 @@ class AdminCommercantsScreen extends ConsumerWidget {
                           if (changed == true) ref.invalidate(_commercantsProvider);
                         },
                         title: Text(item.nom),
-                        subtitle: Text(item.telephone),
+                        subtitle: item.registreStatus == RegistreStatus.enAttente
+                            ? Text(
+                                '${item.telephone} · ${l10n.registreStatusEnAttente}',
+                                style: const TextStyle(color: Colors.orange),
+                              )
+                            : Text(item.telephone),
                         trailing: item.suspended
                             ? TextButton(
                                 onPressed: () => _act(

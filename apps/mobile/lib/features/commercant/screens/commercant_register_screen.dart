@@ -13,6 +13,7 @@ import '../../shared/widgets/commercant_fields_form.dart';
 import '../../shared/widgets/error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/loading_button.dart';
+import '../../shared/widgets/photo_picker_field.dart';
 import '../../../providers/core_providers.dart';
 
 /// Auto-inscription (specs §3.2, voie 1) — sans passage agent requis, et sans
@@ -34,6 +35,7 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
   Categorie? _categorie;
   String? _communeId;
   File? _photo;
+  File? _registrePhoto;
   double? _latitude;
   double? _longitude;
   bool _loading = false;
@@ -50,9 +52,18 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
     super.dispose();
   }
 
+  /// `true` si un appel précédent a déjà créé le compte et ouvert la
+  /// session — permet de relancer uniquement l'envoi du registre (ex. après
+  /// un échec réseau juste après l'inscription) sans retenter `register()`,
+  /// qui échouerait alors avec "téléphone déjà utilisé".
+  bool get _alreadyRegistered => ref.read(authControllerProvider).value != null;
+
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
-    if (!_formKey.currentState!.validate() || _communeId == null || !_acceptedTerms) {
+    final alreadyRegistered = _alreadyRegistered;
+
+    if (!alreadyRegistered &&
+        (!_formKey.currentState!.validate() || _communeId == null || !_acceptedTerms)) {
       setState(() {
         _error = _communeId == null
             ? l10n.communeRequired
@@ -62,35 +73,48 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
       });
       return;
     }
+    if (_registrePhoto == null) {
+      setState(() => _error = l10n.registrePhotoRequired);
+      return;
+    }
 
     setState(() {
       _loading = true;
       _error = null;
     });
 
+    final api = ref.read(commercantApiProvider);
     try {
-      final api = ref.read(commercantApiProvider);
-      String? photoKey;
-      if (_photo != null) {
-        photoKey = await ref.read(storageApiProvider).uploadPhoto(_photo!, purpose: 'commercant');
+      if (!alreadyRegistered) {
+        // Compte d'abord, sans photoKey : /storage/upload exige une session
+        // commerçant valide (JwtAuthGuard) qui n'existe pas encore à ce
+        // stade — l'upload de la photo boutique/registre ne peut se faire
+        // qu'après connexion, ci-dessous.
+        final token = await api.register(
+          telephone: _telephoneController.text.trim(),
+          nom: _nomController.text.trim(),
+          adresse: _adresseController.text.trim(),
+          categorie: _categorie!,
+          communeId: _communeId!,
+          pin: _pinController.text.trim(),
+          latitude: _latitude,
+          longitude: _longitude,
+          acceptedTerms: _acceptedTerms,
+        );
+        await ref.read(authControllerProvider.notifier).loginThenResolveId(
+              role: AppRole.commercant,
+              token: token,
+              fetchId: () async => (await api.me()).id,
+            );
       }
-      final token = await api.register(
-        telephone: _telephoneController.text.trim(),
-        nom: _nomController.text.trim(),
-        adresse: _adresseController.text.trim(),
-        categorie: _categorie!,
-        communeId: _communeId!,
-        pin: _pinController.text.trim(),
-        photoKey: photoKey,
-        latitude: _latitude,
-        longitude: _longitude,
-        acceptedTerms: _acceptedTerms,
-      );
-      await ref.read(authControllerProvider.notifier).loginThenResolveId(
-            role: AppRole.commercant,
-            token: token,
-            fetchId: () async => (await api.me()).id,
-          );
+
+      final storage = ref.read(storageApiProvider);
+      final registreKey = await storage.uploadPhoto(_registrePhoto!, purpose: 'registre');
+      await api.requestRegistreVerification(registreKey);
+      if (_photo != null) {
+        final photoKey = await storage.uploadPhoto(_photo!, purpose: 'commercant');
+        await api.updateProfile(photoKey: photoKey);
+      }
       if (mounted) context.go('/commercant/dashboard');
     } catch (error) {
       setState(() => _error = extractApiErrorMessage(
@@ -133,6 +157,21 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
                 onCategorieChanged: (v) => setState(() => _categorie = v),
                 communeId: _communeId,
                 onCommuneChanged: (v) => setState(() => _communeId = v),
+              ),
+              const SizedBox(height: 16),
+              Text(l10n.registrePhotoLabel, style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(
+                l10n.registrePhotoHelperText,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 8),
+              PhotoPickerField(
+                file: _registrePhoto,
+                onChanged: (file) => setState(() => _registrePhoto = file),
               ),
               const SizedBox(height: 12),
               TextFormField(

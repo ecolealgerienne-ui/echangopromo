@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../data/api/api_exception.dart';
+import '../../../domain/enums/commercant_origin_verification.dart';
+import '../../../domain/enums/registre_status.dart';
 import '../../../domain/models/admin_commercant_item.dart';
 import '../../../domain/models/commune.dart';
 import '../../../l10n/app_localizations.dart';
@@ -134,6 +136,55 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                     label: Text(l10n.itineraryButton),
                     onPressed: () => openMapsAt(item.latitude!, item.longitude!),
                   ),
+                ],
+                if (item.originVerification == CommercantOriginVerification.autoInscrit) ...[
+                  const Divider(height: 40),
+                  Text(l10n.registreSectionLabel, style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  if (item.registreStatus == null)
+                    Text(l10n.registreNotSentLabel,
+                        style: TextStyle(color: colorScheme.onSurfaceVariant))
+                  else ...[
+                    StatusChip(
+                      label: registreStatusLabel(context, item.registreStatus!),
+                      color: registreStatusColor(item.registreStatus!),
+                    ),
+                    if (item.registreUrl != null) ...[
+                      const SizedBox(height: 12),
+                      AspectRatio(
+                        aspectRatio: 4 / 3,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: CachedNetworkImage(imageUrl: item.registreUrl!, fit: BoxFit.cover),
+                        ),
+                      ),
+                    ],
+                    if (item.registreStatus == RegistreStatus.enAttente) ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilledButton(
+                            onPressed: () => _act(
+                              context,
+                              ref,
+                              () => ref.read(adminApiProvider).validerRegistre(item.id),
+                            ),
+                            child: Text(l10n.validerLabel),
+                          ),
+                          OutlinedButton(
+                            onPressed: () => _act(
+                              context,
+                              ref,
+                              () => ref.read(adminApiProvider).rejeterRegistre(item.id),
+                            ),
+                            child: Text(l10n.rejeterLabel),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                 ],
                 const SizedBox(height: 24),
                 item.suspended

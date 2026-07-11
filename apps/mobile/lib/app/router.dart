@@ -18,7 +18,6 @@ import '../features/admin/screens/admin_promos_screen.dart';
 import '../features/admin/screens/agent_list_screen.dart';
 import '../features/admin/screens/create_agent_screen.dart';
 import '../features/admin/screens/moderation_queue_screen.dart';
-import '../features/admin/screens/registre_queue_screen.dart';
 import '../features/agent/screens/agent_login_screen.dart';
 import '../features/agent/screens/agent_promo_form_screen.dart';
 import '../features/agent/screens/create_commercant_screen.dart';
@@ -195,11 +194,6 @@ final _appRoutes = <_AppRoute>[
   _AppRoute(
     '/admin/audit-log',
     (context, state) => const AdminAuditLogScreen(),
-    requiredRole: AppRole.admin,
-  ),
-  _AppRoute(
-    '/admin/registre',
-    (context, state) => const RegistreQueueScreen(),
     requiredRole: AppRole.admin,
   ),
   _AppRoute(

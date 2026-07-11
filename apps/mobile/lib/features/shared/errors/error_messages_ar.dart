@@ -37,6 +37,7 @@ const Map<String, String> errorMessagesAr = {
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'لا يوجد طلب تحقق في الانتظار.',
   'COMMERCANT_NOT_IN_AGENT_COMMUNES': 'هذا التاجر ليس ضمن بلديات هذا العون.',
   'COMMERCANT_TERMS_NOT_ACCEPTED': 'يجب عليك قبول شروط الاستخدام لإنشاء حساب.',
+  'COMMERCANT_REGISTRE_NOT_VALIDATED': 'يجب أن يصادق مسؤول على سجلك التجاري قبل أن تتمكن من نشر العروض.',
 
   'RATE_LIMITED': 'عدد كبير جدًا من المحاولات. أعد المحاولة بعد قليل.',
   'HTTP_ERROR': 'حدث خطأ ما.',

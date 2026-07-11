@@ -5,7 +5,8 @@ import '../enums/registre_status.dart';
 
 /// Entrée de la liste admin des commerçants (`GET /admin/commercant`, plan
 /// de correction Phase 2) — recherche + gestion de compte (suspendre/
-/// réactiver), distincte de la file registre (en attente uniquement).
+/// réactiver) et, depuis le 2026-07-11, consultation/validation du registre
+/// (fusionné ici, l'ancienne file dédiée a été retirée).
 class AdminCommercantItem {
   const AdminCommercantItem({
     required this.id,
@@ -20,6 +21,7 @@ class AdminCommercantItem {
     required this.accountState,
     required this.originVerification,
     required this.registreStatus,
+    this.registreUrl,
     required this.suspended,
     required this.createdAt,
   });
@@ -38,6 +40,7 @@ class AdminCommercantItem {
         originVerification:
             CommercantOriginVerification.fromValue(json['originVerification'] as String?),
         registreStatus: RegistreStatus.fromValue(json['registreStatus'] as String?),
+        registreUrl: json['registreUrl'] as String?,
         suspended: json['suspended'] as bool,
         createdAt: DateTime.parse(json['createdAt'] as String),
       );
@@ -54,6 +57,7 @@ class AdminCommercantItem {
   final CommercantAccountState accountState;
   final CommercantOriginVerification? originVerification;
   final RegistreStatus? registreStatus;
+  final String? registreUrl;
   final bool suspended;
   final DateTime createdAt;
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../domain/enums/commercant_origin_verification.dart';
+import '../../../domain/enums/registre_status.dart';
+import '../../../domain/models/commercant.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
@@ -67,9 +70,12 @@ class CommercantDashboardScreen extends ConsumerWidget {
             meAsync.when(
               loading: () => const LinearProgressIndicator(),
               error: (error, _) => ApiErrorText(error),
-              data: (commercant) => Text(
-                commercant.nom,
-                style: Theme.of(context).textTheme.headlineSmall,
+              data: (commercant) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(commercant.nom, style: Theme.of(context).textTheme.headlineSmall),
+                  _RegistreStatusBanner(commercant: commercant),
+                ],
               ),
             ),
             const SizedBox(height: 16),
@@ -177,6 +183,64 @@ class _UnreadNotificationsBanner extends ConsumerWidget {
         );
       },
       orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+/// Statut du registre pour un commerçant auto-inscrit — aucune promo ne
+/// peut être publiée tant qu'il n'est pas `validé` par un admin (revert du
+/// 2026-07-11, voir `CommercantService.assertRegistreValidated`). Un
+/// commerçant confirmé par un agent n'est jamais concerné.
+class _RegistreStatusBanner extends StatelessWidget {
+  const _RegistreStatusBanner({required this.commercant});
+
+  final Commercant commercant;
+
+  @override
+  Widget build(BuildContext context) {
+    if (commercant.originVerification != CommercantOriginVerification.autoInscrit) {
+      return const SizedBox.shrink();
+    }
+    if (commercant.registreStatus == RegistreStatus.valide) {
+      return const SizedBox.shrink();
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    // `null` (jamais envoyé) traité comme "en attente" — même bannière,
+    // rien d'actionnable de plus à proposer tant qu'aucun écran de
+    // renvoi du registre n'existe après l'inscription initiale.
+    final isRejected = commercant.registreStatus == RegistreStatus.rejete;
+    final title = isRejected ? l10n.registreRejectedBannerTitle : l10n.registrePendingBannerTitle;
+    final message =
+        isRejected ? l10n.registreRejectedBannerMessage : l10n.registrePendingBannerMessage;
+    final color = isRejected ? colorScheme.error : Colors.orange;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Card(
+        color: color.withValues(alpha: 0.1),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, color: color),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text(message),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

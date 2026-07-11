@@ -1,10 +1,10 @@
 import 'package:dio/dio.dart';
+import '../../domain/enums/registre_status.dart';
 import '../../domain/models/admin.dart';
 import '../../domain/models/admin_commercant_item.dart';
 import '../../domain/models/agent.dart';
 import '../../domain/models/audit_log_entry.dart';
 import '../../domain/models/moderation_item.dart';
-import '../../domain/models/registre_item.dart';
 
 /// Page unique généreuse plutôt qu'une vraie pagination UI — même décision
 /// que `PromoApi` (pilote un seul quartier, volume largement sous ce seuil).
@@ -75,10 +75,17 @@ class AdminApi {
 
   // --- Commerçants (plan de correction, Phase 2) ---
 
-  Future<List<AdminCommercantItem>> listCommercants({String? search}) async {
+  Future<List<AdminCommercantItem>> listCommercants({
+    String? search,
+    RegistreStatus? registreStatus,
+  }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/commercant',
-      queryParameters: {'limit': _pageSize, if (search != null && search.isNotEmpty) 'search': search},
+      queryParameters: {
+        'limit': _pageSize,
+        if (search != null && search.isNotEmpty) 'search': search,
+        if (registreStatus != null) 'registreStatus': registreStatus.value,
+      },
     );
     final items = response.data!['items'] as List<dynamic>;
     return items.map((e) => AdminCommercantItem.fromJson(e as Map<String, dynamic>)).toList();
@@ -93,15 +100,6 @@ class AdminApi {
   }
 
   // --- Registre ---
-
-  Future<List<RegistreItem>> registreQueue() async {
-    final response = await _dio.get<Map<String, dynamic>>(
-      '/admin/commercant/registre/queue',
-      queryParameters: {'limit': _pageSize},
-    );
-    final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => RegistreItem.fromJson(e as Map<String, dynamic>)).toList();
-  }
 
   Future<void> validerRegistre(String commercantId) async {
     await _dio.post<void>('/admin/commercant/$commercantId/registre/valider');

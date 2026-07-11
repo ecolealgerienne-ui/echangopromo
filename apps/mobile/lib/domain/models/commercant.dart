@@ -1,5 +1,7 @@
 import '../enums/categorie.dart';
 import '../enums/commercant_account_state.dart';
+import '../enums/commercant_origin_verification.dart';
+import '../enums/registre_status.dart';
 
 class Commercant {
   const Commercant({
@@ -9,6 +11,8 @@ class Commercant {
     required this.categorie,
     required this.communeId,
     this.accountState,
+    this.originVerification,
+    this.registreStatus,
     this.telephone,
     this.photoUrl,
     this.latitude,
@@ -24,6 +28,9 @@ class Commercant {
         accountState: json['accountState'] != null
             ? CommercantAccountState.fromValue(json['accountState'] as String)
             : null,
+        originVerification:
+            CommercantOriginVerification.fromValue(json['originVerification'] as String?),
+        registreStatus: RegistreStatus.fromValue(json['registreStatus'] as String?),
         telephone: json['telephone'] as String?,
         photoUrl: json['photoUrl'] as String?,
         latitude: (json['latitude'] as num?)?.toDouble(),
@@ -36,6 +43,8 @@ class Commercant {
   final Categorie categorie;
   final String communeId;
   final CommercantAccountState? accountState;
+  final CommercantOriginVerification? originVerification;
+  final RegistreStatus? registreStatus;
   final String? telephone;
   final String? photoUrl;
   final double? latitude;

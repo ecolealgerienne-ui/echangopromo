@@ -39,6 +39,8 @@ const Map<String, String> errorMessagesEn = {
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'No pending verification request.',
   'COMMERCANT_NOT_IN_AGENT_COMMUNES': 'This merchant is not in any of this agent\'s communes.',
   'COMMERCANT_TERMS_NOT_ACCEPTED': 'You must accept the terms of use to create an account.',
+  'COMMERCANT_REGISTRE_NOT_VALIDATED':
+      'Your business registration must be validated by an administrator before you can publish promos.',
 
   'RATE_LIMITED': 'Too many attempts. Please try again shortly.',
   'HTTP_ERROR': 'An error occurred.',

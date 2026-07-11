@@ -53,6 +53,8 @@ const Map<String, String> errorMessagesFr = {
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'Aucune demande de vérification en attente.',
   'COMMERCANT_NOT_IN_AGENT_COMMUNES': "Ce commerçant n'est dans aucune des communes de cet agent.",
   'COMMERCANT_TERMS_NOT_ACCEPTED': "Vous devez accepter les conditions d'utilisation pour créer un compte.",
+  'COMMERCANT_REGISTRE_NOT_VALIDATED':
+      "Votre registre de commerce doit être validé par un administrateur avant de pouvoir publier des promos.",
 
   'RATE_LIMITED': 'Trop de tentatives. Réessayez dans quelques instants.',
   'HTTP_ERROR': 'Une erreur est survenue.',

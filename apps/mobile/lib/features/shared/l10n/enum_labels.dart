@@ -5,6 +5,7 @@ import '../../../domain/enums/categorie.dart';
 import '../../../domain/enums/commercant_origin_verification.dart';
 import '../../../domain/enums/promo_lifecycle_status.dart';
 import '../../../domain/enums/promo_moderation_status.dart';
+import '../../../domain/enums/registre_status.dart';
 import '../../../domain/enums/report_reason.dart';
 import '../../../l10n/app_localizations.dart';
 
@@ -100,6 +101,29 @@ String commercantOriginVerificationLabel(
       return l10n.originAutoInscrit;
     case CommercantOriginVerification.confirmeAgent:
       return l10n.originConfirmeAgent;
+  }
+}
+
+String registreStatusLabel(BuildContext context, RegistreStatus status) {
+  final l10n = AppLocalizations.of(context)!;
+  switch (status) {
+    case RegistreStatus.enAttente:
+      return l10n.registreStatusEnAttente;
+    case RegistreStatus.valide:
+      return l10n.registreStatusValide;
+    case RegistreStatus.rejete:
+      return l10n.registreStatusRejete;
+  }
+}
+
+Color registreStatusColor(RegistreStatus status) {
+  switch (status) {
+    case RegistreStatus.enAttente:
+      return Colors.orange;
+    case RegistreStatus.valide:
+      return Colors.green;
+    case RegistreStatus.rejete:
+      return Colors.red;
   }
 }
 

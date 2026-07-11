@@ -10,7 +10,8 @@ import '../../shared/widgets/language_switcher_button.dart';
 final _dashboardProvider = FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).dashboard());
 
 /// Dashboard admin (specs §3.4) : stats globales + accès aux files de
-/// travail (modération, registre, agents).
+/// travail (modération, agents) — le registre se consulte/valide désormais
+/// depuis la fiche détail commerçant, plus de menu dédié.
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
 
@@ -97,12 +98,6 @@ class AdminDashboardScreen extends ConsumerWidget {
               icon: const Icon(Icons.storefront_outlined),
               label: Text(l10n.commercantsLabel),
               onPressed: () => context.push('/admin/commercants'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.fact_check_outlined),
-              label: Text(l10n.registreLabel),
-              onPressed: () => context.push('/admin/registre'),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
