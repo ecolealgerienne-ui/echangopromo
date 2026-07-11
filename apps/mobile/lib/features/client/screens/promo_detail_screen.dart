@@ -10,7 +10,6 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../app/theme.dart';
 import '../../../config/env.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/report_reason.dart';
@@ -20,6 +19,8 @@ import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/promo_photo_hero.dart';
+import '../../shared/widgets/promo_price_row.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/promo_providers.dart';
 
@@ -46,39 +47,15 @@ class PromoDetailScreen extends ConsumerWidget {
         data: (promo) {
           final favorites = ref.watch(favoritesProvider);
           final isFavorite = favorites.contains(promo.id);
-          final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
           final dateFormat = DateFormat('dd/MM/yyyy');
-          final colorScheme = Theme.of(context).colorScheme;
 
           return ListView(
             children: [
-              if (promo.photoUrl != null)
-                Stack(
-                  children: [
-                    AspectRatio(
-                      aspectRatio: 4 / 3,
-                      child: CachedNetworkImage(imageUrl: promo.photoUrl!, fit: BoxFit.cover),
-                    ),
-                    Positioned(
-                      top: 12,
-                      left: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: colorScheme.primary,
-                          borderRadius: BorderRadius.circular(AppRadii.pill),
-                        ),
-                        child: Text(
-                          '-${promo.discountPercent}%',
-                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                color: colorScheme.onPrimary,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              PromoPhotoHero(
+                photoUrl: promo.photoUrl,
+                prixAvant: promo.prixAvant,
+                prixApres: promo.prixApres,
+              ),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -103,27 +80,7 @@ class PromoDetailScreen extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text(
-                          currency.format(promo.prixAvant),
-                          style: TextStyle(
-                            decoration: TextDecoration.lineThrough,
-                            color: colorScheme.onSurfaceVariant,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          currency.format(promo.prixApres),
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 20,
-                            color: colorScheme.primary,
-                          ),
-                        ),
-                      ],
-                    ),
+                    PromoPriceRow(prixAvant: promo.prixAvant, prixApres: promo.prixApres),
                     const SizedBox(height: 4),
                     if (promo.dateFin != null)
                       Text(l10n.validUntil(dateFormat.format(promo.dateFin!))),

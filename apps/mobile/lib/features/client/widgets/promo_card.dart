@@ -1,8 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../../../app/theme.dart';
 import '../../../domain/models/promo.dart';
+import '../../shared/widgets/promo_discount_badge.dart';
+import '../../shared/widgets/promo_price_row.dart';
 
 /// Padding autour du bloc texte (description/prix/nom) — partagé avec
 /// `promo_list_screen.dart` pour calculer un `childAspectRatio` de grille
@@ -34,7 +34,6 @@ class PromoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
     final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
@@ -65,19 +64,11 @@ class PromoCard extends StatelessWidget {
                   Positioned(
                     top: 8,
                     left: 8,
-                    child: Container(
+                    child: PromoDiscountBadge(
+                      prixAvant: promo.prixAvant,
+                      prixApres: promo.prixApres,
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary,
-                        borderRadius: BorderRadius.circular(AppRadii.pill),
-                      ),
-                      child: Text(
-                        '-${promo.discountPercent}%',
-                        style: Theme.of(context)
-                            .textTheme
-                            .labelSmall
-                            ?.copyWith(color: colorScheme.onPrimary, fontWeight: FontWeight.w700),
-                      ),
+                      textStyle: Theme.of(context).textTheme.labelSmall,
                     ),
                   ),
                   if (isFavorite)
@@ -107,21 +98,11 @@ class PromoCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Text(
-                          currency.format(promo.prixAvant),
-                          style: TextStyle(
-                            decoration: TextDecoration.lineThrough,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          currency.format(promo.prixApres),
-                          style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary),
-                        ),
-                      ],
+                    PromoPriceRow(
+                      prixAvant: promo.prixAvant,
+                      prixApres: promo.prixApres,
+                      beforeFontSize: 13,
+                      afterFontSize: 14,
                     ),
                     const SizedBox(height: 4),
                     Text(

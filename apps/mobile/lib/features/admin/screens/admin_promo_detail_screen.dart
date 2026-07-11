@@ -1,7 +1,5 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import '../../../app/theme.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/report_reason.dart';
@@ -10,6 +8,8 @@ import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/promo_photo_hero.dart';
+import '../../shared/widgets/promo_price_row.dart';
 
 /// Fiche promo côté admin/agent (modération) — même `ModerationItem` que
 /// `PromoModerationTile`, en vue complète : photo, statuts lifecycle +
@@ -46,8 +46,6 @@ class AdminPromoDetailScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     final api = ref.read(adminApiProvider);
-    final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
-    final discountPercent = ((item.prixAvant - item.prixApres) / item.prixAvant * 100).round();
     final reasonBreakdown = item.reasonBreakdown;
 
     return Scaffold(
@@ -57,33 +55,10 @@ class AdminPromoDetailScreen extends ConsumerWidget {
       ),
       body: ListView(
         children: [
-          Stack(
-            children: [
-              AspectRatio(
-                aspectRatio: 4 / 3,
-                child: item.photoUrl != null
-                    ? CachedNetworkImage(imageUrl: item.photoUrl!, fit: BoxFit.cover)
-                    : Container(color: colorScheme.surfaceContainerHighest),
-              ),
-              Positioned(
-                top: 12,
-                left: 12,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary,
-                    borderRadius: BorderRadius.circular(AppRadii.pill),
-                  ),
-                  child: Text(
-                    '-$discountPercent%',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: colorScheme.onPrimary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                ),
-              ),
-            ],
+          PromoPhotoHero(
+            photoUrl: item.photoUrl,
+            prixAvant: item.prixAvant,
+            prixApres: item.prixApres,
           ),
           Padding(
             padding: const EdgeInsets.all(16),
@@ -92,27 +67,7 @@ class AdminPromoDetailScreen extends ConsumerWidget {
               children: [
                 Text(item.description, style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text(
-                      currency.format(item.prixAvant),
-                      style: TextStyle(
-                        decoration: TextDecoration.lineThrough,
-                        color: colorScheme.onSurfaceVariant,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      currency.format(item.prixApres),
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20,
-                        color: colorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
+                PromoPriceRow(prixAvant: item.prixAvant, prixApres: item.prixApres),
                 const SizedBox(height: 4),
                 Text(categorieLabel(context, item.categorie)),
                 const SizedBox(height: 12),

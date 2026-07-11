@@ -54,8 +54,4 @@ class Promo {
   bool get isExpired =>
       lifecycleStatus == PromoLifecycleStatus.expiree ||
       (dateFin != null && dateFin!.isBefore(DateTime.now()));
-
-  /// Pourcentage de réduction arrondi, affiché en badge sur la carte et la
-  /// fiche promo (piste "Chaleureux & communautaire" du design system).
-  int get discountPercent => ((prixAvant - prixApres) / prixAvant * 100).round();
 }
