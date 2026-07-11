@@ -13,6 +13,8 @@ import { detectImageFormat } from './image-signature';
  */
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
+export type UploadFolder = 'promo-photos' | 'commercant-photos' | 'registre-documents';
+
 @Injectable()
 export class StorageService {
   private readonly client: S3Client;
@@ -45,13 +47,14 @@ export class StorageService {
    * Structure de bucket prévue pour le nettoyage automatique (specs §5.8) —
    * uniquement les photos de promo (`promo-photos/`) sont purgées après
    * `IMAGE_RETENTION_DAYS` (voir `PromoService.purgeOldPhotosCron`) ; la
-   * photo de commerce (`commercant-photos/`) est permanente, d'où le préfixe
-   * distinct.
+   * photo de commerce (`commercant-photos/`) et le registre de commerce
+   * (`registre-documents/`, pièce justificative conservée pour traçabilité
+   * de la validation admin) sont permanents, d'où le préfixe distinct.
    */
   buildKey(
     commercantId: string,
     extension: string,
-    folder: 'promo-photos' | 'commercant-photos' = 'promo-photos',
+    folder: UploadFolder = 'promo-photos',
   ): string {
     return `${folder}/${commercantId}/${randomUUID()}.${extension}`;
   }
@@ -70,7 +73,7 @@ export class StorageService {
   async uploadPhoto(
     commercantId: string,
     buffer: Buffer,
-    folder: 'promo-photos' | 'commercant-photos' = 'promo-photos',
+    folder: UploadFolder = 'promo-photos',
   ): Promise<string> {
     if (buffer.length > MAX_UPLOAD_BYTES) {
       throw new BadRequestAppException(

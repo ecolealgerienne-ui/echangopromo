@@ -75,13 +75,14 @@ auto_inscrit → autonome (directement, dès la saisie du PIN à l'inscription)
 
 | Niveau | Condition | Effet |
 |---|---|---|
-| `auto_inscrit` | Inscription autonome — aucune vérification du numéro de téléphone | **Suffisant pour publier** — aucune vérification physique |
-| `confirmé_agent` | Constaté physiquement par l'agent lors de sa visite | **Suffisant pour publier** — niveau de confiance supérieur |
-| `vérifié_registre` | Upload volontaire du registre de commerce, validation manuelle par l'admin | Badge de confiance optionnel, **jamais bloquant** pour publier |
+| `auto_inscrit` | Inscription autonome — aucune vérification du numéro de téléphone | **Bloqué pour publier** tant que le registre n'est pas envoyé et validé par un admin (revert du 2026-07-11, voir ci-dessous) |
+| `confirmé_agent` | Constaté physiquement par l'agent lors de sa visite | **Suffisant pour publier** — la visite de l'agent vaut vérification, jamais concerné par la validation du registre |
 
-> Décision explicite : ne pas exiger le registre de commerce pour publier, afin de ne pas exclure le commerce informel, très présent localement.
+> **Revert du 2026-07-11** : la V0 avait explicitement choisi de ne jamais bloquer la publication sur le registre de commerce, pour ne pas exclure le commerce informel (décision d'origine conservée ci-dessous pour mémoire). Décision produit ultérieure : un commerçant auto-inscrit doit désormais envoyer une photo de son registre à l'inscription et attendre la validation d'un admin avant de pouvoir publier une promo (`CommercantService.assertRegistreValidated`, `ErrorCode.COMMERCANT_REGISTRE_NOT_VALIDATED`) — un commerçant confirmé par un agent n'est jamais concerné, la visite de l'agent vaut déjà vérification.
 >
-> **Conséquence de l'auto-inscription et de l'absence de vérification téléphonique dès la V0** : ni le niveau `confirmé_agent` ni une preuve de possession du numéro ne filtrent les faux comptes (un commerçant peut publier sans jamais avoir été vérifié physiquement, et un numéro usurpé peut techniquement créer un compte au nom d'un tiers). Le système de signalement/modération (§5.4) est donc la **seule ligne de défense** contre les faux commerces ou contenus abusifs — risque assumé pour le pilote, à réévaluer avant extension.
+> Décision d'origine (V0, abandonnée) : *« ne pas exiger le registre de commerce pour publier, afin de ne pas exclure le commerce informel, très présent localement »* — le badge `vérifié_registre` était alors optionnel et jamais bloquant.
+>
+> **Conséquence résiduelle de l'auto-inscription et de l'absence de vérification téléphonique** : le registre validé filtre maintenant les faux comptes côté auto-inscription, mais ni le niveau `confirmé_agent` ni une preuve de possession du numéro de téléphone n'apportent cette garantie — un numéro usurpé peut techniquement créer un compte au nom d'un tiers. Le système de signalement/modération (§5.4) reste la ligne de défense pour ce cas résiduel.
 
 **Fiche commerçant — données saisies à la création** (auto-inscription ou
 création agent) :
@@ -155,7 +156,7 @@ brouillon → publiée → arrêtée
 
 - Authentification **email + mot de passe**.
 - **Un seul rôle en V0** (pas de séparation admin/modérateur pour le pilote — à réévaluer si recrutement d'un modérateur dédié).
-- Valide ou rejette les demandes de badge `vérifié_registre`.
+- Valide ou rejette le registre envoyé par un commerçant auto-inscrit — condition désormais bloquante pour que celui-ci puisse publier (§3.2).
 - Traite la file de modération des promos signalées (masquer / valider en `vérifiée_ok` / avertir le commerçant).
 - Crée et gère les comptes agents, assigne un agent à une ou plusieurs communes.
 - **Transfère des communes** d'un agent à un autre (cas : départ d'un agent — sans ça, les fiches des communes concernées cessent d'être mises à jour silencieusement).
@@ -169,7 +170,7 @@ brouillon → publiée → arrêtée
 > Détail des schémas/relations à faire dans une passe dédiée "modèle de données" — ceci n'est qu'un inventaire d'entités et de leurs statuts/cycles de vie, nécessaire pour cadrer le développement.
 
 - **Commune** — référentiel administratif officiel (wilaya → commune), utilisé pour le filtre client et pour le rattachement territorial d'un agent (many-to-many `Agent` ↔ `Commune` — le concept de Zone séparée a été abandonné).
-- **Commerçant** — fiche + état de compte (`créé_agent` / `autonome`) + niveau de vérification (`confirmé_agent` / `vérifié_registre`).
+- **Commerçant** — fiche + état de compte (`créé_agent` / `autonome`) + origine de vérification (`auto_inscrit` / `confirmé_agent`) + statut registre (`en_attente` / `validé` / `rejeté`, bloquant pour publier uniquement si `auto_inscrit`).
 - **Promo** — liée à un commerçant, statut (`active` / `expirée` / `signalée` / `masquée` / `vérifiée_ok`), photo, prix avant/après, catégorie, date de fin, compteur de signalements.
 - **Agent** — compte + communes assignées (many-to-many).
 - **Admin** — compte, rôle unique en V0.

@@ -300,9 +300,10 @@ export class AdminController {
 
   /**
    * Liste + recherche sur l'ensemble des commerçants (plan de correction,
-   * Phase 2) — jusqu'ici seule la file registre (en attente) était
-   * consultable, impossible de retrouver un compte précis autrement qu'en
-   * requêtant la base directement.
+   * Phase 2). `registreStatus` sert de filtre "en attente de validation" —
+   * l'ancienne file dédiée (`GET commercant/registre/queue`) a été retirée
+   * le 2026-07-11 au profit de ce filtre + de la fiche détail commerçant,
+   * qui affiche désormais le registre et permet de le valider/rejeter.
    */
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
@@ -326,6 +327,9 @@ export class AdminController {
         accountState: commercant.accountState,
         originVerification: commercant.originVerification,
         registreStatus: commercant.registreStatus,
+        registreUrl: commercant.registreKey
+          ? this.storageService.buildPublicUrl(commercant.registreKey)
+          : null,
         suspended: commercant.deletedAt !== null,
         createdAt: commercant.createdAt,
       })),
@@ -378,29 +382,6 @@ export class AdminController {
       targetId: commercantId,
     });
     return { ok: true };
-  }
-
-  /** File d'attente des vérifications registre en attente (specs §3.4). */
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
-  @Get('commercant/registre/queue')
-  async registreQueue(@Query() query: PaginationQueryDto) {
-    const result = await this.commercantService.findPendingRegistreVerification(
-      query.page,
-      query.limit,
-    );
-    return {
-      ...result,
-      items: result.items.map((commercant) => ({
-        id: commercant.id,
-        nom: commercant.nom,
-        telephone: commercant.telephone,
-        registreUrl: commercant.registreKey
-          ? this.storageService.buildPublicUrl(commercant.registreKey)
-          : null,
-        createdAt: commercant.createdAt,
-      })),
-    };
   }
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)

@@ -119,7 +119,8 @@ export class PromoService {
    * défaut pour ne rien casser côté agent).
    */
   async create(commercantId: string, dto: CreatePromoDto): Promise<Promo> {
-    await this.commercantService.findByIdOrFail(commercantId);
+    const commercant = await this.commercantService.findByIdOrFail(commercantId);
+    this.commercantService.assertRegistreValidated(commercant);
     this.assertPriceOrder(dto.prixAvant, dto.prixApres);
 
     const base = {
@@ -169,6 +170,8 @@ export class PromoService {
         'Cette promo est déjà publiée',
       );
     }
+    const commercant = await this.commercantService.findByIdOrFail(promo.commercantId);
+    this.commercantService.assertRegistreValidated(commercant);
 
     const dateFin = this.resolveDateFin();
     return this.withCommercantLock(promo.commercantId, async (manager) => {

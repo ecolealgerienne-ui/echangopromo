@@ -55,7 +55,12 @@ export class StorageController {
         'Aucun fichier reçu.',
       );
     }
-    const folder = dto.purpose === 'commercant' ? 'commercant-photos' : 'promo-photos';
+    const folder =
+      dto.purpose === 'commercant'
+        ? 'commercant-photos'
+        : dto.purpose === 'registre'
+          ? 'registre-documents'
+          : 'promo-photos';
     const key = await this.storageService.uploadPhoto(user.sub, file.buffer, folder);
     return { key };
   }

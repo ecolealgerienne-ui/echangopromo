@@ -226,7 +226,12 @@ export class CommercantService {
     await this.commercants.save(commercant);
   }
 
-  /** Décision admin sur le badge `vérifié_registre` — jamais bloquant pour publier (specs §3.2). */
+  /**
+   * Décision admin sur le registre — conditionne la publication de promos
+   * pour un commerçant auto-inscrit depuis le 2026-07-11 (voir
+   * `assertRegistreValidated`), ne concerne jamais un commerçant confirmé
+   * par un agent (déjà vérifié en personne).
+   */
   async resolveRegistreVerification(
     commercantId: string,
     approve: boolean,
@@ -362,6 +367,11 @@ export class CommercantService {
         accountState: query.accountState,
       });
     }
+    if (query.registreStatus) {
+      qb.andWhere('commercant.registreStatus = :registreStatus', {
+        registreStatus: query.registreStatus,
+      });
+    }
     qb.skip((query.page - 1) * query.limit).take(query.limit);
 
     const [items, total] = await qb.getManyAndCount();
@@ -377,20 +387,6 @@ export class CommercantService {
     await this.commercants.update({ id: commercantId }, { deletedAt: null });
   }
 
-  /** File d'attente admin des vérifications registre en attente (specs §3.4). */
-  async findPendingRegistreVerification(
-    page: number,
-    limit: number,
-  ): Promise<PaginatedResult<Commercant>> {
-    const [items, total] = await this.commercants.findAndCount({
-      where: { registreStatus: RegistreStatus.EN_ATTENTE },
-      order: { createdAt: 'ASC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
-    return toPaginatedResult(items, total, page, limit);
-  }
-
   /** Garde IDOR : un agent ne peut agir que sur les commerçants de ses propres communes. */
   async assertCommuneMatches(
     commercantId: string,
@@ -404,5 +400,26 @@ export class CommercantService {
       );
     }
     return commercant;
+  }
+
+  /**
+   * Un commerçant auto-inscrit (`AUTO_INSCRIT`) ne peut créer/publier de
+   * promo qu'une fois son registre de commerce validé par un admin —
+   * décision produit du 2026-07-11, qui remplace le badge `vérifié_registre`
+   * non-bloquant prévu aux specs §3.2/§5.4 (revert assumé : ne plus laisser
+   * publier un compte non vérifié). Un commerçant créé par un agent
+   * (`CONFIRME_AGENT`) est déjà vérifié en personne et n'est jamais
+   * concerné par cette garde.
+   */
+  assertRegistreValidated(commercant: Commercant): void {
+    if (
+      commercant.originVerification === CommercantOriginVerification.AUTO_INSCRIT &&
+      commercant.registreStatus !== RegistreStatus.VALIDE
+    ) {
+      throw new ForbiddenAppException(
+        ErrorCode.COMMERCANT_REGISTRE_NOT_VALIDATED,
+        'Votre registre de commerce doit être validé par un administrateur avant de pouvoir publier des promos',
+      );
+    }
   }
 }
