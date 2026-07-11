@@ -10,6 +10,7 @@ import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/status_chip.dart';
 
 final myPromosProvider = FutureProvider.autoDispose((ref) => ref.watch(promoApiProvider).listMine());
 
@@ -127,21 +128,10 @@ class MyPromosScreen extends ConsumerWidget {
                         children: [
                           Expanded(child: Text(promo.description, overflow: TextOverflow.ellipsis)),
                           const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: statusColor),
-                            ),
-                            child: Text(
-                              promoLifecycleLabel(context, promo.lifecycleStatus, isExpired: promo.isExpired),
-                              style: TextStyle(
-                                color: statusColor,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                          StatusChip(
+                            label: promoLifecycleLabel(context, promo.lifecycleStatus,
+                                isExpired: promo.isExpired),
+                            color: statusColor,
                           ),
                         ],
                       ),

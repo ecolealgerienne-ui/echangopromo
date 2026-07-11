@@ -4,6 +4,7 @@ import '../../../domain/enums/report_reason.dart';
 import '../../../domain/models/moderation_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../shared/l10n/enum_labels.dart';
+import '../../shared/widgets/status_chip.dart';
 
 /// Ligne "promo à modérer" (masquer / vérifier OK / avertir) — partagée
 /// entre la file automatique (`ModerationQueueScreen`, signalements ≥
@@ -57,7 +58,21 @@ class PromoModerationTile extends StatelessWidget {
       leading: CircleAvatar(
         backgroundImage: item.photoUrl != null ? CachedNetworkImageProvider(item.photoUrl!) : null,
       ),
-      title: Text(item.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+      // Sans ce badge, le statut réel (signalée/masquée/vérifiée) n'était
+      // visible qu'après avoir ouvert la fiche détail de chaque promo une
+      // par une (audit design 2026-07-11).
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(item.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ),
+          const SizedBox(width: 8),
+          StatusChip(
+            label: moderationStatusLabel(context, item.moderationStatus),
+            color: moderationStatusColor(context, item.moderationStatus),
+          ),
+        ],
+      ),
       subtitle: Text(subtitle),
       isThreeLine: true,
       trailing: loading
