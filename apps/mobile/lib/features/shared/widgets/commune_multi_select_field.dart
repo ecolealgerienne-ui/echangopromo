@@ -77,17 +77,26 @@ class _CommuneMultiSelectFieldState extends State<CommuneMultiSelectField> {
         ),
         ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 240),
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              for (final commune in communesForWilaya)
-                CheckboxListTile(
-                  dense: true,
-                  value: widget.selectedCommuneIds.contains(commune.id),
-                  title: Text(commune.nom),
-                  onChanged: (checked) => _toggle([commune.id], checked ?? false),
-                ),
-            ],
+          // `Column` + `SingleChildScrollView` plutôt que `ListView` — même
+          // avec `shrinkWrap: true` et une hauteur bornée, un `ListView`
+          // reste un viewport qui refuse toute requête de dimension
+          // intrinsèque (`RenderShrinkWrappingViewport does not support
+          // returning intrinsic dimensions`), qui plante dès que le champ
+          // est placé dans un `AlertDialog` (celui-ci calcule une largeur
+          // intrinsèque pour dimensionner le dialogue). Liste de communes
+          // par wilaya de taille modeste, pas besoin de virtualisation.
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                for (final commune in communesForWilaya)
+                  CheckboxListTile(
+                    dense: true,
+                    value: widget.selectedCommuneIds.contains(commune.id),
+                    title: Text(commune.nom),
+                    onChanged: (checked) => _toggle([commune.id], checked ?? false),
+                  ),
+              ],
+            ),
           ),
         ),
       ],
