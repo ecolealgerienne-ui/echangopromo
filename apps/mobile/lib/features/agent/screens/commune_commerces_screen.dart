@@ -25,7 +25,7 @@ class CommuneCommercesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const BackButtonIcon(),
           tooltip: l10n.backToHomeTooltip,
           onPressed: () => context.go('/'),
         ),

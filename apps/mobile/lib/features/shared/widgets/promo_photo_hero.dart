@@ -29,9 +29,9 @@ class PromoPhotoHero extends StatelessWidget {
               ? CachedNetworkImage(imageUrl: photoUrl!, fit: BoxFit.cover)
               : Container(color: colorScheme.surfaceContainerHighest),
         ),
-        Positioned(
+        PositionedDirectional(
           top: 12,
-          left: 12,
+          start: 12,
           child: PromoDiscountBadge(prixAvant: prixAvant, prixApres: prixApres),
         ),
       ],

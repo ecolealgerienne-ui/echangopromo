@@ -27,7 +27,7 @@ class CommercantDashboardScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const BackButtonIcon(),
           tooltip: l10n.backToHomeTooltip,
           // Ce dashboard est toujours atteint via un `go()` (jamais un
           // `push()`) depuis les écrans de connexion — la pile de

@@ -100,7 +100,7 @@ class AdminCommercantsScreen extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.all(12),
             child: Align(
-              alignment: Alignment.centerLeft,
+              alignment: AlignmentDirectional.centerStart,
               child: FilterChip(
                 label: Text(l10n.pendingRegistreFilterLabel),
                 selected: pendingOnly,

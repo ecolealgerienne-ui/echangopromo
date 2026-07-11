@@ -120,7 +120,7 @@ class _CategoryFilterBar extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         children: [
           Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsetsDirectional.only(end: 8),
             child: ChoiceChip(
               label: Text(l10n.allCategoriesChip),
               selected: selected == null,
@@ -129,7 +129,7 @@ class _CategoryFilterBar extends ConsumerWidget {
           ),
           for (final categorie in Categorie.values)
             Padding(
-              padding: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsetsDirectional.only(end: 8),
               child: ChoiceChip(
                 label: Text(categorieLabel(context, categorie)),
                 selected: selected == categorie,

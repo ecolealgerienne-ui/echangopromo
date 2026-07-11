@@ -61,9 +61,9 @@ class PromoCard extends StatelessWidget {
                     CachedNetworkImage(imageUrl: promo.photoUrl!, fit: BoxFit.cover)
                   else
                     Container(color: colorScheme.surfaceContainerHighest),
-                  Positioned(
+                  PositionedDirectional(
                     top: 8,
-                    left: 8,
+                    start: 8,
                     child: PromoDiscountBadge(
                       prixAvant: promo.prixAvant,
                       prixApres: promo.prixApres,
@@ -72,9 +72,9 @@ class PromoCard extends StatelessWidget {
                     ),
                   ),
                   if (isFavorite)
-                    const Positioned(
+                    const PositionedDirectional(
                       top: 8,
-                      right: 8,
+                      end: 8,
                       child: Icon(Icons.favorite, color: Colors.redAccent),
                     ),
                 ],
