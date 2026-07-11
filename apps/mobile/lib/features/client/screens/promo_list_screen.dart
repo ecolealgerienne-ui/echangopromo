@@ -88,7 +88,7 @@ class PromoListScreen extends ConsumerWidget {
                           final promo = promos[index];
                           return PromoCard(
                             promo: promo,
-                            isFavorite: favorites.contains(promo.id),
+                            isFavorite: favorites.contains(promo.commercantId),
                             onTap: () => context.push('/promo/${promo.id}'),
                           );
                         },

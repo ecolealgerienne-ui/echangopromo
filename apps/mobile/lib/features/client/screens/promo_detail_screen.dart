@@ -47,7 +47,7 @@ class PromoDetailScreen extends ConsumerWidget {
         error: (error, _) => Center(child: ApiErrorText(error)),
         data: (promo) {
           final favorites = ref.watch(favoritesProvider);
-          final isFavorite = favorites.contains(promo.id);
+          final isFavorite = favorites.contains(promo.commercantId);
           final dateFormat = DateFormat('dd/MM/yyyy');
 
           return ListView(
