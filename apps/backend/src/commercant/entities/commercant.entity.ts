@@ -137,4 +137,13 @@ export class Commercant {
    */
   @Column({ type: 'timestamptz', nullable: true })
   deletedAt: Date | null;
+
+  /**
+   * Horodatage d'acceptation des CGU/politique de confidentialité (plan de
+   * correction, Phase 4) — `null` uniquement pour les comptes créés par un
+   * agent (confirmation en personne, pas de flux d'auto-inscription) ou
+   * antérieurs à l'ajout de cette colonne.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  consentedAt: Date | null;
 }

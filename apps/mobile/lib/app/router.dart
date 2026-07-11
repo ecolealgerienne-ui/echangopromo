@@ -27,6 +27,7 @@ import '../features/commercant/screens/commercant_register_screen.dart';
 import '../features/commercant/screens/edit_profile_screen.dart';
 import '../features/commercant/screens/my_promos_screen.dart';
 import '../features/commercant/screens/promo_form_screen.dart';
+import '../features/shared/screens/legal_document_screen.dart';
 import '../features/shared/screens/notifications_screen.dart';
 import '../providers/auth_provider.dart';
 
@@ -55,6 +56,10 @@ Widget _unusedBuilder(BuildContext context, GoRouterState state) => const SizedB
 final _appRoutes = <_AppRoute>[
   _AppRoute('/', (context, state) => const PromoListScreen()),
   _AppRoute('/select-commune', (context, state) => const CommuneSelectionScreen()),
+  // Publics, sans rôle requis — accessibles depuis l'inscription commerçant
+  // et un lien général (plan de correction, Phase 4).
+  _AppRoute('/legal/cgu', (context, state) => const LegalDocumentScreen.cgu()),
+  _AppRoute('/legal/confidentialite', (context, state) => const LegalDocumentScreen.privacy()),
   _AppRoute(
     '/promo/:id',
     (context, state) => PromoDetailScreen(promoId: state.pathParameters['id']!),

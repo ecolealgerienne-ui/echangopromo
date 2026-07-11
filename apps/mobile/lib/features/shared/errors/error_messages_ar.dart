@@ -36,6 +36,7 @@ const Map<String, String> errorMessagesAr = {
   'COMMERCANT_PIN_ALREADY_SET': 'تم بالفعل تحديد رمز PIN لهذا الرقم — اتصل بالمسؤول لإعادة تعيينه.',
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'لا يوجد طلب تحقق في الانتظار.',
   'COMMERCANT_NOT_IN_AGENT_COMMUNES': 'هذا التاجر ليس ضمن بلديات هذا العون.',
+  'COMMERCANT_TERMS_NOT_ACCEPTED': 'يجب عليك قبول شروط الاستخدام لإنشاء حساب.',
 
   'RATE_LIMITED': 'عدد كبير جدًا من المحاولات. أعد المحاولة بعد قليل.',
   'HTTP_ERROR': 'حدث خطأ ما.',

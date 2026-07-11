@@ -188,6 +188,20 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 const SizedBox(height: 16),
                 LoadingButton(loading: _loading, onPressed: _submit, label: l10n.saveLabel),
                 const SizedBox(height: 24),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () => context.push('/legal/cgu'),
+                      child: Text(l10n.legalCguLinkLabel),
+                    ),
+                    TextButton(
+                      onPressed: () => context.push('/legal/confidentialite'),
+                      child: Text(l10n.legalPrivacyLinkLabel),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Theme.of(context).colorScheme.error,

@@ -56,10 +56,18 @@ export class CommercantService {
   /**
    * Auto-inscription (specs §3.2, voie 1) — pas de passage agent requis, et
    * pas d'OTP (décision produit) : le compte est `autonome` dès la saisie du
-   * PIN, sans preuve de possession du numéro de téléphone.
+   * PIN, sans preuve de possession du numéro de téléphone. `acceptedTerms`
+   * vérifié explicitement (pas juste sa présence) : spec §7.4, CGU à traiter
+   * avant toute ouverture publique — plan de correction Phase 4.
    */
   async selfRegister(dto: RegisterCommercantDto): Promise<Commercant> {
     await this.assertPhoneAvailable(dto.telephone);
+    if (dto.acceptedTerms !== true) {
+      throw new BadRequestAppException(
+        ErrorCode.COMMERCANT_TERMS_NOT_ACCEPTED,
+        "Vous devez accepter les conditions d'utilisation pour créer un compte",
+      );
+    }
 
     const { pin, ...rest } = dto;
     return this.commercants.save(
@@ -69,6 +77,7 @@ export class CommercantService {
         pinHash: await this.authService.hash(pin),
         accountState: CommercantAccountState.AUTONOME,
         originVerification: CommercantOriginVerification.AUTO_INSCRIT,
+        consentedAt: new Date(),
       }),
     );
   }
