@@ -315,7 +315,14 @@ export class AdminController {
         id: commercant.id,
         nom: commercant.nom,
         telephone: commercant.telephone,
+        adresse: commercant.adresse,
+        categorie: commercant.categorie,
         communeId: commercant.communeId,
+        photoUrl: commercant.photoKey
+          ? this.storageService.buildPublicUrl(commercant.photoKey)
+          : null,
+        latitude: commercant.latitude,
+        longitude: commercant.longitude,
         accountState: commercant.accountState,
         originVerification: commercant.originVerification,
         registreStatus: commercant.registreStatus,
