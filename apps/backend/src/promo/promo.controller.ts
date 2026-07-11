@@ -17,7 +17,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
 import { DeviceId } from '../common/decorators/device-id.decorator';
-import { ForbiddenAppException } from '../common/errors/app-exception';
+import { ForbiddenAppException, NotFoundAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
@@ -25,7 +25,7 @@ import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
 import { ListPromoQueryDto } from './dto/list-promo-query.dto';
 import { UpdatePromoDto } from './dto/update-promo.dto';
-import { Promo } from './entities/promo.entity';
+import { Promo, VISIBLE_MODERATION_STATUSES } from './entities/promo.entity';
 import { PromoService } from './promo.service';
 
 @Controller('promo')
@@ -93,9 +93,22 @@ export class PromoController {
     return { ...result, items: result.items.map((promo) => this.toClientJson(promo)) };
   }
 
+  /**
+   * Route publique, non authentifiée (accessible via lien partagé/App
+   * Links `/p/:id`) — `findByIdOrFail` ne filtre par construction aucun
+   * statut (utilisé aussi par les flux commerçant/agent qui doivent
+   * pouvoir accéder à leurs propres promos quel que soit leur statut). Sans
+   * ce filtre ici, une promo masquée par un modérateur restait pourtant
+   * intégralement consultable par quiconque connaissait son id, simplement
+   * absente du fil — `VISIBLE_MODERATION_STATUSES` est la même règle que
+   * `findActiveForClient`, appliquée ici au lieu de diverger.
+   */
   @Get(':id')
   async detail(@Param('id') id: string, @DeviceId() deviceId: string) {
     const promo = await this.promoService.findByIdOrFail(id);
+    if (!VISIBLE_MODERATION_STATUSES.includes(promo.moderationStatus)) {
+      throw new NotFoundAppException(ErrorCode.PROMO_NOT_FOUND, 'Promo introuvable');
+    }
     await this.promoService.recordView(id, deviceId);
     return this.toClientJson(promo);
   }
