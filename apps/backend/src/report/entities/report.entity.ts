@@ -6,6 +6,19 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
+/**
+ * Motif du signalement (plan de correction, Phase 5) — jusqu'ici l'admin ne
+ * voyait qu'un nombre de signalements sans savoir pourquoi (périmé ?
+ * arnaque ? photo trompeuse ?), rendant la décision de modération à
+ * l'aveugle.
+ */
+export enum ReportReason {
+  PERIME = 'perime',
+  ARNAQUE = 'arnaque',
+  PHOTO_TROMPEUSE = 'photo_trompeuse',
+  AUTRE = 'autre',
+}
+
 /** Signalement "promo expirée / incorrecte" — max 1 par device par promo (§5.4). */
 @Entity()
 @Index(['promoId', 'deviceId'], { unique: true })
@@ -27,6 +40,10 @@ export class Report {
 
   @Column()
   deviceId: string;
+
+  /** Nullable pour rester compatible avec les signalements déjà en base avant cette colonne. */
+  @Column({ type: 'enum', enum: ReportReason, nullable: true })
+  reason: ReportReason | null;
 
   @CreateDateColumn()
   createdAt: Date;

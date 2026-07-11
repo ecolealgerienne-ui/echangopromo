@@ -12,10 +12,12 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../config/env.dart';
 import '../../../data/api/api_exception.dart';
+import '../../../domain/enums/report_reason.dart';
 import '../../../domain/models/commercant.dart';
 import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/promo_providers.dart';
@@ -174,9 +176,30 @@ class PromoDetailScreen extends ConsumerWidget {
 
   Future<void> _report(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context)!;
+    final reason = await showModalBottomSheet<ReportReason>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(l10n.reportReasonTitle, style: Theme.of(context).textTheme.titleMedium),
+            ),
+            for (final option in ReportReason.values)
+              ListTile(
+                title: Text(reportReasonLabel(context, option)),
+                onTap: () => Navigator.pop(context, option),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (reason == null || !context.mounted) return;
+
     final locale = Localizations.localeOf(context);
     try {
-      await ref.read(reportApiProvider).create(promoId);
+      await ref.read(reportApiProvider).create(promoId, reason);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.reportSent)));
       }

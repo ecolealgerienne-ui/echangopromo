@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../../../domain/enums/report_reason.dart';
 import '../../../domain/models/moderation_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../shared/l10n/enum_labels.dart';
@@ -23,14 +24,25 @@ class PromoModerationTile extends StatelessWidget {
   final Future<void> Function() onVerifierOk;
   final Future<void> Function() onAvertir;
 
+  String _reasonBreakdownText(BuildContext context) {
+    final breakdown = item.reasonBreakdown;
+    if (breakdown == null || breakdown.isEmpty) return '';
+    return breakdown.entries
+        .map((entry) => '${entry.value} ${reportReasonLabel(context, ReportReason.fromValue(entry.key))}')
+        .join(', ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final subtitle = item.activeReportCount != null
-        ? '${item.commercantNom} · ${item.commercantTelephone}\n'
-            '${l10n.reportCountLabel(item.activeReportCount!)}'
-        : '${item.commercantNom} · ${item.commercantTelephone}\n'
-            '${promoLifecycleLabel(context, item.lifecycleStatus, isExpired: false)}';
+    final secondLine = item.activeReportCount != null
+        ? l10n.reportCountLabel(item.activeReportCount!)
+        : promoLifecycleLabel(context, item.lifecycleStatus, isExpired: false);
+    final reasonText = _reasonBreakdownText(context);
+    final subtitle = [
+      '${item.commercantNom} · ${item.commercantTelephone}',
+      if (reasonText.isNotEmpty) '$secondLine ($reasonText)' else secondLine,
+    ].join('\n');
 
     return ListTile(
       leading: CircleAvatar(

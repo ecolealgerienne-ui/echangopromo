@@ -230,9 +230,10 @@ export class AdminController {
     const result = await this.moderationService.queue(query.page, query.limit, communeIds);
     return {
       ...result,
-      items: result.items.map(({ promo, activeReportCount }) => ({
+      items: result.items.map(({ promo, activeReportCount, reasonBreakdown }) => ({
         ...this.toAdminPromoJson(promo),
         activeReportCount,
+        reasonBreakdown,
       })),
     };
   }

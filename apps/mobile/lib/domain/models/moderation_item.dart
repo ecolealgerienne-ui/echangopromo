@@ -20,6 +20,7 @@ class ModerationItem {
     required this.commercantNom,
     required this.commercantTelephone,
     this.activeReportCount,
+    this.reasonBreakdown,
   });
 
   factory ModerationItem.fromJson(Map<String, dynamic> json) => ModerationItem(
@@ -35,6 +36,8 @@ class ModerationItem {
         commercantNom: json['commercantNom'] as String,
         commercantTelephone: json['commercantTelephone'] as String,
         activeReportCount: json['activeReportCount'] as int?,
+        reasonBreakdown: (json['reasonBreakdown'] as Map<String, dynamic>?)
+            ?.map((key, value) => MapEntry(key, value as int)),
       );
 
   final String id;
@@ -49,4 +52,9 @@ class ModerationItem {
   final String commercantNom;
   final String commercantTelephone;
   final int? activeReportCount;
+
+  /// Répartition des motifs de signalement actifs (plan de correction,
+  /// Phase 5) — clé = valeur brute de `ReportReason` (ex. `'arnaque'`),
+  /// renseignée uniquement pour la file automatique.
+  final Map<String, int>? reasonBreakdown;
 }

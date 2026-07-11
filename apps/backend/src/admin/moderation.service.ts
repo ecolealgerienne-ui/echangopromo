@@ -23,17 +23,24 @@ export class ModerationService {
     page: number,
     limit: number,
     communeIds?: string[],
-  ): Promise<PaginatedResult<{ promo: Promo; activeReportCount: number }>> {
+  ): Promise<
+    PaginatedResult<{
+      promo: Promo;
+      activeReportCount: number;
+      reasonBreakdown: Record<string, number>;
+    }>
+  > {
     const pending = await this.reportService.listPendingModeration(page, limit, communeIds);
-    const promos = await this.promoService.findByIds(
-      pending.items.map(({ promoId }) => promoId),
-    );
+    const promoIds = pending.items.map(({ promoId }) => promoId);
+    const promos = await this.promoService.findByIds(promoIds);
     const promoById = new Map(promos.map((promo) => [promo.id, promo]));
+    const reasonBreakdownByPromoId = await this.reportService.getReasonBreakdown(promoIds);
     const items = pending.items
       .filter(({ promoId }) => promoById.has(promoId))
       .map(({ promoId, activeReportCount }) => ({
         promo: promoById.get(promoId)!,
         activeReportCount,
+        reasonBreakdown: reasonBreakdownByPromoId[promoId] ?? {},
       }));
     return { ...pending, items };
   }
