@@ -383,9 +383,15 @@ export class PromoService {
    */
   @Cron(CronExpression.EVERY_DAY_AT_9AM)
   async notifyExpiringSoonCron(): Promise<void> {
+    // `moderationStatus IN VISIBLE_MODERATION_STATUSES` : une promo masquée
+    // par un admin reste `lifecycleStatus = PUBLIEE` en interne (masquer ne
+    // touche que moderationStatus) — sans ce filtre, on inviterait le
+    // commerçant à "republier" un contenu que l'admin vient justement de
+    // retirer pour abus, message contradictoire avec la modération.
     const expiring = await this.promos.find({
       where: {
         lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
+        moderationStatus: In(VISIBLE_MODERATION_STATUSES),
         dateFin: Between(new Date(), new Date(Date.now() + 24 * 60 * 60 * 1000)),
       },
     });

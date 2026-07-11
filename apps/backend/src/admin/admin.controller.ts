@@ -325,7 +325,14 @@ export class AdminController {
     };
   }
 
-  /** Suspend un compte (soft delete réutilisé — même effet que l'auto-suppression). */
+  /**
+   * Suspend un compte (soft delete réutilisé — même effet que
+   * l'auto-suppression). `findByIdOrFail` d'abord (trouvé en relecture) :
+   * `deleteAccount`/`reactivateAccount` font un `update()` aveugle qui ne
+   * signale rien si `commercantId` n'existe pas (silencieux, 0 ligne
+   * affectée) — acceptable pour l'auto-suppression (l'id vient du JWT,
+   * garanti existant) mais pas ici où l'id vient d'un paramètre d'URL.
+   */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
@@ -334,6 +341,7 @@ export class AdminController {
     @CurrentUser() user: AuthTokenPayload,
     @Param('id') commercantId: string,
   ) {
+    await this.commercantService.findByIdOrFail(commercantId);
     await this.commercantService.deleteAccount(commercantId);
     await this.auditLogService.record({
       actorType: AuditActorType.ADMIN,
@@ -353,6 +361,7 @@ export class AdminController {
     @CurrentUser() user: AuthTokenPayload,
     @Param('id') commercantId: string,
   ) {
+    await this.commercantService.findByIdOrFail(commercantId);
     await this.commercantService.reactivateAccount(commercantId);
     await this.auditLogService.record({
       actorType: AuditActorType.ADMIN,

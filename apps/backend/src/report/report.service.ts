@@ -5,7 +5,7 @@ import { Commercant } from '../commercant/entities/commercant.entity';
 import { ConflictAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
-import { Promo } from '../promo/entities/promo.entity';
+import { Promo, PromoModerationStatus } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
 import { Report, ReportReason } from './entities/report.entity';
 
@@ -91,6 +91,14 @@ export class ReportService {
    * correction, Phase 2 : agent = modérateur) — `undefined` = vue globale
    * (admin). Jointure supplémentaire vers `Commercant` seulement dans ce cas,
    * pour ne pas alourdir la requête admin la plus fréquente.
+   *
+   * `moderationStatus = SIGNALEE` explicite (bug trouvé en relecture,
+   * Phase 2/5) : sans ce filtre, une promo déjà résolue (masquée, avertie,
+   * vérifiée OK) restait indéfiniment dans la file, ses signalements
+   * continuant à compter au-dessus du seuil pour toujours (`verifiedOkAt`
+   * n'étant jamais posé par `resolveMasquer`/`resolveAvertir`) — la file ne
+   * désenflait jamais après une décision, cassant tout le workflow agent
+   * introduit en Phase 2.
    */
   private pendingModerationQueryBuilder(communeIds?: string[]): SelectQueryBuilder<Report> {
     const qb = this.reports
@@ -98,7 +106,10 @@ export class ReportService {
       .innerJoin(Promo, 'promo', 'promo.id = report.promoId')
       .select('report.promoId', 'promoId')
       .addSelect('COUNT(DISTINCT report.deviceId)', 'count')
-      .where(
+      .where('promo.moderationStatus = :signalee', {
+        signalee: PromoModerationStatus.SIGNALEE,
+      })
+      .andWhere(
         // Identifiants explicitement quotés : TypeORM ne ré-échappe de façon
         // fiable qu'une des occurrences de `promo.verifiedOkAt` dans une
         // chaîne where() brute contenant plusieurs répétitions du même
