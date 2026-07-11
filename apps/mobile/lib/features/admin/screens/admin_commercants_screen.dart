@@ -31,7 +31,7 @@ class AdminCommercantsScreen extends ConsumerWidget {
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true || !context.mounted) return;
     await _act(context, ref, () => ref.read(adminApiProvider).suspendCommercant(commercantId));
   }
 
