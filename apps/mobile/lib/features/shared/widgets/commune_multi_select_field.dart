@@ -55,6 +55,12 @@ class _CommuneMultiSelectFieldState extends State<CommuneMultiSelectField> {
         communesForWilaya.every((c) => widget.selectedCommuneIds.contains(c.id));
 
     return Column(
+      // `mainAxisSize.min` — sans ça, ce Column (mainAxisSize.max par
+      // défaut) s'étire sur toute la hauteur disponible dans l'AlertDialog
+      // (proche de l'écran entier) au lieu de ne prendre que la hauteur de
+      // son contenu, laissant un grand espace vide entre la liste (bornée à
+      // 240px) et les boutons Annuler/Valider.
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         DropdownButtonFormField<String>(
