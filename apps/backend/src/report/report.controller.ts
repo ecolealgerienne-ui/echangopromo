@@ -17,7 +17,7 @@ export class ReportController {
   @Throttle(STRICT_THROTTLE)
   @Post()
   async create(@Body() dto: CreateReportDto, @DeviceId() deviceId: string) {
-    await this.reportService.createReport(dto.promoId, deviceId);
+    await this.reportService.createReport(dto.promoId, deviceId, dto.reason);
     return { ok: true };
   }
 }

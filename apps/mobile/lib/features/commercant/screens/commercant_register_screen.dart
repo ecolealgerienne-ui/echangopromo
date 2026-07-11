@@ -37,6 +37,7 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
   double? _latitude;
   double? _longitude;
   bool _loading = false;
+  bool _acceptedTerms = false;
   String? _error;
 
   @override
@@ -51,8 +52,14 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
-    if (!_formKey.currentState!.validate() || _communeId == null) {
-      setState(() => _error = _communeId == null ? l10n.communeRequired : null);
+    if (!_formKey.currentState!.validate() || _communeId == null || !_acceptedTerms) {
+      setState(() {
+        _error = _communeId == null
+            ? l10n.communeRequired
+            : !_acceptedTerms
+                ? l10n.acceptTermsRequired
+                : null;
+      });
       return;
     }
 
@@ -77,6 +84,7 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
         photoKey: photoKey,
         latitude: _latitude,
         longitude: _longitude,
+        acceptedTerms: _acceptedTerms,
       );
       await ref.read(authControllerProvider.notifier).loginThenResolveId(
             role: AppRole.commercant,
@@ -142,6 +150,26 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
                 obscureText: true,
                 maxLength: 6,
                 validator: (v) => (v != _pinController.text) ? l10n.pinMismatch : null,
+              ),
+              const SizedBox(height: 12),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: _acceptedTerms,
+                onChanged: (v) => setState(() => _acceptedTerms = v ?? false),
+                title: Text(l10n.acceptTermsLabel),
+              ),
+              Wrap(
+                children: [
+                  TextButton(
+                    onPressed: () => context.push('/legal/cgu'),
+                    child: Text(l10n.legalCguLinkLabel),
+                  ),
+                  TextButton(
+                    onPressed: () => context.push('/legal/confidentialite'),
+                    child: Text(l10n.legalPrivacyLinkLabel),
+                  ),
+                ],
               ),
               ErrorText(_error),
               const SizedBox(height: 16),

@@ -238,6 +238,14 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
                   child: Text(l10n.claimAccount),
                 ),
               ],
+              // TEMPORAIRE — accès à l'écran de test de changement de
+              // profil, à supprimer avant l'ouverture publique (même écran
+              // que /dev/profiles, inaccessible autrement dans l'app).
+              const SizedBox(height: 24),
+              OutlinedButton(
+                onPressed: () => context.push('/dev/profiles'),
+                child: const Text('[TEST] Changer de profil'),
+              ),
             ],
           ),
         ),

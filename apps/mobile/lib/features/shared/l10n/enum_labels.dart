@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../../domain/enums/audit_actor_type.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/enums/promo_lifecycle_status.dart';
+import '../../../domain/enums/report_reason.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// Traduit les enums miroirs du backend (CLAUDE.md règle #19) en texte
@@ -53,6 +56,42 @@ Color promoLifecycleColor(PromoLifecycleStatus status, {required bool isExpired}
       return Colors.orange;
     case PromoLifecycleStatus.expiree:
       return Colors.grey;
+  }
+}
+
+String notificationRelativeDate(BuildContext context, DateTime createdAt) {
+  final l10n = AppLocalizations.of(context)!;
+  final diff = DateTime.now().difference(createdAt);
+
+  if (diff.inMinutes < 1) return l10n.notificationJustNow;
+  if (diff.inHours < 1) return l10n.notificationMinutesAgo(diff.inMinutes);
+  if (diff.inDays < 1) return l10n.notificationHoursAgo(diff.inHours);
+  if (diff.inDays == 1) return l10n.notificationYesterday;
+
+  return DateFormat('dd/MM/yyyy').format(createdAt);
+}
+
+String auditActorTypeLabel(BuildContext context, AuditActorType actorType) {
+  final l10n = AppLocalizations.of(context)!;
+  switch (actorType) {
+    case AuditActorType.admin:
+      return l10n.auditActorAdmin;
+    case AuditActorType.agent:
+      return l10n.auditActorAgent;
+  }
+}
+
+String reportReasonLabel(BuildContext context, ReportReason reason) {
+  final l10n = AppLocalizations.of(context)!;
+  switch (reason) {
+    case ReportReason.perime:
+      return l10n.reportReasonPerime;
+    case ReportReason.arnaque:
+      return l10n.reportReasonArnaque;
+    case ReportReason.photoTrompeuse:
+      return l10n.reportReasonPhotoTrompeuse;
+    case ReportReason.autre:
+      return l10n.reportReasonAutre;
   }
 }
 

@@ -25,6 +25,7 @@ import {
 } from './entities/commercant.entity';
 import { ClaimCommercantDto } from './dto/claim-commercant.dto';
 import { CreateCommercantByAgentDto } from './dto/create-commercant-by-agent.dto';
+import { ListCommercantQueryDto } from './dto/list-commercant-query.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
 import { UpdateCommercantDto } from './dto/update-commercant.dto';
 
@@ -55,10 +56,18 @@ export class CommercantService {
   /**
    * Auto-inscription (specs §3.2, voie 1) — pas de passage agent requis, et
    * pas d'OTP (décision produit) : le compte est `autonome` dès la saisie du
-   * PIN, sans preuve de possession du numéro de téléphone.
+   * PIN, sans preuve de possession du numéro de téléphone. `acceptedTerms`
+   * vérifié explicitement (pas juste sa présence) : spec §7.4, CGU à traiter
+   * avant toute ouverture publique — plan de correction Phase 4.
    */
   async selfRegister(dto: RegisterCommercantDto): Promise<Commercant> {
     await this.assertPhoneAvailable(dto.telephone);
+    if (dto.acceptedTerms !== true) {
+      throw new BadRequestAppException(
+        ErrorCode.COMMERCANT_TERMS_NOT_ACCEPTED,
+        "Vous devez accepter les conditions d'utilisation pour créer un compte",
+      );
+    }
 
     const { pin, ...rest } = dto;
     return this.commercants.save(
@@ -68,6 +77,7 @@ export class CommercantService {
         pinHash: await this.authService.hash(pin),
         accountState: CommercantAccountState.AUTONOME,
         originVerification: CommercantOriginVerification.AUTO_INSCRIT,
+        consentedAt: new Date(),
       }),
     );
   }
@@ -326,6 +336,45 @@ export class CommercantService {
     return this.commercants.count({
       where: { accountState: CommercantAccountState.AUTONOME },
     });
+  }
+
+  /**
+   * Vue admin (plan de correction, Phase 2) : recherche + liste sur
+   * l'ensemble des commerçants, y compris suspendus (`deletedAt` non nul)
+   * — sans ça, l'admin ne pourrait jamais retrouver un compte suspendu pour
+   * le réactiver.
+   */
+  async findAllForAdmin(
+    query: ListCommercantQueryDto,
+  ): Promise<PaginatedResult<Commercant>> {
+    const qb = this.commercants
+      .createQueryBuilder('commercant')
+      .orderBy('commercant.createdAt', 'DESC');
+
+    if (query.search) {
+      qb.andWhere(
+        '(commercant.nom ILIKE :search OR commercant.telephone ILIKE :search)',
+        { search: `%${query.search}%` },
+      );
+    }
+    if (query.accountState) {
+      qb.andWhere('commercant.accountState = :accountState', {
+        accountState: query.accountState,
+      });
+    }
+    qb.skip((query.page - 1) * query.limit).take(query.limit);
+
+    const [items, total] = await qb.getManyAndCount();
+    return toPaginatedResult(items, total, query.page, query.limit);
+  }
+
+  /**
+   * Réactivation d'un compte suspendu par l'admin — symétrique de
+   * `deleteAccount`, sans changement de `tokenVersion` (réactiver ne révoque
+   * rien, ça ne fait que rouvrir l'accès à la connexion).
+   */
+  async reactivateAccount(commercantId: string): Promise<void> {
+    await this.commercants.update({ id: commercantId }, { deletedAt: null });
   }
 
   /** File d'attente admin des vérifications registre en attente (specs §3.4). */

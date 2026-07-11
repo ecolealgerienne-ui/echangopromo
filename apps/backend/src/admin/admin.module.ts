@@ -7,6 +7,7 @@ import { CommercantModule } from '../commercant/commercant.module';
 import { PromoModule } from '../promo/promo.module';
 import { ReportModule } from '../report/report.module';
 import { StorageModule } from '../storage/storage.module';
+import { NotificationModule } from '../notification/notification.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { Admin } from './entities/admin.entity';
@@ -22,6 +23,7 @@ import { ModerationService } from './moderation.service';
     ReportModule,
     AuditLogModule,
     StorageModule,
+    NotificationModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, ModerationService],

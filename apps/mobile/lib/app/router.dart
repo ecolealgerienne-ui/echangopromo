@@ -4,8 +4,11 @@ import 'package:go_router/go_router.dart';
 import '../domain/enums/categorie.dart';
 import '../domain/models/auth_session.dart';
 import '../domain/models/promo.dart';
+import '../features/admin/screens/admin_audit_log_screen.dart';
+import '../features/admin/screens/admin_commercants_screen.dart';
 import '../features/admin/screens/admin_dashboard_screen.dart';
 import '../features/admin/screens/admin_login_screen.dart';
+import '../features/admin/screens/admin_promos_screen.dart';
 import '../features/admin/screens/agent_list_screen.dart';
 import '../features/admin/screens/create_agent_screen.dart';
 import '../features/admin/screens/moderation_queue_screen.dart';
@@ -24,6 +27,9 @@ import '../features/commercant/screens/commercant_register_screen.dart';
 import '../features/commercant/screens/edit_profile_screen.dart';
 import '../features/commercant/screens/my_promos_screen.dart';
 import '../features/commercant/screens/promo_form_screen.dart';
+import '../features/dev/screens/dev_profile_switcher_screen.dart';
+import '../features/shared/screens/legal_document_screen.dart';
+import '../features/shared/screens/notifications_screen.dart';
 import '../providers/auth_provider.dart';
 
 /// Associe le rôle requis directement à la déclaration de route plutôt qu'à
@@ -51,6 +57,13 @@ Widget _unusedBuilder(BuildContext context, GoRouterState state) => const SizedB
 final _appRoutes = <_AppRoute>[
   _AppRoute('/', (context, state) => const PromoListScreen()),
   _AppRoute('/select-commune', (context, state) => const CommuneSelectionScreen()),
+  // Publics, sans rôle requis — accessibles depuis l'inscription commerçant
+  // et un lien général (plan de correction, Phase 4).
+  _AppRoute('/legal/cgu', (context, state) => const LegalDocumentScreen.cgu()),
+  _AppRoute('/legal/confidentialite', (context, state) => const LegalDocumentScreen.privacy()),
+  // TEMPORAIRE — écran de test pour basculer entre profils, à supprimer
+  // avant l'ouverture publique (voir commentaire en tête du fichier).
+  _AppRoute('/dev/profiles', (context, state) => const DevProfileSwitcherScreen()),
   _AppRoute(
     '/promo/:id',
     (context, state) => PromoDetailScreen(promoId: state.pathParameters['id']!),
@@ -89,6 +102,11 @@ final _appRoutes = <_AppRoute>[
     (context, state) => PromoFormScreen(existingPromo: state.extra as Promo?),
     requiredRole: AppRole.commercant,
   ),
+  _AppRoute(
+    '/commercant/notifications',
+    (context, state) => const NotificationsScreen(),
+    requiredRole: AppRole.commercant,
+  ),
 
   // Agent
   _AppRoute('/agent', (context, state) => const AgentLoginScreen()),
@@ -111,6 +129,19 @@ final _appRoutes = <_AppRoute>[
     ),
     requiredRole: AppRole.agent,
   ),
+  // Agent = modérateur (plan de correction, Phase 2) : mêmes écrans que
+  // l'admin, le backend scope automatiquement aux communes de l'agent
+  // (voir AdminController.scopedCommuneIds) — pas de duplication d'écran.
+  _AppRoute(
+    '/agent/moderation',
+    (context, state) => const ModerationQueueScreen(),
+    requiredRole: AppRole.agent,
+  ),
+  _AppRoute(
+    '/agent/promos',
+    (context, state) => const AdminPromosScreen(),
+    requiredRole: AppRole.agent,
+  ),
 
   // Admin (specs §3.4) — compte unique en V0, pas d'auto-inscription, pas
   // d'entrée dans le menu "espace pro" public (accès direct par URL
@@ -126,6 +157,21 @@ final _appRoutes = <_AppRoute>[
   _AppRoute(
     '/admin/moderation',
     (context, state) => const ModerationQueueScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/promos',
+    (context, state) => const AdminPromosScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/commercants',
+    (context, state) => const AdminCommercantsScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/audit-log',
+    (context, state) => const AdminAuditLogScreen(),
     requiredRole: AppRole.admin,
   ),
   _AppRoute(

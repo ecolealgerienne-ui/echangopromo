@@ -17,6 +17,7 @@ class CommercantApi {
     String? photoKey,
     double? latitude,
     double? longitude,
+    required bool acceptedTerms,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>('/commercant/register', data: {
       'telephone': telephone,
@@ -28,6 +29,7 @@ class CommercantApi {
       if (photoKey != null) 'photoKey': photoKey,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
+      'acceptedTerms': acceptedTerms,
     });
     return response.data!['accessToken'] as String;
   }

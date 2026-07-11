@@ -9,6 +9,7 @@ import '../data/api/commune_api.dart';
 import '../data/api/promo_api.dart';
 import '../data/api/report_api.dart';
 import '../data/api/storage_api.dart';
+import '../data/api/notification_api.dart';
 import '../data/local/auth_session_store.dart';
 import '../data/local/device_id_store.dart';
 import '../data/local/favorites_store.dart';
@@ -56,3 +57,4 @@ final agentApiProvider = Provider((ref) => AgentApi(ref.watch(apiClientProvider)
 final reportApiProvider = Provider((ref) => ReportApi(ref.watch(apiClientProvider).dio));
 final storageApiProvider = Provider((ref) => StorageApi(ref.watch(apiClientProvider).dio));
 final adminApiProvider = Provider((ref) => AdminApi(ref.watch(apiClientProvider).dio));
+final notificationApiProvider = Provider((ref) => NotificationApi(ref.watch(apiClientProvider).dio));

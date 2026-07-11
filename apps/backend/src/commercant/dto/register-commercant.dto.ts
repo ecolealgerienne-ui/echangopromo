@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEnum,
   IsLatitude,
   IsLongitude,
@@ -46,4 +47,8 @@ export class RegisterCommercantDto {
   @IsOptional()
   @IsLongitude()
   longitude?: number;
+
+  /** Vérifié explicitement `=== true` dans le service (Phase 4, CGU) — pas juste un booléen présent. */
+  @IsBoolean()
+  acceptedTerms: boolean;
 }

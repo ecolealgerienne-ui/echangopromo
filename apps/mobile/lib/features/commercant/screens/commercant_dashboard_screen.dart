@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/providers/notification_provider.dart';
 import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/notifications_panel.dart';
 
 /// Dashboard commerçant (specs §3.2) : donne une raison concrète de revenir
 /// régulièrement dans l'app, en plus de l'obligation de republication.
@@ -19,9 +21,24 @@ class CommercantDashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: l10n.backToHomeTooltip,
+          // Ce dashboard est toujours atteint via un `go()` (jamais un
+          // `push()`) depuis les écrans de connexion — la pile de
+          // navigation est donc vide et Flutter n'affiche aucun bouton
+          // retour automatique. Bouton explicite plutôt que de dépendre de
+          // `context.canPop()`, systématiquement faux ici.
+          onPressed: () => context.go('/'),
+        ),
         title: Text(l10n.myCommercantSpaceTitle),
         actions: [
           const LanguageSwitcherButton(),
+          IconButton(
+            icon: const NotificationBadge(),
+            tooltip: l10n.notificationsTooltip,
+            onPressed: () => context.push('/commercant/notifications'),
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.account_circle_outlined),
             onSelected: (action) async {
@@ -45,6 +62,7 @@ class CommercantDashboardScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            const _UnreadNotificationsBanner(),
             meAsync.when(
               loading: () => const LinearProgressIndicator(),
               error: (error, _) => Text(l10n.commonError(error.toString())),
@@ -96,3 +114,68 @@ class CommercantDashboardScreen extends ConsumerWidget {
 final _meProvider = FutureProvider.autoDispose((ref) => ref.watch(commercantApiProvider).me());
 final _statsProvider =
     FutureProvider.autoDispose((ref) => ref.watch(commercantApiProvider).dashboardProfileViewCount());
+
+/// Alertes de modération affichées directement sur le dashboard — pas
+/// seulement derrière l'icône cloche, pour que le commerçant ne les
+/// découvre pas seulement s'il pense à cliquer dessus. Reste affichée tant
+/// que le commerçant n'a pas marqué la notification comme lue (aucune
+/// republication automatique de la promo).
+class _UnreadNotificationsBanner extends ConsumerWidget {
+  const _UnreadNotificationsBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final notificationsAsync = ref.watch(notificationsProvider);
+    final controller = ref.watch(notificationControllerProvider);
+
+    return notificationsAsync.maybeWhen(
+      data: (paginated) {
+        final unread = paginated.items;
+        if (unread.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final notification in unread)
+              Card(
+                color: notificationIconColor(notification.type).withValues(alpha: 0.1),
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: Icon(
+                    notificationIcon(notification.type),
+                    color: notificationIconColor(notification.type),
+                  ),
+                  title: Text(notification.message),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton(
+                        onPressed: () => context.push('/commercant/promos'),
+                        child: Text(l10n.reviewPromoCta),
+                      ),
+                      // Sans ce bouton, une notification traitée (promo déjà
+                      // republiée) n'avait aucun moyen de quitter la liste
+                      // des non lues — elle ne passait jamais à l'historique.
+                      IconButton(
+                        icon: const Icon(Icons.check),
+                        tooltip: l10n.markAsReadTooltip,
+                        onPressed: () async {
+                          await controller.markAsRead(notification.id);
+                          ref.invalidate(notificationsProvider);
+                          ref.invalidate(notificationHistoryProvider);
+                          ref.invalidate(unreadNotificationCountProvider);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 8),
+          ],
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}

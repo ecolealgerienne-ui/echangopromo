@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, In, IsNull, LessThan, Not, Repository } from 'typeorm';
+import { Between, EntityManager, In, IsNull, LessThan, Not, Repository } from 'typeorm';
 import { CommercantService } from '../commercant/commercant.service';
 import {
   BadRequestAppException,
@@ -10,8 +10,14 @@ import {
 } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
+import {
+  NotificationRecipientType,
+  NotificationType,
+} from '../notification/entities/notification.entity';
+import { NotificationService } from '../notification/notification.service';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
+import { ListPromoAdminQueryDto } from './dto/list-promo-admin-query.dto';
 import { ListPromoQueryDto } from './dto/list-promo-query.dto';
 import { UpdatePromoDto } from './dto/update-promo.dto';
 import { PromoView } from './entities/promo-view.entity';
@@ -34,6 +40,7 @@ export class PromoService {
     private readonly commercantService: CommercantService,
     private readonly storageService: StorageService,
     private readonly configService: ConfigService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   private defaultDureeJours(): number {
@@ -233,6 +240,57 @@ export class PromoService {
     return toPaginatedResult(items, total, query.page, query.limit);
   }
 
+  /**
+   * Vue admin/agent (plan de correction, Phase 2) : toutes les promos, tous
+   * statuts confondus (contrairement à `findActiveForClient`) — permet de
+   * repérer et masquer un contenu problématique sans attendre 3
+   * signalements. `scopedCommuneIds` restreint aux communes d'un agent ;
+   * `undefined` = vue globale (admin).
+   */
+  async findAllForAdmin(
+    query: ListPromoAdminQueryDto,
+    scopedCommuneIds?: string[],
+  ): Promise<PaginatedResult<Promo>> {
+    if (scopedCommuneIds && scopedCommuneIds.length === 0) {
+      return toPaginatedResult([], 0, query.page, query.limit);
+    }
+
+    const qb = this.promos
+      .createQueryBuilder('promo')
+      .innerJoinAndSelect('promo.commercant', 'commercant')
+      .orderBy('promo.createdAt', 'DESC');
+
+    if (query.search) {
+      qb.andWhere(
+        '(promo.description ILIKE :search OR commercant.nom ILIKE :search)',
+        { search: `%${query.search}%` },
+      );
+    }
+    if (query.communeId) {
+      qb.andWhere('commercant.communeId = :communeId', { communeId: query.communeId });
+    }
+    if (query.categorie) {
+      qb.andWhere('promo.categorie = :categorie', { categorie: query.categorie });
+    }
+    if (query.lifecycleStatus) {
+      qb.andWhere('promo.lifecycleStatus = :lifecycleStatus', {
+        lifecycleStatus: query.lifecycleStatus,
+      });
+    }
+    if (query.moderationStatus) {
+      qb.andWhere('promo.moderationStatus = :moderationStatus', {
+        moderationStatus: query.moderationStatus,
+      });
+    }
+    if (scopedCommuneIds) {
+      qb.andWhere('commercant.communeId IN (:...scopedCommuneIds)', { scopedCommuneIds });
+    }
+    qb.skip((query.page - 1) * query.limit).take(query.limit);
+
+    const [items, total] = await qb.getManyAndCount();
+    return toPaginatedResult(items, total, query.page, query.limit);
+  }
+
   async findByIdOrFail(id: string): Promise<Promo> {
     const promo = await this.promos.findOne({
       where: { id },
@@ -316,6 +374,40 @@ export class PromoService {
     return result.affected ?? 0;
   }
 
+  /**
+   * Relance avant expiration (plan de correction, Phase 6) — jusqu'ici rien
+   * ne notifiait le commerçant qu'une promo allait bientôt expirer, tout
+   * reposait sur lui pour penser à republier. Fenêtre de 24h alignée sur la
+   * cadence quotidienne du cron : chaque promo ne peut croiser cette
+   * fenêtre qu'une seule fois (pas de doublon, pas de promo manquée).
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_9AM)
+  async notifyExpiringSoonCron(): Promise<void> {
+    // `moderationStatus IN VISIBLE_MODERATION_STATUSES` : une promo masquée
+    // par un admin reste `lifecycleStatus = PUBLIEE` en interne (masquer ne
+    // touche que moderationStatus) — sans ce filtre, on inviterait le
+    // commerçant à "republier" un contenu que l'admin vient justement de
+    // retirer pour abus, message contradictoire avec la modération.
+    const expiring = await this.promos.find({
+      where: {
+        lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
+        moderationStatus: In(VISIBLE_MODERATION_STATUSES),
+        dateFin: Between(new Date(), new Date(Date.now() + 24 * 60 * 60 * 1000)),
+      },
+    });
+
+    for (const promo of expiring) {
+      await this.notificationService.create(
+        NotificationType.PROMO_EXPIRING_SOON,
+        NotificationRecipientType.COMMERCANT,
+        promo.commercantId,
+        `Votre promo « ${promo.description} » expire bientôt. Pensez à la republier.`,
+        promo.id,
+      );
+    }
+    this.logger.log(`${expiring.length} promo(s) notifiée(s) avant expiration`);
+  }
+
   async markSignalee(promoId: string): Promise<void> {
     await this.promos.update(
       { id: promoId, moderationStatus: Not(PromoModerationStatus.MASQUEE) },
@@ -339,15 +431,24 @@ export class PromoService {
     );
   }
 
-  /** Décision admin : avertir le commerçant sans changer la visibilité de la promo. */
+  /**
+   * Décision admin : avertir le commerçant — repasse la promo en brouillon
+   * (donc invisible côté client, `dateFin` remise à null comme tout
+   * brouillon) le temps que le commerçant la vérifie et la republie
+   * explicitement via `publish` (pas de republication automatique).
+   */
   async resolveAvertir(promoId: string): Promise<void> {
     const promo = await this.findByIdOrFail(promoId);
-    if (promo.moderationStatus === PromoModerationStatus.SIGNALEE) {
-      await this.promos.update(
-        { id: promoId },
-        { moderationStatus: PromoModerationStatus.NORMALE },
-      );
-    }
+    await this.promos.update(
+      { id: promoId },
+      {
+        ...(promo.moderationStatus === PromoModerationStatus.SIGNALEE
+          ? { moderationStatus: PromoModerationStatus.NORMALE }
+          : {}),
+        lifecycleStatus: PromoLifecycleStatus.BROUILLON,
+        dateFin: null,
+      },
+    );
   }
 
   /**

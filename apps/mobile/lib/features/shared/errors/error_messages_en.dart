@@ -38,6 +38,7 @@ const Map<String, String> errorMessagesEn = {
       'A PIN is already set for this number — contact an administrator to reset it.',
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'No pending verification request.',
   'COMMERCANT_NOT_IN_AGENT_COMMUNES': 'This merchant is not in any of this agent\'s communes.',
+  'COMMERCANT_TERMS_NOT_ACCEPTED': 'You must accept the terms of use to create an account.',
 
   'RATE_LIMITED': 'Too many attempts. Please try again shortly.',
   'HTTP_ERROR': 'An error occurred.',

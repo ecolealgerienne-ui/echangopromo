@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
@@ -11,10 +12,12 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../config/env.dart';
 import '../../../data/api/api_exception.dart';
+import '../../../domain/enums/report_reason.dart';
 import '../../../domain/models/commercant.dart';
 import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/promo_providers.dart';
@@ -41,7 +44,7 @@ class PromoDetailScreen extends ConsumerWidget {
         error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
         data: (promo) {
           final favorites = ref.watch(favoritesProvider);
-          final isFavorite = favorites.contains(promo.commercantId);
+          final isFavorite = favorites.contains(promo.id);
           final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
           final dateFormat = DateFormat('dd/MM/yyyy');
 
@@ -71,7 +74,7 @@ class PromoDetailScreen extends ConsumerWidget {
                         IconButton(
                           icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
                           onPressed: () =>
-                              ref.read(favoritesProvider.notifier).toggle(promo.commercantId),
+                              ref.read(favoritesProvider.notifier).toggle(promo.id),
                         ),
                       ],
                     ),
@@ -141,7 +144,17 @@ class PromoDetailScreen extends ConsumerWidget {
 
     final photo = promo.photoUrl != null ? await _downloadForShare(promo.photoUrl!) : null;
     if (photo != null) {
+      // Certaines applis (Messenger notamment) ignorent le texte joint à une
+      // image dans l'intent de partage natif et n'affichent que la photo —
+      // on copie donc le texte dans le presse-papier en complément, pour que
+      // l'utilisateur puisse le coller manuellement si l'appli le laisse tomber.
+      await Clipboard.setData(ClipboardData(text: message));
       await Share.shareXFiles([XFile(photo.path)], text: message);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.shareTextCopiedNotice)),
+        );
+      }
     } else {
       await Share.share(message);
     }
@@ -163,9 +176,30 @@ class PromoDetailScreen extends ConsumerWidget {
 
   Future<void> _report(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context)!;
+    final reason = await showModalBottomSheet<ReportReason>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(l10n.reportReasonTitle, style: Theme.of(context).textTheme.titleMedium),
+            ),
+            for (final option in ReportReason.values)
+              ListTile(
+                title: Text(reportReasonLabel(context, option)),
+                onTap: () => Navigator.pop(context, option),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (reason == null || !context.mounted) return;
+
     final locale = Localizations.localeOf(context);
     try {
-      await ref.read(reportApiProvider).create(promoId);
+      await ref.read(reportApiProvider).create(promoId, reason);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.reportSent)));
       }

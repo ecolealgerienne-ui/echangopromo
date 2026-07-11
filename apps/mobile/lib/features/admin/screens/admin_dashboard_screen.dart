@@ -20,6 +20,11 @@ class AdminDashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: l10n.backToHomeTooltip,
+          onPressed: () => context.go('/'),
+        ),
         title: Text(l10n.adminSpaceTitle),
         actions: [
           const LanguageSwitcherButton(),
@@ -82,6 +87,18 @@ class AdminDashboardScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
+              icon: const Icon(Icons.local_offer_outlined),
+              label: Text(l10n.allPromosLabel),
+              onPressed: () => context.push('/admin/promos'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.storefront_outlined),
+              label: Text(l10n.commercantsLabel),
+              onPressed: () => context.push('/admin/commercants'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
               icon: const Icon(Icons.fact_check_outlined),
               label: Text(l10n.registreLabel),
               onPressed: () => context.push('/admin/registre'),
@@ -91,6 +108,12 @@ class AdminDashboardScreen extends ConsumerWidget {
               icon: const Icon(Icons.badge_outlined),
               label: Text(l10n.agentsLabel),
               onPressed: () => context.push('/admin/agents'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.history_outlined),
+              label: Text(l10n.auditLogLabel),
+              onPressed: () => context.push('/admin/audit-log'),
             ),
           ],
         ),
