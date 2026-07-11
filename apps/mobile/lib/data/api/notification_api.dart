@@ -40,6 +40,15 @@ class NotificationApi {
     return PaginatedNotifications.fromJson(response.data!);
   }
 
+  /// Historique complet (lues + non lues)
+  Future<PaginatedNotifications> listAll({int page = 1, int limit = 20}) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/notifications',
+      queryParameters: {'page': page, 'limit': limit},
+    );
+    return PaginatedNotifications.fromJson(response.data!);
+  }
+
   /// Compte les notifications non lues (pour un badge)
   Future<int> countUnread() async {
     final response = await _dio.get<Map<String, dynamic>>('/notifications/unread/count');

@@ -115,6 +115,8 @@
   "@notificationHoursAgo": { "placeholders": { "count": { "type": "int" } } },
   "notificationYesterday": "Yesterday",
   "reviewPromoCta": "Review",
+  "unreadNotificationsTab": "Unread",
+  "historyNotificationsTab": "History",
 
   "myPromosTitle": "My promos",
   "capReachedLabel": "Cap of 5 promos reached",

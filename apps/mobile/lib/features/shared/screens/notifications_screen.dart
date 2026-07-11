@@ -15,27 +15,45 @@ class NotificationsScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final controller = ref.watch(notificationControllerProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.notificationsTitle),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.done_all),
-            tooltip: l10n.markAllReadLabel,
-            onPressed: () async {
-              await controller.markAllAsRead();
-              ref.invalidate(notificationsProvider);
-              ref.invalidate(unreadNotificationCountProvider);
-            },
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(l10n.notificationsTitle),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.done_all),
+              tooltip: l10n.markAllReadLabel,
+              onPressed: () async {
+                await controller.markAllAsRead();
+                ref.invalidate(notificationsProvider);
+                ref.invalidate(notificationHistoryProvider);
+                ref.invalidate(unreadNotificationCountProvider);
+              },
+            ),
+          ],
+          bottom: TabBar(
+            tabs: [
+              Tab(text: l10n.unreadNotificationsTab),
+              Tab(text: l10n.historyNotificationsTab),
+            ],
           ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(notificationsProvider);
-          ref.invalidate(unreadNotificationCountProvider);
-        },
-        child: const NotificationsPanel(),
+        ),
+        body: TabBarView(
+          children: [
+            RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(notificationsProvider);
+                ref.invalidate(unreadNotificationCountProvider);
+              },
+              child: const NotificationsPanel(),
+            ),
+            RefreshIndicator(
+              onRefresh: () async => ref.invalidate(notificationHistoryProvider),
+              child: const NotificationsPanel(history: true),
+            ),
+          ],
+        ),
       ),
     );
   }

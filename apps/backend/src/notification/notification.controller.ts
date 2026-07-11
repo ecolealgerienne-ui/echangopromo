@@ -7,7 +7,6 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { AuthService } from '../auth/auth.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -43,6 +42,24 @@ export class NotificationController {
   }
 
   /**
+   * Historique complet (lues + non lues) de l'utilisateur connecté.
+   */
+  @Get()
+  @Roles('commercant', 'agent', 'admin')
+  async listAll(
+    @CurrentUser() user: AuthTokenPayload,
+    @Query() query: PaginationQueryDto,
+  ) {
+    const recipientType = this.roleToRecipientType(user.role);
+    return this.notificationService.listAll(
+      recipientType,
+      user.sub,
+      query.page,
+      query.limit,
+    );
+  }
+
+  /**
    * Compte les notifications non lues (pour un badge de compteur).
    */
   @Get('unread/count')
@@ -62,8 +79,12 @@ export class NotificationController {
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @Post(':id/read')
   @Roles('commercant', 'agent', 'admin')
-  async markAsRead(@Param('id') notificationId: string) {
-    await this.notificationService.markAsRead(notificationId);
+  async markAsRead(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('id') notificationId: string,
+  ) {
+    const recipientType = this.roleToRecipientType(user.role);
+    await this.notificationService.markAsRead(notificationId, recipientType, user.sub);
     return { ok: true };
   }
 

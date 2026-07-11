@@ -128,6 +128,8 @@
   "@notificationHoursAgo": { "placeholders": { "count": { "type": "int" } } },
   "notificationYesterday": "Hier",
   "reviewPromoCta": "Vérifier",
+  "unreadNotificationsTab": "Non lues",
+  "historyNotificationsTab": "Historique",
 
   "myPromosTitle": "Mes promos",
   "capReachedLabel": "Plafond de 5 promos atteint",

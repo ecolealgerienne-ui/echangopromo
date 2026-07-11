@@ -10,6 +10,14 @@ final notificationsProvider = FutureProvider.autoDispose(
   },
 );
 
+/// Historique complet (lues + non lues)
+final notificationHistoryProvider = FutureProvider.autoDispose(
+  (ref) async {
+    final api = ref.watch(notificationApiProvider);
+    return api.listAll(page: 1, limit: 50);
+  },
+);
+
 /// Compteur des notifications non lues (pour un badge)
 final unreadNotificationCountProvider = FutureProvider.autoDispose(
   (ref) async {

@@ -6,12 +6,17 @@ import '../l10n/enum_labels.dart';
 import '../providers/notification_provider.dart';
 
 class NotificationsPanel extends ConsumerWidget {
-  const NotificationsPanel({super.key});
+  const NotificationsPanel({super.key, this.history = false});
+
+  /// `false` = seulement les non lues (comportement historique). `true` =
+  /// historique complet (lues + non lues), voir `notificationHistoryProvider`.
+  final bool history;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final notificationsAsync = ref.watch(notificationsProvider);
+    final notificationsAsync =
+        ref.watch(history ? notificationHistoryProvider : notificationsProvider);
     final controller = ref.watch(notificationControllerProvider);
 
     return notificationsAsync.when(
@@ -39,6 +44,7 @@ class NotificationsPanel extends ConsumerWidget {
               onMarkAsRead: () async {
                 await controller.markAsRead(notification.id);
                 ref.invalidate(notificationsProvider);
+                ref.invalidate(notificationHistoryProvider);
                 ref.invalidate(unreadNotificationCountProvider);
               },
             );

@@ -115,6 +115,8 @@
   "@notificationHoursAgo": { "placeholders": { "count": { "type": "int" } } },
   "notificationYesterday": "أمس",
   "reviewPromoCta": "مراجعة",
+  "unreadNotificationsTab": "غير مقروءة",
+  "historyNotificationsTab": "السجل",
 
   "myPromosTitle": "عروضي",
   "capReachedLabel": "تم بلوغ الحد الأقصى (5 عروض)",
