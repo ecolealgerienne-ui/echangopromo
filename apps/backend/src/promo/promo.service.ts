@@ -12,6 +12,7 @@ import { ErrorCode } from '../common/errors/error-code.enum';
 import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
+import { ListPromoAdminQueryDto } from './dto/list-promo-admin-query.dto';
 import { ListPromoQueryDto } from './dto/list-promo-query.dto';
 import { UpdatePromoDto } from './dto/update-promo.dto';
 import { PromoView } from './entities/promo-view.entity';
@@ -227,6 +228,57 @@ export class PromoService {
       qb.orderBy('favorite_rank', 'ASC');
     }
     qb.addOrderBy('promo.dateFin', 'ASC');
+    qb.skip((query.page - 1) * query.limit).take(query.limit);
+
+    const [items, total] = await qb.getManyAndCount();
+    return toPaginatedResult(items, total, query.page, query.limit);
+  }
+
+  /**
+   * Vue admin/agent (plan de correction, Phase 2) : toutes les promos, tous
+   * statuts confondus (contrairement à `findActiveForClient`) — permet de
+   * repérer et masquer un contenu problématique sans attendre 3
+   * signalements. `scopedCommuneIds` restreint aux communes d'un agent ;
+   * `undefined` = vue globale (admin).
+   */
+  async findAllForAdmin(
+    query: ListPromoAdminQueryDto,
+    scopedCommuneIds?: string[],
+  ): Promise<PaginatedResult<Promo>> {
+    if (scopedCommuneIds && scopedCommuneIds.length === 0) {
+      return toPaginatedResult([], 0, query.page, query.limit);
+    }
+
+    const qb = this.promos
+      .createQueryBuilder('promo')
+      .innerJoinAndSelect('promo.commercant', 'commercant')
+      .orderBy('promo.createdAt', 'DESC');
+
+    if (query.search) {
+      qb.andWhere(
+        '(promo.description ILIKE :search OR commercant.nom ILIKE :search)',
+        { search: `%${query.search}%` },
+      );
+    }
+    if (query.communeId) {
+      qb.andWhere('commercant.communeId = :communeId', { communeId: query.communeId });
+    }
+    if (query.categorie) {
+      qb.andWhere('promo.categorie = :categorie', { categorie: query.categorie });
+    }
+    if (query.lifecycleStatus) {
+      qb.andWhere('promo.lifecycleStatus = :lifecycleStatus', {
+        lifecycleStatus: query.lifecycleStatus,
+      });
+    }
+    if (query.moderationStatus) {
+      qb.andWhere('promo.moderationStatus = :moderationStatus', {
+        moderationStatus: query.moderationStatus,
+      });
+    }
+    if (scopedCommuneIds) {
+      qb.andWhere('commercant.communeId IN (:...scopedCommuneIds)', { scopedCommuneIds });
+    }
     qb.skip((query.page - 1) * query.limit).take(query.limit);
 
     const [items, total] = await qb.getManyAndCount();

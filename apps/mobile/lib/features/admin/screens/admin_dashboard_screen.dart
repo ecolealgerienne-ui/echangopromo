@@ -82,6 +82,18 @@ class AdminDashboardScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
+              icon: const Icon(Icons.local_offer_outlined),
+              label: Text(l10n.allPromosLabel),
+              onPressed: () => context.push('/admin/promos'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.storefront_outlined),
+              label: Text(l10n.commercantsLabel),
+              onPressed: () => context.push('/admin/commercants'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
               icon: const Icon(Icons.fact_check_outlined),
               label: Text(l10n.registreLabel),
               onPressed: () => context.push('/admin/registre'),

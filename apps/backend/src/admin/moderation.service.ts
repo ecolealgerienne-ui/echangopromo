@@ -18,11 +18,13 @@ export class ModerationService {
     private readonly notificationService: NotificationService,
   ) {}
 
+  /** `communeIds` restreint la file aux communes d'un agent — `undefined` = vue globale (admin). */
   async queue(
     page: number,
     limit: number,
+    communeIds?: string[],
   ): Promise<PaginatedResult<{ promo: Promo; activeReportCount: number }>> {
-    const pending = await this.reportService.listPendingModeration(page, limit);
+    const pending = await this.reportService.listPendingModeration(page, limit, communeIds);
     const promos = await this.promoService.findByIds(
       pending.items.map(({ promoId }) => promoId),
     );
@@ -36,7 +38,8 @@ export class ModerationService {
     return { ...pending, items };
   }
 
-  async masquer(adminId: string, promoId: string): Promise<void> {
+  /** Le rôle agent modère aussi désormais (scopé communes, vérifié en amont dans AdminController). */
+  async masquer(actorType: AuditActorType, actorId: string, promoId: string): Promise<void> {
     const promo = await this.promoService.findByIdOrFail(promoId);
     await this.promoService.resolveMasquer(promoId);
     await this.notificationService.create(
@@ -49,10 +52,10 @@ export class ModerationService {
         promoDescription: promo.description,
       },
     );
-    await this.record(adminId, 'moderation_masquer', promoId);
+    await this.record(actorType, actorId, 'moderation_masquer', promoId);
   }
 
-  async verifierOk(adminId: string, promoId: string): Promise<void> {
+  async verifierOk(actorType: AuditActorType, actorId: string, promoId: string): Promise<void> {
     const promo = await this.promoService.findByIdOrFail(promoId);
     await this.promoService.resolveVerifieOk(promoId);
     await this.notificationService.create(
@@ -65,10 +68,10 @@ export class ModerationService {
         promoDescription: promo.description,
       },
     );
-    await this.record(adminId, 'moderation_verifier_ok', promoId);
+    await this.record(actorType, actorId, 'moderation_verifier_ok', promoId);
   }
 
-  async avertir(adminId: string, promoId: string): Promise<void> {
+  async avertir(actorType: AuditActorType, actorId: string, promoId: string): Promise<void> {
     const promo = await this.promoService.findByIdOrFail(promoId);
     await this.promoService.resolveAvertir(promoId);
     await this.notificationService.create(
@@ -81,17 +84,18 @@ export class ModerationService {
         promoDescription: promo.description,
       },
     );
-    await this.record(adminId, 'moderation_avertir', promoId);
+    await this.record(actorType, actorId, 'moderation_avertir', promoId);
   }
 
   private async record(
-    adminId: string,
+    actorType: AuditActorType,
+    actorId: string,
     action: string,
     promoId: string,
   ): Promise<void> {
     await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
-      actorId: adminId,
+      actorType,
+      actorId,
       action,
       targetType: 'promo',
       targetId: promoId,

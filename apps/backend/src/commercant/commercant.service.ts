@@ -25,6 +25,7 @@ import {
 } from './entities/commercant.entity';
 import { ClaimCommercantDto } from './dto/claim-commercant.dto';
 import { CreateCommercantByAgentDto } from './dto/create-commercant-by-agent.dto';
+import { ListCommercantQueryDto } from './dto/list-commercant-query.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
 import { UpdateCommercantDto } from './dto/update-commercant.dto';
 
@@ -326,6 +327,45 @@ export class CommercantService {
     return this.commercants.count({
       where: { accountState: CommercantAccountState.AUTONOME },
     });
+  }
+
+  /**
+   * Vue admin (plan de correction, Phase 2) : recherche + liste sur
+   * l'ensemble des commerçants, y compris suspendus (`deletedAt` non nul)
+   * — sans ça, l'admin ne pourrait jamais retrouver un compte suspendu pour
+   * le réactiver.
+   */
+  async findAllForAdmin(
+    query: ListCommercantQueryDto,
+  ): Promise<PaginatedResult<Commercant>> {
+    const qb = this.commercants
+      .createQueryBuilder('commercant')
+      .orderBy('commercant.createdAt', 'DESC');
+
+    if (query.search) {
+      qb.andWhere(
+        '(commercant.nom ILIKE :search OR commercant.telephone ILIKE :search)',
+        { search: `%${query.search}%` },
+      );
+    }
+    if (query.accountState) {
+      qb.andWhere('commercant.accountState = :accountState', {
+        accountState: query.accountState,
+      });
+    }
+    qb.skip((query.page - 1) * query.limit).take(query.limit);
+
+    const [items, total] = await qb.getManyAndCount();
+    return toPaginatedResult(items, total, query.page, query.limit);
+  }
+
+  /**
+   * Réactivation d'un compte suspendu par l'admin — symétrique de
+   * `deleteAccount`, sans changement de `tokenVersion` (réactiver ne révoque
+   * rien, ça ne fait que rouvrir l'accès à la connexion).
+   */
+  async reactivateAccount(commercantId: string): Promise<void> {
+    await this.commercants.update({ id: commercantId }, { deletedAt: null });
   }
 
   /** File d'attente admin des vérifications registre en attente (specs §3.4). */

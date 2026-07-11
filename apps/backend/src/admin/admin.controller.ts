@@ -22,8 +22,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
+import { ListCommercantQueryDto } from '../commercant/dto/list-commercant-query.dto';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
+import { ListPromoAdminQueryDto } from '../promo/dto/list-promo-admin-query.dto';
+import { Promo } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
 import { ReportService } from '../report/report.service';
 import { StorageService } from '../storage/storage.service';
@@ -164,67 +167,198 @@ export class AdminController {
     return { ok: true };
   }
 
+  /**
+   * DTO explicite plutôt qu'un spread d'entité (règle #4) — la file de
+   * modération n'exposait ni photoUrl (jamais calculé, `photoKey` est
+   * @Exclude()) ni le contact du commerçant, rendant la décision de
+   * modération difficile sans ces informations. Partagé entre la file
+   * automatique et la liste globale (`/admin/promo`, Phase 2).
+   */
+  private toAdminPromoJson(promo: Promo) {
+    return {
+      id: promo.id,
+      description: promo.description,
+      prixAvant: promo.prixAvant,
+      prixApres: promo.prixApres,
+      categorie: promo.categorie,
+      photoUrl: promo.photoKey ? this.storageService.buildPublicUrl(promo.photoKey) : null,
+      lifecycleStatus: promo.lifecycleStatus,
+      moderationStatus: promo.moderationStatus,
+      dateFin: promo.dateFin,
+      commercantId: promo.commercant.id,
+      commercantNom: promo.commercant.nom,
+      commercantTelephone: promo.commercant.telephone,
+    };
+  }
+
+  /**
+   * Agent = modérateur (plan de correction, Phase 2) : `undefined` pour un
+   * admin (vue globale), la liste des communes de l'agent sinon — jamais
+   * `[]` silencieux qui laisserait passer une requête non filtrée par erreur
+   * ailleurs (chaque appelant traite explicitement le cas `undefined`).
+   */
+  private async scopedCommuneIds(user: AuthTokenPayload): Promise<string[] | undefined> {
+    if (user.role !== 'agent') return undefined;
+    const agent = await this.agentService.findByIdOrFail(user.sub);
+    return agent.communes.map((commune) => commune.id);
+  }
+
+  /** Garde IDOR (règle #1) : un agent ne peut modérer que les promos de ses propres communes. */
+  private async assertCanModerate(user: AuthTokenPayload, promoId: string): Promise<void> {
+    if (user.role !== 'agent') return;
+    const promo = await this.promoService.findByIdOrFail(promoId);
+    const agent = await this.agentService.findByIdOrFail(user.sub);
+    await this.commercantService.assertCommuneMatches(
+      promo.commercantId,
+      agent.communes.map((commune) => commune.id),
+    );
+  }
+
+  private actorType(role: string): AuditActorType {
+    return role === 'agent' ? AuditActorType.AGENT : AuditActorType.ADMIN;
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Get('moderation/queue')
-  async moderationQueue(@Query() query: PaginationQueryDto) {
-    const result = await this.moderationService.queue(query.page, query.limit);
+  async moderationQueue(
+    @CurrentUser() user: AuthTokenPayload,
+    @Query() query: PaginationQueryDto,
+  ) {
+    const communeIds = await this.scopedCommuneIds(user);
+    const result = await this.moderationService.queue(query.page, query.limit, communeIds);
     return {
       ...result,
-      // DTO explicite plutôt qu'un spread d'entité (règle #4) — la file de
-      // modération n'exposait ni photoUrl (jamais calculé, `photoKey` est
-      // @Exclude()) ni le contact du commerçant, rendant la décision de
-      // modération difficile sans ces informations.
       items: result.items.map(({ promo, activeReportCount }) => ({
-        id: promo.id,
-        description: promo.description,
-        prixAvant: promo.prixAvant,
-        prixApres: promo.prixApres,
-        categorie: promo.categorie,
-        photoUrl: promo.photoKey ? this.storageService.buildPublicUrl(promo.photoKey) : null,
-        lifecycleStatus: promo.lifecycleStatus,
-        moderationStatus: promo.moderationStatus,
+        ...this.toAdminPromoJson(promo),
         activeReportCount,
-        commercantId: promo.commercant.id,
-        commercantNom: promo.commercant.nom,
-        commercantTelephone: promo.commercant.telephone,
       })),
     };
   }
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Post('moderation/:promoId/masquer')
   async masquer(
     @CurrentUser() user: AuthTokenPayload,
     @Param('promoId') promoId: string,
   ) {
-    await this.moderationService.masquer(user.sub, promoId);
+    await this.assertCanModerate(user, promoId);
+    await this.moderationService.masquer(this.actorType(user.role), user.sub, promoId);
     return { ok: true };
   }
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Post('moderation/:promoId/verifier-ok')
   async verifierOk(
     @CurrentUser() user: AuthTokenPayload,
     @Param('promoId') promoId: string,
   ) {
-    await this.moderationService.verifierOk(user.sub, promoId);
+    await this.assertCanModerate(user, promoId);
+    await this.moderationService.verifierOk(this.actorType(user.role), user.sub, promoId);
+    return { ok: true };
+  }
+
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'agent')
+  @Post('moderation/:promoId/avertir')
+  async avertir(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('promoId') promoId: string,
+  ) {
+    await this.assertCanModerate(user, promoId);
+    await this.moderationService.avertir(this.actorType(user.role), user.sub, promoId);
+    return { ok: true };
+  }
+
+  /**
+   * Vue globale de toutes les promos (plan de correction, Phase 2) — la
+   * file de modération n'expose que celles ayant atteint le seuil de
+   * signalements ; ceci permet de repérer et masquer un contenu
+   * problématique directement, sans attendre 3 signalements clients.
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'agent')
+  @Get('promo')
+  async listPromos(
+    @CurrentUser() user: AuthTokenPayload,
+    @Query() query: ListPromoAdminQueryDto,
+  ) {
+    const communeIds = await this.scopedCommuneIds(user);
+    const result = await this.promoService.findAllForAdmin(query, communeIds);
+    return {
+      ...result,
+      items: result.items.map((promo) => this.toAdminPromoJson(promo)),
+    };
+  }
+
+  /**
+   * Liste + recherche sur l'ensemble des commerçants (plan de correction,
+   * Phase 2) — jusqu'ici seule la file registre (en attente) était
+   * consultable, impossible de retrouver un compte précis autrement qu'en
+   * requêtant la base directement.
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Get('commercant')
+  async listCommercants(@Query() query: ListCommercantQueryDto) {
+    const result = await this.commercantService.findAllForAdmin(query);
+    return {
+      ...result,
+      items: result.items.map((commercant) => ({
+        id: commercant.id,
+        nom: commercant.nom,
+        telephone: commercant.telephone,
+        communeId: commercant.communeId,
+        accountState: commercant.accountState,
+        originVerification: commercant.originVerification,
+        registreStatus: commercant.registreStatus,
+        suspended: commercant.deletedAt !== null,
+        createdAt: commercant.createdAt,
+      })),
+    };
+  }
+
+  /** Suspend un compte (soft delete réutilisé — même effet que l'auto-suppression). */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('commercant/:id/suspend')
+  async suspendCommercant(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('id') commercantId: string,
+  ) {
+    await this.commercantService.deleteAccount(commercantId);
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'commercant_suspend',
+      targetType: 'commercant',
+      targetId: commercantId,
+    });
     return { ok: true };
   }
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  @Post('moderation/:promoId/avertir')
-  async avertir(
+  @Post('commercant/:id/reactivate')
+  async reactivateCommercant(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('promoId') promoId: string,
+    @Param('id') commercantId: string,
   ) {
-    await this.moderationService.avertir(user.sub, promoId);
+    await this.commercantService.reactivateAccount(commercantId);
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'commercant_reactivate',
+      targetType: 'commercant',
+      targetId: commercantId,
+    });
     return { ok: true };
   }
 

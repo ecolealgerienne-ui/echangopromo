@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../domain/models/admin.dart';
+import '../../domain/models/admin_commercant_item.dart';
 import '../../domain/models/agent.dart';
 import '../../domain/models/moderation_item.dart';
 import '../../domain/models/registre_item.dart';
@@ -57,6 +58,37 @@ class AdminApi {
 
   Future<void> avertirPromo(String promoId) async {
     await _dio.post<void>('/admin/moderation/$promoId/avertir');
+  }
+
+  /// Vue globale de toutes les promos (plan de correction, Phase 2) — pas
+  /// seulement celles ayant atteint le seuil de signalements, pour pouvoir
+  /// masquer un contenu problématique repéré directement.
+  Future<List<ModerationItem>> listAllPromos({String? search}) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/admin/promo',
+      queryParameters: {'limit': _pageSize, if (search != null && search.isNotEmpty) 'search': search},
+    );
+    final items = response.data!['items'] as List<dynamic>;
+    return items.map((e) => ModerationItem.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  // --- Commerçants (plan de correction, Phase 2) ---
+
+  Future<List<AdminCommercantItem>> listCommercants({String? search}) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/admin/commercant',
+      queryParameters: {'limit': _pageSize, if (search != null && search.isNotEmpty) 'search': search},
+    );
+    final items = response.data!['items'] as List<dynamic>;
+    return items.map((e) => AdminCommercantItem.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> suspendCommercant(String commercantId) async {
+    await _dio.post<void>('/admin/commercant/$commercantId/suspend');
+  }
+
+  Future<void> reactivateCommercant(String commercantId) async {
+    await _dio.post<void>('/admin/commercant/$commercantId/reactivate');
   }
 
   // --- Registre ---

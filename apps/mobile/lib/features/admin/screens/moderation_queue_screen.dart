@@ -1,10 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/language_switcher_button.dart';
+import '../widgets/promo_moderation_tile.dart';
 
 final _moderationQueueProvider =
     FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).moderationQueue());
@@ -62,34 +62,11 @@ class ModerationQueueScreen extends ConsumerWidget {
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final item = items[index];
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundImage:
-                        item.photoUrl != null ? CachedNetworkImageProvider(item.photoUrl!) : null,
-                  ),
-                  title: Text(item.description, maxLines: 2, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(
-                    '${item.commercantNom} · ${item.commercantTelephone}\n'
-                    '${l10n.reportCountLabel(item.activeReportCount)}',
-                  ),
-                  isThreeLine: true,
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (action) {
-                      switch (action) {
-                        case 'masquer':
-                          _act(context, ref, () => api.masquerPromo(item.id));
-                        case 'verifier':
-                          _act(context, ref, () => api.verifierOkPromo(item.id));
-                        case 'avertir':
-                          _act(context, ref, () => api.avertirPromo(item.id));
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      PopupMenuItem(value: 'masquer', child: Text(l10n.masquerLabel)),
-                      PopupMenuItem(value: 'verifier', child: Text(l10n.verifierOkLabel)),
-                      PopupMenuItem(value: 'avertir', child: Text(l10n.avertirLabel)),
-                    ],
-                  ),
+                return PromoModerationTile(
+                  item: item,
+                  onMasquer: () => _act(context, ref, () => api.masquerPromo(item.id)),
+                  onVerifierOk: () => _act(context, ref, () => api.verifierOkPromo(item.id)),
+                  onAvertir: () => _act(context, ref, () => api.avertirPromo(item.id)),
                 );
               },
             ),

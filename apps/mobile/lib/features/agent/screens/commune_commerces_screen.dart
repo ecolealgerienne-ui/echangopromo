@@ -26,6 +26,16 @@ class CommuneCommercesScreen extends ConsumerWidget {
         title: Text(l10n.myCommunesTitle),
         actions: [
           const LanguageSwitcherButton(),
+          IconButton(
+            icon: const Icon(Icons.flag_outlined),
+            tooltip: l10n.moderationLabel,
+            onPressed: () => context.push('/agent/moderation'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.local_offer_outlined),
+            tooltip: l10n.allPromosLabel,
+            onPressed: () => context.push('/agent/promos'),
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.account_circle_outlined),
             onSelected: (action) async {

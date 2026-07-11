@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
+import { Commercant } from '../commercant/entities/commercant.entity';
 import { ConflictAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
@@ -85,9 +86,14 @@ export class ReportService {
    * fenêtre d'ignore de 30 jours est répliquée ici en SQL (même seuil,
    * même logique que `countActiveReports`, appliquée par-signalement
    * plutôt qu'après coup).
+   *
+   * `communeIds` restreint la file aux communes d'un agent (plan de
+   * correction, Phase 2 : agent = modérateur) — `undefined` = vue globale
+   * (admin). Jointure supplémentaire vers `Commercant` seulement dans ce cas,
+   * pour ne pas alourdir la requête admin la plus fréquente.
    */
-  private pendingModerationQueryBuilder(): SelectQueryBuilder<Report> {
-    return this.reports
+  private pendingModerationQueryBuilder(communeIds?: string[]): SelectQueryBuilder<Report> {
+    const qb = this.reports
       .createQueryBuilder('report')
       .innerJoin(Promo, 'promo', 'promo.id = report.promoId')
       .select('report.promoId', 'promoId')
@@ -107,15 +113,28 @@ export class ReportService {
       .having('COUNT(DISTINCT report.deviceId) >= :threshold', {
         threshold: MODERATION_THRESHOLD,
       });
+
+    if (communeIds) {
+      qb.innerJoin(Commercant, 'commercant', 'commercant.id = promo.commercantId').andWhere(
+        'commercant.communeId IN (:...communeIds)',
+        { communeIds },
+      );
+    }
+    return qb;
   }
 
-  /** File de modération pour l'admin (specs §3.4), paginée. */
+  /** File de modération pour l'admin/agent (specs §3.4), paginée. */
   async listPendingModeration(
     page: number,
     limit: number,
+    communeIds?: string[],
   ): Promise<PaginatedResult<{ promoId: string; activeReportCount: number }>> {
-    const total = await this.countPendingModeration();
-    const rows = await this.pendingModerationQueryBuilder()
+    if (communeIds && communeIds.length === 0) {
+      return toPaginatedResult([], 0, page, limit);
+    }
+
+    const total = await this.countPendingModeration(communeIds);
+    const rows = await this.pendingModerationQueryBuilder(communeIds)
       .orderBy('report.promoId', 'ASC')
       .offset((page - 1) * limit)
       .limit(limit)
@@ -129,7 +148,8 @@ export class ReportService {
   }
 
   /** Nombre total de promos en attente de modération (stat dashboard, pas de pagination). */
-  async countPendingModeration(): Promise<number> {
-    return this.pendingModerationQueryBuilder().getCount();
+  async countPendingModeration(communeIds?: string[]): Promise<number> {
+    if (communeIds && communeIds.length === 0) return 0;
+    return this.pendingModerationQueryBuilder(communeIds).getCount();
   }
 }

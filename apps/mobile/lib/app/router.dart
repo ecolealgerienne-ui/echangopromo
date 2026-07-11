@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import '../domain/enums/categorie.dart';
 import '../domain/models/auth_session.dart';
 import '../domain/models/promo.dart';
+import '../features/admin/screens/admin_commercants_screen.dart';
 import '../features/admin/screens/admin_dashboard_screen.dart';
 import '../features/admin/screens/admin_login_screen.dart';
+import '../features/admin/screens/admin_promos_screen.dart';
 import '../features/admin/screens/agent_list_screen.dart';
 import '../features/admin/screens/create_agent_screen.dart';
 import '../features/admin/screens/moderation_queue_screen.dart';
@@ -117,6 +119,19 @@ final _appRoutes = <_AppRoute>[
     ),
     requiredRole: AppRole.agent,
   ),
+  // Agent = modérateur (plan de correction, Phase 2) : mêmes écrans que
+  // l'admin, le backend scope automatiquement aux communes de l'agent
+  // (voir AdminController.scopedCommuneIds) — pas de duplication d'écran.
+  _AppRoute(
+    '/agent/moderation',
+    (context, state) => const ModerationQueueScreen(),
+    requiredRole: AppRole.agent,
+  ),
+  _AppRoute(
+    '/agent/promos',
+    (context, state) => const AdminPromosScreen(),
+    requiredRole: AppRole.agent,
+  ),
 
   // Admin (specs §3.4) — compte unique en V0, pas d'auto-inscription, pas
   // d'entrée dans le menu "espace pro" public (accès direct par URL
@@ -132,6 +147,16 @@ final _appRoutes = <_AppRoute>[
   _AppRoute(
     '/admin/moderation',
     (context, state) => const ModerationQueueScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/promos',
+    (context, state) => const AdminPromosScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/commercants',
+    (context, state) => const AdminCommercantsScreen(),
     requiredRole: AppRole.admin,
   ),
   _AppRoute(
