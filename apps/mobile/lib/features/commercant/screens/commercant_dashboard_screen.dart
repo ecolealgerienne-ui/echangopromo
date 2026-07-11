@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/theme.dart';
 import '../../../domain/enums/commercant_origin_verification.dart';
 import '../../../domain/enums/registre_status.dart';
 import '../../../domain/models/commercant.dart';
@@ -146,12 +147,12 @@ class _UnreadNotificationsBanner extends ConsumerWidget {
           children: [
             for (final notification in unread)
               Card(
-                color: notificationIconColor(notification.type).withValues(alpha: 0.1),
+                color: notificationIconColor(context, notification.type).withValues(alpha: 0.1),
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
                   leading: Icon(
                     notificationIcon(notification.type),
-                    color: notificationIconColor(notification.type),
+                    color: notificationIconColor(context, notification.type),
                   ),
                   title: Text(notification.message),
                   trailing: Row(
@@ -206,6 +207,7 @@ class _RegistreStatusBanner extends ConsumerWidget {
     }
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
+    final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
 
     // `null` (jamais envoyé) traité comme "en attente" — même bannière.
     // Seul le cas rejeté propose une action (`RegistreResendScreen`) : un
@@ -214,7 +216,7 @@ class _RegistreStatusBanner extends ConsumerWidget {
     final title = isRejected ? l10n.registreRejectedBannerTitle : l10n.registrePendingBannerTitle;
     final message =
         isRejected ? l10n.registreRejectedBannerMessage : l10n.registrePendingBannerMessage;
-    final color = isRejected ? colorScheme.error : Colors.orange;
+    final color = isRejected ? colorScheme.error : semanticColors.warning;
 
     return Padding(
       padding: const EdgeInsets.only(top: 12),

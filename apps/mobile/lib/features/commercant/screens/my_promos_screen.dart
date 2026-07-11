@@ -114,6 +114,7 @@ class MyPromosScreen extends ConsumerWidget {
                         ? l10n.untilDate(dateFormat.format(promo.dateFin!))
                         : l10n.notPublishedYet;
                     final statusColor = promoLifecycleColor(
+                      context,
                       promo.lifecycleStatus,
                       isExpired: promo.isExpired,
                     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/theme.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/registre_status.dart';
 import '../../../l10n/app_localizations.dart';
@@ -75,6 +76,7 @@ class AdminCommercantsScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final commercantsAsync = ref.watch(_commercantsProvider);
     final pendingOnly = ref.watch(_registrePendingFilterProvider);
+    final warningColor = Theme.of(context).extension<AppSemanticColors>()!.warning;
 
     return Scaffold(
       appBar: AppBar(
@@ -130,7 +132,7 @@ class AdminCommercantsScreen extends ConsumerWidget {
                         subtitle: item.registreStatus == RegistreStatus.enAttente
                             ? Text(
                                 '${item.telephone} · ${l10n.registreStatusEnAttente}',
-                                style: const TextStyle(color: Colors.orange),
+                                style: TextStyle(color: warningColor),
                               )
                             : Text(item.telephone),
                         trailing: item.suspended
@@ -147,7 +149,7 @@ class AdminCommercantsScreen extends ConsumerWidget {
                                 child: Text(l10n.suspendLabel),
                               ),
                         leading: item.suspended
-                            ? const Icon(Icons.block, color: Colors.red)
+                            ? Icon(Icons.block, color: Theme.of(context).colorScheme.error)
                             : const Icon(Icons.storefront_outlined),
                       );
                     },

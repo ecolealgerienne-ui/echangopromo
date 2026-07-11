@@ -181,7 +181,7 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                   else ...[
                     StatusChip(
                       label: registreStatusLabel(context, item.registreStatus!),
-                      color: registreStatusColor(item.registreStatus!),
+                      color: registreStatusColor(context, item.registreStatus!),
                     ),
                     if (item.registreUrl != null) ...[
                       const SizedBox(height: 12),

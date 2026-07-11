@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../app/theme.dart';
 import '../../../domain/enums/audit_actor_type.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/enums/commercant_origin_verification.dart';
@@ -46,19 +47,22 @@ String promoLifecycleLabel(BuildContext context, PromoLifecycleStatus status, {r
   }
 }
 
-/// Couleur du badge de statut affiché dans "Mes promos" — indépendante de
-/// la localisation du texte, juste un repère visuel rapide.
-Color promoLifecycleColor(PromoLifecycleStatus status, {required bool isExpired}) {
-  if (isExpired) return Colors.grey;
+/// Couleur du badge de statut affiché dans "Mes promos" — dérivée du thème
+/// (`AppSemanticColors`/`colorScheme`) pour rester calibrée en mode sombre,
+/// plutôt que des `Colors.*` fixes (audit design 2026-07-11).
+Color promoLifecycleColor(BuildContext context, PromoLifecycleStatus status, {required bool isExpired}) {
+  final colorScheme = Theme.of(context).colorScheme;
+  if (isExpired) return colorScheme.onSurfaceVariant;
+  final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
   switch (status) {
     case PromoLifecycleStatus.brouillon:
-      return Colors.blueGrey;
+      return colorScheme.onSurfaceVariant;
     case PromoLifecycleStatus.publiee:
-      return Colors.green;
+      return semanticColors.success;
     case PromoLifecycleStatus.arretee:
-      return Colors.orange;
+      return semanticColors.warning;
     case PromoLifecycleStatus.expiree:
-      return Colors.grey;
+      return colorScheme.onSurfaceVariant;
   }
 }
 
@@ -76,18 +80,20 @@ String moderationStatusLabel(BuildContext context, PromoModerationStatus status)
   }
 }
 
-/// Couleur du badge de statut de modération — indépendante de la
-/// localisation du texte, même logique que `promoLifecycleColor`.
-Color moderationStatusColor(PromoModerationStatus status) {
+/// Couleur du badge de statut de modération — même logique dérivée du
+/// thème que `promoLifecycleColor`.
+Color moderationStatusColor(BuildContext context, PromoModerationStatus status) {
+  final colorScheme = Theme.of(context).colorScheme;
+  final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
   switch (status) {
     case PromoModerationStatus.normale:
-      return Colors.green;
+      return semanticColors.success;
     case PromoModerationStatus.signalee:
-      return Colors.orange;
+      return semanticColors.warning;
     case PromoModerationStatus.masquee:
-      return Colors.red;
+      return colorScheme.error;
     case PromoModerationStatus.verifieeOk:
-      return Colors.blueGrey;
+      return colorScheme.onSurfaceVariant;
   }
 }
 
@@ -116,14 +122,15 @@ String registreStatusLabel(BuildContext context, RegistreStatus status) {
   }
 }
 
-Color registreStatusColor(RegistreStatus status) {
+Color registreStatusColor(BuildContext context, RegistreStatus status) {
+  final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
   switch (status) {
     case RegistreStatus.enAttente:
-      return Colors.orange;
+      return semanticColors.warning;
     case RegistreStatus.valide:
-      return Colors.green;
+      return semanticColors.success;
     case RegistreStatus.rejete:
-      return Colors.red;
+      return Theme.of(context).colorScheme.error;
   }
 }
 

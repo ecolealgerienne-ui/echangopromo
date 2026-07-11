@@ -77,11 +77,11 @@ class AdminPromoDetailScreen extends ConsumerWidget {
                   children: [
                     StatusChip(
                       label: promoLifecycleLabel(context, item.lifecycleStatus, isExpired: false),
-                      color: promoLifecycleColor(item.lifecycleStatus, isExpired: false),
+                      color: promoLifecycleColor(context, item.lifecycleStatus, isExpired: false),
                     ),
                     StatusChip(
                       label: moderationStatusLabel(context, item.moderationStatus),
-                      color: moderationStatusColor(item.moderationStatus),
+                      color: moderationStatusColor(context, item.moderationStatus),
                     ),
                   ],
                 ),
