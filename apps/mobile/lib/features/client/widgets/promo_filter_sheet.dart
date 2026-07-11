@@ -64,13 +64,20 @@ class _PromoFilterSheetContent extends ConsumerWidget {
               ),
             ),
           ),
-          for (final option in PromoSort.values)
-            RadioListTile<PromoSort>(
-              title: Text(_sortLabel(l10n, option)),
-              value: option,
-              groupValue: sort,
-              onChanged: (v) => ref.read(promoSortProvider.notifier).state = v!,
+          RadioGroup<PromoSort>(
+            groupValue: sort,
+            onChanged: (v) => ref.read(promoSortProvider.notifier).state = v!,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final option in PromoSort.values)
+                  RadioListTile<PromoSort>(
+                    title: Text(_sortLabel(l10n, option)),
+                    value: option,
+                  ),
+              ],
             ),
+          ),
           const SizedBox(height: 8),
         ],
       ),
