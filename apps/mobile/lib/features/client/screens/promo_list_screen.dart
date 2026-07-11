@@ -9,10 +9,10 @@ import '../../shared/widgets/language_switcher_button.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/promo_providers.dart';
 import '../widgets/promo_card.dart';
+import '../widgets/promo_filter_sheet.dart';
 
-const _gridCrossAxisCount = 2;
-const _gridSpacing = 12.0;
-const _gridPadding = 12.0;
+const _listPadding = 12.0;
+const _listSpacing = 10.0;
 
 class PromoListScreen extends ConsumerWidget {
   const PromoListScreen({super.key});
@@ -23,6 +23,11 @@ class PromoListScreen extends ConsumerWidget {
     final promosAsync = ref.watch(promoListProvider);
     final favorites = ref.watch(favoritesProvider);
     final selectedCategorie = ref.watch(categoryFilterProvider);
+    // Un filtre "non défaut" allume le point sur le bouton — repère rapide
+    // façon Airbnb/Deliveroo, sans avoir à ouvrir la feuille pour savoir si
+    // un filtre est actif.
+    final filtersActive = ref.watch(favoritesOnlyFilterProvider) ||
+        ref.watch(promoSortProvider) != PromoSort.expireBientot;
 
     return Scaffold(
       appBar: AppBar(
@@ -47,7 +52,23 @@ class PromoListScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          _CategoryFilterBar(selected: selectedCategorie),
+          Row(
+            children: [
+              Expanded(child: _CategoryFilterBar(selected: selectedCategorie)),
+              Padding(
+                padding: const EdgeInsetsDirectional.only(end: 4),
+                child: IconButton(
+                  icon: Badge(
+                    isLabelVisible: filtersActive,
+                    smallSize: 8,
+                    child: const Icon(Icons.tune),
+                  ),
+                  tooltip: l10n.filtersSortTooltip,
+                  onPressed: () => showPromoFilterSheet(context),
+                ),
+              ),
+            ],
+          ),
           Expanded(
             child: promosAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -56,45 +77,21 @@ class PromoListScreen extends ConsumerWidget {
                 if (promos.isEmpty) {
                   return Center(child: Text(l10n.noActivePromos));
                 }
-                return LayoutBuilder(
-                  builder: (context, constraints) {
-                    // `childAspectRatio` calculé pour correspondre
-                    // exactement à la hauteur réelle de la carte (photo
-                    // 16:9 à la largeur de la case + bloc texte de hauteur
-                    // fixe, voir promo_card.dart) — pas de valeur figée qui
-                    // laisserait un espace vide ou déborderait selon la
-                    // largeur d'écran.
-                    final availableWidth = constraints.maxWidth -
-                        _gridPadding * 2 -
-                        _gridSpacing * (_gridCrossAxisCount - 1);
-                    final cardWidth = availableWidth / _gridCrossAxisCount;
-                    final imageHeight = cardWidth * 9 / 16;
-                    final cardHeight =
-                        imageHeight + promoCardTextBlockHeight + promoCardPadding * 2;
-                    final aspectRatio = cardWidth / cardHeight;
-
-                    return RefreshIndicator(
-                      onRefresh: () => ref.refresh(promoListProvider.future),
-                      child: GridView.builder(
-                        padding: const EdgeInsets.all(_gridPadding),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: _gridCrossAxisCount,
-                          mainAxisSpacing: _gridSpacing,
-                          crossAxisSpacing: _gridSpacing,
-                          childAspectRatio: aspectRatio,
-                        ),
-                        itemCount: promos.length,
-                        itemBuilder: (context, index) {
-                          final promo = promos[index];
-                          return PromoCard(
-                            promo: promo,
-                            isFavorite: favorites.contains(promo.commercantId),
-                            onTap: () => context.push('/promo/${promo.id}'),
-                          );
-                        },
-                      ),
-                    );
-                  },
+                return RefreshIndicator(
+                  onRefresh: () => ref.refresh(promoListProvider.future),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(_listPadding),
+                    itemCount: promos.length,
+                    separatorBuilder: (context, index) => const SizedBox(height: _listSpacing),
+                    itemBuilder: (context, index) {
+                      final promo = promos[index];
+                      return PromoCard(
+                        promo: promo,
+                        isFavorite: favorites.contains(promo.commercantId),
+                        onTap: () => context.push('/promo/${promo.id}'),
+                      );
+                    },
+                  ),
                 );
               },
             ),

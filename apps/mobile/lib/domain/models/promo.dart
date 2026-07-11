@@ -16,6 +16,7 @@ class Promo {
     required this.moderationStatus,
     required this.photoUrl,
     this.viewCount,
+    required this.createdAt,
   });
 
   factory Promo.fromJson(Map<String, dynamic> json) => Promo(
@@ -31,6 +32,7 @@ class Promo {
         moderationStatus: PromoModerationStatus.fromValue(json['moderationStatus'] as String),
         photoUrl: json['photoUrl'] as String?,
         viewCount: json['viewCount'] as int?,
+        createdAt: DateTime.parse(json['createdAt'] as String),
       );
 
   final String id;
@@ -47,6 +49,7 @@ class Promo {
   final PromoModerationStatus moderationStatus;
   final String? photoUrl;
   final int? viewCount;
+  final DateTime createdAt;
 
   bool get isDraft => lifecycleStatus == PromoLifecycleStatus.brouillon;
   bool get isPublished => lifecycleStatus == PromoLifecycleStatus.publiee;
@@ -54,4 +57,11 @@ class Promo {
   bool get isExpired =>
       lifecycleStatus == PromoLifecycleStatus.expiree ||
       (dateFin != null && dateFin!.isBefore(DateTime.now()));
+
+  /// Même fenêtre que `PromoService.notifyExpiringSoonCron` côté backend —
+  /// une seule définition de "bientôt" dans tout le produit.
+  bool get isExpiringSoon =>
+      !isExpired && dateFin != null && dateFin!.isBefore(DateTime.now().add(const Duration(hours: 24)));
+
+  double get discountPercent => (prixAvant - prixApres) / prixAvant * 100;
 }
