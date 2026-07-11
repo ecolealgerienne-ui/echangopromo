@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/commune_multi_select_field.dart';
 import '../../shared/widgets/error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
@@ -101,7 +102,7 @@ class _CreateAgentScreenState extends ConsumerState<CreateAgentScreen> {
               const SizedBox(height: 12),
               communesAsync.when(
                 loading: () => const LinearProgressIndicator(),
-                error: (error, _) => Text(l10n.commonError(error.toString())),
+                error: (error, _) => ApiErrorText(error),
                 data: (communes) => CommuneMultiSelectField(
                   communes: communes,
                   selectedCommuneIds: _communeIds,

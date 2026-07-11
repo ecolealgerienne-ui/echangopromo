@@ -7,6 +7,7 @@ import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
+import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/category_dropdown.dart';
 import '../../shared/widgets/error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
@@ -150,7 +151,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ),
       body: meAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
+        error: (error, _) => Center(child: ApiErrorText(error)),
         data: (me) => Padding(
           padding: const EdgeInsets.all(16),
           child: Form(

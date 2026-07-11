@@ -5,6 +5,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/providers/notification_provider.dart';
+import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/notifications_panel.dart';
 
@@ -65,7 +66,7 @@ class CommercantDashboardScreen extends ConsumerWidget {
             const _UnreadNotificationsBanner(),
             meAsync.when(
               loading: () => const LinearProgressIndicator(),
-              error: (error, _) => Text(l10n.commonError(error.toString())),
+              error: (error, _) => ApiErrorText(error),
               data: (commercant) => Text(
                 commercant.nom,
                 style: Theme.of(context).textTheme.headlineSmall,

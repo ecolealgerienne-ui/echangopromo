@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 
 final _dashboardProvider = FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).dashboard());
@@ -50,7 +51,7 @@ class AdminDashboardScreen extends ConsumerWidget {
           children: [
             statsAsync.when(
               loading: () => const LinearProgressIndicator(),
-              error: (error, _) => Text(l10n.commonError(error.toString())),
+              error: (error, _) => ApiErrorText(error),
               data: (stats) => Row(
                 children: [
                   Expanded(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/commune_cascade_field.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../providers/commune_providers.dart';
@@ -49,7 +50,7 @@ class _CommuneSelectionScreenState extends ConsumerState<CommuneSelectionScreen>
         padding: const EdgeInsets.all(16),
         child: communesAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
+          error: (error, _) => Center(child: ApiErrorText(error)),
           data: (communes) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

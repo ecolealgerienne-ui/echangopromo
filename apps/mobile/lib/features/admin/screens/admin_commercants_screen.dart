@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 
 final _commercantSearchProvider = StateProvider.autoDispose<String>((ref) => '');
@@ -87,7 +88,7 @@ class AdminCommercantsScreen extends ConsumerWidget {
           Expanded(
             child: commercantsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
+              error: (error, _) => Center(child: ApiErrorText(error)),
               data: (items) {
                 if (items.isEmpty) {
                   return Center(child: Text(l10n.noCommercantsFound));

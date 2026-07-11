@@ -4,6 +4,7 @@ import '../../../domain/models/notification.dart' as domain;
 import '../../../l10n/app_localizations.dart';
 import '../l10n/enum_labels.dart';
 import '../providers/notification_provider.dart';
+import 'api_error_text.dart';
 
 class NotificationsPanel extends ConsumerWidget {
   const NotificationsPanel({super.key, this.history = false});
@@ -53,7 +54,7 @@ class NotificationsPanel extends ConsumerWidget {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, st) => Center(
-        child: Text(l10n.commonError(error.toString())),
+        child: ApiErrorText(error),
       ),
     );
   }

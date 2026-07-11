@@ -6,6 +6,7 @@ import '../../../domain/models/auth_session.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../widgets/promo_moderation_tile.dart';
 
@@ -56,7 +57,7 @@ class ModerationQueueScreen extends ConsumerWidget {
       ),
       body: queueAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
+        error: (error, _) => Center(child: ApiErrorText(error)),
         data: (items) {
           if (items.isEmpty) {
             return Center(child: Text(l10n.noModerationItems));

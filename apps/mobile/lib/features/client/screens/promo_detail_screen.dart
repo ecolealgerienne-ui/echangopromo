@@ -18,6 +18,7 @@ import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
+import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/promo_photo_hero.dart';
 import '../../shared/widgets/promo_price_row.dart';
@@ -43,7 +44,7 @@ class PromoDetailScreen extends ConsumerWidget {
       ),
       body: promoAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
+        error: (error, _) => Center(child: ApiErrorText(error)),
         data: (promo) {
           final favorites = ref.watch(favoritesProvider);
           final isFavorite = favorites.contains(promo.id);
@@ -214,7 +215,7 @@ class _CommercantInfo extends ConsumerWidget {
 
     return commercantAsync.when(
       loading: () => const SizedBox(height: 40, child: Center(child: CircularProgressIndicator())),
-      error: (error, _) => Text(l10n.commonError(error.toString())),
+      error: (error, _) => ApiErrorText(error),
       data: (commercant) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -6,6 +6,7 @@ import '../../../domain/models/agent.dart';
 import '../../../domain/models/commune.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/commune_multi_select_field.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 
@@ -221,7 +222,7 @@ class AgentListScreen extends ConsumerWidget {
       ),
       body: agentsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
+        error: (error, _) => Center(child: ApiErrorText(error)),
         data: (agents) {
           final communes = communesAsync.valueOrNull ?? const <Commune>[];
           if (agents.isEmpty) {
