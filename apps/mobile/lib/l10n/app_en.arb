@@ -113,6 +113,8 @@
   "notificationsTitle": "Notifications",
   "noNotifications": "No notifications",
   "markAllReadLabel": "Mark all as read",
+  "markAsReadTooltip": "Mark as read",
+  "backToHomeTooltip": "Back to home",
   "notificationJustNow": "Just now",
   "notificationMinutesAgo": "{count, plural, one{{count} minute ago} other{{count} minutes ago}}",
   "@notificationMinutesAgo": { "placeholders": { "count": { "type": "int" } } },

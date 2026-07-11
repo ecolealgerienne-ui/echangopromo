@@ -21,6 +21,16 @@ class CommercantDashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: l10n.backToHomeTooltip,
+          // Ce dashboard est toujours atteint via un `go()` (jamais un
+          // `push()`) depuis les écrans de connexion — la pile de
+          // navigation est donc vide et Flutter n'affiche aucun bouton
+          // retour automatique. Bouton explicite plutôt que de dépendre de
+          // `context.canPop()`, systématiquement faux ici.
+          onPressed: () => context.go('/'),
+        ),
         title: Text(l10n.myCommercantSpaceTitle),
         actions: [
           const LanguageSwitcherButton(),
@@ -117,6 +127,7 @@ class _UnreadNotificationsBanner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final notificationsAsync = ref.watch(notificationsProvider);
+    final controller = ref.watch(notificationControllerProvider);
 
     return notificationsAsync.maybeWhen(
       data: (paginated) {
@@ -136,9 +147,27 @@ class _UnreadNotificationsBanner extends ConsumerWidget {
                     color: notificationIconColor(notification.type),
                   ),
                   title: Text(notification.message),
-                  trailing: TextButton(
-                    onPressed: () => context.push('/commercant/promos'),
-                    child: Text(l10n.reviewPromoCta),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton(
+                        onPressed: () => context.push('/commercant/promos'),
+                        child: Text(l10n.reviewPromoCta),
+                      ),
+                      // Sans ce bouton, une notification traitée (promo déjà
+                      // republiée) n'avait aucun moyen de quitter la liste
+                      // des non lues — elle ne passait jamais à l'historique.
+                      IconButton(
+                        icon: const Icon(Icons.check),
+                        tooltip: l10n.markAsReadTooltip,
+                        onPressed: () async {
+                          await controller.markAsRead(notification.id);
+                          ref.invalidate(notificationsProvider);
+                          ref.invalidate(notificationHistoryProvider);
+                          ref.invalidate(unreadNotificationCountProvider);
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ),

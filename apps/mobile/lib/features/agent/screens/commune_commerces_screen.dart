@@ -23,6 +23,11 @@ class CommuneCommercesScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: l10n.backToHomeTooltip,
+          onPressed: () => context.go('/'),
+        ),
         title: Text(l10n.myCommunesTitle),
         actions: [
           const LanguageSwitcherButton(),

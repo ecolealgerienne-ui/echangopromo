@@ -98,6 +98,7 @@ class _NotificationTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: ListTile(
@@ -110,6 +111,7 @@ class _NotificationTile extends ConsumerWidget {
         trailing: !notification.isRead
             ? IconButton(
                 icon: const Icon(Icons.check),
+                tooltip: l10n.markAsReadTooltip,
                 onPressed: onMarkAsRead,
               )
             : null,

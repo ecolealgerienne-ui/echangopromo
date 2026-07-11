@@ -126,6 +126,8 @@
   "notificationsTitle": "Notifications",
   "noNotifications": "Aucune notification",
   "markAllReadLabel": "Tout marquer comme lu",
+  "markAsReadTooltip": "Marquer comme lu",
+  "backToHomeTooltip": "Retour à l'accueil",
   "notificationJustNow": "À l'instant",
   "notificationMinutesAgo": "{count, plural, one{Il y a {count} minute} other{Il y a {count} minutes}}",
   "@notificationMinutesAgo": { "placeholders": { "count": { "type": "int" } } },

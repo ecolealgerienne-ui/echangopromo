@@ -113,6 +113,8 @@
   "notificationsTitle": "الإشعارات",
   "noNotifications": "لا توجد إشعارات",
   "markAllReadLabel": "تعليم الكل كمقروء",
+  "markAsReadTooltip": "تعليم كمقروء",
+  "backToHomeTooltip": "العودة إلى الرئيسية",
   "notificationJustNow": "الآن",
   "notificationMinutesAgo": "{count, plural, one{منذ {count} دقيقة} other{منذ {count} دقيقة}}",
   "@notificationMinutesAgo": { "placeholders": { "count": { "type": "int" } } },
