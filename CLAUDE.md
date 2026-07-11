@@ -2,8 +2,10 @@
 
 Instructions pour Claude Code sur ce dépôt. Lire aussi `docs/SPECS_ECHANGO_PROMO_V0.md`
 (specs fonctionnelles), `docs/ARCHITECTURE.md` (choix de stack),
-`docs/AUDIT_V0.md` (audit initial complet, fichier:ligne) et
-`docs/AUDIT_V1.md` (audit de suivi — révocation JWT, codes d'erreur) —
+`docs/AUDIT_V0.md` (audit initial complet, fichier:ligne),
+`docs/AUDIT_V1.md` (audit de suivi — révocation JWT, codes d'erreur) et
+`docs/BENCHMARK_CONCURRENTIEL.md` (comparatif fonctionnel face à 7
+applications de promos locales dans le monde) —
 ce fichier-ci en est la synthèse actionnable.
 
 ## Consignes de fonctionnement (utilisateur)
