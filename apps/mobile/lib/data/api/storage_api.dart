@@ -54,6 +54,9 @@ class StorageApi {
     final response = await _dio.post<Map<String, dynamic>>(
       '/storage/upload',
       data: formData,
+      // Le défaut de `ApiClient` (20s) est calibré pour du JSON, trop court
+      // pour l'upload d'une image (jusqu'à ~500 Ko) sur un réseau lent.
+      options: Options(sendTimeout: const Duration(seconds: 60), receiveTimeout: const Duration(seconds: 60)),
     );
     return response.data!['key'] as String;
   }

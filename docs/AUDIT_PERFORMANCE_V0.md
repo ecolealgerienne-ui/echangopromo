@@ -6,12 +6,17 @@ pour les photos de promo. Méthode : exploration en lecture seule,
 fichier:ligne systématique, aucune modification de code pendant l'audit
 lui-même.
 
+**Mise à jour (2026-07-12)** : points 2, 3 et 4 traités le jour même.
+Point 1 (le plus directement lié au CDN prévu) laissé pour la décision
+d'offre CDN — voir sa section, aucune action de code ne le résout seule
+sans choisir un service de redimensionnement.
+
 | # | Point | Sévérité | Statut |
 |---|---|---|---|
-| 1 | Vignettes téléchargées en pleine résolution (liste/avatars) | Élevée | ❌ Non traité |
-| 2 | Upload multi-photo séquentiel (1-3 photos) | Moyenne | ❌ Non traité |
-| 3 | Aucun timeout Dio (mobile) | Moyenne-Élevée (fiabilité) | ❌ Non traité |
-| 4 | Pas de compression de réponse HTTP (backend) | Moyenne | ❌ Non traité |
+| 1 | Vignettes téléchargées en pleine résolution (liste/avatars) | Élevée | ❌ Non traité — dépend du choix de CDN |
+| 2 | Upload multi-photo séquentiel (1-3 photos) | Moyenne | ✅ `Future.wait`, ordre préservé |
+| 3 | Aucun timeout Dio (mobile) | Moyenne-Élevée (fiabilité) | ✅ Timeouts globaux + override upload |
+| 4 | Pas de compression de réponse HTTP (backend) | Moyenne | ✅ Middleware `compression` |
 | 5 | CDN déjà câblé côté backend | Info | ✅ Rien à faire côté code |
 | 6 | Page unique de 100 promos (pas de pagination infinie) | Faible | ⚠️ Compromis déjà assumé/documenté |
 | 7 | Index composite promo ne couvre pas `moderationStatus` | Faible | ⚠️ Sans incidence à l'échelle pilote |

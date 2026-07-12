@@ -100,15 +100,16 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
     try {
       final api = ref.read(promoApiProvider);
       final storageApi = ref.read(storageApiProvider);
-      final photoKeys = <String>[];
-      for (final item in _photoItems) {
-        switch (item) {
-          case ExistingPhotoItem(:final key):
-            photoKeys.add(key);
-          case NewPhotoItem(:final file):
-            photoKeys.add(await storageApi.uploadPhoto(file, purpose: 'promo'));
-        }
-      }
+      // `Future.wait` préserve l'ordre des éléments (1ère photo = photo
+      // principale) tout en uploadant les nouvelles photos en parallèle
+      // plutôt qu'en série — jusqu'à ~3x plus rapide sur une promo à 3
+      // photos sur réseau lent (audit performance 2026-07-12).
+      final photoKeys = await Future.wait(_photoItems.map((item) async {
+        return switch (item) {
+          ExistingPhotoItem(:final key) => key,
+          NewPhotoItem(:final file) => await storageApi.uploadPhoto(file, purpose: 'promo'),
+        };
+      }));
 
       if (_isEditing) {
         await api.update(

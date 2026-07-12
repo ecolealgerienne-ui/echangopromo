@@ -21,7 +21,18 @@ class ApiClient {
     required String Function() getDeviceId,
     required String? Function() getToken,
     void Function()? onAuthInvalid,
-  }) : dio = Dio(BaseOptions(baseUrl: Env.apiBaseUrl)) {
+  }) : dio = Dio(BaseOptions(
+          baseUrl: Env.apiBaseUrl,
+          // Dio n'a par défaut aucun timeout (attente indéfinie) — sur la
+          // couverture réseau variable du marché cible (audit performance
+          // 2026-07-12), une requête sur une connexion dégradée laissait
+          // l'utilisateur bloqué sur un spinner sans jamais échouer.
+          // `StorageApi.uploadPhoto` (upload d'image, plus lent) surcharge
+          // ces valeurs par requête plutôt que d'allonger le défaut global.
+          connectTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 20),
+          sendTimeout: const Duration(seconds: 20),
+        )) {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {

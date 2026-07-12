@@ -1,6 +1,7 @@
 import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import * as compression from 'compression';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/errors/all-exceptions.filter';
 
@@ -23,6 +24,10 @@ async function bootstrap() {
   // la chaîne X-Forwarded-For (qu'un client pourrait sinon falsifier pour
   // usurper une IP et contourner la limite).
   app.set('trust proxy', 1);
+  // Compresse les réponses JSON (listes promo/modération...) — notable sur
+  // le réseau mobile variable du marché cible (même logique "coût data" que
+  // la compression d'image côté upload, audit performance 2026-07-12).
+  app.use(compression());
   // L'app mobile (Dio natif) n'est pas soumise au CORS — seul un futur
   // frontend web (admin) en aurait besoin. Pas d'origine par défaut tant
   // qu'aucun frontend web n'existe (CORS_ORIGINS vide = aucune origine

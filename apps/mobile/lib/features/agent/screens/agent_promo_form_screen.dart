@@ -80,15 +80,14 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
 
     try {
       final storageApi = ref.read(storageApiProvider);
-      final photoKeys = <String>[];
-      for (final item in _photoItems) {
-        switch (item) {
-          case ExistingPhotoItem(:final key):
-            photoKeys.add(key);
-          case NewPhotoItem(:final file):
-            photoKeys.add(await storageApi.uploadPhoto(file));
-        }
-      }
+      // Upload en parallèle plutôt qu'en série, ordre préservé par
+      // `Future.wait` (audit performance 2026-07-12).
+      final photoKeys = await Future.wait(_photoItems.map((item) async {
+        return switch (item) {
+          ExistingPhotoItem(:final key) => key,
+          NewPhotoItem(:final file) => await storageApi.uploadPhoto(file),
+        };
+      }));
       await ref.read(promoApiProvider).createForCommercant(
             widget.commercantId,
             description: _descriptionController.text.trim(),
