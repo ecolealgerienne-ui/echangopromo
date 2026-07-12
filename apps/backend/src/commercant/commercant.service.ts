@@ -184,14 +184,29 @@ export class CommercantService {
     await this.commercants.increment({ id: commercantId }, 'tokenVersion', 1);
   }
 
-  /** Édition du profil par le commerçant lui-même — téléphone non modifiable ici. */
+  /**
+   * Édition du profil par le commerçant lui-même — téléphone non modifiable
+   * ici. `dto` (transformé par `ValidationPipe`) porte une propriété propre
+   * `undefined` pour chaque champ optionnel non fourni (comportement
+   * TypeScript `useDefineForClassFields`, actif dès la cible ES2022) — un
+   * `Object.assign(commercant, dto)` direct écraserait donc les valeurs déjà
+   * en base des champs non envoyés. TypeORM ignore ces `undefined` dans le
+   * `UPDATE` SQL (la base reste correcte), mais pas l'objet renvoyé au
+   * client : `nom`/`categorie` disparaissaient silencieusement de la
+   * réponse dès qu'un appel ne modifiait que `photoKey` (ex. l'envoi de la
+   * photo du commerce pendant l'inscription), faisant planter le parsing
+   * mobile alors que rien n'était perdu en base (bug trouvé 2026-07-12).
+   */
   async updateProfile(
     commercantId: string,
     dto: UpdateCommercantDto,
   ): Promise<Commercant> {
     const commercant = await this.findByIdOrFail(commercantId);
     const previousPhotoKey = commercant.photoKey;
-    Object.assign(commercant, dto);
+    const definedFields = Object.fromEntries(
+      Object.entries(dto).filter(([, value]) => value !== undefined),
+    );
+    Object.assign(commercant, definedFields);
     const saved = await this.commercants.save(commercant);
     // Remplacement de photo : l'ancienne devient orpheline dans S3 si on ne
     // la supprime pas explicitement (buildKey génère toujours une nouvelle

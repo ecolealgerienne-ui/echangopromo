@@ -467,8 +467,20 @@ export class PromoService {
     this.assertPriceOrder(prixAvant, prixApres);
     const previousPhotoKey = promo.photoKey;
 
+    // `dto` (transformé par `ValidationPipe`) porte une propriété propre
+    // `undefined` pour chaque champ optionnel non fourni (comportement
+    // TypeScript `useDefineForClassFields`) — un `{...dto}` direct
+    // écraserait donc les champs non envoyés (ex. `description`/`categorie`
+    // lors d'un simple changement de photo) avec `undefined`. TypeORM
+    // ignore ces `undefined` dans l'UPDATE SQL (la base reste correcte),
+    // mais pas l'objet renvoyé au client — même bug que
+    // `CommercantService.updateProfile`, trouvé le 2026-07-12 sur ce
+    // même cas de figure côté commerçant.
+    const definedFields = Object.fromEntries(
+      Object.entries(dto).filter(([, value]) => value !== undefined),
+    );
     Object.assign(promo, {
-      ...dto,
+      ...definedFields,
       prixAvant: dto.prixAvant?.toFixed(2) ?? promo.prixAvant,
       prixApres: dto.prixApres?.toFixed(2) ?? promo.prixApres,
     });
