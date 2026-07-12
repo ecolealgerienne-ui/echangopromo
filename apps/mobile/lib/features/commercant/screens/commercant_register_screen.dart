@@ -116,7 +116,14 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
         await api.updateProfile(photoKey: photoKey);
       }
       if (mounted) context.go('/commercant/dashboard');
-    } catch (error) {
+    } catch (error, stackTrace) {
+      // TEMPORAIRE (diagnostic 2026-07-12) : toutes les étapes réseau
+      // réussissent côté serveur (confirmé en base) mais l'utilisateur reste
+      // bloqué sur cet écran avec le message générique — l'erreur réelle
+      // n'apparaît nulle part (catch silencieux). À retirer une fois la
+      // cause identifiée.
+      debugPrint('DEBUG commercant register — erreur non-réseau attrapée : $error');
+      debugPrint('DEBUG commercant register — stack trace :\n$stackTrace');
       setState(() => _error = extractApiErrorMessage(
             error,
             fallback: l10n.registerFailed,
