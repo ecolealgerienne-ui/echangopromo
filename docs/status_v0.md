@@ -6,7 +6,7 @@ d'audit, changement d'architecture) — pas seulement en fin de session.
 Pour le détail historique complet, voir aussi `docs/AUDIT_V0.md`
 (findings) et `CLAUDE.md` (règles à respecter).
 
-Dernière mise à jour : 2026-07-05
+Dernière mise à jour : 2026-07-12
 
 ---
 
@@ -1166,3 +1166,30 @@ TypeORM — à confirmer par l'utilisateur sur sa machine.
   - **Non exécuté dans mon environnement** : `flutter analyze` — nouveau
     widget + 4 écrans réécrits, à lancer avant tout autre travail sur ce
     module (consigne du projet).
+- **2026-07-12 (incident VPS — corruption Postgres, volume reconstruit)** —
+  `docker-compose.yml` (dev local) et `docker-compose.promo.yml` (prod VPS)
+  déclaraient tous les deux un volume `postgres_data` sans `name:` de projet
+  Compose explicite dans aucun des deux fichiers — les deux stacks
+  résolvaient donc le même nom de projet par défaut (`echangopromo`, dérivé
+  du dossier) et donc le **même volume physique**
+  (`echangopromo_postgres_data`). La stack dev a tourné sur le VPS à un
+  moment (conteneur `echangopromo-postgres-1`, repéré comme "orphan
+  container" par Compose lors d'un déploiement prod) en même temps que la
+  stack prod — deux processus Postgres indépendants écrivant sur le même
+  répertoire de données, cause classique de corruption. Symptômes : `pg_
+  attribute catalog is missing 1 attribute(s) for relation OID 16505` sur
+  `commercant` (persistant même en connexion `psql` neuve, donc corruption
+  réelle du catalogue et pas un cache de session), table `report`
+  entièrement absente alors que la migration `InitialSchema` censée l'avoir
+  créée était marquée comme exécutée. `REINDEX SYSTEM` non tenté (décision
+  produit : base vieille de 2 jours seulement, encore en phase de test,
+  repartir de zéro jugé plus sûr qu'une réparation incertaine sans backup
+  existant). Volume `echangopromo_postgres_data` supprimé et recréé vide ;
+  `name:` explicite ajouté aux deux fichiers Compose (`echangopromo-dev` /
+  `echangopromo-promo`) pour que les deux stacks ne puissent plus jamais
+  partager de volume, même lancées par erreur sur la même machine.
+  **Dette identifiée dans la foulée** : aucun mécanisme de backup (`pg_dump`
+  ou snapshot) n'existe pour cette base, contrairement à la stack Vendure
+  du même VPS qui a son propre volume de backups — à mettre en place avant
+  que le pilote héberge des données qu'on ne peut pas se permettre de
+  perdre une seconde fois.

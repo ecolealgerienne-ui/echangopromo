@@ -28,6 +28,16 @@
 # échoue à la création du réseau externe introuvable.
 #
 # Usage complet (migrations, seeds) : docs/DEPLOIEMENT_VPS.md
+#
+# `name:` explicite : sans ça, Compose dérive le nom de projet du nom du
+# dossier (`echangopromo`), le MÊME nom que docker-compose.yml (dev local) —
+# les deux stacks partageaient alors le même volume Postgres physique
+# (`echangopromo_postgres_data`). Deux processus Postgres indépendants
+# écrivant sur le même répertoire de données ont corrompu le catalogue de
+# cette base le 2026-07-12 (catalogue pg_attribute désynchronisé, table
+# `report` disparue — voir docs/status_v0.md). Volume reconstruit à partir
+# de zéro le même jour ; ce `name:` empêche toute récidive du partage.
+name: echangopromo-promo
 
 services:
   postgres_promo:

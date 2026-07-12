@@ -1,3 +1,14 @@
+# `name:` explicite : sans ça, Compose dérive le nom de projet du nom du
+# dossier (`echangopromo`), le MÊME nom que docker-compose.promo.yml (prod
+# VPS) — les deux stacks partageraient alors le même volume Postgres
+# physique (`echangopromo_postgres_data`) si les deux tournent un jour sur
+# la même machine. Deux processus Postgres indépendants écrivant sur le
+# même répertoire de données ont corrompu le catalogue de la base de prod
+# le 2026-07-12 (voir docs/status_v0.md) — cette séparation est la
+# correction définitive, pas juste un nettoyage ponctuel de conteneur
+# orphelin.
+name: echangopromo-dev
+
 services:
   postgres:
     image: postgres:16-alpine
