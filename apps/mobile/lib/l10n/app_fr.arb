@@ -273,6 +273,8 @@
   "selectAllInWilayaLabel": "Tout sélectionner dans cette wilaya",
   "communesSelectedCount": "{count, plural, one{{count} commune sélectionnée} other{{count} communes sélectionnées}}",
   "@communesSelectedCount": { "placeholders": { "count": { "type": "int" } } },
+  "maxCommunesHint": "Choisissez jusqu'à {max} communes voisines : leurs promos s'afficheront ensemble.",
+  "@maxCommunesHint": { "placeholders": { "max": { "type": "int" } } },
 
   "legalCguTitle": "Conditions générales d'utilisation",
   "legalPrivacyTitle": "Politique de confidentialité",

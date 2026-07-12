@@ -240,7 +240,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final session = authState.value;
       final path = state.matchedLocation;
 
-      if (path == '/' && ref.read(selectedCommuneProvider) == null) {
+      if (path == '/' && ref.read(selectedCommunesProvider).isEmpty) {
         return '/select-commune';
       }
 

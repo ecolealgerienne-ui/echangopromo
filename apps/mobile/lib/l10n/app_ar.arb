@@ -257,6 +257,8 @@
   "selectAllInWilayaLabel": "تحديد الكل في هذه الولاية",
   "communesSelectedCount": "{count, plural, one{بلدية واحدة مختارة} two{بلديتان مختارتان} few{{count} بلديات مختارة} many{{count} بلدية مختارة} other{{count} بلدية مختارة}}",
   "@communesSelectedCount": { "placeholders": { "count": { "type": "int" } } },
+  "maxCommunesHint": "اختر حتى {max} بلديات مجاورة: ستُعرض عروضها معًا.",
+  "@maxCommunesHint": { "placeholders": { "max": { "type": "int" } } },
 
   "legalCguTitle": "شروط الاستخدام",
   "legalPrivacyTitle": "سياسة الخصوصية",

@@ -14,11 +14,18 @@ class CommuneMultiSelectField extends StatefulWidget {
     required this.communes,
     required this.selectedCommuneIds,
     required this.onChanged,
+    this.maxSelection,
   });
 
   final List<Commune> communes;
   final Set<String> selectedCommuneIds;
   final ValueChanged<Set<String>> onChanged;
+
+  /// `null` = pas de plafond (cas agent, territoire libre). Fixé côté client
+  /// (`kMaxSelectedCommunes`) — masque la commodité "tout sélectionner dans
+  /// la wilaya" (incompatible avec un plafond) et désactive les cases non
+  /// cochées une fois le plafond atteint.
+  final int? maxSelection;
 
   @override
   State<CommuneMultiSelectField> createState() => _CommuneMultiSelectFieldState();
@@ -36,8 +43,12 @@ class _CommuneMultiSelectFieldState extends State<CommuneMultiSelectField> {
 
   void _toggle(Iterable<String> communeIds, bool checked) {
     final updated = Set<String>.from(widget.selectedCommuneIds);
+    final max = widget.maxSelection;
     for (final id in communeIds) {
       if (checked) {
+        if (max != null && updated.length >= max && !updated.contains(id)) {
+          continue;
+        }
         updated.add(id);
       } else {
         updated.remove(id);
@@ -53,6 +64,8 @@ class _CommuneMultiSelectFieldState extends State<CommuneMultiSelectField> {
     final communesForWilaya = widget.communes.where((c) => c.wilaya == _wilaya).toList();
     final allSelectedInWilaya = communesForWilaya.isNotEmpty &&
         communesForWilaya.every((c) => widget.selectedCommuneIds.contains(c.id));
+    final atCap =
+        widget.maxSelection != null && widget.selectedCommuneIds.length >= widget.maxSelection!;
 
     return Column(
       // `mainAxisSize.min` — sans ça, ce Column (mainAxisSize.max par
@@ -74,13 +87,14 @@ class _CommuneMultiSelectFieldState extends State<CommuneMultiSelectField> {
           l10n.communesSelectedCount(widget.selectedCommuneIds.length),
           style: Theme.of(context).textTheme.bodySmall,
         ),
-        CheckboxListTile(
-          value: allSelectedInWilaya,
-          title: Text(l10n.selectAllInWilayaLabel),
-          onChanged: communesForWilaya.isEmpty
-              ? null
-              : (checked) => _toggle(communesForWilaya.map((c) => c.id), checked ?? false),
-        ),
+        if (widget.maxSelection == null)
+          CheckboxListTile(
+            value: allSelectedInWilaya,
+            title: Text(l10n.selectAllInWilayaLabel),
+            onChanged: communesForWilaya.isEmpty
+                ? null
+                : (checked) => _toggle(communesForWilaya.map((c) => c.id), checked ?? false),
+          ),
         ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 240),
           // `Column` + `SingleChildScrollView` plutôt que `ListView` — même
@@ -99,7 +113,9 @@ class _CommuneMultiSelectFieldState extends State<CommuneMultiSelectField> {
                     dense: true,
                     value: widget.selectedCommuneIds.contains(commune.id),
                     title: Text(commune.nom),
-                    onChanged: (checked) => _toggle([commune.id], checked ?? false),
+                    onChanged: (atCap && !widget.selectedCommuneIds.contains(commune.id))
+                        ? null
+                        : (checked) => _toggle([commune.id], checked ?? false),
                   ),
               ],
             ),

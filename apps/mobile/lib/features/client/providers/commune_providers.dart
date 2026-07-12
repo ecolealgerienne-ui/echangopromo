@@ -7,17 +7,24 @@ final communeListProvider = FutureProvider<List<Commune>>((ref) {
   return ref.watch(communeApiProvider).list();
 });
 
-class SelectedCommuneController extends StateNotifier<String?> {
-  SelectedCommuneController(this._store) : super(_store.get());
+/// Décision produit 2026-07-12 : jusqu'à 4 communes sélectionnables côté
+/// client (grandes villes où les communes sont accolées), plafond répété
+/// côté backend (`ListPromoQueryDto.communeIds`, `@ArrayMaxSize(4)`).
+const kMaxSelectedCommunes = 4;
+
+class SelectedCommunesController extends StateNotifier<List<String>> {
+  SelectedCommunesController(this._store) : super(_store.get());
 
   final SelectedCommuneStore _store;
 
-  Future<void> select(String communeId) async {
-    await _store.set(communeId);
-    state = communeId;
+  Future<void> select(List<String> communeIds) async {
+    final capped = communeIds.take(kMaxSelectedCommunes).toList();
+    await _store.set(capped);
+    state = capped;
   }
 }
 
-final selectedCommuneProvider = StateNotifierProvider<SelectedCommuneController, String?>(
-  (ref) => SelectedCommuneController(ref.watch(selectedCommuneStoreProvider)),
+final selectedCommunesProvider =
+    StateNotifierProvider<SelectedCommunesController, List<String>>(
+  (ref) => SelectedCommunesController(ref.watch(selectedCommuneStoreProvider)),
 );

@@ -37,7 +37,8 @@ Application mobile mettant en relation commerçants et clients autour des promot
 - **Identifiant device anonyme** généré à l'installation, stocké localement, utilisé uniquement pour la limitation des signalements (voir §5.4). Ce n'est pas un compte.
 - **Sélection de ville par défaut** : demandée au premier lancement, stockée en local (pas de compte), modifiable à tout moment.
 - Pour les grandes villes : sélection affinée par **commune** (découpage administratif officiel wilaya → commune).
-- **Liste des promos actives**, filtrée par commune sélectionnée.
+- **Multi-sélection de communes (2026-07-12)** : jusqu'à 4 communes simultanément (`kMaxSelectedCommunes`), pensé pour les grandes villes (ex. Alger) où les communes sont accolées — une promo dans l'une intéresse un client dans la voisine. Plafond imposé côté écran ET côté backend (`ListPromoQueryDto.communeIds`, `@ArrayMaxSize(4)`) : une garde uniquement côté app se contournerait en appelant l'API directement. Écran dédié avec bouton de confirmation explicite (pas d'application en direct à chaque coche), car ce filtre part en requête serveur — contrairement au filtre favoris/tri (§ci-dessous) qui reste local et s'applique en direct.
+- **Liste des promos actives**, filtrée par les communes sélectionnées (`IN (...)` sur `commercant.communeId`, déjà indexé).
 - **Filtre par catégorie** (liste fixe, voir §5.6).
 - **Fiche promo** : photo, produit, prix avant/après, nom et adresse du commerçant, date de fin de validité. Si le commerçant a renseigné une photo de son commerce et/ou une position GPS, la fiche affiche aussi la photo du commerce et un bouton "Itinéraire" qui ouvre l'app Google Maps (lien simple, pas d'intégration payante).
 - **Signalement** "promo expirée / incorrecte" : action sans compte, limitée par device ID (voir §5.4). Objectif : limiter les abus côté commerçant autant que côté client.

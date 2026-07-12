@@ -17,12 +17,12 @@ class PromoApi {
   /// Liste des promos actives (specs §3.1) : favoris d'abord, puis
   /// expiration la plus proche — tri appliqué côté backend.
   Future<List<Promo>> listActive({
-    String? communeId,
+    List<String> communeIds = const [],
     Categorie? categorie,
     List<String> favoriteIds = const [],
   }) async {
     final query = <String, dynamic>{
-      if (communeId != null) 'communeId': communeId,
+      if (communeIds.isNotEmpty) 'communeIds': communeIds.join(','),
       if (categorie != null) 'categorie': categorie.value,
       if (favoriteIds.isNotEmpty) 'favoriteIds': favoriteIds.join(','),
       'limit': _pageSize,

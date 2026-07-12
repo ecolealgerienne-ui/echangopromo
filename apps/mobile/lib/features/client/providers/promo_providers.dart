@@ -23,7 +23,7 @@ enum PromoSort { expireBientot, plusGrosseReduction, nouveautes }
 final promoSortProvider = StateProvider.autoDispose<PromoSort>((ref) => PromoSort.expireBientot);
 
 final promoListProvider = FutureProvider.autoDispose<List<Promo>>((ref) async {
-  final communeId = ref.watch(selectedCommuneProvider);
+  final communeIds = ref.watch(selectedCommunesProvider);
   final categorie = ref.watch(categoryFilterProvider);
   final favorites = ref.watch(favoritesProvider);
   final favoritesOnly = ref.watch(favoritesOnlyFilterProvider);
@@ -31,7 +31,7 @@ final promoListProvider = FutureProvider.autoDispose<List<Promo>>((ref) async {
   final api = ref.watch(promoApiProvider);
 
   final promos = await api.listActive(
-    communeId: communeId,
+    communeIds: communeIds,
     categorie: categorie,
     favoriteIds: favorites.toList(),
   );

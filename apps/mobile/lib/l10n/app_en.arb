@@ -257,6 +257,8 @@
   "selectAllInWilayaLabel": "Select all in this wilaya",
   "communesSelectedCount": "{count, plural, one{{count} commune selected} other{{count} communes selected}}",
   "@communesSelectedCount": { "placeholders": { "count": { "type": "int" } } },
+  "maxCommunesHint": "Choose up to {max} nearby communes: their deals will be shown together.",
+  "@maxCommunesHint": { "placeholders": { "max": { "type": "int" } } },
 
   "legalCguTitle": "Terms of use",
   "legalPrivacyTitle": "Privacy policy",

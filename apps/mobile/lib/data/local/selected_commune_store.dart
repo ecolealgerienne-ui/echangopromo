@@ -1,15 +1,17 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Ville/commune sélectionnée par le client (specs §3.1) : stockée en local,
-/// pas de compte, modifiable à tout moment.
+/// Communes sélectionnées par le client (specs §3.1, extension multi-communes
+/// 2026-07-12 pour les grandes villes où les communes sont accolées) :
+/// stockées en local, pas de compte, modifiables à tout moment. Plafonné à 4
+/// (`kMaxSelectedCommunes`), imposé côté écran ET côté backend (DTO).
 class SelectedCommuneStore {
   SelectedCommuneStore(this._prefs);
 
-  static const _key = 'selected_commune_id';
+  static const _key = 'selected_commune_ids';
 
   final SharedPreferences _prefs;
 
-  String? get() => _prefs.getString(_key);
+  List<String> get() => _prefs.getStringList(_key) ?? const [];
 
-  Future<void> set(String communeId) => _prefs.setString(_key, communeId);
+  Future<void> set(List<String> communeIds) => _prefs.setStringList(_key, communeIds);
 }

@@ -220,9 +220,9 @@ export class PromoService {
       // plus apparaître aux clients, sans avoir à muter chaque promo.
       .andWhere('commercant.deletedAt IS NULL');
 
-    if (query.communeId) {
-      qb.andWhere('commercant.communeId = :communeId', {
-        communeId: query.communeId,
+    if (query.communeIds?.length) {
+      qb.andWhere('commercant.communeId IN (:...communeIds)', {
+        communeIds: query.communeIds,
       });
     }
     if (query.categorie) {
