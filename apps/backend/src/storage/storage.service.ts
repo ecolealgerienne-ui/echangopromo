@@ -13,11 +13,15 @@ import { ErrorCode } from '../common/errors/error-code.enum';
 import { detectImageFormat } from './image-signature';
 
 /**
- * Limite haute vu la compression obligatoire côté app avant upload (max
- * ~1200px, JPEG qualité ~80, specs §5.8) — sert de garde-fou contre un
- * upload arbitrairement volumineux (audit sécurité).
+ * Le client cible ~250 Ko après compression par paliers (`StorageApi.
+ * _compress`, mobile) — ce plafond n'est qu'un filet de sécurité serveur,
+ * pas l'objectif : 5 Mo (valeur d'origine) était beaucoup trop généreux
+ * pour le marché algérien (coût data, couverture réseau variable à Djelfa),
+ * decision 2026-07-12. Marge au-dessus de la cible client pour ne jamais
+ * rejeter une compression légitime qui atterrit un peu plus haut sur une
+ * image très texturée.
  */
-export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = 500 * 1024;
 
 export type UploadFolder = 'promo-photos' | 'commercant-photos' | 'registre-documents';
 

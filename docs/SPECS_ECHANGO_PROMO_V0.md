@@ -223,7 +223,7 @@ Saisie libre en arabe et/ou français par l'agent/commerçant, sans contrainte d
 ### 5.8 Stockage des images et rétention
 
 - **Stockage** : photos des promos hébergées sur **OVH S3** (cohérent avec l'infrastructure existante du porteur de projet).
-- **Compression/redimensionnement obligatoire côté app avant upload** (ex. max ~1200px de large, JPEG qualité ~80) — réduit le coût de stockage et la bande passante côté client, important vu la couverture réseau variable à Djelfa.
+- **Compression obligatoire côté app avant upload, cible ~250 Ko après compression** (décision 2026-07-12 : le premier plafond retenu, 5 Mo, était beaucoup trop généreux pour le marché algérien — coût data, couverture réseau variable à Djelfa). Compression par paliers largeur/qualité décroissants (1200px/q80 → … → 700px/q35, voir `StorageApi._compress` côté mobile) jusqu'à passer sous la cible, plutôt qu'un seul réglage fixe qui ne garantissait rien sur le poids réel produit. Même cible pour la photo de commerce et le document de registre — une seule règle de compression, pas de cas particulier par usage. Le plafond serveur (`MAX_UPLOAD_BYTES`, 500 Ko) n'est qu'un filet de sécurité au-dessus de cette cible, pas l'objectif.
 - **CDN devant le bucket recommandé** pour les lectures côté client (évite de taper S3 directement à chaque affichage de promo à volume).
 - **Structure de bucket** à prévoir dès le départ pour faciliter le nettoyage automatique, ex. `promo-photos/{commercant_id}/{promo_id}.jpg`.
 
