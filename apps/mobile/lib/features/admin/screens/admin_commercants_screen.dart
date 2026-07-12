@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../app/theme.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/registre_status.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/status_chip.dart';
 
 final _commercantSearchProvider = StateProvider.autoDispose<String>((ref) => '');
 
@@ -89,7 +90,6 @@ class AdminCommercantsScreen extends ConsumerWidget {
     final commercantsAsync = ref.watch(_commercantsProvider);
     final pendingOnly = ref.watch(_registrePendingFilterProvider);
     final inFlight = ref.watch(_inFlightProvider);
-    final warningColor = Theme.of(context).extension<AppSemanticColors>()!.warning;
 
     return Scaffold(
       appBar: AppBar(
@@ -142,12 +142,32 @@ class AdminCommercantsScreen extends ConsumerWidget {
                           if (changed == true) ref.invalidate(_commercantsProvider);
                         },
                         title: Text(item.nom),
-                        subtitle: item.registreStatus == RegistreStatus.enAttente
-                            ? Text(
-                                '${item.telephone} · ${l10n.registreStatusEnAttente}',
-                                style: TextStyle(color: warningColor),
-                              )
-                            : Text(item.telephone),
+                        // Statut visible d'un coup d'œil dans la liste — avant, seul
+                        // "en attente" avait un indicateur, "validé"/"rejeté"/"suspendu"
+                        // n'étaient visibles qu'en ouvrant la fiche détail (retour terrain
+                        // 2026-07-12).
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(item.telephone),
+                              if (item.registreStatus != null)
+                                StatusChip(
+                                  label: registreStatusLabel(context, item.registreStatus!),
+                                  color: registreStatusColor(context, item.registreStatus!),
+                                ),
+                              if (item.suspended)
+                                StatusChip(
+                                  label: l10n.suspendedBadge,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                            ],
+                          ),
+                        ),
+                        isThreeLine: item.registreStatus != null || item.suspended,
                         trailing: inFlight.contains(item.id)
                             ? const SizedBox(
                                 height: 20,

@@ -55,8 +55,15 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
   /// `true` si un appel précédent a déjà créé le compte et ouvert la
   /// session — permet de relancer uniquement l'envoi du registre (ex. après
   /// un échec réseau juste après l'inscription) sans retenter `register()`,
-  /// qui échouerait alors avec "téléphone déjà utilisé".
-  bool get _alreadyRegistered => ref.read(authControllerProvider).value != null;
+  /// qui échouerait alors avec "téléphone déjà utilisé". Vérifie
+  /// explicitement le rôle (bug trouvé 2026-07-12) : sans ça, une session
+  /// admin/agent restée active (ex. test via `/dev/profiles` sans
+  /// déconnexion) était prise pour un enregistrement déjà réussi, sautait
+  /// `register()` et envoyait la photo avec un token du mauvais rôle —
+  /// `/storage/upload` (réservé à commerçant/agent) rejetait alors
+  /// l'upload avec "Vous n'avez pas les droits pour effectuer cette action."
+  bool get _alreadyRegistered =>
+      ref.read(authControllerProvider).value?.role == AppRole.commercant;
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;

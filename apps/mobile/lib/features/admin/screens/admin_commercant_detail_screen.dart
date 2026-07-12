@@ -207,31 +207,37 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                         ),
                       ),
                     ],
-                    if (item.registreStatus == RegistreStatus.enAttente) ...[
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          FilledButton(
-                            onPressed: () => _act(
-                              context,
-                              ref,
-                              () => ref.read(adminApiProvider).validerRegistre(item.id),
-                            ),
-                            child: Text(l10n.validerLabel),
-                          ),
-                          OutlinedButton(
-                            onPressed: () => _act(
-                              context,
-                              ref,
-                              () => ref.read(adminApiProvider).rejeterRegistre(item.id),
-                            ),
-                            child: Text(l10n.rejeterLabel),
-                          ),
-                        ],
-                      ),
-                    ],
+                    // Toujours modifiable, quel que soit le statut actuel —
+                    // jusqu'au 2026-07-12 un rejet était définitif côté
+                    // admin, sans recours pour corriger une erreur de
+                    // modération sans repasser par le commerçant.
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton(
+                          onPressed: item.registreStatus == RegistreStatus.valide
+                              ? null
+                              : () => _act(
+                                    context,
+                                    ref,
+                                    () => ref.read(adminApiProvider).validerRegistre(item.id),
+                                  ),
+                          child: Text(l10n.validerLabel),
+                        ),
+                        OutlinedButton(
+                          onPressed: item.registreStatus == RegistreStatus.rejete
+                              ? null
+                              : () => _act(
+                                    context,
+                                    ref,
+                                    () => ref.read(adminApiProvider).rejeterRegistre(item.id),
+                                  ),
+                          child: Text(l10n.rejeterLabel),
+                        ),
+                      ],
+                    ),
                   ],
                 ],
                 const SizedBox(height: 24),

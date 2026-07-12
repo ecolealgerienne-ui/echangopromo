@@ -265,17 +265,22 @@ export class CommercantService {
    * Décision admin sur le registre — conditionne la publication de promos
    * pour un commerçant auto-inscrit depuis le 2026-07-11 (voir
    * `assertRegistreValidated`), ne concerne jamais un commerçant confirmé
-   * par un agent (déjà vérifié en personne).
+   * par un agent (déjà vérifié en personne). Rejouable à tout moment
+   * (valider un rejet, rejeter une validation) tant qu'un document a été
+   * soumis au moins une fois — jusqu'au 2026-07-12, un rejet était
+   * définitif côté admin (seul le commerçant pouvait rouvrir le dossier en
+   * renvoyant une photo), ce qui bloquait la correction d'une erreur de
+   * modération sans repasser par le commerçant.
    */
   async resolveRegistreVerification(
     commercantId: string,
     approve: boolean,
   ): Promise<void> {
     const commercant = await this.findByIdOrFail(commercantId);
-    if (commercant.registreStatus !== RegistreStatus.EN_ATTENTE) {
+    if (commercant.registreStatus === null) {
       throw new BadRequestAppException(
         ErrorCode.COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION,
-        'Aucune demande de vérification en attente',
+        'Aucun registre soumis pour ce commerçant',
       );
     }
 

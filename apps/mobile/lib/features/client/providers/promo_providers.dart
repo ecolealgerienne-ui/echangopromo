@@ -37,7 +37,7 @@ final promoListProvider = FutureProvider.autoDispose<List<Promo>>((ref) async {
   );
 
   final filtered =
-      favoritesOnly ? promos.where((p) => favorites.contains(p.commercantId)).toList() : [...promos];
+      favoritesOnly ? promos.where((p) => favorites.contains(p.id)).toList() : [...promos];
 
   switch (sort) {
     case PromoSort.expireBientot:

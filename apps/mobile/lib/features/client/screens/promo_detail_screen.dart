@@ -47,7 +47,7 @@ class PromoDetailScreen extends ConsumerWidget {
         error: (error, _) => Center(child: ApiErrorText(error)),
         data: (promo) {
           final favorites = ref.watch(favoritesProvider);
-          final isFavorite = favorites.contains(promo.commercantId);
+          final isFavorite = favorites.contains(promo.id);
           final dateFormat = DateFormat('dd/MM/yyyy');
 
           return ListView(
@@ -77,7 +77,7 @@ class PromoDetailScreen extends ConsumerWidget {
                           icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
                           tooltip: isFavorite ? l10n.removeFavoriteTooltip : l10n.addFavoriteTooltip,
                           onPressed: () =>
-                              ref.read(favoritesProvider.notifier).toggle(promo.commercantId),
+                              ref.read(favoritesProvider.notifier).toggle(promo.id),
                         ),
                       ],
                     ),

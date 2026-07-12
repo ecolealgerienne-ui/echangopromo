@@ -9,7 +9,12 @@ import { Promo, PromoModerationStatus } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
 import { Report, ReportReason } from './entities/report.entity';
 
-const MODERATION_THRESHOLD = 3;
+// TEMPORAIRE — remis à 1 le 2026-07-12 pour la phase de test en cours
+// (décision produit explicite, pas un oubli comme la fois précédente : voir
+// git blame). Remettre à 3 (specs §5.4) avant l'ouverture publique, même
+// famille de flags temporaires que `/dev/profiles` (router.dart) — à
+// supprimer seulement quand demandé explicitement, pas avant.
+const MODERATION_THRESHOLD = 1;
 const IGNORE_WINDOW_DAYS = 30;
 
 @Injectable()

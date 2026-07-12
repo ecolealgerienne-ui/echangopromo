@@ -230,8 +230,13 @@ export class PromoService {
     }
 
     if (query.favoriteIds?.length) {
+      // Favori par promo (id de la promo elle-même), pas par commerçant —
+      // décision produit du 2026-07-12 confirmant ce comportement après une
+      // régression : une session précédente avait aligné ceci sur
+      // commercantId en lisant "Favoris commerçant" dans les specs §3.1,
+      // qui reste à corriger dans le même sens.
       qb.addSelect(
-        `CASE WHEN promo.commercantId IN (:...favoriteIds) THEN 0 ELSE 1 END`,
+        `CASE WHEN promo.id IN (:...favoriteIds) THEN 0 ELSE 1 END`,
         'favorite_rank',
       ).setParameter('favoriteIds', query.favoriteIds);
       qb.orderBy('favorite_rank', 'ASC');
