@@ -34,6 +34,11 @@ class PromoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
+    // Décode directement à la taille physique affichée (96dp) plutôt que la
+    // pleine résolution de l'image source (jusqu'à 1200px) — sans ça,
+    // chaque vignette de la liste garde en mémoire ~150x plus de pixels
+    // que ce qui est réellement montré.
+    final photoCachePx = (_photoSize * MediaQuery.of(context).devicePixelRatio).round();
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -52,7 +57,12 @@ class PromoCard extends StatelessWidget {
                       width: _photoSize,
                       height: _photoSize,
                       child: promo.photoUrl != null
-                          ? CachedNetworkImage(imageUrl: promo.photoUrl!, fit: BoxFit.cover)
+                          ? CachedNetworkImage(
+                              imageUrl: promo.photoUrl!,
+                              fit: BoxFit.cover,
+                              memCacheWidth: photoCachePx,
+                              memCacheHeight: photoCachePx,
+                            )
                           : Container(color: colorScheme.surfaceContainerHighest),
                     ),
                   ),

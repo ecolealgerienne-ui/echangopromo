@@ -20,13 +20,23 @@ class PromoPhotoHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    // Affichée en pleine largeur d'écran — approximation raisonnable en
+    // l'absence de layout déjà connu à ce stade (`AspectRatio` ne donne pas
+    // de contrainte de largeur avant construction). Sans effet si ça dépasse
+    // la résolution source (~1200px max, voir StorageApi._compress) :
+    // `memCacheWidth` ne fait jamais remonter au-dessus de l'original.
+    final heroCacheWidth = (MediaQuery.sizeOf(context).width * MediaQuery.of(context).devicePixelRatio).round();
 
     return Stack(
       children: [
         AspectRatio(
           aspectRatio: 4 / 3,
           child: photoUrl != null
-              ? CachedNetworkImage(imageUrl: photoUrl!, fit: BoxFit.cover)
+              ? CachedNetworkImage(
+                  imageUrl: photoUrl!,
+                  fit: BoxFit.cover,
+                  memCacheWidth: heroCacheWidth,
+                )
               : Container(color: colorScheme.surfaceContainerHighest),
         ),
         PositionedDirectional(

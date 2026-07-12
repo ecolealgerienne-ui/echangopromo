@@ -93,6 +93,12 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
       }
     }
     final dateFormat = DateFormat('dd/MM/yyyy');
+    // Décode à la largeur physique réellement affichée plutôt que la pleine
+    // résolution source — sans effet si ça dépasse l'original (~1200px max),
+    // `memCacheWidth` ne fait jamais remonter au-dessus.
+    final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+    final screenWidthPx = (MediaQuery.sizeOf(context).width * devicePixelRatio).round();
+    final paddedWidthPx = (MediaQuery.sizeOf(context).width - 32) * devicePixelRatio;
 
     return Scaffold(
       appBar: AppBar(
@@ -104,7 +110,11 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
           if (item.photoUrl != null)
             AspectRatio(
               aspectRatio: 16 / 9,
-              child: CachedNetworkImage(imageUrl: item.photoUrl!, fit: BoxFit.cover),
+              child: CachedNetworkImage(
+                imageUrl: item.photoUrl!,
+                fit: BoxFit.cover,
+                memCacheWidth: screenWidthPx,
+              ),
             ),
           Padding(
             padding: const EdgeInsets.all(16),
@@ -189,7 +199,11 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                         aspectRatio: 4 / 3,
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: CachedNetworkImage(imageUrl: item.registreUrl!, fit: BoxFit.cover),
+                          child: CachedNetworkImage(
+                            imageUrl: item.registreUrl!,
+                            fit: BoxFit.cover,
+                            memCacheWidth: paddedWidthPx.round(),
+                          ),
                         ),
                       ),
                     ],

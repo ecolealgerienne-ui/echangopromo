@@ -230,6 +230,8 @@ class _CommercantInfo extends ConsumerWidget {
                     width: 48,
                     height: 48,
                     fit: BoxFit.cover,
+                    memCacheWidth: (48 * MediaQuery.of(context).devicePixelRatio).round(),
+                    memCacheHeight: (48 * MediaQuery.of(context).devicePixelRatio).round(),
                   ),
                 ),
                 const SizedBox(width: 12),

@@ -53,10 +53,16 @@ class PromoModerationTile extends StatelessWidget {
       if (reasonText.isNotEmpty) '$secondLine ($reasonText)' else secondLine,
     ].join('\n');
 
+    // CircleAvatar par défaut : 40dp de diamètre — décodage limité à cette
+    // taille plutôt qu'à la résolution source de l'image.
+    final avatarCachePx = (40 * MediaQuery.of(context).devicePixelRatio).round();
+
     return ListTile(
       onTap: onTap,
       leading: CircleAvatar(
-        backgroundImage: item.photoUrl != null ? CachedNetworkImageProvider(item.photoUrl!) : null,
+        backgroundImage: item.photoUrl != null
+            ? ResizeImage(CachedNetworkImageProvider(item.photoUrl!), width: avatarCachePx)
+            : null,
       ),
       // Sans ce badge, le statut réel (signalée/masquée/vérifiée) n'était
       // visible qu'après avoir ouvert la fiche détail de chaque promo une

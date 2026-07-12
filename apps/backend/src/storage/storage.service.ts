@@ -105,7 +105,7 @@ export class StorageService {
     if (buffer.length > MAX_UPLOAD_BYTES) {
       throw new BadRequestAppException(
         ErrorCode.STORAGE_FILE_TOO_LARGE,
-        'Le fichier dépasse la taille maximale autorisée (5 Mo).',
+        'Le fichier dépasse la taille maximale autorisée (500 Ko).',
       );
     }
     const format = detectImageFormat(buffer);
@@ -132,6 +132,11 @@ export class StorageService {
         // (voir `PRIVATE_FOLDERS`) : consulté uniquement via
         // `getPresignedUrl`, jamais via une URL publique permanente.
         ACL: PRIVATE_FOLDERS.includes(folder) ? 'private' : 'public-read',
+        // `buildKey` génère toujours une nouvelle clé UUID, jamais un
+        // remplacement en place (voir plus haut) — un objet donné ne change
+        // donc jamais de contenu une fois écrit, cache navigateur/CDN
+        // immuable sur un an sans risque de servir une version périmée.
+        CacheControl: 'public, max-age=31536000, immutable',
       }),
     );
     return key;

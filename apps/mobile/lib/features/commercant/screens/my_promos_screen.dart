@@ -119,10 +119,19 @@ class MyPromosScreen extends ConsumerWidget {
                       promo.lifecycleStatus,
                       isExpired: promo.isExpired,
                     );
+                    // CircleAvatar par défaut : 40dp de diamètre — décodage
+                    // limité à cette taille plutôt qu'à la résolution
+                    // source de l'image.
+                    final avatarCachePx =
+                        (40 * MediaQuery.of(context).devicePixelRatio).round();
                     return ListTile(
                       leading: CircleAvatar(
-                        backgroundImage:
-                            promo.photoUrl != null ? CachedNetworkImageProvider(promo.photoUrl!) : null,
+                        backgroundImage: promo.photoUrl != null
+                            ? ResizeImage(
+                                CachedNetworkImageProvider(promo.photoUrl!),
+                                width: avatarCachePx,
+                              )
+                            : null,
                       ),
                       title: Row(
                         children: [
