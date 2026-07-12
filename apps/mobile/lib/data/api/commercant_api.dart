@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../../domain/enums/categorie.dart';
 import '../../domain/models/commercant.dart';
 
@@ -73,6 +74,8 @@ class CommercantApi {
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
     });
+    // TEMPORAIRE (diagnostic 2026-07-12) : voir commercant_register_screen.dart.
+    debugPrint('DEBUG updateProfile — status ${response.statusCode}, body brut : ${response.data}');
     return Commercant.fromJson(response.data!);
   }
 
