@@ -296,7 +296,13 @@ export class CommercantService {
    * soumis au moins une fois — jusqu'au 2026-07-12, un rejet était
    * définitif côté admin (seul le commerçant pouvait rouvrir le dossier en
    * renvoyant une photo), ce qui bloquait la correction d'une erreur de
-   * modération sans repasser par le commerçant.
+   * modération sans repasser par le commerçant. Purge aussi
+   * `profilePendingReview` (2026-07-12) : à l'inscription d'un auto-inscrit,
+   * l'envoi de la photo boutique passe par `updateProfile` et allume ce
+   * flag en même temps que le registre — sans ce nettoyage, l'admin devrait
+   * valider deux fois (registre puis profil) pour un seul nouveau compte.
+   * N'affecte jamais un `confirmé_agent` (n'a pas de `registreStatus`, ce
+   * chemin ne s'exécute donc jamais pour lui).
    */
   async resolveRegistreVerification(
     commercantId: string,
@@ -314,6 +320,7 @@ export class CommercantService {
       ? RegistreStatus.VALIDE
       : RegistreStatus.REJETE;
     commercant.registreValidatedAt = approve ? new Date() : null;
+    commercant.profilePendingReview = false;
     await this.commercants.save(commercant);
 
     // Sans notification, le seul moyen de découvrir une validation/un rejet

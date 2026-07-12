@@ -141,7 +141,12 @@ export class Commercant {
    * (y compris `confirme_agent`, contrairement au blocage registre qui ne
    * concerne que `auto_inscrit`) : une fois le compte créé, toute
    * modification ultérieure repasse par un contrôle humain, quelle que
-   * soit l'origine de vérification initiale.
+   * soit l'origine de vérification initiale. Purgé aussi par
+   * `resolveRegistreVerification` (2026-07-12) : à l'inscription d'un
+   * auto-inscrit, la photo boutique passe par `updateProfile` et allume ce
+   * flag en même temps que le registre — la validation du registre couvre
+   * donc aussi le profil pour ce cas précis, une seule action admin plutôt
+   * que deux pour un nouveau compte.
    */
   @Column({ type: 'boolean', default: false })
   profilePendingReview: boolean;
