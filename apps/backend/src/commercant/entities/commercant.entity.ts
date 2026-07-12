@@ -133,6 +133,19 @@ export class Commercant {
   @Column({ type: 'timestamptz', nullable: true })
   registreValidatedAt: Date | null;
 
+  /**
+   * Toute modification du profil (nom/adresse/catégorie/photo/position, via
+   * `PATCH /commercant/me`) bloque la publication de promo jusqu'à ce
+   * qu'un admin la valide (`POST /admin/commercant/:id/profile/valider`) —
+   * décision produit du 2026-07-12, s'applique à **tous** les commerçants
+   * (y compris `confirme_agent`, contrairement au blocage registre qui ne
+   * concerne que `auto_inscrit`) : une fois le compte créé, toute
+   * modification ultérieure repasse par un contrôle humain, quelle que
+   * soit l'origine de vérification initiale.
+   */
+  @Column({ type: 'boolean', default: false })
+  profilePendingReview: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

@@ -43,6 +43,8 @@ const Map<String, String> errorMessagesEn = {
   'COMMERCANT_REGISTRE_NOT_VALIDATED':
       'Your business registration must be validated by an administrator before you can publish promos.',
   'COMMERCANT_REGISTRE_KEY_MISMATCH': 'This document does not belong to this merchant.',
+  'COMMERCANT_PROFILE_PENDING_REVIEW':
+      'Your profile changes must be validated by an administrator before you can publish promos.',
 
   'RATE_LIMITED': 'Too many attempts. Please try again shortly.',
   'HTTP_ERROR': 'An error occurred.',

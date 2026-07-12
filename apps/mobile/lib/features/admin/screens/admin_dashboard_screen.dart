@@ -91,6 +91,15 @@ class AdminDashboardScreen extends ConsumerWidget {
                       onTap: () => context.push('/admin/commercants'),
                     ),
                   ),
+                  SizedBox(
+                    width: (MediaQuery.of(context).size.width - 40) / 2,
+                    child: _StatCard(
+                      icon: Icons.edit_note_outlined,
+                      label: l10n.profilsEnAttenteLabel,
+                      value: stats.profilsEnAttente,
+                      onTap: () => context.push('/admin/commercants'),
+                    ),
+                  ),
                 ],
               ),
             ),

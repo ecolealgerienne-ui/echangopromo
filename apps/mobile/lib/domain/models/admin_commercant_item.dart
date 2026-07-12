@@ -22,6 +22,7 @@ class AdminCommercantItem {
     required this.originVerification,
     required this.registreStatus,
     this.registreUrl,
+    this.profilePendingReview = false,
     required this.suspended,
     required this.createdAt,
   });
@@ -41,6 +42,7 @@ class AdminCommercantItem {
             CommercantOriginVerification.fromValue(json['originVerification'] as String?),
         registreStatus: RegistreStatus.fromValue(json['registreStatus'] as String?),
         registreUrl: json['registreUrl'] as String?,
+        profilePendingReview: json['profilePendingReview'] as bool? ?? false,
         suspended: json['suspended'] as bool,
         createdAt: DateTime.parse(json['createdAt'] as String),
       );
@@ -58,6 +60,11 @@ class AdminCommercantItem {
   final CommercantOriginVerification? originVerification;
   final RegistreStatus? registreStatus;
   final String? registreUrl;
+
+  /// Toute modification de profil bloque la publication de promo jusqu'à
+  /// validation admin — s'applique à tous les commerçants (décision produit
+  /// 2026-07-12).
+  final bool profilePendingReview;
   final bool suspended;
   final DateTime createdAt;
 }

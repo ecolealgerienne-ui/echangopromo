@@ -83,6 +83,8 @@ auto_inscrit → autonome (directement, dès la saisie du PIN à l'inscription)
 > Décision d'origine (V0, abandonnée) : *« ne pas exiger le registre de commerce pour publier, afin de ne pas exclure le commerce informel, très présent localement »* — le badge `vérifié_registre` était alors optionnel et jamais bloquant.
 >
 > **Conséquence résiduelle de l'auto-inscription et de l'absence de vérification téléphonique** : le registre validé filtre maintenant les faux comptes côté auto-inscription, mais ni le niveau `confirmé_agent` ni une preuve de possession du numéro de téléphone n'apportent cette garantie — un numéro usurpé peut techniquement créer un compte au nom d'un tiers. Le système de signalement/modération (§5.4) reste la ligne de défense pour ce cas résiduel.
+>
+> **Ajout du 2026-07-12** : toute modification ultérieure du profil (`PATCH /commercant/me` — nom, adresse, catégorie, photo, position) bloque à son tour la publication jusqu'à validation par un admin (`CommercantService.assertProfileValidated`, `ErrorCode.COMMERCANT_PROFILE_PENDING_REVIEW`, colonne `profilePendingReview`) — contrairement au blocage registre ci-dessus, celui-ci s'applique à **tous** les commerçants sans exception, y compris `confirmé_agent` : une fois le compte créé, toute modification repasse par un contrôle humain quelle que soit l'origine de vérification initiale. Pas de rejet symétrique au registre — l'admin valide ou suspend le compte, il n'y a pas de motif de refus dédié à saisir.
 
 **Fiche commerçant — données saisies à la création** (auto-inscription ou
 création agent) :

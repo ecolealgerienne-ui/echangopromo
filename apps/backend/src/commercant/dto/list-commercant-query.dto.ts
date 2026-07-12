@@ -1,4 +1,5 @@
-import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
 import { CommercantAccountState, RegistreStatus } from '../entities/commercant.entity';
 
@@ -17,4 +18,10 @@ export class ListCommercantQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(RegistreStatus)
   registreStatus?: RegistreStatus;
+
+  /** Filtre "modification de profil en attente de validation" (2026-07-12). */
+  @IsOptional()
+  @Transform(({ value }) => value === 'true')
+  @IsBoolean()
+  profilePendingReview?: boolean;
 }

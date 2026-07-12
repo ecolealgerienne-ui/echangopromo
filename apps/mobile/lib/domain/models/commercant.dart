@@ -13,6 +13,7 @@ class Commercant {
     this.accountState,
     this.originVerification,
     this.registreStatus,
+    this.profilePendingReview = false,
     this.telephone,
     this.photoUrl,
     this.latitude,
@@ -31,6 +32,7 @@ class Commercant {
         originVerification:
             CommercantOriginVerification.fromValue(json['originVerification'] as String?),
         registreStatus: RegistreStatus.fromValue(json['registreStatus'] as String?),
+        profilePendingReview: json['profilePendingReview'] as bool? ?? false,
         telephone: json['telephone'] as String?,
         photoUrl: json['photoUrl'] as String?,
         latitude: (json['latitude'] as num?)?.toDouble(),
@@ -45,6 +47,11 @@ class Commercant {
   final CommercantAccountState? accountState;
   final CommercantOriginVerification? originVerification;
   final RegistreStatus? registreStatus;
+
+  /// Toute modification de profil bloque la publication de promo jusqu'à
+  /// validation admin — s'applique à tous les commerçants, contrairement au
+  /// blocage registre (décision produit 2026-07-12).
+  final bool profilePendingReview;
   final String? telephone;
   final String? photoUrl;
   final double? latitude;

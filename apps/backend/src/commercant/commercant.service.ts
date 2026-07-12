@@ -207,6 +207,13 @@ export class CommercantService {
       Object.entries(dto).filter(([, value]) => value !== undefined),
     );
     Object.assign(commercant, definedFields);
+    // Toute modification de profil repasse par une validation admin avant
+    // de pouvoir publier — decision produit 2026-07-12, s'applique à tous
+    // les commerçants (voir doc sur la colonne). Posé même si `dto` ne
+    // porte qu'un seul champ (ex. juste la photo pendant l'inscription).
+    if (Object.keys(definedFields).length > 0) {
+      commercant.profilePendingReview = true;
+    }
     const saved = await this.commercants.save(commercant);
     // Remplacement de photo : l'ancienne devient orpheline dans S3 si on ne
     // la supprime pas explicitement (buildKey génère toujours une nouvelle
@@ -215,6 +222,25 @@ export class CommercantService {
       await this.storageService.deleteObject(previousPhotoKey);
     }
     return saved;
+  }
+
+  /**
+   * Validation admin d'une modification de profil — remet
+   * `profilePendingReview` à `false`, débloque la publication de promo.
+   * Pas de "rejet" symétrique au registre : une modification de profil
+   * n'est pas un document à accepter/refuser, l'admin peut toujours
+   * suspendre le compte séparément s'il juge le changement problématique.
+   */
+  async validateProfile(commercantId: string): Promise<void> {
+    const commercant = await this.findByIdOrFail(commercantId);
+    commercant.profilePendingReview = false;
+    await this.commercants.save(commercant);
+    await this.notificationService.create(
+      NotificationType.PROFILE_VALIDATED,
+      NotificationRecipientType.COMMERCANT,
+      commercantId,
+      'Les modifications de votre profil ont été validées par un administrateur.',
+    );
   }
 
   async findByIdOrFail(id: string): Promise<Commercant> {
@@ -402,6 +428,11 @@ export class CommercantService {
     });
   }
 
+  /** Modifications de profil en attente de validation (stat dashboard admin). */
+  async countPendingProfileReview(): Promise<number> {
+    return this.commercants.count({ where: { profilePendingReview: true } });
+  }
+
   /**
    * Vue admin (plan de correction, Phase 2) : recherche + liste sur
    * l'ensemble des commerçants, y compris suspendus (`deletedAt` non nul)
@@ -429,6 +460,11 @@ export class CommercantService {
     if (query.registreStatus) {
       qb.andWhere('commercant.registreStatus = :registreStatus', {
         registreStatus: query.registreStatus,
+      });
+    }
+    if (query.profilePendingReview !== undefined) {
+      qb.andWhere('commercant.profilePendingReview = :profilePendingReview', {
+        profilePendingReview: query.profilePendingReview,
       });
     }
     qb.skip((query.page - 1) * query.limit).take(query.limit);
@@ -478,6 +514,21 @@ export class CommercantService {
       throw new ForbiddenAppException(
         ErrorCode.COMMERCANT_REGISTRE_NOT_VALIDATED,
         'Votre registre de commerce doit être validé par un administrateur avant de pouvoir publier des promos',
+      );
+    }
+  }
+
+  /**
+   * Contrairement à `assertRegistreValidated`, s'applique à **tous** les
+   * commerçants sans exception d'origine — décision produit du 2026-07-12 :
+   * toute modification de profil (même pour un commerçant confirmé par un
+   * agent) repasse par un contrôle admin avant de pouvoir publier.
+   */
+  assertProfileValidated(commercant: Commercant): void {
+    if (commercant.profilePendingReview) {
+      throw new ForbiddenAppException(
+        ErrorCode.COMMERCANT_PROFILE_PENDING_REVIEW,
+        'Les modifications de votre profil doivent être validées par un administrateur avant de pouvoir publier des promos',
       );
     }
   }

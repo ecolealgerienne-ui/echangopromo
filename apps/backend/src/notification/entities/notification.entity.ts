@@ -20,6 +20,7 @@ export enum NotificationType {
   PROMO_EXPIRING_SOON = 'promo_expiring_soon', // Promo publiée expirant sous 24h (plan de correction, Phase 6)
   REGISTRE_VALIDATED = 'registre_validated', // Admin a validé le registre de commerce
   REGISTRE_REJECTED = 'registre_rejected', // Admin a rejeté le registre de commerce
+  PROFILE_VALIDATED = 'profile_validated', // Admin a validé une modification de profil
 }
 
 export enum NotificationRecipientType {

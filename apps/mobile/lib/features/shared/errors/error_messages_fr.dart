@@ -57,6 +57,8 @@ const Map<String, String> errorMessagesFr = {
   'COMMERCANT_REGISTRE_NOT_VALIDATED':
       "Votre registre de commerce doit être validé par un administrateur avant de pouvoir publier des promos.",
   'COMMERCANT_REGISTRE_KEY_MISMATCH': "Ce document n'appartient pas à ce commerçant.",
+  'COMMERCANT_PROFILE_PENDING_REVIEW':
+      'Les modifications de votre profil doivent être validées par un administrateur avant de pouvoir publier des promos.',
 
   'RATE_LIMITED': 'Trop de tentatives. Réessayez dans quelques instants.',
   'HTTP_ERROR': 'Une erreur est survenue.',

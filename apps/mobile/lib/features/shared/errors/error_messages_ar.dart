@@ -40,6 +40,7 @@ const Map<String, String> errorMessagesAr = {
   'COMMERCANT_TERMS_NOT_ACCEPTED': 'يجب عليك قبول شروط الاستخدام لإنشاء حساب.',
   'COMMERCANT_REGISTRE_NOT_VALIDATED': 'يجب أن يصادق مسؤول على سجلك التجاري قبل أن تتمكن من نشر العروض.',
   'COMMERCANT_REGISTRE_KEY_MISMATCH': 'هذا المستند لا يخص هذا التاجر.',
+  'COMMERCANT_PROFILE_PENDING_REVIEW': 'يجب أن يصادق مسؤول على تعديلات ملفك الشخصي قبل أن تتمكن من نشر العروض.',
 
   'RATE_LIMITED': 'عدد كبير جدًا من المحاولات. أعد المحاولة بعد قليل.',
   'HTTP_ERROR': 'حدث خطأ ما.',

@@ -121,6 +121,7 @@ export class PromoService {
   async create(commercantId: string, dto: CreatePromoDto): Promise<Promo> {
     const commercant = await this.commercantService.findByIdOrFail(commercantId);
     this.commercantService.assertRegistreValidated(commercant);
+    this.commercantService.assertProfileValidated(commercant);
     this.assertPriceOrder(dto.prixAvant, dto.prixApres);
 
     const base = {
@@ -172,6 +173,7 @@ export class PromoService {
     }
     const commercant = await this.commercantService.findByIdOrFail(promo.commercantId);
     this.commercantService.assertRegistreValidated(commercant);
+    this.commercantService.assertProfileValidated(commercant);
 
     const dateFin = this.resolveDateFin();
     return this.withCommercantLock(promo.commercantId, async (manager) => {

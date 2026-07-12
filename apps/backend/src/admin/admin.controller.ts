@@ -335,6 +335,7 @@ export class AdminController {
           registreUrl: commercant.registreKey
             ? await this.storageService.getPresignedUrl(commercant.registreKey)
             : null,
+          profilePendingReview: commercant.profilePendingReview,
           suspended: commercant.deletedAt !== null,
           createdAt: commercant.createdAt,
         })),
@@ -412,6 +413,31 @@ export class AdminController {
     return { ok: true };
   }
 
+  /**
+   * Valide une modification de profil en attente (`profilePendingReview`)
+   * — débloque la publication de promo, s'applique à tous les commerçants
+   * quelle que soit leur origine de vérification (décision produit
+   * 2026-07-12).
+   */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('commercant/:id/profile/valider')
+  async validerProfil(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('id') commercantId: string,
+  ) {
+    await this.commercantService.validateProfile(commercantId);
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'profile_valider',
+      targetType: 'commercant',
+      targetId: commercantId,
+    });
+    return { ok: true };
+  }
+
   /** PIN oublié : pas d'OTP, seul l'admin peut effacer le PIN (§3.2). */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -472,19 +498,26 @@ export class AdminController {
   @Roles('admin')
   @Get('dashboard')
   async dashboard() {
-    const [commercesActifs, promosPubliees, signalementsEnAttente, registresEnAttente] =
-      await Promise.all([
-        this.commercantService.countActive(),
-        this.promoService.countVisible(),
-        this.reportService.countPendingModeration(),
-        this.commercantService.countPendingRegistre(),
-      ]);
+    const [
+      commercesActifs,
+      promosPubliees,
+      signalementsEnAttente,
+      registresEnAttente,
+      profilsEnAttente,
+    ] = await Promise.all([
+      this.commercantService.countActive(),
+      this.promoService.countVisible(),
+      this.reportService.countPendingModeration(),
+      this.commercantService.countPendingRegistre(),
+      this.commercantService.countPendingProfileReview(),
+    ]);
 
     return {
       commercesActifs,
       promosPubliees,
       signalementsEnAttente,
       registresEnAttente,
+      profilsEnAttente,
     };
   }
 }

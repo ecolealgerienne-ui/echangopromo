@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../app/theme.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/commercant_origin_verification.dart';
 import '../../../domain/enums/registre_status.dart';
@@ -132,9 +133,15 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                         label: commercantOriginVerificationLabel(context, item.originVerification!),
                         color: colorScheme.secondary,
                       ),
+                    if (item.profilePendingReview)
+                      StatusChip(
+                        label: l10n.profilePendingReviewBadgeLabel,
+                        color: Theme.of(context).extension<AppSemanticColors>()!.warning,
+                      ),
                   ],
                 ),
-                if (item.suspended || item.originVerification != null) const SizedBox(height: 12),
+                if (item.suspended || item.originVerification != null || item.profilePendingReview)
+                  const SizedBox(height: 12),
                 Text(categorieLabel(context, item.categorie), style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 12),
                 Row(
@@ -262,6 +269,20 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                       onPressed: () => _confirmAndResetPin(context, ref),
                       child: Text(l10n.resetPinLabel),
                     ),
+                    if (item.profilePendingReview)
+                      FilledButton.tonal(
+                        // `popOnSuccess` (défaut) plutôt que rester sur cet
+                        // écran : `item` est figé au moment de la
+                        // navigation, il ne se rafraîchirait pas tout seul
+                        // après validation — même pattern que valider/
+                        // rejeter le registre.
+                        onPressed: () => _act(
+                          context,
+                          ref,
+                          () => ref.read(adminApiProvider).validerProfil(item.id),
+                        ),
+                        child: Text(l10n.validerProfilLabel),
+                      ),
                   ],
                 ),
               ],

@@ -34,6 +34,7 @@ class AdminApi {
         int promosPubliees,
         int signalementsEnAttente,
         int registresEnAttente,
+        int profilsEnAttente,
       })> dashboard() async {
     final response = await _dio.get<Map<String, dynamic>>('/admin/dashboard');
     final data = response.data!;
@@ -42,6 +43,7 @@ class AdminApi {
       promosPubliees: data['promosPubliees'] as int,
       signalementsEnAttente: data['signalementsEnAttente'] as int,
       registresEnAttente: data['registresEnAttente'] as int,
+      profilsEnAttente: data['profilsEnAttente'] as int,
     );
   }
 
@@ -85,6 +87,7 @@ class AdminApi {
   Future<List<AdminCommercantItem>> listCommercants({
     String? search,
     RegistreStatus? registreStatus,
+    bool? profilePendingReview,
   }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/commercant',
@@ -92,6 +95,7 @@ class AdminApi {
         'limit': _pageSize,
         if (search != null && search.isNotEmpty) 'search': search,
         if (registreStatus != null) 'registreStatus': registreStatus.value,
+        if (profilePendingReview != null) 'profilePendingReview': profilePendingReview,
       },
     );
     final items = response.data!['items'] as List<dynamic>;
@@ -118,6 +122,10 @@ class AdminApi {
 
   Future<void> resetPin(String commercantId) async {
     await _dio.post<void>('/admin/commercant/$commercantId/reset-pin');
+  }
+
+  Future<void> validerProfil(String commercantId) async {
+    await _dio.post<void>('/admin/commercant/$commercantId/profile/valider');
   }
 
   // --- Agents ---

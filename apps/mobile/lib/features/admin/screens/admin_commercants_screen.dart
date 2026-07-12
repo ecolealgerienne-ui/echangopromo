@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/theme.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/registre_status.dart';
 import '../../../l10n/app_localizations.dart';
@@ -164,10 +165,17 @@ class AdminCommercantsScreen extends ConsumerWidget {
                                   label: l10n.suspendedBadge,
                                   color: Theme.of(context).colorScheme.error,
                                 ),
+                              if (item.profilePendingReview)
+                                StatusChip(
+                                  label: l10n.profilePendingReviewBadgeLabel,
+                                  color: Theme.of(context).extension<AppSemanticColors>()!.warning,
+                                ),
                             ],
                           ),
                         ),
-                        isThreeLine: item.registreStatus != null || item.suspended,
+                        isThreeLine: item.registreStatus != null ||
+                            item.suspended ||
+                            item.profilePendingReview,
                         trailing: inFlight.contains(item.id)
                             ? const SizedBox(
                                 height: 20,

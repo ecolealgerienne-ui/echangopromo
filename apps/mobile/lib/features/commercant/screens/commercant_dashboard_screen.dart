@@ -76,6 +76,7 @@ class CommercantDashboardScreen extends ConsumerWidget {
                 children: [
                   Text(commercant.nom, style: Theme.of(context).textTheme.headlineSmall),
                   _RegistreStatusBanner(commercant: commercant),
+                  if (commercant.profilePendingReview) const _ProfilePendingReviewBanner(),
                 ],
               ),
             ),
@@ -246,6 +247,50 @@ class _RegistreStatusBanner extends ConsumerWidget {
                         child: Text(l10n.registreResendSubmit),
                       ),
                     ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bannière "profil en attente de validation" — indépendante du registre :
+/// toute modification de profil (`PATCH /commercant/me`) bloque la
+/// publication jusqu'à validation admin, pour tous les commerçants, y
+/// compris ceux confirmés par un agent (décision produit 2026-07-12).
+class _ProfilePendingReviewBanner extends StatelessWidget {
+  const _ProfilePendingReviewBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Card(
+        color: semanticColors.warning.withValues(alpha: 0.1),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, color: semanticColors.warning),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.profilePendingReviewBannerTitle,
+                      style: TextStyle(color: semanticColors.warning, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(l10n.profilePendingReviewBannerMessage),
                   ],
                 ),
               ),

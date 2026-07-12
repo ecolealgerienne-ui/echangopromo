@@ -111,6 +111,7 @@ export class CommercantController {
       accountState: commercant.accountState,
       originVerification: commercant.originVerification,
       registreStatus: commercant.registreStatus,
+      profilePendingReview: commercant.profilePendingReview,
       photoUrl: this.photoUrl(commercant),
       latitude: commercant.latitude,
       longitude: commercant.longitude,
