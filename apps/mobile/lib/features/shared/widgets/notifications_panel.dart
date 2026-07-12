@@ -81,6 +81,8 @@ Color notificationIconColor(BuildContext context, domain.NotificationType type) 
       return semanticColors.success;
     case domain.NotificationType.registreRejected:
       return colorScheme.error;
+    case domain.NotificationType.profileValidated:
+      return semanticColors.success;
   }
 }
 
@@ -98,6 +100,8 @@ IconData notificationIcon(domain.NotificationType type) {
       return Icons.assignment_turned_in_rounded;
     case domain.NotificationType.registreRejected:
       return Icons.assignment_late_rounded;
+    case domain.NotificationType.profileValidated:
+      return Icons.person_search_rounded;
   }
 }
 

@@ -4,7 +4,8 @@ enum NotificationType {
   promoVerified('promo_verified'),
   promoExpiringSoon('promo_expiring_soon'),
   registreValidated('registre_validated'),
-  registreRejected('registre_rejected');
+  registreRejected('registre_rejected'),
+  profileValidated('profile_validated');
 
   const NotificationType(this.value);
   final String value;
