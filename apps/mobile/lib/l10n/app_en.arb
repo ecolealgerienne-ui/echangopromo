@@ -164,6 +164,7 @@
 
   "editPromoTitle": "Edit promo",
   "photoRequired": "A photo is required.",
+  "promoPhotosHint": "Up to 3 photos: the first one will be shown first.",
   "saveDraftLabel": "Save as draft",
   "operationFailed": "Operation failed.",
 

@@ -53,7 +53,7 @@ class PromoDetailScreen extends ConsumerWidget {
           return ListView(
             children: [
               PromoPhotoHero(
-                photoUrl: promo.photoUrl,
+                photoUrls: promo.photoUrls,
                 prixAvant: promo.prixAvant,
                 prixApres: promo.prixApres,
               ),

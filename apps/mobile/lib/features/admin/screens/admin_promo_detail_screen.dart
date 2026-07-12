@@ -56,7 +56,7 @@ class AdminPromoDetailScreen extends ConsumerWidget {
       body: ListView(
         children: [
           PromoPhotoHero(
-            photoUrl: item.photoUrl,
+            photoUrls: item.photoUrls,
             prixAvant: item.prixAvant,
             prixApres: item.prixApres,
           ),

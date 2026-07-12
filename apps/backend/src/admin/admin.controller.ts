@@ -170,7 +170,7 @@ export class AdminController {
 
   /**
    * DTO explicite plutôt qu'un spread d'entité (règle #4) — la file de
-   * modération n'exposait ni photoUrl (jamais calculé, `photoKey` est
+   * modération n'exposait ni photoUrl (jamais calculé, `photoKeys` est
    * @Exclude()) ni le contact du commerçant, rendant la décision de
    * modération difficile sans ces informations. Partagé entre la file
    * automatique et la liste globale (`/admin/promo`, Phase 2).
@@ -182,7 +182,7 @@ export class AdminController {
       prixAvant: promo.prixAvant,
       prixApres: promo.prixApres,
       categorie: promo.categorie,
-      photoUrl: promo.photoKey ? this.storageService.buildPublicUrl(promo.photoKey) : null,
+      photoUrls: promo.photoKeys.map((key) => this.storageService.buildPublicUrl(key)),
       lifecycleStatus: promo.lifecycleStatus,
       moderationStatus: promo.moderationStatus,
       dateFin: promo.dateFin,

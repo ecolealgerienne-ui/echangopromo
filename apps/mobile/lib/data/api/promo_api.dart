@@ -42,13 +42,13 @@ class PromoApi {
     required double prixAvant,
     required double prixApres,
     required Categorie categorie,
-    required String photoKey,
+    required List<String> photoKeys,
     DateTime? dateFin,
     bool asDraft = false,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/promo',
-      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKey, dateFin, asDraft),
+      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKeys, dateFin, asDraft),
     );
     return Promo.fromJson(response.data!);
   }
@@ -59,13 +59,13 @@ class PromoApi {
     required double prixAvant,
     required double prixApres,
     required Categorie categorie,
-    required String photoKey,
+    required List<String> photoKeys,
     DateTime? dateFin,
     bool asDraft = false,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/promo/agent/$commercantId',
-      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKey, dateFin, asDraft),
+      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKeys, dateFin, asDraft),
     );
     return Promo.fromJson(response.data!);
   }
@@ -85,14 +85,14 @@ class PromoApi {
     double? prixAvant,
     double? prixApres,
     Categorie? categorie,
-    String? photoKey,
+    List<String>? photoKeys,
   }) async {
     await _dio.patch<void>('/promo/$id', data: {
       if (description != null) 'description': description,
       if (prixAvant != null) 'prixAvant': prixAvant,
       if (prixApres != null) 'prixApres': prixApres,
       if (categorie != null) 'categorie': categorie.value,
-      if (photoKey != null) 'photoKey': photoKey,
+      if (photoKeys != null) 'photoKeys': photoKeys,
     });
   }
 
@@ -112,7 +112,7 @@ class PromoApi {
     double prixAvant,
     double prixApres,
     Categorie categorie,
-    String photoKey,
+    List<String> photoKeys,
     DateTime? dateFin,
     bool asDraft,
   ) =>
@@ -121,7 +121,7 @@ class PromoApi {
         'prixAvant': prixAvant,
         'prixApres': prixApres,
         'categorie': categorie.value,
-        'photoKey': photoKey,
+        'photoKeys': photoKeys,
         if (dateFin != null) 'dateFin': dateFin.toIso8601String(),
         if (asDraft) 'asDraft': asDraft,
       };

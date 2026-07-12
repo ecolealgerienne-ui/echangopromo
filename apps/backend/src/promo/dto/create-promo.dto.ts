@@ -1,5 +1,8 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsDate,
   IsEnum,
@@ -29,10 +32,17 @@ export class CreatePromoDto {
   @IsEnum(Categorie)
   categorie: Categorie;
 
-  /** Clé de l'objet S3 de la photo, déjà uploadée via URL pré-signée. */
-  @IsString()
-  @MinLength(1)
-  photoKey: string;
+  /**
+   * Clés des objets S3, déjà uploadées (`POST /storage/upload`) — 1 à 3,
+   * ordonnées, la première étant la photo principale (décision produit
+   * 2026-07-12).
+   */
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(3)
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  photoKeys: string[];
 
   /**
    * Ignoré si `asDraft` est vrai. Optionnel — si omis, calculée à

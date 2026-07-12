@@ -164,6 +164,7 @@
 
   "editPromoTitle": "تعديل العرض",
   "photoRequired": "الصورة مطلوبة.",
+  "promoPhotosHint": "حتى 3 صور: الأولى هي التي تُعرض أولاً.",
   "saveDraftLabel": "حفظ كمسودة",
   "operationFailed": "تعذّرت العملية.",
 

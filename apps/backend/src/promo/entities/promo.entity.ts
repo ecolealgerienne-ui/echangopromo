@@ -77,14 +77,18 @@ export class Promo {
   categorie: Categorie;
 
   /**
-   * Clé de l'objet S3 (voir docs/ARCHITECTURE.md — structure de bucket).
-   * Jamais exposée au client : pour les promos créées par un agent, cette
-   * clé contient l'UUID de l'agent (pas du commerçant) — fuite d'identifiant
-   * interne évitable. Le contrôleur expose `photoUrl` à la place.
+   * Clés des objets S3, jusqu'à 3, ordonnées (voir docs/ARCHITECTURE.md —
+   * structure de bucket ; décision produit 2026-07-12, une seule photo ne
+   * suffit pas à juger un produit). Jamais exposées publiquement : pour les
+   * promos créées par un agent, ces clés contiennent l'UUID de l'agent (pas
+   * du commerçant) — fuite d'identifiant interne évitable. Le contrôleur
+   * expose `photoUrls` à la place, et ne réexpose les clés brutes que sur
+   * `GET /promo/me/all` (propriétaire authentifié uniquement) pour permettre
+   * l'édition sans réuploader les photos inchangées.
    */
   @Exclude()
-  @Column()
-  photoKey: string;
+  @Column('text', { array: true })
+  photoKeys: string[];
 
   /** Null tant que la promo est en `brouillon` — fixée à la publication. */
   @Column({ type: 'timestamptz', nullable: true })

@@ -130,7 +130,7 @@ export class PromoService {
       prixAvant: dto.prixAvant.toFixed(2),
       prixApres: dto.prixApres.toFixed(2),
       categorie: dto.categorie,
-      photoKey: dto.photoKey,
+      photoKeys: dto.photoKeys,
     };
 
     if (dto.asDraft) {
@@ -472,7 +472,7 @@ export class PromoService {
     const prixAvant = dto.prixAvant ?? Number(promo.prixAvant);
     const prixApres = dto.prixApres ?? Number(promo.prixApres);
     this.assertPriceOrder(prixAvant, prixApres);
-    const previousPhotoKey = promo.photoKey;
+    const previousPhotoKeys = promo.photoKeys;
 
     // `dto` (transformé par `ValidationPipe`) porte une propriété propre
     // `undefined` pour chaque champ optionnel non fourni (comportement
@@ -492,11 +492,16 @@ export class PromoService {
       prixApres: dto.prixApres?.toFixed(2) ?? promo.prixApres,
     });
     const saved = await this.promos.save(promo);
-    // Remplacement de photo : l'ancienne devient orpheline dans S3 si on ne
-    // la supprime pas explicitement (buildKey génère toujours une nouvelle
-    // clé UUID, jamais un remplacement en place).
-    if (dto.photoKey && previousPhotoKey && dto.photoKey !== previousPhotoKey) {
-      await this.storageService.deleteObject(previousPhotoKey);
+    // Le mobile envoie toujours le tableau complet résolu (clés inchangées
+    // réutilisées telles quelles, voir `PromoFormScreen`) — une clé absente
+    // du nouveau tableau a donc été explicitement retirée ou remplacée, et
+    // devient orpheline dans S3 si on ne la supprime pas ici (`buildKey`
+    // génère toujours une nouvelle clé UUID, jamais un remplacement en place).
+    if (dto.photoKeys) {
+      const removedKeys = previousPhotoKeys.filter((key) => !dto.photoKeys!.includes(key));
+      for (const key of removedKeys) {
+        await this.storageService.deleteObject(key);
+      }
     }
     return saved;
   }
@@ -526,7 +531,9 @@ export class PromoService {
     });
 
     for (const promo of eligible) {
-      await this.storageService.deleteObject(promo.photoKey);
+      for (const key of promo.photoKeys) {
+        await this.storageService.deleteObject(key);
+      }
       promo.photoPurgedAt = new Date();
       await this.promos.save(promo);
     }

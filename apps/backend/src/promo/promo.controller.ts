@@ -41,11 +41,16 @@ export class PromoController {
    * DTO de sortie explicite plutôt qu'un spread de l'entité (`{...promo}`) :
    * un spread transforme l'instance en objet plain et désactiverait
    * silencieusement les `@Exclude()` si l'entité en gagnait un jour ;
-   * ça exclut aussi `photoKey`, qui pour les promos créées par un agent
+   * ça exclut aussi `photoKeys`, qui pour les promos créées par un agent
    * contient l'UUID de l'**agent** (pas du commerçant) — un identifiant
    * interne qui n'a rien à faire dans une réponse publique.
+   *
+   * `includeKeys` réexpose les clés S3 brutes (pas seulement les URLs) —
+   * réservé à `GET /promo/me/all` (propriétaire authentifié uniquement) :
+   * l'écran d'édition en a besoin pour renvoyer les photos inchangées sans
+   * les réuploader, sans jamais les exposer publiquement.
    */
-  private toClientJson(promo: Promo) {
+  private toClientJson(promo: Promo, options?: { includeKeys?: boolean }) {
     return {
       id: promo.id,
       commercantId: promo.commercantId,
@@ -57,7 +62,8 @@ export class PromoController {
       dateFin: promo.dateFin,
       lifecycleStatus: promo.lifecycleStatus,
       moderationStatus: promo.moderationStatus,
-      photoUrl: this.storageService.buildPublicUrl(promo.photoKey),
+      photoUrls: promo.photoKeys.map((key) => this.storageService.buildPublicUrl(key)),
+      ...(options?.includeKeys ? { photoKeys: promo.photoKeys } : {}),
       createdAt: promo.createdAt,
     };
   }
@@ -142,7 +148,7 @@ export class PromoController {
     return {
       ...result,
       items: result.items.map((promo) => ({
-        ...this.toClientJson(promo),
+        ...this.toClientJson(promo, { includeKeys: true }),
         viewCount: viewCounts[promo.id] ?? 0,
       })),
     };

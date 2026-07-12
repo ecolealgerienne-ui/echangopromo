@@ -180,6 +180,7 @@
 
   "editPromoTitle": "Modifier la promo",
   "photoRequired": "Une photo est requise.",
+  "promoPhotosHint": "Jusqu'à 3 photos : la première sera affichée en priorité.",
   "saveDraftLabel": "Enregistrer en brouillon",
   "operationFailed": "Opération impossible.",
 

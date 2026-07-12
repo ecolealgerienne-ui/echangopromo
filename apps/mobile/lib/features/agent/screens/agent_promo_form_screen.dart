@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/api_exception.dart';
@@ -8,6 +6,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../shared/widgets/error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/loading_button.dart';
+import '../../shared/widgets/multi_photo_picker_field.dart';
 import '../../shared/widgets/promo_form_fields.dart';
 import '../../../providers/core_providers.dart';
 
@@ -37,7 +36,7 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
   final _prixApresController = TextEditingController();
   Categorie? _categorie;
   int _dureeJours = _defaultDureeJours;
-  File? _photo;
+  List<PhotoSlotItem> _photoItems = [];
   bool _loading = false;
   String? _error;
 
@@ -69,7 +68,7 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
-    if (_photo == null) {
+    if (_photoItems.isEmpty) {
       setState(() => _error = l10n.photoRequiredCamera);
       return;
     }
@@ -80,14 +79,23 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
     });
 
     try {
-      final photoKey = await ref.read(storageApiProvider).uploadPhoto(_photo!);
+      final storageApi = ref.read(storageApiProvider);
+      final photoKeys = <String>[];
+      for (final item in _photoItems) {
+        switch (item) {
+          case ExistingPhotoItem(:final key):
+            photoKeys.add(key);
+          case NewPhotoItem(:final file):
+            photoKeys.add(await storageApi.uploadPhoto(file));
+        }
+      }
       await ref.read(promoApiProvider).createForCommercant(
             widget.commercantId,
             description: _descriptionController.text.trim(),
             prixAvant: double.parse(_prixAvantController.text.trim()),
             prixApres: double.parse(_prixApresController.text.trim()),
             categorie: _categorie!,
-            photoKey: photoKey,
+            photoKeys: photoKeys,
             dateFin: DateTime.now().add(Duration(days: _dureeJours)),
           );
       if (mounted) Navigator.of(context).pop(true);
@@ -117,8 +125,8 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
           child: ListView(
             children: [
               PromoFormFields(
-                photo: _photo,
-                onPhotoChanged: (file) => setState(() => _photo = file),
+                photoItems: _photoItems,
+                onPhotoItemsChanged: (items) => setState(() => _photoItems = items),
                 cameraOnly: true,
                 descriptionController: _descriptionController,
                 prixAvantController: _prixAvantController,

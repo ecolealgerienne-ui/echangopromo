@@ -14,7 +14,8 @@ class Promo {
     required this.dateFin,
     required this.lifecycleStatus,
     required this.moderationStatus,
-    required this.photoUrl,
+    required this.photoUrls,
+    this.photoKeys,
     this.viewCount,
     required this.createdAt,
   });
@@ -30,7 +31,10 @@ class Promo {
         dateFin: json['dateFin'] != null ? DateTime.parse(json['dateFin'] as String) : null,
         lifecycleStatus: PromoLifecycleStatus.fromValue(json['lifecycleStatus'] as String),
         moderationStatus: PromoModerationStatus.fromValue(json['moderationStatus'] as String),
-        photoUrl: json['photoUrl'] as String?,
+        photoUrls: (json['photoUrls'] as List<dynamic>? ?? const [])
+            .map((e) => e as String)
+            .toList(),
+        photoKeys: (json['photoKeys'] as List<dynamic>?)?.map((e) => e as String).toList(),
         viewCount: json['viewCount'] as int?,
         createdAt: DateTime.parse(json['createdAt'] as String),
       );
@@ -47,9 +51,21 @@ class Promo {
   final DateTime? dateFin;
   final PromoLifecycleStatus lifecycleStatus;
   final PromoModerationStatus moderationStatus;
-  final String? photoUrl;
+  final List<String> photoUrls;
+
+  /// Clés S3 brutes, dans le même ordre que [photoUrls] — renseignées
+  /// uniquement par `GET /promo/me/all` (propriétaire authentifié), jamais
+  /// par la liste/fiche publique. Utilisées par l'écran d'édition pour
+  /// renvoyer les photos inchangées sans les réuploader (voir
+  /// `PromoFormScreen`) ; `null` partout ailleurs.
+  final List<String>? photoKeys;
   final int? viewCount;
   final DateTime createdAt;
+
+  /// Photo principale (première de [photoUrls]) — c'est la seule affichée en
+  /// liste/vignette, les écrans qui n'ont besoin que d'un aperçu unique
+  /// (`PromoCard`, `MyPromosScreen`...) n'ont donc rien à changer.
+  String? get photoUrl => photoUrls.isEmpty ? null : photoUrls.first;
 
   bool get isDraft => lifecycleStatus == PromoLifecycleStatus.brouillon;
   bool get isPublished => lifecycleStatus == PromoLifecycleStatus.publiee;
