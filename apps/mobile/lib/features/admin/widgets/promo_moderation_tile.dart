@@ -60,8 +60,11 @@ class PromoModerationTile extends StatelessWidget {
     return ListTile(
       onTap: onTap,
       leading: CircleAvatar(
-        backgroundImage: item.photoUrl != null
-            ? ResizeImage(CachedNetworkImageProvider(item.photoUrl!), width: avatarCachePx)
+        backgroundImage: (item.thumbnailUrl ?? item.photoUrl) != null
+            ? ResizeImage(
+                CachedNetworkImageProvider((item.thumbnailUrl ?? item.photoUrl)!),
+                width: avatarCachePx,
+              )
             : null,
       ),
       // Sans ce badge, le statut réel (signalée/masquée/vérifiée) n'était

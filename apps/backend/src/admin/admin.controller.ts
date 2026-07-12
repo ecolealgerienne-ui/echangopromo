@@ -176,13 +176,19 @@ export class AdminController {
    * automatique et la liste globale (`/admin/promo`, Phase 2).
    */
   private toAdminPromoJson(promo: Promo) {
+    const photoUrls = promo.photoKeys.map((key) => this.storageService.buildPublicUrl(key));
     return {
       id: promo.id,
       description: promo.description,
       prixAvant: promo.prixAvant,
       prixApres: promo.prixApres,
       categorie: promo.categorie,
-      photoUrls: promo.photoKeys.map((key) => this.storageService.buildPublicUrl(key)),
+      photoUrls,
+      // Miniature de la 1ère photo (liste de modération) — même fallback
+      // que côté client si la génération a échoué.
+      thumbnailUrl: promo.thumbnailKey
+        ? this.storageService.buildPublicUrl(promo.thumbnailKey)
+        : (photoUrls[0] ?? null),
       lifecycleStatus: promo.lifecycleStatus,
       moderationStatus: promo.moderationStatus,
       dateFin: promo.dateFin,

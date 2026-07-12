@@ -56,9 +56,9 @@ class PromoCard extends StatelessWidget {
                     child: SizedBox(
                       width: _photoSize,
                       height: _photoSize,
-                      child: promo.photoUrl != null
+                      child: (promo.thumbnailUrl ?? promo.photoUrl) != null
                           ? CachedNetworkImage(
-                              imageUrl: promo.photoUrl!,
+                              imageUrl: (promo.thumbnailUrl ?? promo.photoUrl)!,
                               fit: BoxFit.cover,
                               memCacheWidth: photoCachePx,
                               memCacheHeight: photoCachePx,

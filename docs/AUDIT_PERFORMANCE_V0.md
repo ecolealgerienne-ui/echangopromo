@@ -6,14 +6,14 @@ pour les photos de promo. Méthode : exploration en lecture seule,
 fichier:ligne systématique, aucune modification de code pendant l'audit
 lui-même.
 
-**Mise à jour (2026-07-12)** : points 2, 3 et 4 traités le jour même.
-Point 1 (le plus directement lié au CDN prévu) laissé pour la décision
-d'offre CDN — voir sa section, aucune action de code ne le résout seule
-sans choisir un service de redimensionnement.
+**Mise à jour (2026-07-12)** : points 2, 3 et 4 traités le jour même. CDN
+abandonné pour l'instant (décision produit) — point 1 traité quand même,
+sans CDN : miniature générée côté backend à l'upload/l'édition plutôt
+qu'à la volée par un service tiers (voir sa section).
 
 | # | Point | Sévérité | Statut |
 |---|---|---|---|
-| 1 | Vignettes téléchargées en pleine résolution (liste/avatars) | Élevée | ❌ Non traité — dépend du choix de CDN |
+| 1 | Vignettes téléchargées en pleine résolution (liste/avatars) | Élevée | ✅ Miniature serveur (`thumbnailKey`), sans CDN |
 | 2 | Upload multi-photo séquentiel (1-3 photos) | Moyenne | ✅ `Future.wait`, ordre préservé |
 | 3 | Aucun timeout Dio (mobile) | Moyenne-Élevée (fiabilité) | ✅ Timeouts globaux + override upload |
 | 4 | Pas de compression de réponse HTTP (backend) | Moyenne | ✅ Middleware `compression` |
@@ -40,15 +40,18 @@ Une liste de 20 promos télécharge donc ~3-5 Mo juste pour afficher des
 vignettes de 96×96, sur le marché explicitement identifié comme sensible
 au coût data (`storage.service.ts:16-24`).
 
-**Lien direct avec le CDN envisagé** : un CDN "cache HTTP" classique (ex.
-un simple reverse-proxy devant le bucket) n'apporte qu'un gain de latence,
-pas de réduction de volume — le fichier plein format resterait quand même
-téléchargé. Pour réellement optimiser l'affichage des vignettes, il faut
-un CDN avec **redimensionnement à la volée** (Cloudflare Images, Bunny
-Optimizer, imgproxy, ou variantes générées à l'upload côté backend) qui
-sert une variante ~100-150px pour les listes et l'original uniquement pour
-le carousel détail (`PromoPhotoHero`). À garder en tête au moment de
-choisir l'offre CDN — toutes ne proposent pas ce redimensionnement.
+**Traité (2026-07-12), sans CDN** : le CDN a été mis de côté pour l'instant
+(décision produit) — plutôt qu'un redimensionnement à la volée par un
+service tiers, une vraie miniature (~240px, `sharp`, `Promo.thumbnailKey`)
+est générée côté backend au moment de la création/édition d'une promo, à
+partir de la 1ère photo uniquement (seule affichée en vignette — les
+photos 2/3 ne le sont jamais). `PromoService.tryGenerateThumbnail`
+(best-effort : un échec ne bloque jamais la sauvegarde, le contrôleur
+retombe alors sur la photo complète). `PromoCard`/`MyPromosScreen`/
+`PromoModerationTile` consomment `thumbnailUrl` au lieu de `photoUrl` ;
+`PromoPhotoHero` (fiche détail) continue d'utiliser les photos complètes,
+inchangé. Si un CDN est ajouté plus tard, cette miniature reste valable
+et profite quand même du cache/latence du CDN comme n'importe quel objet.
 
 ---
 

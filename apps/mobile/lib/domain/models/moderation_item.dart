@@ -14,6 +14,7 @@ class ModerationItem {
     required this.prixApres,
     required this.categorie,
     required this.photoUrls,
+    this.thumbnailUrl,
     required this.lifecycleStatus,
     required this.moderationStatus,
     required this.commercantId,
@@ -32,6 +33,7 @@ class ModerationItem {
         photoUrls: (json['photoUrls'] as List<dynamic>? ?? const [])
             .map((e) => e as String)
             .toList(),
+        thumbnailUrl: json['thumbnailUrl'] as String?,
         lifecycleStatus: PromoLifecycleStatus.fromValue(json['lifecycleStatus'] as String),
         moderationStatus: PromoModerationStatus.fromValue(json['moderationStatus'] as String),
         commercantId: json['commercantId'] as String,
@@ -48,6 +50,10 @@ class ModerationItem {
   final double prixApres;
   final Categorie categorie;
   final List<String> photoUrls;
+
+  /// Miniature (~240px) de la 1ère photo — à utiliser à la place de
+  /// [photoUrl] pour la vignette liste (`PromoModerationTile`).
+  final String? thumbnailUrl;
   final PromoLifecycleStatus lifecycleStatus;
   final PromoModerationStatus moderationStatus;
   final String commercantId;

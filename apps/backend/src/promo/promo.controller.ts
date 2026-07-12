@@ -51,6 +51,7 @@ export class PromoController {
    * les réuploader, sans jamais les exposer publiquement.
    */
   private toClientJson(promo: Promo, options?: { includeKeys?: boolean }) {
+    const photoUrls = promo.photoKeys.map((key) => this.storageService.buildPublicUrl(key));
     return {
       id: promo.id,
       commercantId: promo.commercantId,
@@ -62,7 +63,14 @@ export class PromoController {
       dateFin: promo.dateFin,
       lifecycleStatus: promo.lifecycleStatus,
       moderationStatus: promo.moderationStatus,
-      photoUrls: promo.photoKeys.map((key) => this.storageService.buildPublicUrl(key)),
+      photoUrls,
+      // Miniature de la 1ère photo (listes, audit performance 2026-07-12) —
+      // retombe sur la photo complète si la génération a échoué (best-effort,
+      // voir `PromoService.tryGenerateThumbnail`), jamais `null` tant qu'il y
+      // a au moins une photo.
+      thumbnailUrl: promo.thumbnailKey
+        ? this.storageService.buildPublicUrl(promo.thumbnailKey)
+        : (photoUrls[0] ?? null),
       ...(options?.includeKeys ? { photoKeys: promo.photoKeys } : {}),
       createdAt: promo.createdAt,
     };

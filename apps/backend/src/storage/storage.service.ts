@@ -8,9 +8,19 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
+import sharp from 'sharp';
 import { BadRequestAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { detectImageFormat } from './image-signature';
+
+/**
+ * Côté carré affiché par les plus grandes vignettes liste (`PromoCard`,
+ * 96dp) — marge pour les écrans haute densité (jusqu'à ~2.5x) sans
+ * viser la pleine résolution source, inutile pour une vignette (audit
+ * performance 2026-07-12 : la vignette téléchargeait la photo complète,
+ * `memCacheWidth` ne réduisant que le décodage mémoire, pas le réseau).
+ */
+const THUMBNAIL_SIZE_PX = 240;
 
 /**
  * Le client cible ~250 Ko après compression par paliers (`StorageApi.
@@ -186,5 +196,44 @@ export class StorageService {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
     );
+  }
+
+  private async downloadObject(key: string): Promise<Buffer> {
+    const response = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    const bytes = await response.Body!.transformToByteArray();
+    return Buffer.from(bytes);
+  }
+
+  /**
+   * Génère et upload une miniature carrée à partir d'un objet déjà en
+   * ligne — utilisée uniquement pour la 1ère photo d'une promo (seule
+   * affichée en vignette liste, voir `PromoService.tryGenerateThumbnail`),
+   * jamais pour les photos 2/3 ni pour les autres dossiers (commerce,
+   * registre). `-thumb-<uuid>` plutôt qu'un remplacement en place, même
+   * logique que `buildKey` : un objet donné ne change jamais de contenu
+   * une fois écrit, cache navigateur/CDN immuable sans risque de servir
+   * une version périmée.
+   */
+  async generateThumbnail(sourceKey: string): Promise<string> {
+    const original = await this.downloadObject(sourceKey);
+    const thumbnail = await sharp(original)
+      .resize(THUMBNAIL_SIZE_PX, THUMBNAIL_SIZE_PX, { fit: 'cover' })
+      .jpeg({ quality: 70 })
+      .toBuffer();
+
+    const thumbnailKey = `${sourceKey.replace(/\.[^./]+$/, '')}-thumb-${randomUUID()}.jpg`;
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: thumbnailKey,
+        Body: thumbnail,
+        ContentType: 'image/jpeg',
+        ACL: 'public-read',
+        CacheControl: 'public, max-age=31536000, immutable',
+      }),
+    );
+    return thumbnailKey;
   }
 }

@@ -15,6 +15,7 @@ class Promo {
     required this.lifecycleStatus,
     required this.moderationStatus,
     required this.photoUrls,
+    this.thumbnailUrl,
     this.photoKeys,
     this.viewCount,
     required this.createdAt,
@@ -34,6 +35,7 @@ class Promo {
         photoUrls: (json['photoUrls'] as List<dynamic>? ?? const [])
             .map((e) => e as String)
             .toList(),
+        thumbnailUrl: json['thumbnailUrl'] as String?,
         photoKeys: (json['photoKeys'] as List<dynamic>?)?.map((e) => e as String).toList(),
         viewCount: json['viewCount'] as int?,
         createdAt: DateTime.parse(json['createdAt'] as String),
@@ -52,6 +54,13 @@ class Promo {
   final PromoLifecycleStatus lifecycleStatus;
   final PromoModerationStatus moderationStatus;
   final List<String> photoUrls;
+
+  /// Miniature (~240px) de la 1ère photo, générée côté serveur — à utiliser
+  /// pour toute vignette liste (`PromoCard`, `MyPromosScreen`...), jamais
+  /// pour la fiche détail (`PromoPhotoHero`, pleine résolution). Retombe
+  /// déjà sur la photo complète côté backend si la génération a échoué,
+  /// donc non-null dès qu'il y a au moins une photo.
+  final String? thumbnailUrl;
 
   /// Clés S3 brutes, dans le même ordre que [photoUrls] — renseignées
   /// uniquement par `GET /promo/me/all` (propriétaire authentifié), jamais

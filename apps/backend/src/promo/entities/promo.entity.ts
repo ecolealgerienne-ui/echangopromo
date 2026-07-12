@@ -90,6 +90,19 @@ export class Promo {
   @Column('text', { array: true })
   photoKeys: string[];
 
+  /**
+   * Miniature (~240px) générée côté serveur à partir de la 1ère photo
+   * uniquement (décision produit 2026-07-12 — seule la photo principale
+   * sert de vignette dans les listes, les photos 2/3 ne sont jamais
+   * affichées en petit). `null` si la génération a échoué (best-effort,
+   * ne bloque jamais la création/édition — voir
+   * `PromoService.tryGenerateThumbnail`) : le contrôleur retombe alors sur
+   * la photo complète.
+   */
+  @Exclude()
+  @Column({ type: 'varchar', nullable: true })
+  thumbnailKey: string | null;
+
   /** Null tant que la promo est en `brouillon` — fixée à la publication. */
   @Column({ type: 'timestamptz', nullable: true })
   dateFin: Date | null;

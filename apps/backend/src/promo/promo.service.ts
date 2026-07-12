@@ -99,6 +99,20 @@ export class PromoService {
     }
   }
 
+  /**
+   * Best-effort : une miniature manquante ne doit jamais bloquer la
+   * création/édition d'une promo — `PromoController.toClientJson` retombe
+   * sur la photo complète si `null` (échec réseau S3 transitoire par ex.).
+   */
+  private async tryGenerateThumbnail(sourceKey: string): Promise<string | null> {
+    try {
+      return await this.storageService.generateThumbnail(sourceKey);
+    } catch (error) {
+      this.logger.warn(`Échec de génération de la miniature pour ${sourceKey} : ${error}`);
+      return null;
+    }
+  }
+
   private async withCommercantLock<T>(
     commercantId: string,
     fn: (manager: EntityManager) => Promise<T>,
@@ -123,6 +137,7 @@ export class PromoService {
     this.commercantService.assertRegistreValidated(commercant);
     this.commercantService.assertProfileValidated(commercant);
     this.assertPriceOrder(dto.prixAvant, dto.prixApres);
+    const thumbnailKey = await this.tryGenerateThumbnail(dto.photoKeys[0]);
 
     const base = {
       commercantId,
@@ -131,6 +146,7 @@ export class PromoService {
       prixApres: dto.prixApres.toFixed(2),
       categorie: dto.categorie,
       photoKeys: dto.photoKeys,
+      thumbnailKey,
     };
 
     if (dto.asDraft) {
@@ -473,6 +489,13 @@ export class PromoService {
     const prixApres = dto.prixApres ?? Number(promo.prixApres);
     this.assertPriceOrder(prixAvant, prixApres);
     const previousPhotoKeys = promo.photoKeys;
+    const previousThumbnailKey = promo.thumbnailKey;
+    // Régénérée uniquement si la 1ère photo change (pas juste réordonnée à
+    // l'identique) — évite un aller-retour S3 (download + resize + upload)
+    // inutile à chaque édition de description/prix.
+    if (dto.photoKeys && dto.photoKeys[0] !== previousPhotoKeys[0]) {
+      promo.thumbnailKey = await this.tryGenerateThumbnail(dto.photoKeys[0]);
+    }
 
     // `dto` (transformé par `ValidationPipe`) porte une propriété propre
     // `undefined` pour chaque champ optionnel non fourni (comportement
@@ -502,6 +525,9 @@ export class PromoService {
       for (const key of removedKeys) {
         await this.storageService.deleteObject(key);
       }
+    }
+    if (previousThumbnailKey && previousThumbnailKey !== promo.thumbnailKey) {
+      await this.storageService.deleteObject(previousThumbnailKey);
     }
     return saved;
   }
@@ -533,6 +559,9 @@ export class PromoService {
     for (const promo of eligible) {
       for (const key of promo.photoKeys) {
         await this.storageService.deleteObject(key);
+      }
+      if (promo.thumbnailKey) {
+        await this.storageService.deleteObject(promo.thumbnailKey);
       }
       promo.photoPurgedAt = new Date();
       await this.promos.save(promo);

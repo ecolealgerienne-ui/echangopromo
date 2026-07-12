@@ -126,9 +126,9 @@ class MyPromosScreen extends ConsumerWidget {
                         (40 * MediaQuery.of(context).devicePixelRatio).round();
                     return ListTile(
                       leading: CircleAvatar(
-                        backgroundImage: promo.photoUrl != null
+                        backgroundImage: (promo.thumbnailUrl ?? promo.photoUrl) != null
                             ? ResizeImage(
-                                CachedNetworkImageProvider(promo.photoUrl!),
+                                CachedNetworkImageProvider((promo.thumbnailUrl ?? promo.photoUrl)!),
                                 width: avatarCachePx,
                               )
                             : null,
