@@ -228,7 +228,7 @@ class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScr
                 decoration: const InputDecoration(labelText: 'PIN'),
                 keyboardType: TextInputType.number,
                 obscureText: true,
-                maxLength: 6,
+                maxLength: 12,
               ),
             ],
           ),
