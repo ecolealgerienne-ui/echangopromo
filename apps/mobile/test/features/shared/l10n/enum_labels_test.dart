@@ -30,6 +30,10 @@ void main() {
       promoLifecycleLabel(context, PromoLifecycleStatus.expiree, isExpired: false),
       'Expirée',
     );
+    expect(
+      promoLifecycleLabel(context, PromoLifecycleStatus.supprimee, isExpired: false),
+      'Supprimée',
+    );
   });
 
   testWidgets('categorieLabel — traduit selon la langue courante', (tester) async {

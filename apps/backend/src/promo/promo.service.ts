@@ -232,9 +232,13 @@ export class PromoService {
         moderationStatuses: VISIBLE_MODERATION_STATUSES,
       })
       .andWhere('promo.dateFin > NOW()')
-      // Compte commerçant supprimé (soft delete) : ses promos ne doivent
-      // plus apparaître aux clients, sans avoir à muter chaque promo.
-      .andWhere('commercant.deletedAt IS NULL');
+      // Compte commerçant supprimé ou suspendu (soft, 2026-07-14) : garde
+      // défensive en plus de la cascade posée par CommercantService
+      // (suspend/deleteCommercant/deleteAccount repassent déjà les promos en
+      // BROUILLON/SUPPRIMEE), pour ne jamais dépendre uniquement de cette
+      // cascade ayant réussi.
+      .andWhere('commercant.deletedAt IS NULL')
+      .andWhere('commercant.suspendedAt IS NULL');
 
     if (query.communeIds?.length) {
       qb.andWhere('commercant.communeId IN (:...communeIds)', {

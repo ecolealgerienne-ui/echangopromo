@@ -15,6 +15,7 @@ import {
   NotificationType,
 } from '../notification/entities/notification.entity';
 import { NotificationService } from '../notification/notification.service';
+import { Promo, PromoLifecycleStatus } from '../promo/entities/promo.entity';
 import { StorageService } from '../storage/storage.service';
 import { CommercantView } from './entities/commercant-view.entity';
 import {
@@ -35,17 +36,23 @@ export class CommercantService {
     private readonly commercants: Repository<Commercant>,
     @InjectRepository(CommercantView)
     private readonly views: Repository<CommercantView>,
+    // Accès direct à l'entité Promo pour la cascade de statut posée par
+    // suspend/deleteCommercant/deleteAccount — voir le commentaire dans
+    // commercant.module.ts (cycle NestJS avec PromoModule sinon).
+    @InjectRepository(Promo)
+    private readonly promos: Repository<Promo>,
     private readonly authService: AuthService,
     private readonly storageService: StorageService,
     private readonly notificationService: NotificationService,
   ) {}
 
   /**
-   * Ne regarde que les comptes actifs (`deletedAt IS NULL`) — un compte
-   * suspendu ne doit plus bloquer son numéro indéfiniment, sans quoi un
-   * commerce ayant changé de main ne pourrait jamais être recréé pour le
-   * nouveau propriétaire (bug trouvé 2026-07-13). Même filtre que l'index
-   * partiel posé en base, voir `Commercant.telephone`.
+   * Ne regarde que les comptes non supprimés (`deletedAt IS NULL`) — un
+   * compte suspendu (`suspendedAt`) bloque toujours son numéro, seule une
+   * suppression le libère (bug trouvé 2026-07-13, précisé 2026-07-14 :
+   * suspension et suppression sont deux états distincts depuis, voir
+   * `Commercant.suspendedAt`). Même filtre que l'index partiel posé en
+   * base, voir `Commercant.telephone`.
    */
   private async assertPhoneAvailable(telephone: string): Promise<void> {
     const existing = await this.commercants.findOne({
@@ -116,10 +123,11 @@ export class CommercantService {
 
   async login(telephone: string, pin: string): Promise<Commercant> {
     const commercant = await this.commercants.findOne({ where: { telephone } });
-    // Un compte supprimé (soft delete) est traité comme des identifiants
-    // invalides plutôt qu'un message dédié — évite de confirmer à un tiers
-    // que ce numéro a un jour eu un compte.
-    if (!commercant?.pinHash || commercant.deletedAt) {
+    // Un compte supprimé OU suspendu (soft, `deletedAt`/`suspendedAt`) est
+    // traité comme des identifiants invalides plutôt qu'un message dédié —
+    // évite de confirmer à un tiers que ce numéro a un jour eu un compte,
+    // et bloque effectivement la connexion pendant une suspension.
+    if (!commercant?.pinHash || commercant.deletedAt || commercant.suspendedAt) {
       throw new BadRequestAppException(
         ErrorCode.AUTH_INVALID_CREDENTIALS,
         'Identifiants invalides',
@@ -176,16 +184,19 @@ export class CommercantService {
   /**
    * Suppression de compte par le commerçant lui-même — soft delete
    * uniquement (`deletedAt`), jamais de suppression physique (conserve
-   * l'historique promos/signalements). `tokenVersion` incrémenté pour
-   * révoquer immédiatement le token en cours (même mécanisme que
-   * `resetPin`/`changePin`) : sans ça, la session active resterait valide jusqu'à
-   * expiration malgré la suppression. Les promos du commerçant cessent
-   * d'être visibles aux clients dès ce moment (filtre `commercant.deletedAt
-   * IS NULL` dans `PromoService.findActiveForClient`).
+   * l'historique promos/signalements). Libère le numéro de téléphone (voir
+   * `assertPhoneAvailable`) et "supprime" (`PromoLifecycleStatus.SUPPRIMEE`,
+   * pas de suppression physique non plus) toutes les promos du commerçant —
+   * mêmes règles que `deleteCommercant` (admin/agent), décision produit
+   * 2026-07-14. `tokenVersion` incrémenté pour révoquer immédiatement le
+   * token en cours (même mécanisme que `resetPin`/`changePin`) : sans ça, la
+   * session active resterait valide jusqu'à expiration malgré la
+   * suppression.
    */
   async deleteAccount(commercantId: string): Promise<void> {
     await this.commercants.update({ id: commercantId }, { deletedAt: new Date() });
     await this.commercants.increment({ id: commercantId }, 'tokenVersion', 1);
+    await this.promos.update({ commercantId }, { lifecycleStatus: PromoLifecycleStatus.SUPPRIMEE });
   }
 
   /**
@@ -258,10 +269,10 @@ export class CommercantService {
   async findPublicProfile(id: string): Promise<Commercant> {
     const commercant = await this.findByIdOrFail(id);
     // Contrairement aux endpoints authentifiés (déjà bloqués par la
-    // révocation de tokenVersion au moment de la suppression), celui-ci est
-    // atteignable par n'importe quel client à partir d'un id mémorisé avant
-    // la suppression (favoris, lien de partage) — vérification explicite.
-    if (commercant.deletedAt) {
+    // révocation de tokenVersion au moment de la suppression/suspension),
+    // celui-ci est atteignable par n'importe quel client à partir d'un id
+    // mémorisé avant (favoris, lien de partage) — vérification explicite.
+    if (commercant.deletedAt || commercant.suspendedAt) {
       throw new NotFoundAppException(ErrorCode.COMMERCANT_NOT_FOUND, 'Commerçant introuvable');
     }
     return commercant;
@@ -371,6 +382,11 @@ export class CommercantService {
     return this.commercants.count({
       where: {
         accountState: CommercantAccountState.AUTONOME,
+        // Ni supprimé ni suspendu (bug trouvé 2026-07-14 : ce compteur
+        // ignorait deletedAt/suspendedAt, comptant donc aussi les comptes
+        // inactifs dans "commerces actifs" du dashboard).
+        deletedAt: IsNull(),
+        suspendedAt: IsNull(),
         ...(communeIds ? { communeId: In(communeIds) } : {}),
       },
     });
@@ -400,11 +416,11 @@ export class CommercantService {
 
   /**
    * Vue admin (plan de correction, Phase 2) : recherche + liste sur
-   * l'ensemble des commerçants, y compris suspendus (`deletedAt` non nul)
-   * — sans ça, l'admin ne pourrait jamais retrouver un compte suspendu pour
-   * le réactiver. `communeIds` restreint aux communes d'un agent (partage
-   * de cet écran admin/agent, décision produit 2026-07-12) — `undefined` =
-   * vue globale (admin).
+   * l'ensemble des commerçants, y compris suspendus et supprimés — sans ça,
+   * l'admin ne pourrait jamais retrouver un compte suspendu pour le
+   * réactiver, ni consulter l'historique d'un compte supprimé. `communeIds`
+   * restreint aux communes d'un agent (partage de cet écran admin/agent,
+   * décision produit 2026-07-12) — `undefined` = vue globale (admin).
    */
   async findAllForAdmin(
     query: ListCommercantQueryDto,
@@ -457,27 +473,51 @@ export class CommercantService {
   }
 
   /**
-   * Réactivation d'un compte suspendu par l'admin — symétrique de
-   * `deleteAccount`, sans changement de `tokenVersion` (réactiver ne révoque
-   * rien, ça ne fait que rouvrir l'accès à la connexion). Un numéro de
-   * téléphone suspendu étant réattribuable (voir `assertPhoneAvailable`),
-   * il faut vérifier qu'aucun autre compte actif ne l'a repris entre-temps
-   * avant de rouvrir celui-ci — sans ça, deux comptes actifs se
-   * retrouveraient avec le même numéro, violant l'index partiel posé en
-   * base (`Commercant.telephone`).
+   * Suspension par l'admin/agent — réversible et arbitraire (aucun motif
+   * métier requis), distincte de `deleteCommercant`/`deleteAccount`
+   * (décision produit 2026-07-14) : ne touche jamais `deletedAt`, ne libère
+   * donc jamais le numéro de téléphone. Dépublie les promos en cours
+   * (`PUBLIEE` → `BROUILLON`, pas `SUPPRIMEE` — réversible) et révoque la
+   * session en cours comme tout changement d'état de sécurité (règle #6),
+   * pour empêcher un commerçant déjà connecté de continuer à publier
+   * pendant sa suspension.
    */
-  async reactivateAccount(commercantId: string): Promise<void> {
-    const commercant = await this.findByIdOrFail(commercantId);
-    const activeWithSamePhone = await this.commercants.findOne({
-      where: { telephone: commercant.telephone, deletedAt: IsNull() },
-    });
-    if (activeWithSamePhone && activeWithSamePhone.id !== commercantId) {
-      throw new ConflictAppException(
-        ErrorCode.COMMERCANT_PHONE_TAKEN,
-        'Ce numéro de téléphone est maintenant utilisé par un autre commerçant actif',
-      );
-    }
-    await this.commercants.update({ id: commercantId }, { deletedAt: null });
+  async suspend(commercantId: string): Promise<void> {
+    await this.findByIdOrFail(commercantId);
+    await this.commercants.update({ id: commercantId }, { suspendedAt: new Date() });
+    await this.commercants.increment({ id: commercantId }, 'tokenVersion', 1);
+    await this.promos.update(
+      { commercantId, lifecycleStatus: PromoLifecycleStatus.PUBLIEE },
+      { lifecycleStatus: PromoLifecycleStatus.BROUILLON },
+    );
+  }
+
+  /**
+   * Lève une suspension — pas de republication automatique des promos
+   * repassées en `BROUILLON` (décision produit 2026-07-14) : le commerçant
+   * les republie lui-même après avoir vérifié qu'elles sont toujours à jour
+   * (prix, dates). Le numéro de téléphone n'ayant jamais été libéré par la
+   * suspension, aucune vérification de collision n'est nécessaire ici
+   * (contrairement à une éventuelle restauration après suppression, non
+   * supportée : le numéro peut entre-temps avoir été réattribué).
+   */
+  async unsuspend(commercantId: string): Promise<void> {
+    await this.findByIdOrFail(commercantId);
+    await this.commercants.update({ id: commercantId }, { suspendedAt: null });
+  }
+
+  /**
+   * Suppression par l'admin/agent — même effet que l'auto-suppression du
+   * commerçant (`deleteAccount`), déclenchée cette fois par l'admin/agent
+   * (compte frauduleux, commerce fermé, changement de propriétaire...).
+   * Libère le numéro de téléphone et "supprime" toutes les promos du
+   * commerçant. Pas de restauration prévue.
+   */
+  async deleteCommercant(commercantId: string): Promise<void> {
+    await this.findByIdOrFail(commercantId);
+    await this.commercants.update({ id: commercantId }, { deletedAt: new Date() });
+    await this.commercants.increment({ id: commercantId }, 'tokenVersion', 1);
+    await this.promos.update({ commercantId }, { lifecycleStatus: PromoLifecycleStatus.SUPPRIMEE });
   }
 
   /** Garde IDOR : un agent ne peut agir que sur les commerçants de ses propres communes. */

@@ -79,6 +79,7 @@ class Promo {
   bool get isDraft => lifecycleStatus == PromoLifecycleStatus.brouillon;
   bool get isPublished => lifecycleStatus == PromoLifecycleStatus.publiee;
   bool get isStopped => lifecycleStatus == PromoLifecycleStatus.arretee;
+  bool get isDeleted => lifecycleStatus == PromoLifecycleStatus.supprimee;
   bool get isExpired =>
       lifecycleStatus == PromoLifecycleStatus.expiree ||
       (dateFin != null && dateFin!.isBefore(DateTime.now()));

@@ -183,6 +183,8 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                   children: [
                     if (item.suspended)
                       StatusChip(label: l10n.suspendedBadge, color: colorScheme.error),
+                    if (item.deleted)
+                      StatusChip(label: l10n.deletedBadge, color: colorScheme.error),
                     if (item.originVerification != null)
                       StatusChip(
                         label: commercantOriginVerificationLabel(context, item.originVerification!),
@@ -195,7 +197,10 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                       ),
                   ],
                 ),
-                if (item.suspended || item.originVerification != null || item.profilePendingReview)
+                if (item.suspended ||
+                    item.deleted ||
+                    item.originVerification != null ||
+                    item.profilePendingReview)
                   const SizedBox(height: 12),
                 Text(categorieLabel(context, item.categorie), style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 12),
@@ -310,27 +315,34 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                     FilledButton.icon(
                       icon: const Icon(Icons.add),
                       label: Text(l10n.newPromoTitle),
-                      onPressed: item.suspended
+                      onPressed: (item.suspended || item.deleted)
                           ? null
                           : () => context.push(newPromoPath, extra: item.categorie),
                     ),
-                    item.suspended
-                        ? FilledButton(
-                            onPressed: () => _act(
-                              context,
-                              ref,
-                              () => ref.read(adminApiProvider).reactivateCommercant(item.id),
+                    if (!item.deleted) ...[
+                      item.suspended
+                          ? FilledButton(
+                              onPressed: () => _act(
+                                context,
+                                ref,
+                                () => ref.read(adminApiProvider).reactivateCommercant(item.id),
+                              ),
+                              child: Text(l10n.reactivateLabel),
+                            )
+                          : OutlinedButton(
+                              onPressed: () => _confirmAndSuspend(context, ref),
+                              child: Text(l10n.suspendLabel),
                             ),
-                            child: Text(l10n.reactivateLabel),
-                          )
-                        : OutlinedButton(
-                            onPressed: () => _confirmAndSuspend(context, ref),
-                            child: Text(l10n.suspendLabel),
-                          ),
-                    OutlinedButton(
-                      onPressed: () => _confirmAndResetPin(context, ref),
-                      child: Text(l10n.resetPinLabel),
-                    ),
+                      OutlinedButton(
+                        onPressed: () => _confirmAndDelete(context, ref),
+                        style: OutlinedButton.styleFrom(foregroundColor: colorScheme.error),
+                        child: Text(l10n.deleteCommercantLabel),
+                      ),
+                      OutlinedButton(
+                        onPressed: () => _confirmAndResetPin(context, ref),
+                        child: Text(l10n.resetPinLabel),
+                      ),
+                    ],
                     if (item.profilePendingReview)
                       FilledButton.tonal(
                         // `popOnSuccess` (défaut) plutôt que rester sur cet
@@ -370,5 +382,31 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
     );
     if (confirmed != true || !context.mounted) return;
     await _act(context, ref, () => ref.read(adminApiProvider).suspendCommercant(item.id));
+  }
+
+  /// Suppression logique par l'admin/agent (2026-07-14) — distincte de la
+  /// suspension : libère le numéro de téléphone et "supprime" les promos,
+  /// pas de restauration prévue (contrairement à la suspension).
+  Future<void> _confirmAndDelete(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.deleteCommercantConfirmTitle),
+        content: Text(l10n.deleteCommercantConfirmMessage),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.commonCancel)),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              l10n.deleteCommercantLabel,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await _act(context, ref, () => ref.read(adminApiProvider).deleteCommercant(item.id));
   }
 }

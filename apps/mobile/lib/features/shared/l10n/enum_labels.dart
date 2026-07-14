@@ -44,6 +44,8 @@ String promoLifecycleLabel(BuildContext context, PromoLifecycleStatus status, {r
       return l10n.lifecycleStopped;
     case PromoLifecycleStatus.expiree:
       return l10n.lifecycleExpired;
+    case PromoLifecycleStatus.supprimee:
+      return l10n.lifecycleDeleted;
   }
 }
 
@@ -63,6 +65,8 @@ Color promoLifecycleColor(BuildContext context, PromoLifecycleStatus status, {re
       return semanticColors.warning;
     case PromoLifecycleStatus.expiree:
       return colorScheme.onSurfaceVariant;
+    case PromoLifecycleStatus.supprimee:
+      return colorScheme.error;
   }
 }
 

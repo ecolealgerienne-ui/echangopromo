@@ -170,13 +170,31 @@ export class Commercant {
   updatedAt: Date;
 
   /**
-   * Suppression de compte (bouton "Supprimer mon compte") — soft delete
-   * uniquement, jamais de suppression physique : conserve l'historique
-   * (promos, signalements) et permet une éventuelle restauration manuelle
-   * par l'admin. `null` = compte actif.
+   * Suppression de compte — soft delete uniquement, jamais de suppression
+   * physique : conserve l'historique (promos, signalements). Déclenchée par
+   * le commerçant lui-même (bouton "Supprimer mon compte") ou par
+   * l'admin/agent (`CommercantService.deleteCommercant`). `null` = compte
+   * non supprimé. Distinct de `suspendedAt` ci-dessous depuis le
+   * 2026-07-14 (les deux partageaient ce même champ auparavant, ce qui
+   * libérait par erreur le numéro de téléphone — voir `assertPhoneAvailable`
+   * — dès qu'un admin suspendait un compte) : seule la suppression libère le
+   * numéro et "supprime" les promos (`PromoLifecycleStatus.SUPPRIMEE`) ;
+   * pas de restauration prévue (le numéro peut entre-temps avoir été
+   * réattribué à un autre commerçant).
    */
   @Column({ type: 'timestamptz', nullable: true })
   deletedAt: Date | null;
+
+  /**
+   * Suspension — réversible et arbitraire (décision admin/agent sans motif
+   * métier particulier requis), contrairement à `deletedAt`. Ne libère
+   * jamais le numéro de téléphone. Dépublie les promos en cours (repassées
+   * en `BROUILLON`, republication manuelle après levée de la suspension —
+   * pas de republication automatique). Bloque la connexion comme
+   * `deletedAt` (voir `CommercantService.login`).
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  suspendedAt: Date | null;
 
   /**
    * Horodatage d'acceptation des CGU/politique de confidentialité (plan de

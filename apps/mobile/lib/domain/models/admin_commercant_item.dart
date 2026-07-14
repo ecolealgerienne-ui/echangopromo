@@ -24,6 +24,7 @@ class AdminCommercantItem {
     this.registreUrl,
     this.profilePendingReview = false,
     required this.suspended,
+    required this.deleted,
     required this.createdAt,
   });
 
@@ -44,6 +45,7 @@ class AdminCommercantItem {
         registreUrl: json['registreUrl'] as String?,
         profilePendingReview: json['profilePendingReview'] as bool? ?? false,
         suspended: json['suspended'] as bool,
+        deleted: json['deleted'] as bool,
         createdAt: DateTime.parse(json['createdAt'] as String),
       );
 
@@ -66,5 +68,10 @@ class AdminCommercantItem {
   /// 2026-07-12).
   final bool profilePendingReview;
   final bool suspended;
+
+  /// Suppression logique (2026-07-14) — distincte de `suspended` : libère
+  /// le numéro de téléphone et "supprime" les promos, pas de restauration
+  /// prévue (contrairement à la suspension, réversible).
+  final bool deleted;
   final DateTime createdAt;
 }

@@ -396,7 +396,8 @@ export class AdminController {
             ? await this.storageService.getPresignedUrl(commercant.registreKey)
             : null,
           profilePendingReview: commercant.profilePendingReview,
-          suspended: commercant.deletedAt !== null,
+          suspended: commercant.suspendedAt !== null,
+          deleted: commercant.deletedAt !== null,
           createdAt: commercant.createdAt,
         })),
       ),
@@ -404,12 +405,10 @@ export class AdminController {
   }
 
   /**
-   * Suspend un compte (soft delete réutilisé — même effet que
-   * l'auto-suppression). `findByIdOrFail` d'abord (trouvé en relecture) :
-   * `deleteAccount`/`reactivateAccount` font un `update()` aveugle qui ne
-   * signale rien si `commercantId` n'existe pas (silencieux, 0 ligne
-   * affectée) — acceptable pour l'auto-suppression (l'id vient du JWT,
-   * garanti existant) mais pas ici où l'id vient d'un paramètre d'URL.
+   * Suspend un compte — réversible et arbitraire, distinct de la
+   * suppression depuis le 2026-07-14 (voir `CommercantService.suspend`).
+   * `assertCanManageCommercant` d'abord (IDOR, règle #1) ; l'existence du
+   * commerçant est vérifiée par le service lui-même.
    */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -420,8 +419,7 @@ export class AdminController {
     @Param('id') commercantId: string,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
-    await this.commercantService.findByIdOrFail(commercantId);
-    await this.commercantService.deleteAccount(commercantId);
+    await this.commercantService.suspend(commercantId);
     await this.auditLogService.record({
       actorType: this.actorType(user.role),
       actorId: user.sub,
@@ -432,6 +430,7 @@ export class AdminController {
     return { ok: true };
   }
 
+  /** Lève une suspension (voir `CommercantService.unsuspend`) — pas de republication automatique des promos. */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'agent')
@@ -441,12 +440,37 @@ export class AdminController {
     @Param('id') commercantId: string,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
-    await this.commercantService.findByIdOrFail(commercantId);
-    await this.commercantService.reactivateAccount(commercantId);
+    await this.commercantService.unsuspend(commercantId);
     await this.auditLogService.record({
       actorType: this.actorType(user.role),
       actorId: user.sub,
       action: 'commercant_reactivate',
+      targetType: 'commercant',
+      targetId: commercantId,
+    });
+    return { ok: true };
+  }
+
+  /**
+   * Suppression logique par l'admin/agent (nouvelle capacité, 2026-07-14) —
+   * distincte de la suspension : libère le numéro de téléphone et
+   * "supprime" les promos du commerçant (voir `CommercantService.deleteCommercant`).
+   * Pas de restauration prévue, contrairement à la suspension.
+   */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'agent')
+  @Post('commercant/:id/delete')
+  async deleteCommercant(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('id') commercantId: string,
+  ) {
+    await this.assertCanManageCommercant(user, commercantId);
+    await this.commercantService.deleteCommercant(commercantId);
+    await this.auditLogService.record({
+      actorType: this.actorType(user.role),
+      actorId: user.sub,
+      action: 'commercant_delete',
       targetType: 'commercant',
       targetId: commercantId,
     });

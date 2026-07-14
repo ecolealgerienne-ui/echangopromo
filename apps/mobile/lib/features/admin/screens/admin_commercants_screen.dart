@@ -68,6 +68,37 @@ class AdminCommercantsScreen extends ConsumerWidget {
     );
   }
 
+  /// Suppression logique par l'admin/agent (2026-07-14) — distincte de la
+  /// suspension : libère le numéro de téléphone et "supprime" les promos,
+  /// pas de restauration prévue (contrairement à la suspension).
+  Future<void> _confirmAndDelete(BuildContext context, WidgetRef ref, String commercantId) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.deleteCommercantConfirmTitle),
+        content: Text(l10n.deleteCommercantConfirmMessage),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.commonCancel)),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              l10n.deleteCommercantLabel,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await _act(
+      context,
+      ref,
+      commercantId,
+      () => ref.read(adminApiProvider).deleteCommercant(commercantId),
+    );
+  }
+
   Future<void> _act(
     BuildContext context,
     WidgetRef ref,
@@ -202,6 +233,11 @@ class AdminCommercantsScreen extends ConsumerWidget {
                                   label: l10n.suspendedBadge,
                                   color: Theme.of(context).colorScheme.error,
                                 ),
+                              if (item.deleted)
+                                StatusChip(
+                                  label: l10n.deletedBadge,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
                               if (item.profilePendingReview)
                                 StatusChip(
                                   label: l10n.profilePendingReviewBadgeLabel,
@@ -212,6 +248,7 @@ class AdminCommercantsScreen extends ConsumerWidget {
                         ),
                         isThreeLine: item.registreStatus != null ||
                             item.suspended ||
+                            item.deleted ||
                             item.profilePendingReview,
                         trailing: inFlight.contains(item.id)
                             ? const SizedBox(
@@ -219,23 +256,41 @@ class AdminCommercantsScreen extends ConsumerWidget {
                                 width: 20,
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               )
-                            : item.suspended
-                                ? TextButton(
-                                    onPressed: () => _act(
-                                      context,
-                                      ref,
-                                      item.id,
-                                      () => ref.read(adminApiProvider).reactivateCommercant(item.id),
-                                    ),
-                                    child: Text(l10n.reactivateLabel),
-                                  )
-                                : TextButton(
-                                    onPressed: () => _confirmAndSuspend(context, ref, item.id),
-                                    child: Text(l10n.suspendLabel),
+                            : item.deleted
+                                ? null
+                                : PopupMenuButton<String>(
+                                    onSelected: (action) {
+                                      switch (action) {
+                                        case 'suspend':
+                                          _confirmAndSuspend(context, ref, item.id);
+                                        case 'reactivate':
+                                          _act(
+                                            context,
+                                            ref,
+                                            item.id,
+                                            () => ref
+                                                .read(adminApiProvider)
+                                                .reactivateCommercant(item.id),
+                                          );
+                                        case 'delete':
+                                          _confirmAndDelete(context, ref, item.id);
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      item.suspended
+                                          ? PopupMenuItem(
+                                              value: 'reactivate', child: Text(l10n.reactivateLabel))
+                                          : PopupMenuItem(
+                                              value: 'suspend', child: Text(l10n.suspendLabel)),
+                                      PopupMenuItem(
+                                          value: 'delete', child: Text(l10n.deleteCommercantLabel)),
+                                    ],
                                   ),
-                        leading: item.suspended
-                            ? Icon(Icons.block, color: Theme.of(context).colorScheme.error)
-                            : const Icon(Icons.storefront_outlined),
+                        leading: item.deleted
+                            ? Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error)
+                            : item.suspended
+                                ? Icon(Icons.block, color: Theme.of(context).colorScheme.error)
+                                : const Icon(Icons.storefront_outlined),
                       );
                     },
                   ),

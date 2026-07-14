@@ -127,6 +127,12 @@ class AdminApi {
     await _dio.post<void>('/admin/commercant/$commercantId/reactivate');
   }
 
+  /// Suppression logique (2026-07-14) — distincte de la suspension, libère
+  /// le numéro de téléphone et "supprime" les promos, pas de restauration.
+  Future<void> deleteCommercant(String commercantId) async {
+    await _dio.post<void>('/admin/commercant/$commercantId/delete');
+  }
+
   // --- Registre ---
 
   Future<void> validerRegistre(String commercantId) async {

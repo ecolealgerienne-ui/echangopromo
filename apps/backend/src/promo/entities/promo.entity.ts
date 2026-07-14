@@ -18,12 +18,21 @@ import { Commercant } from '../../commercant/entities/commercant.entity';
  * combiner cycle de vie et modération dans un seul enum, leçon tirée d'un
  * bug réel de comptage avant ce projet). Le commerçant peut éditer une promo
  * quel que soit son statut ici.
+ *
+ * `SUPPRIMEE` (2026-07-14) : cascade posée par `CommercantService` quand le
+ * commerçant lui-même OU l'admin/agent supprime le compte
+ * (`deleteAccount`/`deleteCommercant`) — distincte d'`ARRETEE` (arrêt
+ * volontaire d'une promo précise par le commerçant, compte toujours actif)
+ * pour ne pas mélanger deux causes différentes dans une même valeur. Jamais
+ * assignée par une suspension de compte, qui repasse les promos en
+ * `BROUILLON` (réversible) plutôt que `SUPPRIMEE` (définitif).
  */
 export enum PromoLifecycleStatus {
   BROUILLON = 'brouillon',
   PUBLIEE = 'publiee',
   ARRETEE = 'arretee',
   EXPIREE = 'expiree',
+  SUPPRIMEE = 'supprimee',
 }
 
 /**

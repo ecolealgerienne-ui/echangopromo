@@ -7,6 +7,7 @@ void main() {
     expect(PromoLifecycleStatus.fromValue('publiee'), PromoLifecycleStatus.publiee);
     expect(PromoLifecycleStatus.fromValue('arretee'), PromoLifecycleStatus.arretee);
     expect(PromoLifecycleStatus.fromValue('expiree'), PromoLifecycleStatus.expiree);
+    expect(PromoLifecycleStatus.fromValue('supprimee'), PromoLifecycleStatus.supprimee);
   });
 
   test('fromValue retombe sur expiree pour une valeur inconnue', () {
