@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../shared/l10n/enum_labels.dart';
@@ -17,10 +18,30 @@ const _listSpacing = 10.0;
 class PromoListScreen extends ConsumerWidget {
   const PromoListScreen({super.key});
 
+  Future<void> _loadMore(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      await ref.read(promoListProvider.notifier).loadMore();
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(extractApiErrorMessage(
+              error,
+              fallback: l10n.operationFailed,
+              locale: Localizations.localeOf(context),
+            )),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final promosAsync = ref.watch(promoListProvider);
+    final promoListState = ref.watch(promoListProvider);
+    final promos = ref.watch(visiblePromosProvider);
     final favorites = ref.watch(favoritesProvider);
     final selectedCategorie = ref.watch(categoryFilterProvider);
     // Un filtre "non défaut" allume le point sur le bouton — repère rapide
@@ -70,20 +91,42 @@ class PromoListScreen extends ConsumerWidget {
             ],
           ),
           Expanded(
-            child: promosAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(child: ApiErrorText(error)),
-              data: (promos) {
-                if (promos.isEmpty) {
-                  return Center(child: Text(l10n.noActivePromos));
-                }
-                return RefreshIndicator(
-                  onRefresh: () => ref.refresh(promoListProvider.future),
+            child: switch (promoListState.status) {
+              PromoListStatus.loading => const Center(child: CircularProgressIndicator()),
+              PromoListStatus.error => Center(child: ApiErrorText(promoListState.error!)),
+              PromoListStatus.loaded => RefreshIndicator(
+                  onRefresh: () => ref.read(promoListProvider.notifier).refresh(),
                   child: ListView.separated(
                     padding: const EdgeInsets.all(_listPadding),
-                    itemCount: promos.length,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    itemCount: promos.isEmpty
+                        ? 1
+                        : promos.length + (promoListState.hasMore ? 1 : 0),
                     separatorBuilder: (context, index) => const SizedBox(height: _listSpacing),
                     itemBuilder: (context, index) {
+                      if (promos.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 80),
+                          child: Center(child: Text(l10n.noActivePromos)),
+                        );
+                      }
+                      if (index == promos.length) {
+                        return Center(
+                          child: promoListState.loadingMore
+                              ? const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                )
+                              : OutlinedButton(
+                                  onPressed: () => _loadMore(context, ref),
+                                  child: Text(l10n.loadMoreButtonLabel),
+                                ),
+                        );
+                      }
                       final promo = promos[index];
                       return PromoCard(
                         promo: promo,
@@ -92,9 +135,8 @@ class PromoListScreen extends ConsumerWidget {
                       );
                     },
                   ),
-                );
-              },
-            ),
+                ),
+            },
           ),
         ],
       ),

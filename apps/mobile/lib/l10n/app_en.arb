@@ -101,6 +101,7 @@
   "agentSpaceItem": "Field agent area",
   "allCategoriesChip": "All",
   "noActivePromos": "No active promo at the moment.",
+  "loadMoreButtonLabel": "Show more",
   "filtersSortTooltip": "Filters and sorting",
   "filtersSortTitle": "Filters and sorting",
   "favoritesOnlyLabel": "Show only my favorites",

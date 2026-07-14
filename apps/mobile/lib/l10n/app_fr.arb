@@ -114,6 +114,7 @@
   "agentSpaceItem": "Espace agent terrain",
   "allCategoriesChip": "Toutes",
   "noActivePromos": "Aucune promo active pour le moment.",
+  "loadMoreButtonLabel": "Afficher plus",
   "filtersSortTooltip": "Filtres et tri",
   "filtersSortTitle": "Filtres et tri",
   "favoritesOnlyLabel": "Afficher seulement mes favoris",

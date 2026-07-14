@@ -2,12 +2,34 @@ import 'package:dio/dio.dart';
 import '../../domain/enums/categorie.dart';
 import '../../domain/models/promo.dart';
 
-/// Le backend pagine désormais `/promo` et `/promo/me/all` (`{items, total,
-/// page, limit}`) — le pilote (un seul quartier) reste largement sous cette
-/// taille de page, donc on récupère une seule page généreuse plutôt que de
-/// construire un vrai défilement infini pour l'instant. À revoir quand le
-/// volume de promos actives approchera `_pageSize`.
+/// Le backend pagine `/promo` et `/promo/me/all` (`{items, total, page,
+/// limit}`). `listMine()` reste une page unique généreuse (plafond métier de
+/// 5 promos actives par commerçant, jamais approché) ; `listActive()` pagine
+/// réellement côté mobile via bouton "Afficher plus" (retour terrain
+/// 2026-07-14 : grosses communes type Djelfa dépassant `_pageSize` en promos
+/// actives simultanées).
 const _pageSize = 100;
+
+/// Miroir mobile de `PaginatedResult<T>` (backend) pour `listActive()`.
+class PaginatedPromos {
+  PaginatedPromos({required this.items, required this.total, required this.page, required this.limit});
+
+  factory PaginatedPromos.fromJson(Map<String, dynamic> json) => PaginatedPromos(
+        items: (json['items'] as List<dynamic>)
+            .map((e) => Promo.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        total: json['total'] as int,
+        page: json['page'] as int,
+        limit: json['limit'] as int,
+      );
+
+  final List<Promo> items;
+  final int total;
+  final int page;
+  final int limit;
+
+  bool get hasMore => page * limit < total;
+}
 
 class PromoApi {
   PromoApi(this._dio);
@@ -15,21 +37,23 @@ class PromoApi {
   final Dio _dio;
 
   /// Liste des promos actives (specs §3.1) : favoris d'abord, puis
-  /// expiration la plus proche — tri appliqué côté backend.
-  Future<List<Promo>> listActive({
+  /// expiration la plus proche — tri appliqué côté backend. `page` permet le
+  /// chargement incrémental ("Afficher plus" côté écran client).
+  Future<PaginatedPromos> listActive({
     List<String> communeIds = const [],
     Categorie? categorie,
     List<String> favoriteIds = const [],
+    int page = 1,
   }) async {
     final query = <String, dynamic>{
       if (communeIds.isNotEmpty) 'communeIds': communeIds.join(','),
       if (categorie != null) 'categorie': categorie.value,
       if (favoriteIds.isNotEmpty) 'favoriteIds': favoriteIds.join(','),
+      'page': page,
       'limit': _pageSize,
     };
     final response = await _dio.get<Map<String, dynamic>>('/promo', queryParameters: query);
-    final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => Promo.fromJson(e as Map<String, dynamic>)).toList();
+    return PaginatedPromos.fromJson(response.data!);
   }
 
   Future<Promo> detail(String id) async {
