@@ -71,6 +71,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                       icon: Icons.storefront_outlined,
                       label: l10n.commercesActifsLabel,
                       value: stats.commercesActifs,
+                      onTap: () => context.push('$rolePrefix/commercants'),
                     ),
                   ),
                   SizedBox(
