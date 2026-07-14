@@ -11,6 +11,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { Categorie } from '../../common/enums/categorie.enum';
+import { PIN_SET_MESSAGE, PIN_SET_PATTERN } from '../pin.constants';
 
 export class RegisterCommercantDto {
   @IsPhoneNumber('DZ')
@@ -31,7 +32,7 @@ export class RegisterCommercantDto {
   @IsUUID()
   communeId: string;
 
-  @Matches(/^\d{4,6}$/, { message: 'Le code PIN doit contenir 4 à 6 chiffres' })
+  @Matches(PIN_SET_PATTERN, { message: PIN_SET_MESSAGE })
   pin: string;
 
   /** Clé S3 de la photo du commerce, déjà uploadée (optionnel). */

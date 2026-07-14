@@ -48,8 +48,7 @@ const Map<String, String> errorMessagesFr = {
 
   'COMMERCANT_PHONE_TAKEN': 'Ce numéro de téléphone est déjà enregistré.',
   'COMMERCANT_NOT_FOUND': 'Commerçant introuvable.',
-  'COMMERCANT_PIN_ALREADY_SET':
-      'Un PIN est déjà défini pour ce numéro — contactez un administrateur pour le réinitialiser.',
+  'COMMERCANT_OLD_PIN_MISMATCH': "L'ancien PIN ne correspond pas.",
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'Aucune demande de vérification en attente.',
   'COMMERCANT_NOT_IN_AGENT_COMMUNES': "Ce commerçant n'est dans aucune des communes de cet agent.",
   'COMMERCANT_TERMS_NOT_ACCEPTED': "Vous devez accepter les conditions d'utilisation pour créer un compte.",

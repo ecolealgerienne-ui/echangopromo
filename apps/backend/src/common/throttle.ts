@@ -1,6 +1,6 @@
 /**
  * Limite stricte pour les endpoints non authentifiés ou basés sur un
- * identifiant déclaratif non vérifié (login, claim commerçant,
+ * identifiant déclaratif non vérifié (login, inscription commerçant,
  * signalement) — 5 requêtes/minute par IP, plus restrictif que la limite
  * globale par défaut (60/min, voir `ThrottlerModule.forRoot` dans
  * `app.module.ts`).

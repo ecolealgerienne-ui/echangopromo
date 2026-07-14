@@ -15,6 +15,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/utils/maps_launcher.dart';
+import '../../shared/validators/pin_validator.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/status_chip.dart';
 
@@ -61,16 +62,73 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
     }
   }
 
+  /// PIN vraiment oublié (le commerçant ne peut fournir aucun ancien PIN) —
+  /// l'admin/agent fixe directement un nouveau PIN, à communiquer par
+  /// téléphone après avoir identifié l'appelant (décision produit
+  /// 2026-07-13 : plus de remise à zéro suivie d'une revendication
+  /// publique, exploitable par quiconque connaissait juste le numéro).
   Future<void> _confirmAndResetPin(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context)!;
+    final newPin = await _promptForNewPin(
+      context,
+      title: l10n.resetPinDialogTitle,
+      body: l10n.resetPinDialogBody,
+    );
+    if (newPin == null || !context.mounted) return;
+    await _act(
+      context,
+      ref,
+      () => ref.read(adminApiProvider).resetPin(item.id, newPin),
+      popOnSuccess: false,
+      successMessage: l10n.resetPinSuccessMessage,
+    );
+  }
+
+  /// Le commerçant se souvient encore de son PIN actuel et veut le changer
+  /// — appelle un admin/agent qui saisit les deux valeurs pendant la
+  /// conversation (§3.2, pas de flux libre-service commerçant).
+  Future<void> _confirmAndChangePin(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context)!;
+    final oldPinController = TextEditingController();
+    final newPinController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(l10n.resetPinConfirmTitle),
-        content: Text(l10n.resetPinConfirmMessage),
+        title: Text(l10n.changePinDialogTitle),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: oldPinController,
+                decoration: InputDecoration(labelText: l10n.oldPinLabel),
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 12,
+                validator: validateExistingPin(context),
+              ),
+              TextFormField(
+                controller: newPinController,
+                decoration: InputDecoration(labelText: l10n.newPinLabel),
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 12,
+                validator: validatePin(context),
+              ),
+            ],
+          ),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.commonCancel)),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(l10n.resetPinLabel)),
+          FilledButton(
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.pop(context, true);
+            },
+            child: Text(l10n.commonConfirm),
+          ),
         ],
       ),
     );
@@ -78,9 +136,57 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
     await _act(
       context,
       ref,
-      () => ref.read(adminApiProvider).resetPin(item.id),
+      () => ref.read(adminApiProvider).changePin(
+            item.id,
+            oldPinController.text.trim(),
+            newPinController.text.trim(),
+          ),
       popOnSuccess: false,
-      successMessage: l10n.resetPinSuccessMessage,
+      successMessage: l10n.changePinSuccessMessage,
+    );
+  }
+
+  Future<String?> _promptForNewPin(
+    BuildContext context, {
+    required String title,
+    required String body,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+    final pinController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(body, style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: pinController,
+                decoration: InputDecoration(labelText: l10n.newPinLabel),
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 12,
+                validator: validatePin(context),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(l10n.commonCancel)),
+          FilledButton(
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.pop(context, pinController.text.trim());
+            },
+            child: Text(l10n.commonConfirm),
+          ),
+        ],
+      ),
     );
   }
 
@@ -283,6 +389,10 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                             onPressed: () => _confirmAndSuspend(context, ref),
                             child: Text(l10n.suspendLabel),
                           ),
+                    OutlinedButton(
+                      onPressed: () => _confirmAndChangePin(context, ref),
+                      child: Text(l10n.changePinLabel),
+                    ),
                     OutlinedButton(
                       onPressed: () => _confirmAndResetPin(context, ref),
                       child: Text(l10n.resetPinLabel),

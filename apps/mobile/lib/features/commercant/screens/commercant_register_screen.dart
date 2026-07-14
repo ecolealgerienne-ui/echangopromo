@@ -186,7 +186,7 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
                 decoration: InputDecoration(labelText: l10n.choosePinLabel),
                 keyboardType: TextInputType.number,
                 obscureText: true,
-                maxLength: 6,
+                maxLength: 12,
                 validator: validatePin(context),
               ),
               TextFormField(
@@ -194,7 +194,7 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
                 decoration: InputDecoration(labelText: l10n.confirmPinLabel),
                 keyboardType: TextInputType.number,
                 obscureText: true,
-                maxLength: 6,
+                maxLength: 12,
                 validator: (v) => (v != _pinController.text) ? l10n.pinMismatch : null,
               ),
               const SizedBox(height: 12),

@@ -58,18 +58,23 @@ le SMS est jugé inutile et coûteux pour ce marché, aucune vérification de
 possession du numéro n'est effectuée) :
 
 1. Saisie du numéro de téléphone (auto-inscription) ou saisie par l'agent (création assistée).
-2. Définition d'un **code PIN** (4-6 chiffres) par le commerçant — directement à l'inscription, ou plus tard via l'écran de connexion pour un compte créé par l'agent (`claim`, voir cycle de vie ci-dessous). Aucune preuve de possession du numéro n'est demandée.
+2. Définition d'un **code PIN** (6-12 chiffres, relevé de 4-6 le 2026-07-13 — voir encart sécurité ci-dessous) par le commerçant à l'inscription, ou **choisi par l'agent et transmis en personne** pour un compte créé par l'agent.
 3. Connexions suivantes : téléphone + PIN.
-4. **PIN oublié** : pas de flux libre-service. Seul l'**admin** peut effacer le PIN d'un commerçant (sur demande, hors app) ; le commerçant en redéfinit ensuite un nouveau via `claim`, comme pour un compte créé par un agent.
+4. **PIN oublié** : pas de flux libre-service. Un admin/agent (après avoir identifié l'appelant pendant la conversation) fixe directement un nouveau PIN et le communique par téléphone — même mécanisme que la création par agent. Si le commerçant se souvient encore de son PIN actuel et veut simplement le changer, l'admin/agent saisit l'ancien et le nouveau (`change-pin`), l'ancien faisant office de preuve d'identité.
+
+> **Fermeture de faille (2026-07-13)** : jusqu'ici, un compte créé par un agent restait `créé_agent` (PIN non défini) jusqu'à ce que le commerçant le revendique lui-même via `POST /commercant/claim`, un endpoint public ne demandant que le numéro de téléphone — **n'importe qui connaissant ce numéro (souvent public : enseigne, carte de visite) pouvait donc revendiquer le compte avant le vrai commerçant**, avec le même risque à chaque réinitialisation de PIN par un admin. L'endpoint `claim` est supprimé : l'agent choisit désormais le PIN en personne à la création (compte `autonome` dès le départ, plus d'état intermédiaire), et toute réinitialisation ultérieure passe par un admin/agent qui fixe ou vérifie le PIN directement, communiqué uniquement de vive voix (jamais par SMS, cohérent avec la décision "pas d'OTP"). La longueur minimale du PIN est montée à 6 chiffres à cette occasion (ancien minimum de 4 jugé trop faible) ; la connexion et la vérification de l'ancien PIN restent permissives sur 4-12 chiffres pour ne pas invalider les PIN déjà fixés avant ce changement.
 
 **Cycle de vie du compte** (états) :
 
 ```
-créé_agent → autonome (dès que le commerçant définit son PIN via `claim`)
+créé_agent → autonome (historique uniquement — un compte créé par un agent est
+              désormais autonome dès la création, voir encart ci-dessus ;
+              `créé_agent` ne subsiste que sur d'éventuelles lignes antérieures
+              au 2026-07-13, dont le PIN se fixe comme un PIN oublié ordinaire)
 auto_inscrit → autonome (directement, dès la saisie du PIN à l'inscription)
 ```
 
-- Un compte créé par l'agent reste `créé_agent` jusqu'à ce que le commerçant définisse lui-même son PIN pour ce numéro (`claim`) — il n'y a plus d'étape "revendication" distincte ni d'OTP intermédiaire.
+- Un compte créé par l'agent est `autonome` dès la création (l'agent choisit et transmet le PIN en personne) — plus d'étape de revendication publique.
 - Un compte auto-inscrit passe directement en `autonome` dès l'inscription — pas d'étape intermédiaire, car il n'y a pas de tiers (agent) à qui retirer la main.
 
 **Niveaux de vérification (indépendants du cycle de vie du compte)** :

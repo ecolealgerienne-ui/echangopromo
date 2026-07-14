@@ -120,8 +120,21 @@ class AdminApi {
     await _dio.post<void>('/admin/commercant/$commercantId/registre/rejeter');
   }
 
-  Future<void> resetPin(String commercantId) async {
-    await _dio.post<void>('/admin/commercant/$commercantId/reset-pin');
+  /// PIN vraiment oublié — fixe directement un nouveau PIN (décision produit
+  /// 2026-07-13), à communiquer au commerçant par téléphone.
+  Future<void> resetPin(String commercantId, String newPin) async {
+    await _dio.post<void>(
+      '/admin/commercant/$commercantId/reset-pin',
+      data: {'newPin': newPin},
+    );
+  }
+
+  /// Le commerçant connaît encore son PIN actuel et veut le changer.
+  Future<void> changePin(String commercantId, String oldPin, String newPin) async {
+    await _dio.post<void>(
+      '/admin/commercant/$commercantId/change-pin',
+      data: {'oldPin': oldPin, 'newPin': newPin},
+    );
   }
 
   Future<void> validerProfil(String commercantId) async {

@@ -34,15 +34,6 @@ class CommercantApi {
     return response.data!['accessToken'] as String;
   }
 
-  /// Active un compte créé par un agent (ou réinitialisé par l'admin) — pas d'OTP.
-  Future<String> claim({required String telephone, required String pin}) async {
-    final response = await _dio.post<Map<String, dynamic>>(
-      '/commercant/claim',
-      data: {'telephone': telephone, 'pin': pin},
-    );
-    return response.data!['accessToken'] as String;
-  }
-
   Future<String> login({required String telephone, required String pin}) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/commercant/login',

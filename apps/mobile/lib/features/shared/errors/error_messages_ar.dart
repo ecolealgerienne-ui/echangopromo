@@ -33,7 +33,7 @@ const Map<String, String> errorMessagesAr = {
 
   'COMMERCANT_PHONE_TAKEN': 'رقم الهاتف هذا مسجل بالفعل.',
   'COMMERCANT_NOT_FOUND': 'التاجر غير موجود.',
-  'COMMERCANT_PIN_ALREADY_SET': 'تم بالفعل تحديد رمز PIN لهذا الرقم — اتصل بالمسؤول لإعادة تعيينه.',
+  'COMMERCANT_OLD_PIN_MISMATCH': 'رمز PIN القديم غير مطابق.',
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'لا يوجد طلب تحقق في الانتظار.',
   'COMMERCANT_NOT_IN_AGENT_COMMUNES': 'هذا التاجر ليس ضمن بلديات هذا العون.',
   'COMMERCANT_TERMS_NOT_ACCEPTED': 'يجب عليك قبول شروط الاستخدام لإنشاء حساب.',

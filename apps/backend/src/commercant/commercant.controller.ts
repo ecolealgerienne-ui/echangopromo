@@ -19,7 +19,6 @@ import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
 import { DeviceId } from '../common/decorators/device-id.decorator';
 import { StorageService } from '../storage/storage.service';
 import { CommercantService } from './commercant.service';
-import { ClaimCommercantDto } from './dto/claim-commercant.dto';
 import { Commercant } from './entities/commercant.entity';
 import { LoginCommercantDto } from './dto/login-commercant.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
@@ -44,20 +43,6 @@ export class CommercantController {
   @Post('register')
   async register(@Body() dto: RegisterCommercantDto) {
     const commercant = await this.commercantService.selfRegister(dto);
-    return {
-      accessToken: this.authService.issueToken(
-        commercant.id,
-        'commercant',
-        commercant.tokenVersion,
-      ),
-    };
-  }
-
-  /** Active un compte créé par un agent (ou réinitialisé par l'admin) — pas d'OTP. */
-  @Throttle(STRICT_THROTTLE)
-  @Post('claim')
-  async claim(@Body() dto: ClaimCommercantDto) {
-    const commercant = await this.commercantService.claim(dto);
     return {
       accessToken: this.authService.issueToken(
         commercant.id,

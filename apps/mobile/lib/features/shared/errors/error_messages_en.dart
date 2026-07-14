@@ -34,8 +34,7 @@ const Map<String, String> errorMessagesEn = {
 
   'COMMERCANT_PHONE_TAKEN': 'This phone number is already registered.',
   'COMMERCANT_NOT_FOUND': 'Merchant not found.',
-  'COMMERCANT_PIN_ALREADY_SET':
-      'A PIN is already set for this number — contact an administrator to reset it.',
+  'COMMERCANT_OLD_PIN_MISMATCH': 'The old PIN does not match.',
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'No pending verification request.',
   'COMMERCANT_NOT_IN_AGENT_COMMUNES': 'This merchant is not in any of this agent\'s communes.',
   'COMMERCANT_TERMS_NOT_ACCEPTED': 'You must accept the terms of use to create an account.',

@@ -14,10 +14,12 @@ import { Commune } from '../../commune/entities/commune.entity';
 import { Agent } from '../../agent/entities/agent.entity';
 
 /**
- * Cycle de vie du compte (specs §3.2). Sans OTP, il n'y a plus d'étape
- * intermédiaire de revendication : un commerçant créé par un agent reste
- * `cree_agent` jusqu'à ce qu'il définisse lui-même son PIN (`claim`), ce qui
- * le fait passer directement à `autonome`.
+ * Cycle de vie du compte (specs §3.2). `CREE_AGENT` n'est plus jamais
+ * assigné depuis le 2026-07-13 (l'agent choisit et transmet le PIN en
+ * personne à la création, le compte est `autonome` dès le départ — voir
+ * `CommercantService.createByAgent`) ; la valeur reste dans l'enum pour les
+ * lignes déjà en base créées avant ce changement, dont le PIN se fixe
+ * désormais via `CommercantService.resetPin` comme un PIN oublié ordinaire.
  */
 export enum CommercantAccountState {
   CREE_AGENT = 'cree_agent',
@@ -90,8 +92,8 @@ export class Commercant {
 
   /**
    * Incrémenté pour révoquer tous les JWT émis avant (même mécanisme que
-   * Agent/Admin, audit règle #6) — notamment lors d'un `adminResetPin` :
-   * sans ça, effacer le PIN n'empêche pas un JWT déjà émis de continuer à
+   * Agent/Admin, audit règle #6) — notamment lors d'un `resetPin`/`changePin` :
+   * sans ça, changer le PIN n'empêche pas un JWT déjà émis de continuer à
    * fonctionner jusqu'à expiration (audit V1 §1).
    */
   @Column({ type: 'int', default: 0 })

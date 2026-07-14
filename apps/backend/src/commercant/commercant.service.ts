@@ -23,7 +23,6 @@ import {
   CommercantOriginVerification,
   RegistreStatus,
 } from './entities/commercant.entity';
-import { ClaimCommercantDto } from './dto/claim-commercant.dto';
 import { CreateCommercantByAgentDto } from './dto/create-commercant-by-agent.dto';
 import { ListCommercantQueryDto } from './dto/list-commercant-query.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
@@ -80,47 +79,30 @@ export class CommercantService {
     );
   }
 
-  /** Création assistée par l'agent (specs §3.2, voie 2) — pas d'OTP envoyé ici. */
+  /**
+   * Création assistée par l'agent (specs §3.2, voie 2). L'agent choisit et
+   * transmet le PIN en personne (décision produit 2026-07-13) : le compte
+   * est `autonome` dès la création, plus d'état intermédiaire `cree_agent`
+   * en attente d'une revendication publique (ancienne faille — un tiers
+   * connaissant seulement le numéro de téléphone du commerçant pouvait
+   * revendiquer le compte avant lui).
+   */
   async createByAgent(
     dto: CreateCommercantByAgentDto,
     agentId: string,
   ): Promise<Commercant> {
     await this.assertPhoneAvailable(dto.telephone);
+    const { pin, ...rest } = dto;
 
     return this.commercants.save(
       this.commercants.create({
-        ...dto,
+        ...rest,
+        pinHash: await this.authService.hash(pin),
         createdByAgentId: agentId,
-        accountState: CommercantAccountState.CREE_AGENT,
+        accountState: CommercantAccountState.AUTONOME,
         originVerification: CommercantOriginVerification.CONFIRME_AGENT,
       }),
     );
-  }
-
-  /**
-   * Le commerçant définit lui-même son PIN pour activer un compte créé par
-   * un agent, ou pour se réactiver après une réinitialisation par l'admin
-   * (§3.3) — aucun OTP : seul le numéro de téléphone est requis (décision
-   * produit assumée, voir §3.2 des specs). Refusé si un PIN est déjà défini,
-   * pour ne pas permettre l'écrasement silencieux du PIN d'un tiers.
-   */
-  async claim(dto: ClaimCommercantDto): Promise<Commercant> {
-    const commercant = await this.commercants.findOne({
-      where: { telephone: dto.telephone },
-    });
-    if (!commercant) {
-      throw new NotFoundAppException(ErrorCode.COMMERCANT_NOT_FOUND, 'Commerçant introuvable');
-    }
-    if (commercant.pinHash) {
-      throw new ConflictAppException(
-        ErrorCode.COMMERCANT_PIN_ALREADY_SET,
-        'Un PIN est déjà défini pour ce numéro — contactez un administrateur pour le réinitialiser',
-      );
-    }
-
-    commercant.pinHash = await this.authService.hash(dto.pin);
-    commercant.accountState = CommercantAccountState.AUTONOME;
-    return this.commercants.save(commercant);
   }
 
   async login(telephone: string, pin: string): Promise<Commercant> {
@@ -147,16 +129,36 @@ export class CommercantService {
   }
 
   /**
-   * PIN oublié : pas de flux libre-service (pas d'OTP pour reprouver la
-   * possession du numéro). Seul l'admin peut effacer le PIN ; le commerçant
-   * en définit ensuite un nouveau via `claim`, exactement comme pour un
-   * compte créé par un agent. Incrémente aussi `tokenVersion` : sans ça,
-   * un JWT déjà émis avant le reset resterait valide jusqu'à expiration
-   * malgré l'action de l'admin (audit V1 §1).
+   * PIN vraiment oublié (le commerçant ne peut fournir aucun ancien PIN) —
+   * l'admin/agent fixe directement un nouveau PIN (décision produit
+   * 2026-07-13, remplace l'ancienne remise à zéro suivie d'une
+   * revendication publique, qui laissait n'importe qui connaissant le
+   * numéro de téléphone s'approprier le compte en premier). Incrémente
+   * `tokenVersion` : sans ça, un JWT déjà émis avant le reset resterait
+   * valide jusqu'à expiration malgré l'action de l'admin (audit V1 §1).
    */
-  async adminResetPin(commercantId: string): Promise<void> {
+  async resetPin(commercantId: string, newPin: string): Promise<void> {
     const commercant = await this.findByIdOrFail(commercantId);
-    commercant.pinHash = null;
+    commercant.pinHash = await this.authService.hash(newPin);
+    await this.commercants.save(commercant);
+    await this.commercants.increment({ id: commercantId }, 'tokenVersion', 1);
+  }
+
+  /**
+   * Le commerçant se souvient encore de son PIN actuel et veut le changer
+   * — appelle un admin/agent qui saisit les deux valeurs (§3.2, pas de
+   * flux libre-service commerçant). La preuve de possession de l'ancien
+   * PIN tient lieu de vérification d'identité, sans OTP.
+   */
+  async changePin(commercantId: string, oldPin: string, newPin: string): Promise<void> {
+    const commercant = await this.findByIdOrFail(commercantId);
+    if (!commercant.pinHash || !(await this.authService.compare(oldPin, commercant.pinHash))) {
+      throw new BadRequestAppException(
+        ErrorCode.COMMERCANT_OLD_PIN_MISMATCH,
+        "L'ancien PIN ne correspond pas",
+      );
+    }
+    commercant.pinHash = await this.authService.hash(newPin);
     await this.commercants.save(commercant);
     await this.commercants.increment({ id: commercantId }, 'tokenVersion', 1);
   }
@@ -166,7 +168,7 @@ export class CommercantService {
    * uniquement (`deletedAt`), jamais de suppression physique (conserve
    * l'historique promos/signalements). `tokenVersion` incrémenté pour
    * révoquer immédiatement le token en cours (même mécanisme que
-   * `adminResetPin`) : sans ça, la session active resterait valide jusqu'à
+   * `resetPin`/`changePin`) : sans ça, la session active resterait valide jusqu'à
    * expiration malgré la suppression. Les promos du commerçant cessent
    * d'être visibles aux clients dès ce moment (filtre `commercant.deletedAt
    * IS NULL` dans `PromoService.findActiveForClient`).
