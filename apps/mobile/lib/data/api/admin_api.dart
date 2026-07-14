@@ -129,14 +129,6 @@ class AdminApi {
     );
   }
 
-  /// Le commerçant connaît encore son PIN actuel et veut le changer.
-  Future<void> changePin(String commercantId, String oldPin, String newPin) async {
-    await _dio.post<void>(
-      '/admin/commercant/$commercantId/change-pin',
-      data: {'oldPin': oldPin, 'newPin': newPin},
-    );
-  }
-
   Future<void> validerProfil(String commercantId) async {
     await _dio.post<void>('/admin/commercant/$commercantId/profile/valider');
   }

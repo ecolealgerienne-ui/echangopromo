@@ -84,68 +84,6 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
     );
   }
 
-  /// Le commerçant se souvient encore de son PIN actuel et veut le changer
-  /// — appelle un admin/agent qui saisit les deux valeurs pendant la
-  /// conversation (§3.2, pas de flux libre-service commerçant).
-  Future<void> _confirmAndChangePin(BuildContext context, WidgetRef ref) async {
-    final l10n = AppLocalizations.of(context)!;
-    final oldPinController = TextEditingController();
-    final newPinController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.changePinDialogTitle),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: oldPinController,
-                decoration: InputDecoration(labelText: l10n.oldPinLabel),
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                maxLength: 12,
-                validator: validateExistingPin(context),
-              ),
-              TextFormField(
-                controller: newPinController,
-                decoration: InputDecoration(labelText: l10n.newPinLabel),
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                maxLength: 12,
-                validator: validatePin(context),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.commonCancel)),
-          FilledButton(
-            onPressed: () {
-              if (!formKey.currentState!.validate()) return;
-              Navigator.pop(context, true);
-            },
-            child: Text(l10n.commonConfirm),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-    await _act(
-      context,
-      ref,
-      () => ref.read(adminApiProvider).changePin(
-            item.id,
-            oldPinController.text.trim(),
-            newPinController.text.trim(),
-          ),
-      popOnSuccess: false,
-      successMessage: l10n.changePinSuccessMessage,
-    );
-  }
-
   Future<String?> _promptForNewPin(
     BuildContext context, {
     required String title,
@@ -389,10 +327,6 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                             onPressed: () => _confirmAndSuspend(context, ref),
                             child: Text(l10n.suspendLabel),
                           ),
-                    OutlinedButton(
-                      onPressed: () => _confirmAndChangePin(context, ref),
-                      child: Text(l10n.changePinLabel),
-                    ),
                     OutlinedButton(
                       onPressed: () => _confirmAndResetPin(context, ref),
                       child: Text(l10n.resetPinLabel),

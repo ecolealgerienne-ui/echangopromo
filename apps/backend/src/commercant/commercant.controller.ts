@@ -19,6 +19,7 @@ import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
 import { DeviceId } from '../common/decorators/device-id.decorator';
 import { StorageService } from '../storage/storage.service';
 import { CommercantService } from './commercant.service';
+import { ChangeCommercantPinDto } from './dto/change-commercant-pin.dto';
 import { Commercant } from './entities/commercant.entity';
 import { LoginCommercantDto } from './dto/login-commercant.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
@@ -127,6 +128,26 @@ export class CommercantController {
   ) {
     const commercant = await this.commercantService.updateProfile(user.sub, dto);
     return this.toMeJson(commercant);
+  }
+
+  /**
+   * Le commerçant connaît encore son PIN actuel et veut le changer — libre-
+   * service (décision produit 2026-07-13 : contrairement au flux "PIN
+   * oublié", pas besoin de passer par un admin/agent quand on a déjà la
+   * preuve de possession du PIN en main). Incrémente `tokenVersion` côté
+   * service, donc le token courant devient invalide juste après cet appel —
+   * le mobile déconnecte et renvoie vers l'écran de connexion.
+   */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('commercant')
+  @Patch('me/pin')
+  async changeMyPin(
+    @CurrentUser() user: AuthTokenPayload,
+    @Body() dto: ChangeCommercantPinDto,
+  ) {
+    await this.commercantService.changePin(user.sub, dto.oldPin, dto.newPin);
+    return { ok: true };
   }
 
   /**

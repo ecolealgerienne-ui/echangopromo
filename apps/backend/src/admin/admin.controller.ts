@@ -23,7 +23,6 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
-import { ChangeCommercantPinDto } from '../commercant/dto/change-commercant-pin.dto';
 import { ListCommercantQueryDto } from '../commercant/dto/list-commercant-query.dto';
 import { ResetCommercantPinDto } from '../commercant/dto/reset-commercant-pin.dto';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
@@ -495,32 +494,6 @@ export class AdminController {
       actorType: this.actorType(user.role),
       actorId: user.sub,
       action: 'commercant_reset_pin',
-      targetType: 'commercant',
-      targetId: commercantId,
-    });
-    return { ok: true };
-  }
-
-  /**
-   * Le commerçant se souvient encore de son PIN actuel et veut le changer
-   * — appelle un admin/agent qui saisit les deux valeurs pendant la
-   * conversation (§3.2, pas de flux libre-service commerçant).
-   */
-  @Throttle(SENSITIVE_ACTION_THROTTLE)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin', 'agent')
-  @Post('commercant/:id/change-pin')
-  async changePin(
-    @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
-    @Body() dto: ChangeCommercantPinDto,
-  ) {
-    await this.assertCanManageCommercant(user, commercantId);
-    await this.commercantService.changePin(commercantId, dto.oldPin, dto.newPin);
-    await this.auditLogService.record({
-      actorType: this.actorType(user.role),
-      actorId: user.sub,
-      action: 'commercant_change_pin',
       targetType: 'commercant',
       targetId: commercantId,
     });

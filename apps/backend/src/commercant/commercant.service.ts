@@ -146,9 +146,10 @@ export class CommercantService {
 
   /**
    * Le commerçant se souvient encore de son PIN actuel et veut le changer
-   * — appelle un admin/agent qui saisit les deux valeurs (§3.2, pas de
-   * flux libre-service commerçant). La preuve de possession de l'ancien
-   * PIN tient lieu de vérification d'identité, sans OTP.
+   * — libre-service (`CommercantController.changeMyPin`, décision produit
+   * 2026-07-13) : la preuve de possession de l'ancien PIN tient lieu de
+   * vérification d'identité, sans OTP. Distinct de `resetPin` ci-dessus
+   * (PIN vraiment oublié, admin/agent seuls).
    */
   async changePin(commercantId: string, oldPin: string, newPin: string): Promise<void> {
     const commercant = await this.findByIdOrFail(commercantId);

@@ -7,6 +7,7 @@ import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
+import '../../shared/validators/pin_validator.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/category_dropdown.dart';
 import '../../shared/widgets/error_text.dart';
@@ -79,6 +80,92 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           ));
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Libre-service : le commerçant connaît encore son PIN actuel et veut le
+  /// changer (décision produit 2026-07-13 — contrairement au flux "PIN
+  /// oublié", qui passe par un admin/agent). Le token courant devient
+  /// invalide dès l'appel réussi (tokenVersion incrémenté côté service) :
+  /// on déconnecte et renvoie vers l'accueil plutôt que de laisser un futur
+  /// appel échouer de façon inattendue.
+  Future<void> _changePin() async {
+    final l10n = AppLocalizations.of(context)!;
+    final oldPinController = TextEditingController();
+    final newPinController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.changePinDialogTitle),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: oldPinController,
+                decoration: InputDecoration(labelText: l10n.oldPinLabel),
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 12,
+                validator: validateExistingPin(context),
+              ),
+              TextFormField(
+                controller: newPinController,
+                decoration: InputDecoration(labelText: l10n.newPinLabel),
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 12,
+                validator: validatePin(context),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.commonCancel)),
+          FilledButton(
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.pop(context, true);
+            },
+            child: Text(l10n.commonConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ref.read(commercantApiProvider).changePin(
+            oldPin: oldPinController.text.trim(),
+            newPin: newPinController.text.trim(),
+          );
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          content: Text(l10n.changePinSuccessMessage),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(l10n.commonUnderstood)),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      await ref.read(authControllerProvider.notifier).logout();
+      if (mounted) context.go('/');
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(extractApiErrorMessage(
+              error,
+              fallback: l10n.operationFailed,
+              locale: Localizations.localeOf(context),
+            )),
+          ),
+        );
+      }
     }
   }
 
@@ -188,6 +275,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 ErrorText(_error),
                 const SizedBox(height: 16),
                 LoadingButton(loading: _loading, onPressed: _submit, label: l10n.saveLabel),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: _loading ? null : _changePin,
+                  child: Text(l10n.changePinLabel),
+                ),
                 const SizedBox(height: 24),
                 Wrap(
                   alignment: WrapAlignment.center,

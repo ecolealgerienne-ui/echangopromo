@@ -47,6 +47,15 @@ class CommercantApi {
     return Commercant.fromJson(response.data!);
   }
 
+  /// Libre-service : le commerçant connaît encore son PIN actuel et veut le
+  /// changer (décision produit 2026-07-13 — contrairement au flux "PIN
+  /// oublié", qui passe par un admin/agent). Le token courant devient
+  /// invalide juste après cet appel (tokenVersion incrémenté côté service),
+  /// à l'appelant de déconnecter et renvoyer vers l'écran de connexion.
+  Future<void> changePin({required String oldPin, required String newPin}) async {
+    await _dio.patch<void>('/commercant/me/pin', data: {'oldPin': oldPin, 'newPin': newPin});
+  }
+
   /// Édition du profil — téléphone volontairement non modifiable ici.
   Future<Commercant> updateProfile({
     String? nom,
