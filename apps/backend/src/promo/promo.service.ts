@@ -217,9 +217,10 @@ export class PromoService {
 
   /**
    * Liste des promos actives filtrée par commune/catégorie (specs §3.1).
-   * Tri par défaut : favoris d'abord, puis expiration la plus proche —
-   * proposition non confirmée (point ouvert §7.2), appliquée par défaut en
-   * l'absence d'autre arbitrage.
+   * Tri par défaut : favoris d'abord, puis plus récemment publiées en
+   * premier (retour terrain 2026-07-14 — remplace l'ancien tri par
+   * expiration la plus proche, toujours disponible côté client comme option
+   * de tri manuelle).
    */
   async findActiveForClient(
     query: ListPromoQueryDto,
@@ -265,7 +266,11 @@ export class PromoService {
       ).setParameter('favoriteIds', query.favoriteIds);
       qb.orderBy('favorite_rank', 'ASC');
     }
-    qb.addOrderBy('promo.dateFin', 'ASC');
+    // NULLS LAST : toutes les promos ici sont PUBLIEE donc publishedAt est
+    // normalement toujours renseigné, mais une ligne pré-migration mal
+    // backfillée ne doit pas remonter en tête d'un tri DESC (comportement
+    // par défaut de Postgres pour NULL en DESC).
+    qb.addOrderBy('promo.publishedAt', 'DESC', 'NULLS LAST');
     qb.skip((query.page - 1) * query.limit).take(query.limit);
 
     const [items, total] = await qb.getManyAndCount();

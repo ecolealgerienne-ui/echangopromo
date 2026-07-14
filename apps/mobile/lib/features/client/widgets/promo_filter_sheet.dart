@@ -37,7 +37,7 @@ class _PromoFilterSheetContent extends ConsumerWidget {
                 TextButton(
                   onPressed: () {
                     ref.read(favoritesOnlyFilterProvider.notifier).state = false;
-                    ref.read(promoSortProvider.notifier).state = PromoSort.expireBientot;
+                    ref.read(promoSortProvider.notifier).state = PromoSort.nouveautes;
                   },
                   child: Text(l10n.resetFiltersLabel),
                 ),

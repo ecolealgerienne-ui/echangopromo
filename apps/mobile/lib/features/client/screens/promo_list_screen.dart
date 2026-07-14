@@ -48,7 +48,7 @@ class PromoListScreen extends ConsumerWidget {
     // façon Airbnb/Deliveroo, sans avoir à ouvrir la feuille pour savoir si
     // un filtre est actif.
     final filtersActive = ref.watch(favoritesOnlyFilterProvider) ||
-        ref.watch(promoSortProvider) != PromoSort.expireBientot;
+        ref.watch(promoSortProvider) != PromoSort.nouveautes;
 
     return Scaffold(
       appBar: AppBar(

@@ -17,12 +17,13 @@ final favoritesOnlyFilterProvider = StateProvider.autoDispose<bool>((ref) => fal
 
 enum PromoSort { expireBientot, plusGrosseReduction, nouveautes }
 
-/// `expireBientot` reproduit le tri par défaut déjà appliqué côté backend
-/// (`PromoService.findActiveForClient`) ; les deux autres sont recalculés
+/// `nouveautes` reproduit le tri par défaut déjà appliqué côté backend
+/// (`PromoService.findActiveForClient`, retour terrain 2026-07-14 : les
+/// plus récemment publiées en premier) ; les deux autres sont recalculés
 /// côté client, sur les promos chargées jusqu'ici (pas un tri global
 /// serveur) — acceptable tant que le tri par défaut reste celui qui pousse
 /// à charger plus de pages.
-final promoSortProvider = StateProvider.autoDispose<PromoSort>((ref) => PromoSort.expireBientot);
+final promoSortProvider = StateProvider.autoDispose<PromoSort>((ref) => PromoSort.nouveautes);
 
 enum PromoListStatus { loading, loaded, error }
 
