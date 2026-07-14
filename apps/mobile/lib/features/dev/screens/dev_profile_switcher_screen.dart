@@ -141,7 +141,7 @@ class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScr
             token: token,
             fetchId: () async => (await api.me()).id,
           );
-      if (mounted) context.push('/agent/communes');
+      if (mounted) context.push('/agent/dashboard');
     } catch (error) {
       _showError(error);
     } finally {
