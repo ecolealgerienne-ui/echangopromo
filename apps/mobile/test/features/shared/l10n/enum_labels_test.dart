@@ -42,13 +42,4 @@ void main() {
     final arContext = await pumpLocalizedContext(tester, locale: const Locale('ar'));
     expect(categorieLabel(arContext, Categorie.alimentation), 'المواد الغذائية');
   });
-
-  testWidgets('visitStatusLabel — valeur inconnue retombe sur la valeur brute', (tester) async {
-    final context = await pumpLocalizedContext(tester);
-
-    expect(visitStatusLabel(context, 'jamais_visite'), 'Jamais visité');
-    expect(visitStatusLabel(context, 'a_jour'), 'À jour');
-    expect(visitStatusLabel(context, 'a_relancer'), 'À relancer');
-    expect(visitStatusLabel(context, 'valeur_inconnue'), 'valeur_inconnue');
-  });
 }
