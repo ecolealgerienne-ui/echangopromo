@@ -18,6 +18,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/utils/maps_launcher.dart';
+import '../../shared/utils/phone_launcher.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/promo_photo_hero.dart';
@@ -253,6 +254,33 @@ class _CommercantInfo extends ConsumerWidget {
                 const SizedBox(width: 4),
                 Expanded(child: Text(commercant.adresse!)),
               ],
+            ),
+          ],
+          if (commercant.telephone != null && commercant.telephone!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Tooltip(
+              message: l10n.callTooltip,
+              child: InkWell(
+                onTap: () => callPhone(commercant.telephone!),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.phone_outlined,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      commercant.telephone!,
+                      style: TextStyle(
+                        decoration: TextDecoration.underline,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
           if (commercant.latitude != null && commercant.longitude != null) ...[

@@ -92,6 +92,7 @@
   "reportReasonPhotoTrompeuse": "Misleading photo",
   "reportReasonAutre": "Other reason",
   "itineraryButton": "Directions",
+  "callTooltip": "Call",
   "shareTooltip": "Share",
   "addFavoriteTooltip": "Add to favorites",
   "removeFavoriteTooltip": "Remove from favorites",

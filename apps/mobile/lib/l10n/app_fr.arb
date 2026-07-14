@@ -96,6 +96,7 @@
   "reportReasonPhotoTrompeuse": "Photo trompeuse",
   "reportReasonAutre": "Autre raison",
   "itineraryButton": "Itinéraire",
+  "callTooltip": "Appeler",
   "shareTooltip": "Partager",
   "addFavoriteTooltip": "Ajouter aux favoris",
   "removeFavoriteTooltip": "Retirer des favoris",
