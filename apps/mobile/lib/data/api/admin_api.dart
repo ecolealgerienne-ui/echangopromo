@@ -184,6 +184,16 @@ class AdminApi {
     await _dio.post<void>('/admin/agent/$agentId/revoke-token');
   }
 
+  /// Mot de passe agent oublié/perdu — l'agent ne peut pas le changer
+  /// lui-même (décision produit 2026-07-14), seul l'admin fixe un nouveau
+  /// mot de passe, à communiquer de vive voix.
+  Future<void> resetAgentPassword(String agentId, String newPassword) async {
+    await _dio.post<void>(
+      '/admin/agent/$agentId/reset-password',
+      data: {'newPassword': newPassword},
+    );
+  }
+
   Future<void> transferCommunes({
     required List<String> communeIds,
     required String fromAgentId,

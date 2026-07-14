@@ -94,6 +94,62 @@ class AgentListScreen extends ConsumerWidget {
     }
   }
 
+  /// Mot de passe vraiment oublié — l'agent ne peut pas le changer
+  /// lui-même (décision produit 2026-07-14), seul l'admin en fixe un
+  /// nouveau, à communiquer de vive voix après avoir identifié l'agent
+  /// (même schéma que `_confirmAndResetPin` côté commerçant).
+  Future<void> _resetPassword(BuildContext context, WidgetRef ref, Agent agent) async {
+    final l10n = AppLocalizations.of(context)!;
+    final passwordController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final newPassword = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.resetAgentPasswordDialogTitle),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(l10n.resetAgentPasswordDialogBody, style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: passwordController,
+                decoration: InputDecoration(labelText: l10n.passwordLabel),
+                obscureText: true,
+                validator: (v) => (v == null || v.length < 8) ? l10n.passwordRequired : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(l10n.commonCancel)),
+          FilledButton(
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.pop(context, passwordController.text);
+            },
+            child: Text(l10n.commonConfirm),
+          ),
+        ],
+      ),
+    );
+    if (newPassword == null || !context.mounted) return;
+    ref.read(_inFlightAgentsProvider.notifier).update((ids) => {...ids, agent.id});
+    try {
+      await ref.read(adminApiProvider).resetAgentPassword(agent.id, newPassword);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.resetAgentPasswordSuccessMessage)),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) await _showError(context, error);
+    } finally {
+      ref.read(_inFlightAgentsProvider.notifier).update((ids) => {...ids}..remove(agent.id));
+    }
+  }
+
   Future<void> _revokeToken(BuildContext context, WidgetRef ref, Agent agent) async {
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
@@ -274,6 +330,8 @@ class AgentListScreen extends ConsumerWidget {
                             switch (action) {
                               case 'assignCommunes':
                                 _assignCommunes(context, ref, agent, communes);
+                              case 'resetPassword':
+                                _resetPassword(context, ref, agent);
                               case 'revoke':
                                 _revokeToken(context, ref, agent);
                             }
@@ -281,6 +339,8 @@ class AgentListScreen extends ConsumerWidget {
                           itemBuilder: (context) => [
                             PopupMenuItem(
                                 value: 'assignCommunes', child: Text(l10n.assignCommunesLabel)),
+                            PopupMenuItem(
+                                value: 'resetPassword', child: Text(l10n.resetAgentPasswordLabel)),
                             PopupMenuItem(value: 'revoke', child: Text(l10n.revokeTokenLabel)),
                           ],
                         ),

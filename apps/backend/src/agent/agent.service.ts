@@ -98,6 +98,20 @@ export class AgentService {
   }
 
   /**
+   * Mot de passe agent conservé (2026-07-14, décision produit — pas de PIN
+   * pour ce rôle), mais l'agent ne peut pas le changer lui-même : seul
+   * l'admin peut le réinitialiser (perte/oubli, départ), à communiquer de
+   * vive voix — même schéma que `resetPin` côté commerçant (tokenVersion
+   * incrémenté pour révoquer immédiatement toute session en cours).
+   */
+  async resetPassword(agentId: string, newPassword: string): Promise<void> {
+    await this.findByIdOrFail(agentId);
+    const passwordHash = await this.authService.hash(newPassword);
+    await this.agents.update({ id: agentId }, { passwordHash });
+    await this.agents.increment({ id: agentId }, 'tokenVersion', 1);
+  }
+
+  /**
    * Transfère un lot de communes d'un agent à un autre (specs §3.4) — cas
    * type : départ d'un agent, pour éviter que les commerces de ces communes
    * cessent d'être suivis silencieusement.

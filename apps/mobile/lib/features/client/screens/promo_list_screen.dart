@@ -60,14 +60,14 @@ class PromoListScreen extends ConsumerWidget {
             tooltip: l10n.changeCommuneTooltip,
             onPressed: () => context.push('/select-commune'),
           ),
-          PopupMenuButton<String>(
+          // Espace agent terrain retiré de ce menu (2026-07-14, même
+          // décision produit que l'admin) : accès direct par URL `/agent`
+          // uniquement, pas de découverte possible depuis l'app grand
+          // public.
+          IconButton(
             icon: const Icon(Icons.storefront_outlined),
-            tooltip: l10n.professionalSpaceTooltip,
-            onSelected: (route) => context.push(route),
-            itemBuilder: (context) => [
-              PopupMenuItem(value: '/commercant', child: Text(l10n.commercantSpaceItem)),
-              PopupMenuItem(value: '/agent', child: Text(l10n.agentSpaceItem)),
-            ],
+            tooltip: l10n.commercantSpaceItem,
+            onPressed: () => context.push('/commercant'),
           ),
         ],
       ),

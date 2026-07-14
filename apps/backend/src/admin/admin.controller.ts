@@ -12,6 +12,7 @@ import { Throttle } from '@nestjs/throttler';
 import { AgentService } from '../agent/agent.service';
 import { AssignCommunesDto } from '../agent/dto/assign-communes.dto';
 import { CreateAgentDto } from '../agent/dto/create-agent.dto';
+import { ResetAgentPasswordDto } from '../agent/dto/reset-agent-password.dto';
 import { TransferCommunesDto } from '../agent/dto/transfer-communes.dto';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { ListAuditLogQueryDto } from '../audit-log/dto/list-audit-log-query.dto';
@@ -139,6 +140,32 @@ export class AdminController {
       actorType: AuditActorType.ADMIN,
       actorId: user.sub,
       action: 'revoke_agent_token',
+      targetType: 'agent',
+      targetId: agentId,
+    });
+    return { ok: true };
+  }
+
+  /**
+   * Mot de passe agent oublié/perdu — l'agent ne peut pas le changer
+   * lui-même (décision produit 2026-07-14), seul l'admin fixe un nouveau
+   * mot de passe, à communiquer de vive voix. Même schéma que
+   * `resetPin`/`reset-pin` côté commerçant.
+   */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('agent/:id/reset-password')
+  async resetAgentPassword(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('id') agentId: string,
+    @Body() dto: ResetAgentPasswordDto,
+  ) {
+    await this.agentService.resetPassword(agentId, dto.newPassword);
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'reset_agent_password',
       targetType: 'agent',
       targetId: agentId,
     });
