@@ -48,7 +48,16 @@ export class Commercant {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  /**
+   * Unique parmi les comptes actifs uniquement — index partiel
+   * `WHERE "deletedAt" IS NULL` posé par migration (pas exprimable par ce
+   * décorateur seul), pas une contrainte `unique` classique. Sans ça, un
+   * commerçant suspendu bloquait définitivement son numéro : impossible de
+   * le donner ensuite au vrai propriétaire en cas de changement de main du
+   * commerce (bug trouvé 2026-07-13, `assertPhoneAvailable` ne filtrait
+   * pas non plus les lignes supprimées avant ce correctif).
+   */
+  @Column()
   telephone: string;
 
   @Column()

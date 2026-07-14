@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
 import {
   BadRequestAppException,
@@ -40,8 +40,17 @@ export class CommercantService {
     private readonly notificationService: NotificationService,
   ) {}
 
+  /**
+   * Ne regarde que les comptes actifs (`deletedAt IS NULL`) — un compte
+   * suspendu ne doit plus bloquer son numéro indéfiniment, sans quoi un
+   * commerce ayant changé de main ne pourrait jamais être recréé pour le
+   * nouveau propriétaire (bug trouvé 2026-07-13). Même filtre que l'index
+   * partiel posé en base, voir `Commercant.telephone`.
+   */
   private async assertPhoneAvailable(telephone: string): Promise<void> {
-    const existing = await this.commercants.findOne({ where: { telephone } });
+    const existing = await this.commercants.findOne({
+      where: { telephone, deletedAt: IsNull() },
+    });
     if (existing) {
       throw new ConflictAppException(
         ErrorCode.COMMERCANT_PHONE_TAKEN,
@@ -442,9 +451,24 @@ export class CommercantService {
   /**
    * Réactivation d'un compte suspendu par l'admin — symétrique de
    * `deleteAccount`, sans changement de `tokenVersion` (réactiver ne révoque
-   * rien, ça ne fait que rouvrir l'accès à la connexion).
+   * rien, ça ne fait que rouvrir l'accès à la connexion). Un numéro de
+   * téléphone suspendu étant réattribuable (voir `assertPhoneAvailable`),
+   * il faut vérifier qu'aucun autre compte actif ne l'a repris entre-temps
+   * avant de rouvrir celui-ci — sans ça, deux comptes actifs se
+   * retrouveraient avec le même numéro, violant l'index partiel posé en
+   * base (`Commercant.telephone`).
    */
   async reactivateAccount(commercantId: string): Promise<void> {
+    const commercant = await this.findByIdOrFail(commercantId);
+    const activeWithSamePhone = await this.commercants.findOne({
+      where: { telephone: commercant.telephone, deletedAt: IsNull() },
+    });
+    if (activeWithSamePhone && activeWithSamePhone.id !== commercantId) {
+      throw new ConflictAppException(
+        ErrorCode.COMMERCANT_PHONE_TAKEN,
+        'Ce numéro de téléphone est maintenant utilisé par un autre commerçant actif',
+      );
+    }
     await this.commercants.update({ id: commercantId }, { deletedAt: null });
   }
 
