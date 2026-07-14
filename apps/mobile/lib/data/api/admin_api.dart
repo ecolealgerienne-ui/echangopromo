@@ -49,10 +49,14 @@ class AdminApi {
 
   // --- Modération ---
 
-  Future<List<ModerationItem>> moderationQueue() async {
+  Future<List<ModerationItem>> moderationQueue({String? communeId, String? wilaya}) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/moderation/queue',
-      queryParameters: {'limit': _pageSize},
+      queryParameters: {
+        'limit': _pageSize,
+        if (communeId != null) 'communeId': communeId,
+        if (wilaya != null) 'wilaya': wilaya,
+      },
     );
     final items = response.data!['items'] as List<dynamic>;
     return items.map((e) => ModerationItem.fromJson(e as Map<String, dynamic>)).toList();
@@ -73,10 +77,19 @@ class AdminApi {
   /// Vue globale de toutes les promos (plan de correction, Phase 2) — pas
   /// seulement celles ayant atteint le seuil de signalements, pour pouvoir
   /// masquer un contenu problématique repéré directement.
-  Future<List<ModerationItem>> listAllPromos({String? search}) async {
+  Future<List<ModerationItem>> listAllPromos({
+    String? search,
+    String? communeId,
+    String? wilaya,
+  }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/promo',
-      queryParameters: {'limit': _pageSize, if (search != null && search.isNotEmpty) 'search': search},
+      queryParameters: {
+        'limit': _pageSize,
+        if (search != null && search.isNotEmpty) 'search': search,
+        if (communeId != null) 'communeId': communeId,
+        if (wilaya != null) 'wilaya': wilaya,
+      },
     );
     final items = response.data!['items'] as List<dynamic>;
     return items.map((e) => ModerationItem.fromJson(e as Map<String, dynamic>)).toList();
@@ -88,6 +101,8 @@ class AdminApi {
     String? search,
     RegistreStatus? registreStatus,
     bool? profilePendingReview,
+    String? communeId,
+    String? wilaya,
   }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/commercant',
@@ -96,6 +111,8 @@ class AdminApi {
         if (search != null && search.isNotEmpty) 'search': search,
         if (registreStatus != null) 'registreStatus': registreStatus.value,
         if (profilePendingReview != null) 'profilePendingReview': profilePendingReview,
+        if (communeId != null) 'communeId': communeId,
+        if (wilaya != null) 'wilaya': wilaya,
       },
     );
     final items = response.data!['items'] as List<dynamic>;

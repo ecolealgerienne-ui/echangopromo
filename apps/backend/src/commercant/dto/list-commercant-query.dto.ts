@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
 import { CommercantAccountState, RegistreStatus } from '../entities/commercant.entity';
@@ -9,6 +9,17 @@ export class ListCommercantQueryDto extends PaginationQueryDto {
   @IsString()
   @MaxLength(100)
   search?: string;
+
+  /** Filtre commune (2026-07-14, en plus du scope agent qui reste géré à part). */
+  @IsOptional()
+  @IsUUID()
+  communeId?: string;
+
+  /** Filtre wilaya (2026-07-14) — prépare l'extension multi-wilaya, sans effet tant que Djelfa est la seule wilaya pilote. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  wilaya?: string;
 
   @IsOptional()
   @IsEnum(CommercantAccountState)

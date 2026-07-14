@@ -295,6 +295,11 @@ export class PromoService {
     if (query.communeId) {
       qb.andWhere('commercant.communeId = :communeId', { communeId: query.communeId });
     }
+    if (query.wilaya) {
+      qb.innerJoin('commercant.commune', 'commune').andWhere('commune.wilaya = :wilaya', {
+        wilaya: query.wilaya,
+      });
+    }
     if (query.categorie) {
       qb.andWhere('promo.categorie = :categorie', { categorie: query.categorie });
     }

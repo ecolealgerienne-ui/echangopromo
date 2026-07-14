@@ -27,6 +27,7 @@ import { ListCommercantQueryDto } from '../commercant/dto/list-commercant-query.
 import { ResetCommercantPinDto } from '../commercant/dto/reset-commercant-pin.dto';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
+import { ListModerationQueueQueryDto } from './dto/list-moderation-queue-query.dto';
 import { ListPromoAdminQueryDto } from '../promo/dto/list-promo-admin-query.dto';
 import { Promo } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
@@ -249,10 +250,13 @@ export class AdminController {
   @Get('moderation/queue')
   async moderationQueue(
     @CurrentUser() user: AuthTokenPayload,
-    @Query() query: PaginationQueryDto,
+    @Query() query: ListModerationQueueQueryDto,
   ) {
     const communeIds = await this.scopedCommuneIds(user);
-    const result = await this.moderationService.queue(query.page, query.limit, communeIds);
+    const result = await this.moderationService.queue(query.page, query.limit, communeIds, {
+      communeId: query.communeId,
+      wilaya: query.wilaya,
+    });
     return {
       ...result,
       items: result.items.map(({ promo, activeReportCount, reasonBreakdown }) => ({

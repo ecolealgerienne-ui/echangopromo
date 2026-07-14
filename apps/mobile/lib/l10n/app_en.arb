@@ -34,6 +34,7 @@
 
   "wilayaLabel": "Province",
   "communeLabel": "Municipality",
+  "filterAllOption": "All",
   "communeRequired": "Municipality required",
   "communesError": "Municipalities error: {error}",
 

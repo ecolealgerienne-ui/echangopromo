@@ -36,6 +36,7 @@
 
   "wilayaLabel": "Wilaya",
   "communeLabel": "Commune",
+  "filterAllOption": "Toutes",
   "communeRequired": "Commune requise",
   "communesError": "Erreur communes : {error}",
   "@communesError": { "placeholders": { "error": { "type": "String" } } },

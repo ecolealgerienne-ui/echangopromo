@@ -8,13 +8,20 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
+import '../widgets/commune_filter_bar.dart';
 import '../widgets/promo_moderation_tile.dart';
 
 final _searchProvider = StateProvider.autoDispose<String>((ref) => '');
 
+/// Filtre commune/wilaya (retour terrain 2026-07-14), en plus de la recherche.
+final _wilayaFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
+final _communeFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
+
 final _allPromosProvider = FutureProvider.autoDispose((ref) {
   final search = ref.watch(_searchProvider);
-  return ref.watch(adminApiProvider).listAllPromos(search: search);
+  final wilaya = ref.watch(_wilayaFilterProvider);
+  final communeId = ref.watch(_communeFilterProvider);
+  return ref.watch(adminApiProvider).listAllPromos(search: search, wilaya: wilaya, communeId: communeId);
 });
 
 /// Même pattern que `ModerationQueueScreen._inFlightProvider` (audit UX 2026-07-11).
@@ -82,6 +89,15 @@ class AdminPromosScreen extends ConsumerWidget {
                 isDense: true,
               ),
               onChanged: (value) => ref.read(_searchProvider.notifier).state = value,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: CommuneFilterBar(
+              wilaya: ref.watch(_wilayaFilterProvider),
+              communeId: ref.watch(_communeFilterProvider),
+              onWilayaChanged: (value) => ref.read(_wilayaFilterProvider.notifier).state = value,
+              onCommuneChanged: (value) => ref.read(_communeFilterProvider.notifier).state = value,
             ),
           ),
           Expanded(

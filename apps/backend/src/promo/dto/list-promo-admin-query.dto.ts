@@ -19,6 +19,12 @@ export class ListPromoAdminQueryDto extends PaginationQueryDto {
   @IsUUID()
   communeId?: string;
 
+  /** Filtre wilaya (2026-07-14) — prépare l'extension multi-wilaya, sans effet tant que Djelfa est la seule wilaya pilote. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  wilaya?: string;
+
   @IsOptional()
   @IsEnum(Categorie)
   categorie?: Categorie;

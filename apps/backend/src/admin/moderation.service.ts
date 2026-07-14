@@ -18,11 +18,16 @@ export class ModerationService {
     private readonly notificationService: NotificationService,
   ) {}
 
-  /** `communeIds` restreint la file aux communes d'un agent — `undefined` = vue globale (admin). */
+  /**
+   * `communeIds` restreint la file aux communes d'un agent — `undefined` = vue
+   * globale (admin). `filter` est le filtre commune/wilaya choisi manuellement
+   * dans l'écran (2026-07-14), orthogonal au scope agent.
+   */
   async queue(
     page: number,
     limit: number,
     communeIds?: string[],
+    filter?: { communeId?: string; wilaya?: string },
   ): Promise<
     PaginatedResult<{
       promo: Promo;
@@ -30,7 +35,7 @@ export class ModerationService {
       reasonBreakdown: Record<string, number>;
     }>
   > {
-    const pending = await this.reportService.listPendingModeration(page, limit, communeIds);
+    const pending = await this.reportService.listPendingModeration(page, limit, communeIds, filter);
     const promoIds = pending.items.map(({ promoId }) => promoId);
     const promos = await this.promoService.findByIds(promoIds);
     const promoById = new Map(promos.map((promo) => [promo.id, promo]));

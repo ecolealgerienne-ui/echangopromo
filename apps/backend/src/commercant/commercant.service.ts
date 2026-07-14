@@ -421,6 +421,14 @@ export class CommercantService {
     if (communeIds) {
       qb.andWhere('commercant.communeId IN (:...communeIds)', { communeIds });
     }
+    if (query.communeId) {
+      qb.andWhere('commercant.communeId = :filterCommuneId', { filterCommuneId: query.communeId });
+    }
+    if (query.wilaya) {
+      qb.innerJoin('commercant.commune', 'commune').andWhere('commune.wilaya = :wilaya', {
+        wilaya: query.wilaya,
+      });
+    }
     if (query.search) {
       qb.andWhere(
         '(commercant.nom ILIKE :search OR commercant.telephone ILIKE :search)',
