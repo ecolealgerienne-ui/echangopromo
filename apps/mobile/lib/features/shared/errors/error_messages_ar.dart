@@ -12,7 +12,6 @@ const Map<String, String> errorMessagesAr = {
 
   'AGENT_EMAIL_TAKEN': 'هذا البريد الإلكتروني مستخدم بالفعل من طرف عون آخر.',
   'AGENT_NOT_FOUND': 'العون غير موجود.',
-  'AGENT_NO_COMMUNE_ASSIGNED': 'هذا العون غير مرتبط بأي بلدية.',
   'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT': 'إحدى هذه البلديات غير مسندة حاليًا لهذا العون.',
 
   'COMMUNE_NOT_FOUND': 'البلدية غير موجودة.',

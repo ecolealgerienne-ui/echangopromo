@@ -49,14 +49,8 @@
   "nomRequired": "الاسم مطلوب",
   "adresseLabel": "العنوان (اختياري)",
 
-  "myCommunesTitle": "بلدياتي",
   "logoutTooltip": "تسجيل الخروج",
   "newCommercantLabel": "تاجر جديد",
-  "communesEmptyForAgent": "لا يوجد أي محل في هذه البلديات.",
-  "waitingActivationTooltip": "في انتظار التفعيل من طرف التاجر",
-  "visitStatusNeverVisited": "لم تتم زيارته",
-  "visitStatusUpToDate": "محدّث",
-  "visitStatusToFollowUp": "يحتاج متابعة",
 
   "newPromoTitle": "عرض جديد",
   "photoRequiredCamera": "يجب التقاط الصورة بالكاميرا مباشرة.",

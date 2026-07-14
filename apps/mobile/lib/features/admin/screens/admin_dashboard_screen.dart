@@ -129,17 +129,6 @@ class AdminDashboardScreen extends ConsumerWidget {
               label: Text(l10n.commercantsLabel),
               onPressed: () => context.push('$rolePrefix/commercants'),
             ),
-            if (!isAdmin) ...[
-              const SizedBox(height: 8),
-              // Tournée terrain (statut visité/à relancer par commune) —
-              // fonctionnalité propre à l'agent, sans équivalent admin, donc
-              // pas de bouton générique par rôle comme les autres ci-dessus.
-              OutlinedButton.icon(
-                icon: const Icon(Icons.map_outlined),
-                label: Text(l10n.myCommunesTitle),
-                onPressed: () => context.push('/agent/communes'),
-              ),
-            ],
             if (isAdmin) ...[
               const SizedBox(height: 8),
               OutlinedButton.icon(

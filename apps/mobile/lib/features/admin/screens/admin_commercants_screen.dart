@@ -103,6 +103,20 @@ class AdminCommercantsScreen extends ConsumerWidget {
         title: Text(l10n.commercantsLabel),
         actions: const [LanguageSwitcherButton()],
       ),
+      // Création de commerçant réservée à l'agent (specs §3.2/§3.3, jamais
+      // l'admin) — seul point d'entrée vers /agent/commercant/new depuis la
+      // suppression de CommuneCommercesScreen (écran de tournée retiré
+      // 2026-07-12, statut jamais visité/à jour/à relancer abandonné).
+      floatingActionButton: role == AppRole.agent
+          ? FloatingActionButton.extended(
+              icon: const Icon(Icons.add_business_outlined),
+              label: Text(l10n.newCommercantLabel),
+              onPressed: () async {
+                final created = await context.push<bool>('/agent/commercant/new');
+                if (created == true) ref.invalidate(_commercantsProvider);
+              },
+            )
+          : null,
       body: Column(
         children: [
           Padding(

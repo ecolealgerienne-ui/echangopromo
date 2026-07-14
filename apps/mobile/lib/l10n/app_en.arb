@@ -49,14 +49,8 @@
   "nomRequired": "Name required",
   "adresseLabel": "Address (optional)",
 
-  "myCommunesTitle": "My communes",
   "logoutTooltip": "Log out",
   "newCommercantLabel": "New merchant",
-  "communesEmptyForAgent": "No shop in these communes.",
-  "waitingActivationTooltip": "Waiting for activation by the merchant",
-  "visitStatusNeverVisited": "Never visited",
-  "visitStatusUpToDate": "Up to date",
-  "visitStatusToFollowUp": "Needs follow-up",
 
   "newPromoTitle": "New promo",
   "photoRequiredCamera": "The photo must be taken with the camera.",

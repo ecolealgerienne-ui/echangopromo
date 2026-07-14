@@ -169,17 +169,3 @@ String reportReasonLabel(BuildContext context, ReportReason reason) {
       return l10n.reportReasonAutre;
   }
 }
-
-String visitStatusLabel(BuildContext context, String visitStatus) {
-  final l10n = AppLocalizations.of(context)!;
-  switch (visitStatus) {
-    case 'jamais_visite':
-      return l10n.visitStatusNeverVisited;
-    case 'a_jour':
-      return l10n.visitStatusUpToDate;
-    case 'a_relancer':
-      return l10n.visitStatusToFollowUp;
-    default:
-      return visitStatus;
-  }
-}

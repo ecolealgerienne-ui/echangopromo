@@ -52,14 +52,8 @@
   "nomRequired": "Nom requis",
   "adresseLabel": "Adresse (optionnel)",
 
-  "myCommunesTitle": "Mes communes",
   "logoutTooltip": "Déconnexion",
   "newCommercantLabel": "Nouveau commerçant",
-  "communesEmptyForAgent": "Aucun commerce dans ces communes.",
-  "waitingActivationTooltip": "En attente d'activation par le commerçant",
-  "visitStatusNeverVisited": "Jamais visité",
-  "visitStatusUpToDate": "À jour",
-  "visitStatusToFollowUp": "À relancer",
 
   "newPromoTitle": "Nouvelle promo",
   "photoRequiredCamera": "La photo doit être prise avec l'appareil photo.",

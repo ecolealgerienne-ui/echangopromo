@@ -148,7 +148,6 @@ brouillon → publiée → arrêtée
   les communes de cette wilaya, pas un champ distinct), le staffing "un agent
   par commune" n'étant pas soutenable.
 - Authentification **email + mot de passe**, compte créé exclusivement par l'Admin (pas d'auto-inscription agent).
-- Voit la liste des commerces de ses communes avec statut : jamais visité / à jour / à relancer.
 - Crée une fiche commerçant (numéro de téléphone, nom, adresse, catégorie) + première promo.
 - Prend la photo de la promo **obligatoirement dans l'app** (pas d'upload depuis la galerie), avec horodatage. **Pas de géolocalisation capturée** (décision explicite — écartée après discussion).
 - Met à jour une promo existante sur un commerce déjà onboardé.
@@ -157,13 +156,14 @@ brouillon → publiée → arrêtée
 - **Agent = modérateur, mêmes écrans que l'admin** (décision produit
   2026-07-12) : dashboard, modération, liste de promos, liste/fiche
   commerçant (valider registre/profil, suspendre/réactiver, réinitialiser
-  le PIN) — un seul jeu d'écrans partagé, scopé automatiquement aux
-  communes de l'agent côté backend (vue globale pour l'admin). Seules deux
-  fonctionnalités restent réservées à l'admin : la gestion des agents et le
-  journal d'audit. La liste "commerces de mes communes" (statut jamais
-  visité/à jour/à relancer, §3.3 ci-dessus) reste propre à l'agent, sans
-  équivalent admin — c'est un outil de tournée terrain, pas une fiche de
-  gestion.
+  le PIN, créer une fiche commerçant) — un seul jeu d'écrans partagé, scopé
+  automatiquement aux communes de l'agent côté backend (vue globale pour
+  l'admin). Seules deux fonctionnalités restent réservées à l'admin : la
+  gestion des agents et le journal d'audit.
+- **Liste "commerces de mes communes" avec statut de tournée (jamais
+  visité/à jour/à relancer) retirée le 2026-07-12** — décision produit,
+  jugée redondante avec la fiche commerçant unifiée ci-dessus. Le statut de
+  tournée n'est plus calculé ni affiché nulle part dans le produit.
 
 ### 3.4 Admin / Modérateur
 

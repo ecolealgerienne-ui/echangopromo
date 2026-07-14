@@ -15,11 +15,6 @@ import {
   NotificationType,
 } from '../notification/entities/notification.entity';
 import { NotificationService } from '../notification/notification.service';
-import {
-  Promo,
-  PromoLifecycleStatus,
-  VISIBLE_MODERATION_STATUSES,
-} from '../promo/entities/promo.entity';
 import { StorageService } from '../storage/storage.service';
 import { CommercantView } from './entities/commercant-view.entity';
 import {
@@ -34,8 +29,6 @@ import { ListCommercantQueryDto } from './dto/list-commercant-query.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
 import { UpdateCommercantDto } from './dto/update-commercant.dto';
 
-export type CommuneCommerceStatus = 'jamais_visite' | 'a_jour' | 'a_relancer';
-
 @Injectable()
 export class CommercantService {
   constructor(
@@ -43,7 +36,6 @@ export class CommercantService {
     private readonly commercants: Repository<Commercant>,
     @InjectRepository(CommercantView)
     private readonly views: Repository<CommercantView>,
-    @InjectRepository(Promo) private readonly promos: Repository<Promo>,
     private readonly authService: AuthService,
     private readonly storageService: StorageService,
     private readonly notificationService: NotificationService,
@@ -355,71 +347,6 @@ export class CommercantService {
       where: { commercantId },
     });
     return { profileViewCount };
-  }
-
-  /**
-   * Commerces des communes couvertes par un agent, avec statut de tournée
-   * (specs §3.3). Faute d'un horodatage explicite de "dernière visite" dans
-   * les specs, le statut est dérivé de l'état des promos : jamais publié /
-   * a une promo visible / n'a plus que des promos expirées ou masquées.
-   *
-   * Deux requêtes agrégées (pas une par commerçant) : le statut "à jour"
-   * doit utiliser la même définition de "promo visible" que le client
-   * (`lifecycleStatus = publiee` + `VISIBLE_MODERATION_STATUSES`), pas
-   * seulement `publiee` — sinon une promo `verifiee_ok` fait apparaître à
-   * tort le commerçant comme "à relancer".
-   */
-  async listByCommunesWithVisitStatus(
-    communeIds: string[],
-  ): Promise<Array<Commercant & { visitStatus: CommuneCommerceStatus }>> {
-    if (communeIds.length === 0) return [];
-    const commercants = await this.commercants.find({
-      where: { communeId: In(communeIds) },
-    });
-    if (commercants.length === 0) return [];
-
-    const commercantIds = commercants.map((c) => c.id);
-
-    const totalRows = await this.promos
-      .createQueryBuilder('promo')
-      .select('promo.commercantId', 'commercantId')
-      .addSelect('COUNT(*)', 'count')
-      .where('promo.commercantId IN (:...commercantIds)', { commercantIds })
-      .groupBy('promo.commercantId')
-      .getRawMany<{ commercantId: string; count: string }>();
-
-    const visibleRows = await this.promos
-      .createQueryBuilder('promo')
-      .select('promo.commercantId', 'commercantId')
-      .addSelect('COUNT(*)', 'count')
-      .where('promo.commercantId IN (:...commercantIds)', { commercantIds })
-      .andWhere('promo.lifecycleStatus = :lifecycleStatus', {
-        lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
-      })
-      .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
-        moderationStatuses: VISIBLE_MODERATION_STATUSES,
-      })
-      .groupBy('promo.commercantId')
-      .getRawMany<{ commercantId: string; count: string }>();
-
-    const totalByCommercant = new Map(
-      totalRows.map((row) => [row.commercantId, Number(row.count)]),
-    );
-    const visibleByCommercant = new Map(
-      visibleRows.map((row) => [row.commercantId, Number(row.count)]),
-    );
-
-    return commercants.map((commercant) => {
-      const total = totalByCommercant.get(commercant.id) ?? 0;
-      const visible = visibleByCommercant.get(commercant.id) ?? 0;
-
-      let visitStatus: CommuneCommerceStatus;
-      if (total === 0) visitStatus = 'jamais_visite';
-      else if (visible > 0) visitStatus = 'a_jour';
-      else visitStatus = 'a_relancer';
-
-      return Object.assign(commercant, { visitStatus });
-    });
   }
 
   /**

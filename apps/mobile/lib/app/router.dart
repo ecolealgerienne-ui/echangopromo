@@ -21,7 +21,6 @@ import '../features/admin/screens/moderation_queue_screen.dart';
 import '../features/agent/screens/agent_login_screen.dart';
 import '../features/agent/screens/agent_promo_form_screen.dart';
 import '../features/agent/screens/create_commercant_screen.dart';
-import '../features/agent/screens/commune_commerces_screen.dart';
 import '../features/client/screens/commune_selection_screen.dart';
 import '../features/client/screens/promo_detail_screen.dart';
 import '../features/client/screens/promo_list_screen.dart';
@@ -122,11 +121,6 @@ final _appRoutes = <_AppRoute>[
   // Agent
   _AppRoute('/agent', (context, state) => const AgentLoginScreen()),
   _AppRoute('/agent/login', (context, state) => const AgentLoginScreen()),
-  _AppRoute(
-    '/agent/communes',
-    (context, state) => const CommuneCommercesScreen(),
-    requiredRole: AppRole.agent,
-  ),
   _AppRoute(
     '/agent/commercant/new',
     (context, state) => const CreateCommercantScreen(),

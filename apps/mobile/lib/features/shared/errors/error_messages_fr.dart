@@ -25,7 +25,6 @@ const Map<String, String> errorMessagesFr = {
 
   'AGENT_EMAIL_TAKEN': 'Cet email est déjà utilisé par un agent.',
   'AGENT_NOT_FOUND': 'Agent introuvable.',
-  'AGENT_NO_COMMUNE_ASSIGNED': "Cet agent n'est rattaché à aucune commune.",
   'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT':
       "Au moins une de ces communes n'est pas actuellement assignée à cet agent.",
 
