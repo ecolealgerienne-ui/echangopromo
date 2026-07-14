@@ -29,11 +29,12 @@ class AdminDashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const BackButtonIcon(),
-          tooltip: l10n.backToHomeTooltip,
-          onPressed: () => context.go('/'),
-        ),
+        // Pas de bouton retour ici (retour terrain 2026-07-12) : cet écran
+        // est l'accueil du rôle admin/agent, un bouton "retour à l'app
+        // cliente" en dur porte à confusion (on garde la session pro active
+        // tout en atterrissant sur l'app grand public) — sortir de cet
+        // espace passe désormais par la déconnexion explicite (menu compte).
+        automaticallyImplyLeading: false,
         title: Text(isAdmin ? l10n.adminSpaceTitle : l10n.agentSpaceTitle),
         actions: [
           const LanguageSwitcherButton(),
