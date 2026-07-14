@@ -94,6 +94,11 @@ export class CommercantController {
       adresse: commercant.adresse,
       categorie: commercant.categorie,
       communeId: commercant.communeId,
+      // Ajouté 2026-07-12 : le client a besoin d'appeler le commerçant
+      // depuis la fiche promo (tap-pour-appeler), pas seulement de voir son
+      // adresse — jusqu'ici omis de cette réponse publique (contrairement à
+      // `toMeJson`), pas une décision de confidentialité documentée.
+      telephone: commercant.telephone,
       photoUrl: this.photoUrl(commercant),
       latitude: commercant.latitude,
       longitude: commercant.longitude,
