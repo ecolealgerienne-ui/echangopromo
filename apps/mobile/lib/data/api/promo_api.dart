@@ -4,11 +4,15 @@ import '../../domain/models/promo.dart';
 
 /// Le backend pagine `/promo` et `/promo/me/all` (`{items, total, page,
 /// limit}`). `listMine()` reste une page unique généreuse (plafond métier de
-/// 5 promos actives par commerçant, jamais approché) ; `listActive()` pagine
-/// réellement côté mobile via bouton "Afficher plus" (retour terrain
-/// 2026-07-14 : grosses communes type Djelfa dépassant `_pageSize` en promos
-/// actives simultanées).
+/// 5 promos actives par commerçant, jamais approché).
 const _pageSize = 100;
+
+/// `listActive()` pagine réellement côté mobile via bouton "Afficher plus"
+/// (retour terrain 2026-07-14 : grosses communes type Djelfa dépassant cette
+/// taille en promos actives simultanées).
+// TEMPORAIRE — abaissé à 2 pour tester le bouton "Afficher plus" avec peu de
+// données pilote (2026-07-14). Remettre à 50 une fois le test terminé.
+const _activePageSize = 2;
 
 /// Miroir mobile de `PaginatedResult<T>` (backend) pour `listActive()`.
 class PaginatedPromos {
@@ -50,7 +54,7 @@ class PromoApi {
       if (categorie != null) 'categorie': categorie.value,
       if (favoriteIds.isNotEmpty) 'favoriteIds': favoriteIds.join(','),
       'page': page,
-      'limit': _pageSize,
+      'limit': _activePageSize,
     };
     final response = await _dio.get<Map<String, dynamic>>('/promo', queryParameters: query);
     return PaginatedPromos.fromJson(response.data!);
