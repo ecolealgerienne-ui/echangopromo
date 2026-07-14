@@ -167,6 +167,7 @@ export class PromoService {
           ...base,
           dateFin,
           lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
+          publishedAt: new Date(),
         }),
       );
     });
@@ -196,6 +197,7 @@ export class PromoService {
       await this.assertUnderCap(manager, promo.commercantId);
       promo.lifecycleStatus = PromoLifecycleStatus.PUBLIEE;
       promo.dateFin = dateFin;
+      promo.publishedAt = new Date();
       return manager.save(promo);
     });
   }

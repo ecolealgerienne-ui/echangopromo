@@ -19,6 +19,7 @@ class Promo {
     this.photoKeys,
     this.viewCount,
     required this.createdAt,
+    this.publishedAt,
   });
 
   factory Promo.fromJson(Map<String, dynamic> json) => Promo(
@@ -39,6 +40,8 @@ class Promo {
         photoKeys: (json['photoKeys'] as List<dynamic>?)?.map((e) => e as String).toList(),
         viewCount: json['viewCount'] as int?,
         createdAt: DateTime.parse(json['createdAt'] as String),
+        publishedAt:
+            json['publishedAt'] != null ? DateTime.parse(json['publishedAt'] as String) : null,
       );
 
   final String id;
@@ -70,6 +73,12 @@ class Promo {
   final List<String>? photoKeys;
   final int? viewCount;
   final DateTime createdAt;
+
+  /// Horodatage de la (dernière) publication — posé uniquement par
+  /// `publish()` côté backend, distinct de [createdAt] (peut dater d'un
+  /// brouillon créé bien avant sa publication). `null` tant que la promo
+  /// n'a jamais été publiée (toujours en brouillon).
+  final DateTime? publishedAt;
 
   /// Photo principale (première de [photoUrls]) — c'est la seule affichée en
   /// liste/vignette, les écrans qui n'ont besoin que d'un aperçu unique

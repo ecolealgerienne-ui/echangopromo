@@ -73,6 +73,7 @@ export class PromoController {
         : (photoUrls[0] ?? null),
       ...(options?.includeKeys ? { photoKeys: promo.photoKeys } : {}),
       createdAt: promo.createdAt,
+      publishedAt: promo.publishedAt,
     };
   }
 

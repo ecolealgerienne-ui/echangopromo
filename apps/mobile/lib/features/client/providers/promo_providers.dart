@@ -171,7 +171,13 @@ final visiblePromosProvider = Provider.autoDispose<List<Promo>>((ref) {
     case PromoSort.plusGrosseReduction:
       filtered.sort((a, b) => b.discountPercent.compareTo(a.discountPercent));
     case PromoSort.nouveautes:
-      filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      // publishedAt plutôt que createdAt (2026-07-14) : createdAt peut dater
+      // d'un brouillon créé bien avant sa publication, ce qui faussait ce
+      // tri. Toutes les promos ici sont déjà publiées (findActiveForClient),
+      // publishedAt est donc toujours renseigné — le fallback ne sert qu'à
+      // rassurer l'analyseur de types.
+      filtered.sort((a, b) =>
+          (b.publishedAt ?? b.createdAt).compareTo(a.publishedAt ?? a.createdAt));
   }
   return filtered;
 });

@@ -116,6 +116,19 @@ export class Promo {
   @Column({ type: 'timestamptz', nullable: true })
   dateFin: Date | null;
 
+  /**
+   * Horodatage de la (dernière) publication — posé/rafraîchi uniquement par
+   * `PromoService.publish()` (2026-07-14). Distinct de `createdAt` (peut
+   * dater d'un brouillon créé bien avant sa publication) et d'`updatedAt`
+   * (écrasé par toute modification ultérieure : édition, arrêt, résolution
+   * de modération...) — seule source fiable pour trier "nouveautés" côté
+   * client. Une republication (promo arrêtée/expirée republiée) le
+   * rafraîchit à nouveau : c'est un geste de publication à part entière,
+   * pas une simple prolongation.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  publishedAt: Date | null;
+
   @Column({
     type: 'enum',
     enum: PromoLifecycleStatus,
