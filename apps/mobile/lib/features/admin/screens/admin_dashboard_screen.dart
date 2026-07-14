@@ -79,6 +79,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                       icon: Icons.local_offer_outlined,
                       label: l10n.promosPublieesLabel,
                       value: stats.promosPubliees,
+                      onTap: () => context.push('$rolePrefix/promos'),
                     ),
                   ),
                   SizedBox(
@@ -111,26 +112,8 @@ class AdminDashboardScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              icon: const Icon(Icons.flag_outlined),
-              label: Text(l10n.moderationLabel),
-              onPressed: () => context.push('$rolePrefix/moderation'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.local_offer_outlined),
-              label: Text(l10n.allPromosLabel),
-              onPressed: () => context.push('$rolePrefix/promos'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.storefront_outlined),
-              label: Text(l10n.commercantsLabel),
-              onPressed: () => context.push('$rolePrefix/commercants'),
-            ),
             if (isAdmin) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 24),
               OutlinedButton.icon(
                 icon: const Icon(Icons.badge_outlined),
                 label: Text(l10n.agentsLabel),
