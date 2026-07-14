@@ -10,9 +10,7 @@ const _pageSize = 100;
 /// `listActive()` pagine réellement côté mobile via bouton "Afficher plus"
 /// (retour terrain 2026-07-14 : grosses communes type Djelfa dépassant cette
 /// taille en promos actives simultanées).
-// TEMPORAIRE — abaissé à 2 pour tester le bouton "Afficher plus" avec peu de
-// données pilote (2026-07-14). Remettre à 50 une fois le test terminé.
-const _activePageSize = 2;
+const _activePageSize = 50;
 
 /// Miroir mobile de `PaginatedResult<T>` (backend) pour `listActive()`.
 class PaginatedPromos {
