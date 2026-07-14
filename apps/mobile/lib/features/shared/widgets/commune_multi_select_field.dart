@@ -15,6 +15,7 @@ class CommuneMultiSelectField extends StatefulWidget {
     required this.selectedCommuneIds,
     required this.onChanged,
     this.maxSelection,
+    this.constrainListHeight = true,
   });
 
   final List<Commune> communes;
@@ -26,6 +27,15 @@ class CommuneMultiSelectField extends StatefulWidget {
   /// la wilaya" (incompatible avec un plafond) et désactive les cases non
   /// cochées une fois le plafond atteint.
   final int? maxSelection;
+
+  /// `true` (défaut) : liste bornée à 240px avec son propre scroll interne —
+  /// nécessaire dans un `AlertDialog` (assignation agent, `agent_list_screen`),
+  /// qui calcule une largeur intrinsèque et plante sinon. `false` : liste
+  /// affichée en entier, sans plafond ni scroll interne — pour un écran plein
+  /// (`CommuneSelectionScreen`), où le scroll doit porter sur l'écran entier,
+  /// pas sur une sous-boîte de 240px (bug 2026-07-12 : seules ~5 communes sur
+  /// 34 étaient visibles, le reste de l'écran restant vide en dessous).
+  final bool constrainListHeight;
 
   @override
   State<CommuneMultiSelectField> createState() => _CommuneMultiSelectFieldState();
@@ -95,32 +105,40 @@ class _CommuneMultiSelectFieldState extends State<CommuneMultiSelectField> {
                 ? null
                 : (checked) => _toggle(communesForWilaya.map((c) => c.id), checked ?? false),
           ),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 240),
-          // `Column` + `SingleChildScrollView` plutôt que `ListView` — même
-          // avec `shrinkWrap: true` et une hauteur bornée, un `ListView`
-          // reste un viewport qui refuse toute requête de dimension
-          // intrinsèque (`RenderShrinkWrappingViewport does not support
-          // returning intrinsic dimensions`), qui plante dès que le champ
-          // est placé dans un `AlertDialog` (celui-ci calcule une largeur
-          // intrinsèque pour dimensionner le dialogue). Liste de communes
-          // par wilaya de taille modeste, pas besoin de virtualisation.
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                for (final commune in communesForWilaya)
-                  CheckboxListTile(
-                    dense: true,
-                    value: widget.selectedCommuneIds.contains(commune.id),
-                    title: Text(commune.nom),
-                    onChanged: (atCap && !widget.selectedCommuneIds.contains(commune.id))
-                        ? null
-                        : (checked) => _toggle([commune.id], checked ?? false),
-                  ),
-              ],
-            ),
+        if (widget.constrainListHeight)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 240),
+            // `Column` + `SingleChildScrollView` plutôt que `ListView` — même
+            // avec `shrinkWrap: true` et une hauteur bornée, un `ListView`
+            // reste un viewport qui refuse toute requête de dimension
+            // intrinsèque (`RenderShrinkWrappingViewport does not support
+            // returning intrinsic dimensions`), qui plante dès que le champ
+            // est placé dans un `AlertDialog` (celui-ci calcule une largeur
+            // intrinsèque pour dimensionner le dialogue). Liste de communes
+            // par wilaya de taille modeste, pas besoin de virtualisation.
+            child: SingleChildScrollView(child: _communeCheckboxes(communesForWilaya, atCap)),
+          )
+        else
+          // Pas de plafond de hauteur ni de scroll interne : l'appelant
+          // (écran plein, pas un dialogue) porte déjà son propre scroll sur
+          // l'ensemble du contenu.
+          _communeCheckboxes(communesForWilaya, atCap),
+      ],
+    );
+  }
+
+  Widget _communeCheckboxes(List<Commune> communesForWilaya, bool atCap) {
+    return Column(
+      children: [
+        for (final commune in communesForWilaya)
+          CheckboxListTile(
+            dense: true,
+            value: widget.selectedCommuneIds.contains(commune.id),
+            title: Text(commune.nom),
+            onChanged: (atCap && !widget.selectedCommuneIds.contains(commune.id))
+                ? null
+                : (checked) => _toggle([commune.id], checked ?? false),
           ),
-        ),
       ],
     );
   }

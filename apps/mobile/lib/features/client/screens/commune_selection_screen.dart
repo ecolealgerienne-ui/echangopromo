@@ -66,6 +66,7 @@ class _CommuneSelectionScreenState extends ConsumerState<CommuneSelectionScreen>
                     communes: communes,
                     selectedCommuneIds: _selectedCommuneIds,
                     maxSelection: kMaxSelectedCommunes,
+                    constrainListHeight: false,
                     onChanged: (ids) => setState(() => _selectedCommuneIds = ids),
                   ),
                 ),
