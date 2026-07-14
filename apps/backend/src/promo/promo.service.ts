@@ -191,8 +191,22 @@ export class PromoService {
    * créations/24h, voir `assertUnderDailyCreationCap`) ; sinon publie
    * immédiatement (comportement historique, comportement par défaut pour ne
    * rien casser côté agent).
+   *
+   * `trustedActor` (2026-07-14) : passé à `true` uniquement par
+   * `PromoController.createByAgent` (agent/admin, jamais l'auto-inscription
+   * commerçant) — ces deux rôles agissent via un canal audité et créé
+   * exclusivement par l'admin (pas d'auto-inscription), le vecteur d'abus
+   * visé par le plafond anti-abus (un commerçant qui gonfle artificiellement
+   * son propre classement) ne s'applique pas de la même façon. Le plafond de
+   * 5 promos *actives* (`assertUnderCap`) reste lui appliqué à tout le
+   * monde : ce n'est pas une mesure anti-abus mais une règle métier
+   * structurelle sur le volume par commerçant.
    */
-  async create(commercantId: string, dto: CreatePromoDto): Promise<Promo> {
+  async create(
+    commercantId: string,
+    dto: CreatePromoDto,
+    options?: { trustedActor?: boolean },
+  ): Promise<Promo> {
     const commercant = await this.commercantService.findByIdOrFail(commercantId);
     this.commercantService.assertRegistreValidated(commercant);
     this.commercantService.assertProfileValidated(commercant);
@@ -211,7 +225,9 @@ export class PromoService {
 
     if (dto.asDraft) {
       return this.withCommercantLock(commercantId, async (manager) => {
-        await this.assertUnderDailyCreationCap(manager, commercantId);
+        if (!options?.trustedActor) {
+          await this.assertUnderDailyCreationCap(manager, commercantId);
+        }
         return manager.save(
           manager.create(Promo, {
             ...base,
@@ -225,7 +241,9 @@ export class PromoService {
     const dateFin = this.resolveDateFin(dto.dateFin);
     return this.withCommercantLock(commercantId, async (manager) => {
       await this.assertUnderCap(manager, commercantId);
-      await this.assertUnderDailyCreationCap(manager, commercantId);
+      if (!options?.trustedActor) {
+        await this.assertUnderDailyCreationCap(manager, commercantId);
+      }
       return manager.save(
         manager.create(Promo, {
           ...base,
@@ -246,8 +264,10 @@ export class PromoService {
    * anti-abus (voir `assertRepublishCooldown`) — sans quoi un cycle
    * arrêt→republication répété permettrait de garder artificiellement la
    * promo en tête du tri "plus récentes en premier" côté client.
+   * `trustedActor` : même exemption que `create` ci-dessus, pour l'agent
+   * qui republie pour le compte d'un commerçant.
    */
-  async publish(promoId: string): Promise<Promo> {
+  async publish(promoId: string, options?: { trustedActor?: boolean }): Promise<Promo> {
     const promo = await this.findByIdOrFail(promoId);
     if (promo.lifecycleStatus === PromoLifecycleStatus.PUBLIEE) {
       throw new BadRequestAppException(
@@ -255,7 +275,9 @@ export class PromoService {
         'Cette promo est déjà publiée',
       );
     }
-    this.assertRepublishCooldown(promo);
+    if (!options?.trustedActor) {
+      this.assertRepublishCooldown(promo);
+    }
     const commercant = await this.commercantService.findByIdOrFail(promo.commercantId);
     this.commercantService.assertRegistreValidated(commercant);
     this.commercantService.assertProfileValidated(commercant);

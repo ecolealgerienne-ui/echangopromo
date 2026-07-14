@@ -185,7 +185,10 @@ export class PromoController {
         agent.communes.map((commune) => commune.id),
       );
     }
-    return this.promoService.create(commercantId, dto);
+    // Exempté des plafonds anti-abus (2026-07-14) : agent/admin agissent
+    // via un canal audité, pas l'auto-service commerçant que ces plafonds
+    // visent (voir `PromoService.create`).
+    return this.promoService.create(commercantId, dto, { trustedActor: true });
   }
 
   /** Édition ouverte au commerçant propriétaire, en plus de l'agent (auparavant agent uniquement). */
@@ -203,7 +206,11 @@ export class PromoController {
     return this.promoService.update(id, dto);
   }
 
-  /** Publie un brouillon, ou republie une promo arrêtée/expirée (specs §3.2). */
+  /**
+   * Publie un brouillon, ou republie une promo arrêtée/expirée (specs §3.2).
+   * L'agent est exempté du cooldown anti-abus de republication (même
+   * raisonnement que `createByAgent`) — jamais le commerçant lui-même.
+   */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('commercant', 'agent')
@@ -214,7 +221,7 @@ export class PromoController {
   ) {
     const promo = await this.promoService.findByIdOrFail(id);
     await this.assertCanManage(user, promo);
-    return this.promoService.publish(id);
+    return this.promoService.publish(id, { trustedActor: user.role === 'agent' });
   }
 
   /** Arrêt volontaire (ex. rupture de stock) — libère un slot sur le plafond de 5. */
