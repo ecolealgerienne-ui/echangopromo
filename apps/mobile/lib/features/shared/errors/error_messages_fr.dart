@@ -11,7 +11,8 @@
 /// Volontairement absents de ce mapping : `VALIDATION_ERROR` (message par
 /// champ, dynamique, déjà en français côté backend) et les codes dont le
 /// message backend interpole une valeur (`PROMO_DATE_FIN_EXCEEDS_MAX`,
-/// `PROMO_ACTIVE_CAP_REACHED`) — un mapping statique leur ferait perdre
+/// `PROMO_ACTIVE_CAP_REACHED`, `PROMO_DAILY_CREATION_CAP_REACHED`,
+/// `PROMO_REPUBLISH_TOO_SOON`) — un mapping statique leur ferait perdre
 /// cette valeur. Pour ces codes, [ApiException.displayMessage] retombe sur
 /// le message backend brut.
 const Map<String, String> errorMessagesFr = {

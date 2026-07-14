@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, EntityManager, In, IsNull, LessThan, Not, Repository } from 'typeorm';
+import { Between, EntityManager, In, IsNull, LessThan, MoreThan, Not, Repository } from 'typeorm';
 import { CommercantService } from '../commercant/commercant.service';
 import {
   BadRequestAppException,
@@ -55,6 +55,16 @@ export class PromoService {
     return this.configService.get<number>('IMAGE_RETENTION_DAYS', 30);
   }
 
+  /** Anti-abus (retour terrain 2026-07-14) — voir `assertUnderDailyCreationCap`. */
+  private dailyCreationCap(): number {
+    return this.configService.get<number>('PROMO_DAILY_CREATION_CAP', 5);
+  }
+
+  /** Anti-abus (retour terrain 2026-07-14) — voir `assertRepublishCooldown`. */
+  private republishCooldownHours(): number {
+    return this.configService.get<number>('PROMO_REPUBLISH_COOLDOWN_HOURS', 24);
+  }
+
   /** Calcule/valide la date de fin — jamais plus loin que `PROMO_MAX_DURATION_DAYS`. */
   private resolveDateFin(requested?: Date): Date {
     const now = Date.now();
@@ -100,6 +110,54 @@ export class PromoService {
   }
 
   /**
+   * Anti-abus (retour terrain 2026-07-14) : sans ce plafond, un commerçant
+   * pourrait créer une nouvelle promo en boucle rien que pour profiter du
+   * tri "plus récentes en premier" côté client (`publishedAt`) — le
+   * cooldown de republication (`assertRepublishCooldown`) ne suffit pas
+   * seul, puisque créer une NOUVELLE promo à chaque fois le contourne.
+   * Compte toutes les créations (brouillon inclus, comme le plafond actif
+   * ne les compte pas mais celui-ci le doit) sur une fenêtre glissante de
+   * 24h, pas un jour calendaire — pas de contournement en recréant juste
+   * après minuit. Même verrou que `assertUnderCap` (règle #13).
+   */
+  private async assertUnderDailyCreationCap(
+    manager: EntityManager,
+    commercantId: string,
+  ): Promise<void> {
+    const cap = this.dailyCreationCap();
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentCount = await manager.count(Promo, {
+      where: { commercantId, createdAt: MoreThan(since) },
+    });
+    if (recentCount >= cap) {
+      throw new BadRequestAppException(
+        ErrorCode.PROMO_DAILY_CREATION_CAP_REACHED,
+        `Plafond de ${cap} créations de promo par 24h atteint pour ce commerçant`,
+      );
+    }
+  }
+
+  /**
+   * Anti-abus (retour terrain 2026-07-14) : sans ce cooldown, un commerçant
+   * pourrait enchaîner des cycles arrêt→republication rien que pour
+   * rafraîchir `publishedAt` et remonter en tête du tri "plus récentes en
+   * premier" côté client. Ne s'applique qu'à une republication
+   * (`publishedAt` déjà posé par une publication précédente) — jamais à la
+   * toute première publication d'un brouillon.
+   */
+  private assertRepublishCooldown(promo: Promo): void {
+    if (!promo.publishedAt) return;
+    const cooldownMs = this.republishCooldownHours() * 60 * 60 * 1000;
+    const nextAllowedAt = new Date(promo.publishedAt.getTime() + cooldownMs);
+    if (nextAllowedAt.getTime() > Date.now()) {
+      throw new BadRequestAppException(
+        ErrorCode.PROMO_REPUBLISH_TOO_SOON,
+        `Vous pourrez republier cette promo à partir du ${nextAllowedAt.toISOString()}`,
+      );
+    }
+  }
+
+  /**
    * Best-effort : une miniature manquante ne doit jamais bloquer la
    * création/édition d'une promo — `PromoController.toClientJson` retombe
    * sur la photo complète si `null` (échec réseau S3 transitoire par ex.).
@@ -128,9 +186,11 @@ export class PromoService {
 
   /**
    * Création (specs §3.2/§5.3) — `asDraft: true` enregistre en brouillon
-   * (non visible, non compté dans le plafond, `dateFin` non fixée) ;
-   * sinon publie immédiatement (comportement historique, comportement par
-   * défaut pour ne rien casser côté agent).
+   * (non visible, non compté dans le plafond de 5 promos *actives*,
+   * `dateFin` non fixée — mais compté dans le plafond anti-abus de
+   * créations/24h, voir `assertUnderDailyCreationCap`) ; sinon publie
+   * immédiatement (comportement historique, comportement par défaut pour ne
+   * rien casser côté agent).
    */
   async create(commercantId: string, dto: CreatePromoDto): Promise<Promo> {
     const commercant = await this.commercantService.findByIdOrFail(commercantId);
@@ -150,18 +210,22 @@ export class PromoService {
     };
 
     if (dto.asDraft) {
-      return this.promos.save(
-        this.promos.create({
-          ...base,
-          dateFin: null,
-          lifecycleStatus: PromoLifecycleStatus.BROUILLON,
-        }),
-      );
+      return this.withCommercantLock(commercantId, async (manager) => {
+        await this.assertUnderDailyCreationCap(manager, commercantId);
+        return manager.save(
+          manager.create(Promo, {
+            ...base,
+            dateFin: null,
+            lifecycleStatus: PromoLifecycleStatus.BROUILLON,
+          }),
+        );
+      });
     }
 
     const dateFin = this.resolveDateFin(dto.dateFin);
     return this.withCommercantLock(commercantId, async (manager) => {
       await this.assertUnderCap(manager, commercantId);
+      await this.assertUnderDailyCreationCap(manager, commercantId);
       return manager.save(
         manager.create(Promo, {
           ...base,
@@ -178,7 +242,10 @@ export class PromoService {
    * avec une `dateFin` recalculée à neuf (jamais une simple prolongation :
    * specs §3.2, "republication complète requise pour réactiver"). C'est ce
    * geste explicite qui constitue la republication complète, pas une
-   * resaisie du formulaire.
+   * resaisie du formulaire. Une republication est soumise à un cooldown
+   * anti-abus (voir `assertRepublishCooldown`) — sans quoi un cycle
+   * arrêt→republication répété permettrait de garder artificiellement la
+   * promo en tête du tri "plus récentes en premier" côté client.
    */
   async publish(promoId: string): Promise<Promo> {
     const promo = await this.findByIdOrFail(promoId);
@@ -188,6 +255,7 @@ export class PromoService {
         'Cette promo est déjà publiée',
       );
     }
+    this.assertRepublishCooldown(promo);
     const commercant = await this.commercantService.findByIdOrFail(promo.commercantId);
     this.commercantService.assertRegistreValidated(commercant);
     this.commercantService.assertProfileValidated(commercant);
