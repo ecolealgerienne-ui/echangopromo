@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../domain/models/auth_session.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
@@ -9,9 +10,13 @@ import '../../shared/widgets/language_switcher_button.dart';
 
 final _dashboardProvider = FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).dashboard());
 
-/// Dashboard admin (specs §3.4) : stats globales + accès aux files de
-/// travail (modération, agents) — le registre se consulte/valide désormais
-/// depuis la fiche détail commerçant, plus de menu dédié.
+/// Dashboard (specs §3.4) — partagé admin/agent (décision produit
+/// 2026-07-12, agent = modérateur avec les mêmes écrans que l'admin) :
+/// stats globales pour l'admin, restreintes aux communes de l'agent sinon
+/// (backend scope automatiquement via `AdminController.scopedCommuneIds`).
+/// Seules la gestion des agents et le journal d'audit restent admin-only —
+/// le registre se consulte/valide depuis la fiche détail commerçant, plus
+/// de menu dédié.
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
 
@@ -19,6 +24,8 @@ class AdminDashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final statsAsync = ref.watch(_dashboardProvider);
+    final isAdmin = ref.watch(authControllerProvider).value?.role == AppRole.admin;
+    final rolePrefix = isAdmin ? '/admin' : '/agent';
 
     return Scaffold(
       appBar: AppBar(
@@ -27,7 +34,7 @@ class AdminDashboardScreen extends ConsumerWidget {
           tooltip: l10n.backToHomeTooltip,
           onPressed: () => context.go('/'),
         ),
-        title: Text(l10n.adminSpaceTitle),
+        title: Text(isAdmin ? l10n.adminSpaceTitle : l10n.agentSpaceTitle),
         actions: [
           const LanguageSwitcherButton(),
           PopupMenuButton<String>(
@@ -79,7 +86,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                       icon: Icons.flag_outlined,
                       label: l10n.signalementsEnAttenteLabel,
                       value: stats.signalementsEnAttente,
-                      onTap: () => context.push('/admin/moderation'),
+                      onTap: () => context.push('$rolePrefix/moderation'),
                     ),
                   ),
                   SizedBox(
@@ -88,7 +95,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                       icon: Icons.assignment_outlined,
                       label: l10n.registresEnAttenteLabel,
                       value: stats.registresEnAttente,
-                      onTap: () => context.push('/admin/commercants'),
+                      onTap: () => context.push('$rolePrefix/commercants'),
                     ),
                   ),
                   SizedBox(
@@ -97,7 +104,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                       icon: Icons.edit_note_outlined,
                       label: l10n.profilsEnAttenteLabel,
                       value: stats.profilsEnAttente,
-                      onTap: () => context.push('/admin/commercants'),
+                      onTap: () => context.push('$rolePrefix/commercants'),
                     ),
                   ),
                 ],
@@ -107,32 +114,45 @@ class AdminDashboardScreen extends ConsumerWidget {
             FilledButton.icon(
               icon: const Icon(Icons.flag_outlined),
               label: Text(l10n.moderationLabel),
-              onPressed: () => context.push('/admin/moderation'),
+              onPressed: () => context.push('$rolePrefix/moderation'),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               icon: const Icon(Icons.local_offer_outlined),
               label: Text(l10n.allPromosLabel),
-              onPressed: () => context.push('/admin/promos'),
+              onPressed: () => context.push('$rolePrefix/promos'),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               icon: const Icon(Icons.storefront_outlined),
               label: Text(l10n.commercantsLabel),
-              onPressed: () => context.push('/admin/commercants'),
+              onPressed: () => context.push('$rolePrefix/commercants'),
             ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.badge_outlined),
-              label: Text(l10n.agentsLabel),
-              onPressed: () => context.push('/admin/agents'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.history_outlined),
-              label: Text(l10n.auditLogLabel),
-              onPressed: () => context.push('/admin/audit-log'),
-            ),
+            if (!isAdmin) ...[
+              const SizedBox(height: 8),
+              // Tournée terrain (statut visité/à relancer par commune) —
+              // fonctionnalité propre à l'agent, sans équivalent admin, donc
+              // pas de bouton générique par rôle comme les autres ci-dessus.
+              OutlinedButton.icon(
+                icon: const Icon(Icons.map_outlined),
+                label: Text(l10n.myCommunesTitle),
+                onPressed: () => context.push('/agent/communes'),
+              ),
+            ],
+            if (isAdmin) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.badge_outlined),
+                label: Text(l10n.agentsLabel),
+                onPressed: () => context.push('/admin/agents'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.history_outlined),
+                label: Text(l10n.auditLogLabel),
+                onPressed: () => context.push('/admin/audit-log'),
+              ),
+            ],
           ],
         ),
       ),

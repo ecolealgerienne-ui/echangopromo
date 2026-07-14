@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/registre_status.dart';
+import '../../../domain/models/auth_session.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/api_error_text.dart';
@@ -91,6 +93,10 @@ class AdminCommercantsScreen extends ConsumerWidget {
     final commercantsAsync = ref.watch(_commercantsProvider);
     final pendingOnly = ref.watch(_registrePendingFilterProvider);
     final inFlight = ref.watch(_inFlightProvider);
+    // Même pattern que AdminPromosScreen/ModerationQueueScreen (écran
+    // partagé admin/agent, décision produit 2026-07-12).
+    final role = ref.read(authControllerProvider).value?.role;
+    final detailPath = role == AppRole.agent ? '/agent/commercants/detail' : '/admin/commercants/detail';
 
     return Scaffold(
       appBar: AppBar(
@@ -138,8 +144,7 @@ class AdminCommercantsScreen extends ConsumerWidget {
                       final item = items[index];
                       return ListTile(
                         onTap: () async {
-                          final changed = await context
-                              .push<bool>('/admin/commercants/detail', extra: item);
+                          final changed = await context.push<bool>(detailPath, extra: item);
                           if (changed == true) ref.invalidate(_commercantsProvider);
                         },
                         title: Text(item.nom),

@@ -154,11 +154,24 @@ brouillon → publiée → arrêtée
 - Met à jour une promo existante sur un commerce déjà onboardé.
 - N'a plus d'action à faire pour activer le compte du commerçant : celui-ci le fait lui-même, quand il le souhaite, en définissant son PIN sur l'écran de connexion (pas d'OTP à initier).
 - **Pas de mode hors-ligne en V0** (décision explicite malgré la couverture réseau variable à Djelfa — voir §7, risque à surveiller pendant le pilote).
+- **Agent = modérateur, mêmes écrans que l'admin** (décision produit
+  2026-07-12) : dashboard, modération, liste de promos, liste/fiche
+  commerçant (valider registre/profil, suspendre/réactiver, réinitialiser
+  le PIN) — un seul jeu d'écrans partagé, scopé automatiquement aux
+  communes de l'agent côté backend (vue globale pour l'admin). Seules deux
+  fonctionnalités restent réservées à l'admin : la gestion des agents et le
+  journal d'audit. La liste "commerces de mes communes" (statut jamais
+  visité/à jour/à relancer, §3.3 ci-dessus) reste propre à l'agent, sans
+  équivalent admin — c'est un outil de tournée terrain, pas une fiche de
+  gestion.
 
 ### 3.4 Admin / Modérateur
 
 - Authentification **email + mot de passe**.
 - **Un seul rôle en V0** (pas de séparation admin/modérateur pour le pilote — à réévaluer si recrutement d'un modérateur dédié).
+- Gagne, depuis le 2026-07-12, la capacité de publier une promo pour un
+  commerçant (même écran que l'agent) — en plus de ses capacités de
+  modération/gestion déjà partagées avec l'agent (voir §3.3).
 - Valide ou rejette le registre envoyé par un commerçant auto-inscrit — condition désormais bloquante pour que celui-ci puisse publier (§3.2).
 - Traite la file de modération des promos signalées (masquer / valider en `vérifiée_ok` / avertir le commerçant).
 - Crée et gère les comptes agents, assigne un agent à une ou plusieurs communes.

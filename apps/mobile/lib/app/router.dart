@@ -140,9 +140,17 @@ final _appRoutes = <_AppRoute>[
     ),
     requiredRole: AppRole.agent,
   ),
-  // Agent = modérateur (plan de correction, Phase 2) : mêmes écrans que
-  // l'admin, le backend scope automatiquement aux communes de l'agent
-  // (voir AdminController.scopedCommuneIds) — pas de duplication d'écran.
+  // Agent = modérateur (plan de correction, Phase 2, étendu 2026-07-12 à
+  // dashboard + fiche commerçant) : mêmes écrans que l'admin, le backend
+  // scope automatiquement aux communes de l'agent (voir
+  // AdminController.scopedCommuneIds) — pas de duplication d'écran, à
+  // l'exception volontaire de la gestion des agents et du journal d'audit
+  // (restés admin-only, voir AdminDashboardScreen).
+  _AppRoute(
+    '/agent/dashboard',
+    (context, state) => const AdminDashboardScreen(),
+    requiredRole: AppRole.agent,
+  ),
   _AppRoute(
     '/agent/moderation',
     (context, state) => const ModerationQueueScreen(),
@@ -158,6 +166,16 @@ final _appRoutes = <_AppRoute>[
   _AppRoute(
     '/agent/promo-detail',
     (context, state) => AdminPromoDetailScreen(item: state.extra as ModerationItem),
+    requiredRole: AppRole.agent,
+  ),
+  _AppRoute(
+    '/agent/commercants',
+    (context, state) => const AdminCommercantsScreen(),
+    requiredRole: AppRole.agent,
+  ),
+  _AppRoute(
+    '/agent/commercants/detail',
+    (context, state) => AdminCommercantDetailScreen(item: state.extra as AdminCommercantItem),
     requiredRole: AppRole.agent,
   ),
 
@@ -217,6 +235,17 @@ final _appRoutes = <_AppRoute>[
     (context, state) => const CreateAgentScreen(),
     requiredRole: AppRole.admin,
   ),
+  // Admin gagne la capacité de publier une promo pour un commerçant
+  // (décision produit 2026-07-12) — même écran que l'agent, la garde de
+  // commune ne s'applique qu'au rôle agent côté backend (vue globale admin).
+  _AppRoute(
+    '/admin/promo/new/:commercantId',
+    (context, state) => AgentPromoFormScreen(
+      commercantId: state.pathParameters['commercantId']!,
+      defaultCategorie: state.extra as Categorie?,
+    ),
+    requiredRole: AppRole.admin,
+  ),
 ];
 
 String _loginPathFor(AppRole role) {
@@ -251,7 +280,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         return session?.role == AppRole.commercant ? '/commercant/dashboard' : '/commercant/login';
       }
       if (path == '/agent') {
-        return session?.role == AppRole.agent ? '/agent/communes' : '/agent/login';
+        return session?.role == AppRole.agent ? '/agent/dashboard' : '/agent/login';
       }
       if (path == '/admin') {
         return session?.role == AppRole.admin ? '/admin/dashboard' : '/admin/login';

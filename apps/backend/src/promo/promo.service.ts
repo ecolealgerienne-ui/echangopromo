@@ -573,13 +573,17 @@ export class PromoService {
   }
 
   /**
-   * Utilisé par le dashboard admin. Filtre aussi sur `dateFin` comme
-   * `findActiveForClient` — sans ça, une promo expirée reste comptée comme
-   * "publiée" jusqu'au passage du cron quotidien (`expireOutdatedPromosCron`),
-   * jusqu'à 24h de statistique fausse.
+   * Utilisé par le dashboard admin/agent (partagé, décision produit
+   * 2026-07-12). Filtre aussi sur `dateFin` comme `findActiveForClient` —
+   * sans ça, une promo expirée reste comptée comme "publiée" jusqu'au
+   * passage du cron quotidien (`expireOutdatedPromosCron`), jusqu'à 24h de
+   * statistique fausse. `communeIds` restreint aux communes d'un agent —
+   * `undefined` = vue globale (admin).
    */
-  async countVisible(): Promise<number> {
-    return this.promos
+  async countVisible(communeIds?: string[]): Promise<number> {
+    if (communeIds && communeIds.length === 0) return 0;
+
+    const qb = this.promos
       .createQueryBuilder('promo')
       .where('promo.lifecycleStatus = :lifecycleStatus', {
         lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
@@ -587,7 +591,14 @@ export class PromoService {
       .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
         moderationStatuses: VISIBLE_MODERATION_STATUSES,
       })
-      .andWhere('promo.dateFin > NOW()')
-      .getCount();
+      .andWhere('promo.dateFin > NOW()');
+
+    if (communeIds) {
+      qb.innerJoin('promo.commercant', 'commercant').andWhere(
+        'commercant.communeId IN (:...communeIds)',
+        { communeIds },
+      );
+    }
+    return qb.getCount();
   }
 }

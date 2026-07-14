@@ -162,21 +162,28 @@ export class PromoController {
     };
   }
 
-  /** IDOR corrigé : un agent ne peut publier que pour un commerçant de ses propres communes. */
+  /**
+   * IDOR corrigé : un agent ne peut publier que pour un commerçant de ses
+   * propres communes — pas de restriction de commune pour un admin (vue
+   * globale, décision produit 2026-07-12 : l'admin gagne la même capacité
+   * de publier pour un commerçant, écrans partagés avec l'agent).
+   */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('agent')
+  @Roles('agent', 'admin')
   @Post('agent/:commercantId')
   async createByAgent(
     @CurrentUser() user: AuthTokenPayload,
     @Param('commercantId') commercantId: string,
     @Body() dto: CreatePromoDto,
   ) {
-    const agent = await this.agentService.findByIdOrFail(user.sub);
-    await this.commercantService.assertCommuneMatches(
-      commercantId,
-      agent.communes.map((commune) => commune.id),
-    );
+    if (user.role === 'agent') {
+      const agent = await this.agentService.findByIdOrFail(user.sub);
+      await this.commercantService.assertCommuneMatches(
+        commercantId,
+        agent.communes.map((commune) => commune.id),
+      );
+    }
     return this.promoService.create(commercantId, dto);
   }
 

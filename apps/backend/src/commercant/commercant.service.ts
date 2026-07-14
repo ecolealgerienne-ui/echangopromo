@@ -422,37 +422,66 @@ export class CommercantService {
     });
   }
 
-  async countActive(): Promise<number> {
+  /**
+   * `communeIds` restreint aux communes d'un agent (dashboard partagé
+   * admin/agent, décision produit 2026-07-12) — `undefined` = vue globale
+   * (admin), même convention que `AdminController.scopedCommuneIds`.
+   */
+  async countActive(communeIds?: string[]): Promise<number> {
+    if (communeIds && communeIds.length === 0) return 0;
     return this.commercants.count({
-      where: { accountState: CommercantAccountState.AUTONOME },
+      where: {
+        accountState: CommercantAccountState.AUTONOME,
+        ...(communeIds ? { communeId: In(communeIds) } : {}),
+      },
     });
   }
 
   /** Registres en attente de validation (stat dashboard admin, plan de correction). */
-  async countPendingRegistre(): Promise<number> {
+  async countPendingRegistre(communeIds?: string[]): Promise<number> {
+    if (communeIds && communeIds.length === 0) return 0;
     return this.commercants.count({
-      where: { registreStatus: RegistreStatus.EN_ATTENTE },
+      where: {
+        registreStatus: RegistreStatus.EN_ATTENTE,
+        ...(communeIds ? { communeId: In(communeIds) } : {}),
+      },
     });
   }
 
   /** Modifications de profil en attente de validation (stat dashboard admin). */
-  async countPendingProfileReview(): Promise<number> {
-    return this.commercants.count({ where: { profilePendingReview: true } });
+  async countPendingProfileReview(communeIds?: string[]): Promise<number> {
+    if (communeIds && communeIds.length === 0) return 0;
+    return this.commercants.count({
+      where: {
+        profilePendingReview: true,
+        ...(communeIds ? { communeId: In(communeIds) } : {}),
+      },
+    });
   }
 
   /**
    * Vue admin (plan de correction, Phase 2) : recherche + liste sur
    * l'ensemble des commerçants, y compris suspendus (`deletedAt` non nul)
    * — sans ça, l'admin ne pourrait jamais retrouver un compte suspendu pour
-   * le réactiver.
+   * le réactiver. `communeIds` restreint aux communes d'un agent (partage
+   * de cet écran admin/agent, décision produit 2026-07-12) — `undefined` =
+   * vue globale (admin).
    */
   async findAllForAdmin(
     query: ListCommercantQueryDto,
+    communeIds?: string[],
   ): Promise<PaginatedResult<Commercant>> {
+    if (communeIds && communeIds.length === 0) {
+      return toPaginatedResult([], 0, query.page, query.limit);
+    }
+
     const qb = this.commercants
       .createQueryBuilder('commercant')
       .orderBy('commercant.createdAt', 'DESC');
 
+    if (communeIds) {
+      qb.andWhere('commercant.communeId IN (:...communeIds)', { communeIds });
+    }
     if (query.search) {
       qb.andWhere(
         '(commercant.nom ILIKE :search OR commercant.telephone ILIKE :search)',

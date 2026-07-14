@@ -221,6 +221,24 @@ export class AdminController {
     );
   }
 
+  /**
+   * Garde IDOR (règle #1) : un agent ne peut consulter/gérer que les
+   * commerçants de ses propres communes — écran fiche commerçant partagé
+   * avec l'admin (décision produit 2026-07-12), même pattern que
+   * `assertCanModerate` ci-dessus.
+   */
+  private async assertCanManageCommercant(
+    user: AuthTokenPayload,
+    commercantId: string,
+  ): Promise<void> {
+    if (user.role !== 'agent') return;
+    const agent = await this.agentService.findByIdOrFail(user.sub);
+    await this.commercantService.assertCommuneMatches(
+      commercantId,
+      agent.communes.map((commune) => commune.id),
+    );
+  }
+
   private actorType(role: string): AuditActorType {
     return role === 'agent' ? AuditActorType.AGENT : AuditActorType.ADMIN;
   }
@@ -312,10 +330,14 @@ export class AdminController {
    * qui affiche désormais le registre et permet de le valider/rejeter.
    */
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Get('commercant')
-  async listCommercants(@Query() query: ListCommercantQueryDto) {
-    const result = await this.commercantService.findAllForAdmin(query);
+  async listCommercants(
+    @CurrentUser() user: AuthTokenPayload,
+    @Query() query: ListCommercantQueryDto,
+  ) {
+    const communeIds = await this.scopedCommuneIds(user);
+    const result = await this.commercantService.findAllForAdmin(query, communeIds);
     return {
       ...result,
       items: await Promise.all(
@@ -359,16 +381,17 @@ export class AdminController {
    */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Post('commercant/:id/suspend')
   async suspendCommercant(
     @CurrentUser() user: AuthTokenPayload,
     @Param('id') commercantId: string,
   ) {
+    await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.findByIdOrFail(commercantId);
     await this.commercantService.deleteAccount(commercantId);
     await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
+      actorType: this.actorType(user.role),
       actorId: user.sub,
       action: 'commercant_suspend',
       targetType: 'commercant',
@@ -379,16 +402,17 @@ export class AdminController {
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Post('commercant/:id/reactivate')
   async reactivateCommercant(
     @CurrentUser() user: AuthTokenPayload,
     @Param('id') commercantId: string,
   ) {
+    await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.findByIdOrFail(commercantId);
     await this.commercantService.reactivateAccount(commercantId);
     await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
+      actorType: this.actorType(user.role),
       actorId: user.sub,
       action: 'commercant_reactivate',
       targetType: 'commercant',
@@ -399,18 +423,19 @@ export class AdminController {
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Post('commercant/:id/registre/valider')
   async validerRegistre(
     @CurrentUser() user: AuthTokenPayload,
     @Param('id') commercantId: string,
   ) {
+    await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.resolveRegistreVerification(
       commercantId,
       true,
     );
     await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
+      actorType: this.actorType(user.role),
       actorId: user.sub,
       action: 'registre_valider',
       targetType: 'commercant',
@@ -427,15 +452,16 @@ export class AdminController {
    */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Post('commercant/:id/profile/valider')
   async validerProfil(
     @CurrentUser() user: AuthTokenPayload,
     @Param('id') commercantId: string,
   ) {
+    await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.validateProfile(commercantId);
     await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
+      actorType: this.actorType(user.role),
       actorId: user.sub,
       action: 'profile_valider',
       targetType: 'commercant',
@@ -444,18 +470,22 @@ export class AdminController {
     return { ok: true };
   }
 
-  /** PIN oublié : pas d'OTP, seul l'admin peut effacer le PIN (§3.2). */
+  /**
+   * PIN oublié : pas d'OTP, seul un admin ou l'agent de la commune peut
+   * effacer le PIN (§3.2, écran fiche commerçant partagé 2026-07-12).
+   */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Post('commercant/:id/reset-pin')
   async resetPin(
     @CurrentUser() user: AuthTokenPayload,
     @Param('id') commercantId: string,
   ) {
+    await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.adminResetPin(commercantId);
     await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
+      actorType: this.actorType(user.role),
       actorId: user.sub,
       action: 'commercant_reset_pin',
       targetType: 'commercant',
@@ -466,18 +496,19 @@ export class AdminController {
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Post('commercant/:id/registre/rejeter')
   async rejeterRegistre(
     @CurrentUser() user: AuthTokenPayload,
     @Param('id') commercantId: string,
   ) {
+    await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.resolveRegistreVerification(
       commercantId,
       false,
     );
     await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
+      actorType: this.actorType(user.role),
       actorId: user.sub,
       action: 'registre_rejeter',
       targetType: 'commercant',
@@ -499,11 +530,16 @@ export class AdminController {
     return this.auditLogService.findAll(query.page, query.limit, query.actorType);
   }
 
-  /** Dashboard global admin (specs §3.4). */
+  /**
+   * Dashboard (specs §3.4) — partagé admin/agent (décision produit
+   * 2026-07-12) : stats globales pour l'admin, restreintes aux communes de
+   * l'agent sinon (même `scopedCommuneIds` que modération/liste promos).
+   */
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Get('dashboard')
-  async dashboard() {
+  async dashboard(@CurrentUser() user: AuthTokenPayload) {
+    const communeIds = await this.scopedCommuneIds(user);
     const [
       commercesActifs,
       promosPubliees,
@@ -511,11 +547,11 @@ export class AdminController {
       registresEnAttente,
       profilsEnAttente,
     ] = await Promise.all([
-      this.commercantService.countActive(),
-      this.promoService.countVisible(),
-      this.reportService.countPendingModeration(),
-      this.commercantService.countPendingRegistre(),
-      this.commercantService.countPendingProfileReview(),
+      this.commercantService.countActive(communeIds),
+      this.promoService.countVisible(communeIds),
+      this.reportService.countPendingModeration(communeIds),
+      this.commercantService.countPendingRegistre(communeIds),
+      this.commercantService.countPendingProfileReview(communeIds),
     ]);
 
     return {

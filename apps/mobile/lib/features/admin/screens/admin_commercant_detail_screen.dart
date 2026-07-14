@@ -1,14 +1,17 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../app/theme.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/commercant_origin_verification.dart';
 import '../../../domain/enums/registre_status.dart';
 import '../../../domain/models/admin_commercant_item.dart';
+import '../../../domain/models/auth_session.dart';
 import '../../../domain/models/commune.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/utils/maps_launcher.dart';
@@ -93,6 +96,14 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
         break;
       }
     }
+    // Même pattern que AdminPromosScreen/AdminCommercantsScreen (écran
+    // partagé admin/agent, décision produit 2026-07-12) : l'admin gagne la
+    // capacité de publier une promo pour un commerçant, même écran que
+    // l'agent (AgentPromoFormScreen), pas de garde de commune côté backend
+    // pour ce rôle (vue globale).
+    final role = ref.read(authControllerProvider).value?.role;
+    final newPromoPath =
+        role == AppRole.agent ? '/agent/promo/new/${item.id}' : '/admin/promo/new/${item.id}';
     final dateFormat = DateFormat('dd/MM/yyyy');
     // Décode à la largeur physique réellement affichée plutôt que la pleine
     // résolution source — sans effet si ça dépasse l'original (~1200px max),
@@ -252,6 +263,13 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
+                    FilledButton.icon(
+                      icon: const Icon(Icons.add),
+                      label: Text(l10n.newPromoTitle),
+                      onPressed: item.suspended
+                          ? null
+                          : () => context.push(newPromoPath, extra: item.categorie),
+                    ),
                     item.suspended
                         ? FilledButton(
                             onPressed: () => _act(
