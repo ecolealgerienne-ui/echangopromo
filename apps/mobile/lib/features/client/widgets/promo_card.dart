@@ -1,24 +1,23 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import '../../../app/theme.dart';
 import '../../../domain/models/promo.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../shared/widgets/promo_discount_badge.dart';
+import '../../shared/widgets/promo_price_row.dart';
 
-/// Padding autour du bloc texte (description/prix/nom) — partagé avec
-/// `promo_list_screen.dart` pour calculer un `childAspectRatio` de grille
-/// qui correspond exactement à la hauteur réelle de la carte (photo +
-/// bloc texte), sans espace vide résiduel.
-const promoCardPadding = 12.0;
+/// Taille de la photo dans la ligne — assez grande pour continuer à jouer
+/// son rôle de signal de confiance (preuve qu'il s'agit d'un vrai commerce),
+/// contrairement à une simple miniature ; assez petite pour laisser au texte
+/// (notamment l'arabe, plus large qu'un français tronqué) toute la largeur
+/// de l'écran. Proposition 2026-07-11 : liste 1 colonne plutôt que grille 2
+/// colonnes, sur le modèle Deliveroo/Uber Eats plutôt que la miniature d'un
+/// catalogue supermarché.
+const _photoSize = 96.0;
 
-/// Hauteur réservée au bloc texte, indépendante du contenu réel : la
-/// description est censée tenir sur 2 lignes, le prix sur 1, le nom du
-/// commerçant sur 1 (specs). Fixer cette hauteur (au lieu de laisser
-/// chaque `Text` prendre sa hauteur naturelle, qui varie si la
-/// description tient sur 1 seule ligne) rend les cartes homogènes dans
-/// une grille à ratio fixe. Marge incluse au-delà de l'estimation
-/// theme par défaut (~83) pour absorber une échelle de police
-/// légèrement plus grande sans faire déborder la carte.
-const promoCardTextBlockHeight = 96.0;
-
+/// Ligne "promo" du fil client — remplace l'ancienne carte de grille
+/// 2 colonnes : une seule colonne laisse la place au nom du commerçant, au
+/// badge "expire bientôt" et à un texte RTL sans troncature agressive.
 class PromoCard extends StatelessWidget {
   const PromoCard({
     super.key,
@@ -33,91 +32,110 @@ class PromoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    // Décode directement à la taille physique affichée (96dp) plutôt que la
+    // pleine résolution de l'image source (jusqu'à 1200px) — sans ça,
+    // chaque vignette de la liste garde en mémoire ~150x plus de pixels
+    // que ce qui est réellement montré.
+    final photoCachePx = (_photoSize * MediaQuery.of(context).devicePixelRatio).round();
 
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // `Expanded` plutôt qu'`AspectRatio` : la hauteur totale de la
-            // carte est déjà imposée (tight) par la grille — un `AspectRatio`
-            // fixe redemande sa propre hauteur en plus de celle du bloc
-            // texte ci-dessous, et le moindre écart entre le ratio calculé
-            // côté grille et la hauteur réellement prise par le texte
-            // (métriques de police, échelle d'accessibilité) fait déborder
-            // la `Column`. Avec `Expanded`, la photo prend toujours
-            // exactement l'espace restant, jamais plus — proche de 16:9 en
-            // pratique (le ratio de grille vise ça) mais sans jamais pouvoir
-            // provoquer d'overflow.
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(
                 children: [
-                  if (promo.photoUrl != null)
-                    CachedNetworkImage(imageUrl: promo.photoUrl!, fit: BoxFit.cover)
-                  else
-                    Container(color: Theme.of(context).colorScheme.surfaceContainerHighest),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                    child: SizedBox(
+                      width: _photoSize,
+                      height: _photoSize,
+                      child: (promo.thumbnailUrl ?? promo.photoUrl) != null
+                          ? CachedNetworkImage(
+                              imageUrl: (promo.thumbnailUrl ?? promo.photoUrl)!,
+                              fit: BoxFit.cover,
+                              memCacheWidth: photoCachePx,
+                              memCacheHeight: photoCachePx,
+                            )
+                          : Container(color: colorScheme.surfaceContainerHighest),
+                    ),
+                  ),
                   if (isFavorite)
-                    const Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Icon(Icons.favorite, color: Colors.redAccent),
+                    PositionedDirectional(
+                      top: 4,
+                      start: 4,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surface.withValues(alpha: 0.85),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.favorite, size: 14, color: Colors.redAccent),
+                      ),
                     ),
                 ],
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(promoCardPadding),
-              // Hauteur fixe : sans ça, une description tenant sur 1 seule
-              // ligne (ou l'absence de nom de commerçant, ci-dessous
-              // toujours rendu même vide) rendrait cette carte plus courte
-              // que ses voisines dans la grille.
-              child: SizedBox(
-                height: promoCardTextBlockHeight,
+              const SizedBox(width: 12),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       promo.description,
-                      style: Theme.of(context).textTheme.titleMedium,
+                      style: Theme.of(context).textTheme.titleSmall,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Text(
-                          currency.format(promo.prixAvant),
-                          style: const TextStyle(
-                            decoration: TextDecoration.lineThrough,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          currency.format(promo.prixApres),
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
-                      // Toujours rendu (même vide) pour réserver sa ligne —
-                      // sinon la carte d'un commerçant sans nom connu serait
-                      // plus courte que les autres.
                       promo.commercantNom ?? '',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: colorScheme.onSurfaceVariant),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: PromoPriceRow(
+                            prixAvant: promo.prixAvant,
+                            prixApres: promo.prixApres,
+                            beforeFontSize: 12,
+                            afterFontSize: 15,
+                          ),
+                        ),
+                        PromoDiscountBadge(
+                          prixAvant: promo.prixAvant,
+                          prixApres: promo.prixApres,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          textStyle: Theme.of(context).textTheme.labelSmall,
+                        ),
+                      ],
+                    ),
+                    if (promo.isExpiringSoon) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        l10n.expiringSoonBadgeLabel,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: Theme.of(context).extension<AppSemanticColors>()!.warning,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

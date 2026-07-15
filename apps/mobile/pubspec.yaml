@@ -15,6 +15,10 @@ dependencies:
   # State management
   flutter_riverpod: ^2.5.0
 
+  # Typographie du design system (Cairo + IBM Plex Sans Arabic — support
+  # natif FR/EN/AR, voir apps/mobile/lib/app/theme.dart)
+  google_fonts: ^6.2.1
+
   # Navigation
   go_router: ^14.0.0
 

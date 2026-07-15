@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, EntityManager, In, IsNull, LessThan, Not, Repository } from 'typeorm';
+import { Between, EntityManager, In, IsNull, LessThan, MoreThan, Not, Repository } from 'typeorm';
 import { CommercantService } from '../commercant/commercant.service';
 import {
   BadRequestAppException,
@@ -55,6 +55,16 @@ export class PromoService {
     return this.configService.get<number>('IMAGE_RETENTION_DAYS', 30);
   }
 
+  /** Anti-abus (retour terrain 2026-07-14) — voir `assertUnderDailyCreationCap`. */
+  private dailyCreationCap(): number {
+    return this.configService.get<number>('PROMO_DAILY_CREATION_CAP', 5);
+  }
+
+  /** Anti-abus (retour terrain 2026-07-14) — voir `assertRepublishCooldown`. */
+  private republishCooldownHours(): number {
+    return this.configService.get<number>('PROMO_REPUBLISH_COOLDOWN_HOURS', 24);
+  }
+
   /** Calcule/valide la date de fin — jamais plus loin que `PROMO_MAX_DURATION_DAYS`. */
   private resolveDateFin(requested?: Date): Date {
     const now = Date.now();
@@ -99,6 +109,68 @@ export class PromoService {
     }
   }
 
+  /**
+   * Anti-abus (retour terrain 2026-07-14) : sans ce plafond, un commerçant
+   * pourrait créer une nouvelle promo en boucle rien que pour profiter du
+   * tri "plus récentes en premier" côté client (`publishedAt`) — le
+   * cooldown de republication (`assertRepublishCooldown`) ne suffit pas
+   * seul, puisque créer une NOUVELLE promo à chaque fois le contourne.
+   * Compte toutes les créations (brouillon inclus, comme le plafond actif
+   * ne les compte pas mais celui-ci le doit) sur une fenêtre glissante de
+   * 24h, pas un jour calendaire — pas de contournement en recréant juste
+   * après minuit. Même verrou que `assertUnderCap` (règle #13).
+   */
+  private async assertUnderDailyCreationCap(
+    manager: EntityManager,
+    commercantId: string,
+  ): Promise<void> {
+    const cap = this.dailyCreationCap();
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentCount = await manager.count(Promo, {
+      where: { commercantId, createdAt: MoreThan(since) },
+    });
+    if (recentCount >= cap) {
+      throw new BadRequestAppException(
+        ErrorCode.PROMO_DAILY_CREATION_CAP_REACHED,
+        `Plafond de ${cap} créations de promo par 24h atteint pour ce commerçant`,
+      );
+    }
+  }
+
+  /**
+   * Anti-abus (retour terrain 2026-07-14) : sans ce cooldown, un commerçant
+   * pourrait enchaîner des cycles arrêt→republication rien que pour
+   * rafraîchir `publishedAt` et remonter en tête du tri "plus récentes en
+   * premier" côté client. Ne s'applique qu'à une republication
+   * (`publishedAt` déjà posé par une publication précédente) — jamais à la
+   * toute première publication d'un brouillon.
+   */
+  private assertRepublishCooldown(promo: Promo): void {
+    if (!promo.publishedAt) return;
+    const cooldownMs = this.republishCooldownHours() * 60 * 60 * 1000;
+    const nextAllowedAt = new Date(promo.publishedAt.getTime() + cooldownMs);
+    if (nextAllowedAt.getTime() > Date.now()) {
+      throw new BadRequestAppException(
+        ErrorCode.PROMO_REPUBLISH_TOO_SOON,
+        `Vous pourrez republier cette promo à partir du ${nextAllowedAt.toISOString()}`,
+      );
+    }
+  }
+
+  /**
+   * Best-effort : une miniature manquante ne doit jamais bloquer la
+   * création/édition d'une promo — `PromoController.toClientJson` retombe
+   * sur la photo complète si `null` (échec réseau S3 transitoire par ex.).
+   */
+  private async tryGenerateThumbnail(sourceKey: string): Promise<string | null> {
+    try {
+      return await this.storageService.generateThumbnail(sourceKey);
+    } catch (error) {
+      this.logger.warn(`Échec de génération de la miniature pour ${sourceKey} : ${error}`);
+      return null;
+    }
+  }
+
   private async withCommercantLock<T>(
     commercantId: string,
     fn: (manager: EntityManager) => Promise<T>,
@@ -114,13 +186,32 @@ export class PromoService {
 
   /**
    * Création (specs §3.2/§5.3) — `asDraft: true` enregistre en brouillon
-   * (non visible, non compté dans le plafond, `dateFin` non fixée) ;
-   * sinon publie immédiatement (comportement historique, comportement par
-   * défaut pour ne rien casser côté agent).
+   * (non visible, non compté dans le plafond de 5 promos *actives*,
+   * `dateFin` non fixée — mais compté dans le plafond anti-abus de
+   * créations/24h, voir `assertUnderDailyCreationCap`) ; sinon publie
+   * immédiatement (comportement historique, comportement par défaut pour ne
+   * rien casser côté agent).
+   *
+   * `trustedActor` (2026-07-14) : passé à `true` uniquement par
+   * `PromoController.createByAgent` (agent/admin, jamais l'auto-inscription
+   * commerçant) — ces deux rôles agissent via un canal audité et créé
+   * exclusivement par l'admin (pas d'auto-inscription), le vecteur d'abus
+   * visé par le plafond anti-abus (un commerçant qui gonfle artificiellement
+   * son propre classement) ne s'applique pas de la même façon. Le plafond de
+   * 5 promos *actives* (`assertUnderCap`) reste lui appliqué à tout le
+   * monde : ce n'est pas une mesure anti-abus mais une règle métier
+   * structurelle sur le volume par commerçant.
    */
-  async create(commercantId: string, dto: CreatePromoDto): Promise<Promo> {
-    await this.commercantService.findByIdOrFail(commercantId);
+  async create(
+    commercantId: string,
+    dto: CreatePromoDto,
+    options?: { trustedActor?: boolean },
+  ): Promise<Promo> {
+    const commercant = await this.commercantService.findByIdOrFail(commercantId);
+    this.commercantService.assertRegistreValidated(commercant);
+    this.commercantService.assertProfileValidated(commercant);
     this.assertPriceOrder(dto.prixAvant, dto.prixApres);
+    const thumbnailKey = await this.tryGenerateThumbnail(dto.photoKeys[0]);
 
     const base = {
       commercantId,
@@ -128,27 +219,37 @@ export class PromoService {
       prixAvant: dto.prixAvant.toFixed(2),
       prixApres: dto.prixApres.toFixed(2),
       categorie: dto.categorie,
-      photoKey: dto.photoKey,
+      photoKeys: dto.photoKeys,
+      thumbnailKey,
     };
 
     if (dto.asDraft) {
-      return this.promos.save(
-        this.promos.create({
-          ...base,
-          dateFin: null,
-          lifecycleStatus: PromoLifecycleStatus.BROUILLON,
-        }),
-      );
+      return this.withCommercantLock(commercantId, async (manager) => {
+        if (!options?.trustedActor) {
+          await this.assertUnderDailyCreationCap(manager, commercantId);
+        }
+        return manager.save(
+          manager.create(Promo, {
+            ...base,
+            dateFin: null,
+            lifecycleStatus: PromoLifecycleStatus.BROUILLON,
+          }),
+        );
+      });
     }
 
     const dateFin = this.resolveDateFin(dto.dateFin);
     return this.withCommercantLock(commercantId, async (manager) => {
       await this.assertUnderCap(manager, commercantId);
+      if (!options?.trustedActor) {
+        await this.assertUnderDailyCreationCap(manager, commercantId);
+      }
       return manager.save(
         manager.create(Promo, {
           ...base,
           dateFin,
           lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
+          publishedAt: new Date(),
         }),
       );
     });
@@ -159,9 +260,14 @@ export class PromoService {
    * avec une `dateFin` recalculée à neuf (jamais une simple prolongation :
    * specs §3.2, "republication complète requise pour réactiver"). C'est ce
    * geste explicite qui constitue la republication complète, pas une
-   * resaisie du formulaire.
+   * resaisie du formulaire. Une republication est soumise à un cooldown
+   * anti-abus (voir `assertRepublishCooldown`) — sans quoi un cycle
+   * arrêt→republication répété permettrait de garder artificiellement la
+   * promo en tête du tri "plus récentes en premier" côté client.
+   * `trustedActor` : même exemption que `create` ci-dessus, pour l'agent
+   * qui republie pour le compte d'un commerçant.
    */
-  async publish(promoId: string): Promise<Promo> {
+  async publish(promoId: string, options?: { trustedActor?: boolean }): Promise<Promo> {
     const promo = await this.findByIdOrFail(promoId);
     if (promo.lifecycleStatus === PromoLifecycleStatus.PUBLIEE) {
       throw new BadRequestAppException(
@@ -169,12 +275,19 @@ export class PromoService {
         'Cette promo est déjà publiée',
       );
     }
+    if (!options?.trustedActor) {
+      this.assertRepublishCooldown(promo);
+    }
+    const commercant = await this.commercantService.findByIdOrFail(promo.commercantId);
+    this.commercantService.assertRegistreValidated(commercant);
+    this.commercantService.assertProfileValidated(commercant);
 
     const dateFin = this.resolveDateFin();
     return this.withCommercantLock(promo.commercantId, async (manager) => {
       await this.assertUnderCap(manager, promo.commercantId);
       promo.lifecycleStatus = PromoLifecycleStatus.PUBLIEE;
       promo.dateFin = dateFin;
+      promo.publishedAt = new Date();
       return manager.save(promo);
     });
   }
@@ -194,9 +307,10 @@ export class PromoService {
 
   /**
    * Liste des promos actives filtrée par commune/catégorie (specs §3.1).
-   * Tri par défaut : favoris d'abord, puis expiration la plus proche —
-   * proposition non confirmée (point ouvert §7.2), appliquée par défaut en
-   * l'absence d'autre arbitrage.
+   * Tri par défaut : favoris d'abord, puis plus récemment publiées en
+   * premier (retour terrain 2026-07-14 — remplace l'ancien tri par
+   * expiration la plus proche, toujours disponible côté client comme option
+   * de tri manuelle).
    */
   async findActiveForClient(
     query: ListPromoQueryDto,
@@ -211,13 +325,17 @@ export class PromoService {
         moderationStatuses: VISIBLE_MODERATION_STATUSES,
       })
       .andWhere('promo.dateFin > NOW()')
-      // Compte commerçant supprimé (soft delete) : ses promos ne doivent
-      // plus apparaître aux clients, sans avoir à muter chaque promo.
-      .andWhere('commercant.deletedAt IS NULL');
+      // Compte commerçant supprimé ou suspendu (soft, 2026-07-14) : garde
+      // défensive en plus de la cascade posée par CommercantService
+      // (suspend/deleteCommercant/deleteAccount repassent déjà les promos en
+      // BROUILLON/SUPPRIMEE), pour ne jamais dépendre uniquement de cette
+      // cascade ayant réussi.
+      .andWhere('commercant.deletedAt IS NULL')
+      .andWhere('commercant.suspendedAt IS NULL');
 
-    if (query.communeId) {
-      qb.andWhere('commercant.communeId = :communeId', {
-        communeId: query.communeId,
+    if (query.communeIds?.length) {
+      qb.andWhere('commercant.communeId IN (:...communeIds)', {
+        communeIds: query.communeIds,
       });
     }
     if (query.categorie) {
@@ -227,13 +345,22 @@ export class PromoService {
     }
 
     if (query.favoriteIds?.length) {
+      // Favori par promo (id de la promo elle-même), pas par commerçant —
+      // décision produit du 2026-07-12 confirmant ce comportement après une
+      // régression : une session précédente avait aligné ceci sur
+      // commercantId en lisant "Favoris commerçant" dans les specs §3.1,
+      // qui reste à corriger dans le même sens.
       qb.addSelect(
-        `CASE WHEN promo.commercantId IN (:...favoriteIds) THEN 0 ELSE 1 END`,
+        `CASE WHEN promo.id IN (:...favoriteIds) THEN 0 ELSE 1 END`,
         'favorite_rank',
       ).setParameter('favoriteIds', query.favoriteIds);
       qb.orderBy('favorite_rank', 'ASC');
     }
-    qb.addOrderBy('promo.dateFin', 'ASC');
+    // NULLS LAST : toutes les promos ici sont PUBLIEE donc publishedAt est
+    // normalement toujours renseigné, mais une ligne pré-migration mal
+    // backfillée ne doit pas remonter en tête d'un tri DESC (comportement
+    // par défaut de Postgres pour NULL en DESC).
+    qb.addOrderBy('promo.publishedAt', 'DESC', 'NULLS LAST');
     qb.skip((query.page - 1) * query.limit).take(query.limit);
 
     const [items, total] = await qb.getManyAndCount();
@@ -268,6 +395,11 @@ export class PromoService {
     }
     if (query.communeId) {
       qb.andWhere('commercant.communeId = :communeId', { communeId: query.communeId });
+    }
+    if (query.wilaya) {
+      qb.innerJoin('commercant.commune', 'commune').andWhere('commune.wilaya = :wilaya', {
+        wilaya: query.wilaya,
+      });
     }
     if (query.categorie) {
       qb.andWhere('promo.categorie = :categorie', { categorie: query.categorie });
@@ -462,19 +594,46 @@ export class PromoService {
     const prixAvant = dto.prixAvant ?? Number(promo.prixAvant);
     const prixApres = dto.prixApres ?? Number(promo.prixApres);
     this.assertPriceOrder(prixAvant, prixApres);
-    const previousPhotoKey = promo.photoKey;
+    const previousPhotoKeys = promo.photoKeys;
+    const previousThumbnailKey = promo.thumbnailKey;
+    // Régénérée uniquement si la 1ère photo change (pas juste réordonnée à
+    // l'identique) — évite un aller-retour S3 (download + resize + upload)
+    // inutile à chaque édition de description/prix.
+    if (dto.photoKeys && dto.photoKeys[0] !== previousPhotoKeys[0]) {
+      promo.thumbnailKey = await this.tryGenerateThumbnail(dto.photoKeys[0]);
+    }
 
+    // `dto` (transformé par `ValidationPipe`) porte une propriété propre
+    // `undefined` pour chaque champ optionnel non fourni (comportement
+    // TypeScript `useDefineForClassFields`) — un `{...dto}` direct
+    // écraserait donc les champs non envoyés (ex. `description`/`categorie`
+    // lors d'un simple changement de photo) avec `undefined`. TypeORM
+    // ignore ces `undefined` dans l'UPDATE SQL (la base reste correcte),
+    // mais pas l'objet renvoyé au client — même bug que
+    // `CommercantService.updateProfile`, trouvé le 2026-07-12 sur ce
+    // même cas de figure côté commerçant.
+    const definedFields = Object.fromEntries(
+      Object.entries(dto).filter(([, value]) => value !== undefined),
+    );
     Object.assign(promo, {
-      ...dto,
+      ...definedFields,
       prixAvant: dto.prixAvant?.toFixed(2) ?? promo.prixAvant,
       prixApres: dto.prixApres?.toFixed(2) ?? promo.prixApres,
     });
     const saved = await this.promos.save(promo);
-    // Remplacement de photo : l'ancienne devient orpheline dans S3 si on ne
-    // la supprime pas explicitement (buildKey génère toujours une nouvelle
-    // clé UUID, jamais un remplacement en place).
-    if (dto.photoKey && previousPhotoKey && dto.photoKey !== previousPhotoKey) {
-      await this.storageService.deleteObject(previousPhotoKey);
+    // Le mobile envoie toujours le tableau complet résolu (clés inchangées
+    // réutilisées telles quelles, voir `PromoFormScreen`) — une clé absente
+    // du nouveau tableau a donc été explicitement retirée ou remplacée, et
+    // devient orpheline dans S3 si on ne la supprime pas ici (`buildKey`
+    // génère toujours une nouvelle clé UUID, jamais un remplacement en place).
+    if (dto.photoKeys) {
+      const removedKeys = previousPhotoKeys.filter((key) => !dto.photoKeys!.includes(key));
+      for (const key of removedKeys) {
+        await this.storageService.deleteObject(key);
+      }
+    }
+    if (previousThumbnailKey && previousThumbnailKey !== promo.thumbnailKey) {
+      await this.storageService.deleteObject(previousThumbnailKey);
     }
     return saved;
   }
@@ -504,7 +663,12 @@ export class PromoService {
     });
 
     for (const promo of eligible) {
-      await this.storageService.deleteObject(promo.photoKey);
+      for (const key of promo.photoKeys) {
+        await this.storageService.deleteObject(key);
+      }
+      if (promo.thumbnailKey) {
+        await this.storageService.deleteObject(promo.thumbnailKey);
+      }
       promo.photoPurgedAt = new Date();
       await this.promos.save(promo);
     }
@@ -515,13 +679,17 @@ export class PromoService {
   }
 
   /**
-   * Utilisé par le dashboard admin. Filtre aussi sur `dateFin` comme
-   * `findActiveForClient` — sans ça, une promo expirée reste comptée comme
-   * "publiée" jusqu'au passage du cron quotidien (`expireOutdatedPromosCron`),
-   * jusqu'à 24h de statistique fausse.
+   * Utilisé par le dashboard admin/agent (partagé, décision produit
+   * 2026-07-12). Filtre aussi sur `dateFin` comme `findActiveForClient` —
+   * sans ça, une promo expirée reste comptée comme "publiée" jusqu'au
+   * passage du cron quotidien (`expireOutdatedPromosCron`), jusqu'à 24h de
+   * statistique fausse. `communeIds` restreint aux communes d'un agent —
+   * `undefined` = vue globale (admin).
    */
-  async countVisible(): Promise<number> {
-    return this.promos
+  async countVisible(communeIds?: string[]): Promise<number> {
+    if (communeIds && communeIds.length === 0) return 0;
+
+    const qb = this.promos
       .createQueryBuilder('promo')
       .where('promo.lifecycleStatus = :lifecycleStatus', {
         lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
@@ -529,7 +697,14 @@ export class PromoService {
       .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
         moderationStatuses: VISIBLE_MODERATION_STATUSES,
       })
-      .andWhere('promo.dateFin > NOW()')
-      .getCount();
+      .andWhere('promo.dateFin > NOW()');
+
+    if (communeIds) {
+      qb.innerJoin('promo.commercant', 'commercant').andWhere(
+        'commercant.communeId IN (:...communeIds)',
+        { communeIds },
+      );
+    }
+    return qb.getCount();
   }
 }

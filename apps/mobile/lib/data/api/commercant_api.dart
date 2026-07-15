@@ -34,15 +34,6 @@ class CommercantApi {
     return response.data!['accessToken'] as String;
   }
 
-  /// Active un compte créé par un agent (ou réinitialisé par l'admin) — pas d'OTP.
-  Future<String> claim({required String telephone, required String pin}) async {
-    final response = await _dio.post<Map<String, dynamic>>(
-      '/commercant/claim',
-      data: {'telephone': telephone, 'pin': pin},
-    );
-    return response.data!['accessToken'] as String;
-  }
-
   Future<String> login({required String telephone, required String pin}) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/commercant/login',
@@ -54,6 +45,15 @@ class CommercantApi {
   Future<Commercant> me() async {
     final response = await _dio.get<Map<String, dynamic>>('/commercant/me');
     return Commercant.fromJson(response.data!);
+  }
+
+  /// Libre-service : le commerçant connaît encore son PIN actuel et veut le
+  /// changer (décision produit 2026-07-13 — contrairement au flux "PIN
+  /// oublié", qui passe par un admin/agent). Le token courant devient
+  /// invalide juste après cet appel (tokenVersion incrémenté côté service),
+  /// à l'appelant de déconnecter et renvoyer vers l'écran de connexion.
+  Future<void> changePin({required String oldPin, required String newPin}) async {
+    await _dio.patch<void>('/commercant/me/pin', data: {'oldPin': oldPin, 'newPin': newPin});
   }
 
   /// Édition du profil — téléphone volontairement non modifiable ici.

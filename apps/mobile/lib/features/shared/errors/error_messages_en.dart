@@ -12,7 +12,6 @@ const Map<String, String> errorMessagesEn = {
 
   'AGENT_EMAIL_TAKEN': 'This email is already used by an agent.',
   'AGENT_NOT_FOUND': 'Agent not found.',
-  'AGENT_NO_COMMUNE_ASSIGNED': 'This agent is not assigned to any commune.',
   'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT':
       'At least one of these communes is not currently assigned to this agent.',
 
@@ -24,6 +23,7 @@ const Map<String, String> errorMessagesEn = {
 
   'STORAGE_INVALID_IMAGE': 'The uploaded file is not a valid image. Try again with a photo.',
   'STORAGE_FILE_TOO_LARGE': 'The photo is too large. Try again with another photo.',
+  'STORAGE_PURPOSE_NOT_ALLOWED': 'This upload type is not allowed for this account.',
 
   'PROMO_NOT_FOUND': 'Promo not found.',
   'PROMO_NOT_OWNED_BY_COMMERCANT': 'This promo does not belong to this merchant.',
@@ -34,11 +34,15 @@ const Map<String, String> errorMessagesEn = {
 
   'COMMERCANT_PHONE_TAKEN': 'This phone number is already registered.',
   'COMMERCANT_NOT_FOUND': 'Merchant not found.',
-  'COMMERCANT_PIN_ALREADY_SET':
-      'A PIN is already set for this number — contact an administrator to reset it.',
+  'COMMERCANT_OLD_PIN_MISMATCH': 'The old PIN does not match.',
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'No pending verification request.',
   'COMMERCANT_NOT_IN_AGENT_COMMUNES': 'This merchant is not in any of this agent\'s communes.',
   'COMMERCANT_TERMS_NOT_ACCEPTED': 'You must accept the terms of use to create an account.',
+  'COMMERCANT_REGISTRE_NOT_VALIDATED':
+      'Your business registration must be validated by an administrator before you can publish promos.',
+  'COMMERCANT_REGISTRE_KEY_MISMATCH': 'This document does not belong to this merchant.',
+  'COMMERCANT_PROFILE_PENDING_REVIEW':
+      'Your profile changes must be validated by an administrator before you can publish promos.',
 
   'RATE_LIMITED': 'Too many attempts. Please try again shortly.',
   'HTTP_ERROR': 'An error occurred.',

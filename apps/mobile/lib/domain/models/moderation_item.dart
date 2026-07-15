@@ -13,7 +13,8 @@ class ModerationItem {
     required this.prixAvant,
     required this.prixApres,
     required this.categorie,
-    required this.photoUrl,
+    required this.photoUrls,
+    this.thumbnailUrl,
     required this.lifecycleStatus,
     required this.moderationStatus,
     required this.commercantId,
@@ -29,7 +30,10 @@ class ModerationItem {
         prixAvant: double.parse(json['prixAvant'].toString()),
         prixApres: double.parse(json['prixApres'].toString()),
         categorie: Categorie.fromValue(json['categorie'] as String),
-        photoUrl: json['photoUrl'] as String?,
+        photoUrls: (json['photoUrls'] as List<dynamic>? ?? const [])
+            .map((e) => e as String)
+            .toList(),
+        thumbnailUrl: json['thumbnailUrl'] as String?,
         lifecycleStatus: PromoLifecycleStatus.fromValue(json['lifecycleStatus'] as String),
         moderationStatus: PromoModerationStatus.fromValue(json['moderationStatus'] as String),
         commercantId: json['commercantId'] as String,
@@ -45,13 +49,20 @@ class ModerationItem {
   final double prixAvant;
   final double prixApres;
   final Categorie categorie;
-  final String? photoUrl;
+  final List<String> photoUrls;
+
+  /// Miniature (~240px) de la 1ère photo — à utiliser à la place de
+  /// [photoUrl] pour la vignette liste (`PromoModerationTile`).
+  final String? thumbnailUrl;
   final PromoLifecycleStatus lifecycleStatus;
   final PromoModerationStatus moderationStatus;
   final String commercantId;
   final String commercantNom;
   final String commercantTelephone;
   final int? activeReportCount;
+
+  /// Photo principale — seule affichée en liste (`PromoModerationTile`).
+  String? get photoUrl => photoUrls.isEmpty ? null : photoUrls.first;
 
   /// Répartition des motifs de signalement actifs (plan de correction,
   /// Phase 5) — clé = valeur brute de `ReportReason` (ex. `'arnaque'`),

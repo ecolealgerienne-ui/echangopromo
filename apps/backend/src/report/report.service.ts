@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Commercant } from '../commercant/entities/commercant.entity';
+import { Commune } from '../commune/entities/commune.entity';
 import { ConflictAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
@@ -9,7 +10,11 @@ import { Promo, PromoModerationStatus } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
 import { Report, ReportReason } from './entities/report.entity';
 
-const MODERATION_THRESHOLD = 1;
+// Remis à 3 (specs §5.4) le 2026-07-14 — avait été temporairement abaissé à
+// 1 le 2026-07-12 pour une phase de test, ce qui laissait un seul
+// signalement (X-Device-Id jamais vérifié côté serveur, trivialement
+// rejouable) suffire à masquer la promo d'un concurrent.
+const MODERATION_THRESHOLD = 3;
 const IGNORE_WINDOW_DAYS = 30;
 
 @Injectable()
@@ -100,7 +105,10 @@ export class ReportService {
    * désenflait jamais après une décision, cassant tout le workflow agent
    * introduit en Phase 2.
    */
-  private pendingModerationQueryBuilder(communeIds?: string[]): SelectQueryBuilder<Report> {
+  private pendingModerationQueryBuilder(
+    communeIds?: string[],
+    filter?: { communeId?: string; wilaya?: string },
+  ): SelectQueryBuilder<Report> {
     const qb = this.reports
       .createQueryBuilder('report')
       .innerJoin(Promo, 'promo', 'promo.id = report.promoId')
@@ -125,10 +133,19 @@ export class ReportService {
         threshold: MODERATION_THRESHOLD,
       });
 
+    if (communeIds || filter?.communeId || filter?.wilaya) {
+      qb.innerJoin(Commercant, 'commercant', 'commercant.id = promo.commercantId');
+    }
     if (communeIds) {
-      qb.innerJoin(Commercant, 'commercant', 'commercant.id = promo.commercantId').andWhere(
-        'commercant.communeId IN (:...communeIds)',
-        { communeIds },
+      qb.andWhere('commercant.communeId IN (:...communeIds)', { communeIds });
+    }
+    if (filter?.communeId) {
+      qb.andWhere('commercant.communeId = :filterCommuneId', { filterCommuneId: filter.communeId });
+    }
+    if (filter?.wilaya) {
+      qb.innerJoin(Commune, 'commune', 'commune.id = commercant.communeId').andWhere(
+        'commune.wilaya = :wilaya',
+        { wilaya: filter.wilaya },
       );
     }
     return qb;
@@ -139,13 +156,14 @@ export class ReportService {
     page: number,
     limit: number,
     communeIds?: string[],
+    filter?: { communeId?: string; wilaya?: string },
   ): Promise<PaginatedResult<{ promoId: string; activeReportCount: number }>> {
     if (communeIds && communeIds.length === 0) {
       return toPaginatedResult([], 0, page, limit);
     }
 
-    const total = await this.countPendingModeration(communeIds);
-    const rows = await this.pendingModerationQueryBuilder(communeIds)
+    const total = await this.countPendingModeration(communeIds, filter);
+    const rows = await this.pendingModerationQueryBuilder(communeIds, filter)
       .orderBy('report.promoId', 'ASC')
       .offset((page - 1) * limit)
       .limit(limit)
@@ -159,9 +177,12 @@ export class ReportService {
   }
 
   /** Nombre total de promos en attente de modération (stat dashboard, pas de pagination). */
-  async countPendingModeration(communeIds?: string[]): Promise<number> {
+  async countPendingModeration(
+    communeIds?: string[],
+    filter?: { communeId?: string; wilaya?: string },
+  ): Promise<number> {
     if (communeIds && communeIds.length === 0) return 0;
-    return this.pendingModerationQueryBuilder(communeIds).getCount();
+    return this.pendingModerationQueryBuilder(communeIds, filter).getCount();
   }
 
   /**

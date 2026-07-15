@@ -6,11 +6,17 @@ import '../../../domain/models/agent.dart';
 import '../../../domain/models/commune.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/commune_multi_select_field.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 
 final _agentsProvider = FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).listAgents());
 final _communesProvider = FutureProvider.autoDispose((ref) => ref.watch(communeApiProvider).list());
+
+/// Même pattern que `ModerationQueueScreen._inFlightProvider` (audit UX
+/// 2026-07-11) : agent dont une action (assigner/révoquer) est en cours.
+final _inFlightAgentsProvider = StateProvider.autoDispose<Set<String>>((ref) => {});
+final _transferInFlightProvider = StateProvider.autoDispose<bool>((ref) => false);
 
 /// Gestion des agents (specs §3.4) : création, assignation/retrait de
 /// communes, révocation de session, transfert de communes entre deux agents.
@@ -74,6 +80,7 @@ class AgentListScreen extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
+    ref.read(_inFlightAgentsProvider.notifier).update((ids) => {...ids, agent.id});
     try {
       await ref.read(adminApiProvider).assignCommunes(
             agentId: agent.id,
@@ -82,6 +89,64 @@ class AgentListScreen extends ConsumerWidget {
       await _reload(ref);
     } catch (error) {
       if (context.mounted) await _showError(context, error);
+    } finally {
+      ref.read(_inFlightAgentsProvider.notifier).update((ids) => {...ids}..remove(agent.id));
+    }
+  }
+
+  /// Mot de passe vraiment oublié — l'agent ne peut pas le changer
+  /// lui-même (décision produit 2026-07-14), seul l'admin en fixe un
+  /// nouveau, à communiquer de vive voix après avoir identifié l'agent
+  /// (même schéma que `_confirmAndResetPin` côté commerçant).
+  Future<void> _resetPassword(BuildContext context, WidgetRef ref, Agent agent) async {
+    final l10n = AppLocalizations.of(context)!;
+    final passwordController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final newPassword = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.resetAgentPasswordDialogTitle),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(l10n.resetAgentPasswordDialogBody, style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: passwordController,
+                decoration: InputDecoration(labelText: l10n.passwordLabel),
+                obscureText: true,
+                validator: (v) => (v == null || v.length < 8) ? l10n.passwordRequired : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(l10n.commonCancel)),
+          FilledButton(
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.pop(context, passwordController.text);
+            },
+            child: Text(l10n.commonConfirm),
+          ),
+        ],
+      ),
+    );
+    if (newPassword == null || !context.mounted) return;
+    ref.read(_inFlightAgentsProvider.notifier).update((ids) => {...ids, agent.id});
+    try {
+      await ref.read(adminApiProvider).resetAgentPassword(agent.id, newPassword);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.resetAgentPasswordSuccessMessage)),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) await _showError(context, error);
+    } finally {
+      ref.read(_inFlightAgentsProvider.notifier).update((ids) => {...ids}..remove(agent.id));
     }
   }
 
@@ -105,10 +170,13 @@ class AgentListScreen extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
+    ref.read(_inFlightAgentsProvider.notifier).update((ids) => {...ids, agent.id});
     try {
       await ref.read(adminApiProvider).revokeAgentToken(agent.id);
     } catch (error) {
       if (context.mounted) await _showError(context, error);
+    } finally {
+      ref.read(_inFlightAgentsProvider.notifier).update((ids) => {...ids}..remove(agent.id));
     }
   }
 
@@ -179,6 +247,7 @@ class AgentListScreen extends ConsumerWidget {
       ),
     );
     if (confirmed != true || fromAgentId == null || toAgentId == null || selected.isEmpty) return;
+    ref.read(_transferInFlightProvider.notifier).state = true;
     try {
       await ref.read(adminApiProvider).transferCommunes(
             communeIds: selected.toList(),
@@ -188,6 +257,8 @@ class AgentListScreen extends ConsumerWidget {
       await _reload(ref);
     } catch (error) {
       if (context.mounted) await _showError(context, error);
+    } finally {
+      ref.read(_transferInFlightProvider.notifier).state = false;
     }
   }
 
@@ -196,15 +267,25 @@ class AgentListScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final agentsAsync = ref.watch(_agentsProvider);
     final communesAsync = ref.watch(_communesProvider);
+    final inFlightAgents = ref.watch(_inFlightAgentsProvider);
+    final transferInFlight = ref.watch(_transferInFlightProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.agentsLabel),
         actions: [
           IconButton(
-            icon: const Icon(Icons.swap_horiz),
+            icon: transferInFlight
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.swap_horiz),
             tooltip: l10n.transferCommunesLabel,
-            onPressed: agentsAsync.valueOrNull == null || communesAsync.valueOrNull == null
+            onPressed: transferInFlight ||
+                    agentsAsync.valueOrNull == null ||
+                    communesAsync.valueOrNull == null
                 ? null
                 : () => _transferCommunes(context, ref, agentsAsync.value!, communesAsync.value!),
           ),
@@ -221,7 +302,7 @@ class AgentListScreen extends ConsumerWidget {
       ),
       body: agentsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
+        error: (error, _) => Center(child: ApiErrorText(error)),
         data: (agents) {
           final communes = communesAsync.valueOrNull ?? const <Commune>[];
           if (agents.isEmpty) {
@@ -235,22 +316,34 @@ class AgentListScreen extends ConsumerWidget {
                 final agent = agents[index];
                 final communeNames = _communeNames(agent.communes);
                 return ListTile(
+                  onTap: () => context.push('/admin/agents/detail', extra: agent),
                   title: Text(agent.nom),
                   subtitle: Text('${agent.email}${communeNames.isNotEmpty ? ' · $communeNames' : ''}'),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (action) {
-                      switch (action) {
-                        case 'assignCommunes':
-                          _assignCommunes(context, ref, agent, communes);
-                        case 'revoke':
-                          _revokeToken(context, ref, agent);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      PopupMenuItem(value: 'assignCommunes', child: Text(l10n.assignCommunesLabel)),
-                      PopupMenuItem(value: 'revoke', child: Text(l10n.revokeTokenLabel)),
-                    ],
-                  ),
+                  trailing: inFlightAgents.contains(agent.id)
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : PopupMenuButton<String>(
+                          onSelected: (action) {
+                            switch (action) {
+                              case 'assignCommunes':
+                                _assignCommunes(context, ref, agent, communes);
+                              case 'resetPassword':
+                                _resetPassword(context, ref, agent);
+                              case 'revoke':
+                                _revokeToken(context, ref, agent);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                                value: 'assignCommunes', child: Text(l10n.assignCommunesLabel)),
+                            PopupMenuItem(
+                                value: 'resetPassword', child: Text(l10n.resetAgentPasswordLabel)),
+                            PopupMenuItem(value: 'revoke', child: Text(l10n.revokeTokenLabel)),
+                          ],
+                        ),
                 );
               },
             ),

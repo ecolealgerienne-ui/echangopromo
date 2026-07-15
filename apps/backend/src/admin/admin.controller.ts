@@ -12,6 +12,7 @@ import { Throttle } from '@nestjs/throttler';
 import { AgentService } from '../agent/agent.service';
 import { AssignCommunesDto } from '../agent/dto/assign-communes.dto';
 import { CreateAgentDto } from '../agent/dto/create-agent.dto';
+import { ResetAgentPasswordDto } from '../agent/dto/reset-agent-password.dto';
 import { TransferCommunesDto } from '../agent/dto/transfer-communes.dto';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { ListAuditLogQueryDto } from '../audit-log/dto/list-audit-log-query.dto';
@@ -24,8 +25,10 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
 import { ListCommercantQueryDto } from '../commercant/dto/list-commercant-query.dto';
+import { ResetCommercantPinDto } from '../commercant/dto/reset-commercant-pin.dto';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
+import { ListModerationQueueQueryDto } from './dto/list-moderation-queue-query.dto';
 import { ListPromoAdminQueryDto } from '../promo/dto/list-promo-admin-query.dto';
 import { Promo } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
@@ -143,6 +146,32 @@ export class AdminController {
     return { ok: true };
   }
 
+  /**
+   * Mot de passe agent oublié/perdu — l'agent ne peut pas le changer
+   * lui-même (décision produit 2026-07-14), seul l'admin fixe un nouveau
+   * mot de passe, à communiquer de vive voix. Même schéma que
+   * `resetPin`/`reset-pin` côté commerçant.
+   */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('agent/:id/reset-password')
+  async resetAgentPassword(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('id') agentId: string,
+    @Body() dto: ResetAgentPasswordDto,
+  ) {
+    await this.agentService.resetPassword(agentId, dto.newPassword);
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'reset_agent_password',
+      targetType: 'agent',
+      targetId: agentId,
+    });
+    return { ok: true };
+  }
+
   /** Transfère un lot de communes d'un agent à un autre (specs §3.4). */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -170,19 +199,25 @@ export class AdminController {
 
   /**
    * DTO explicite plutôt qu'un spread d'entité (règle #4) — la file de
-   * modération n'exposait ni photoUrl (jamais calculé, `photoKey` est
+   * modération n'exposait ni photoUrl (jamais calculé, `photoKeys` est
    * @Exclude()) ni le contact du commerçant, rendant la décision de
    * modération difficile sans ces informations. Partagé entre la file
    * automatique et la liste globale (`/admin/promo`, Phase 2).
    */
   private toAdminPromoJson(promo: Promo) {
+    const photoUrls = promo.photoKeys.map((key) => this.storageService.buildPublicUrl(key));
     return {
       id: promo.id,
       description: promo.description,
       prixAvant: promo.prixAvant,
       prixApres: promo.prixApres,
       categorie: promo.categorie,
-      photoUrl: promo.photoKey ? this.storageService.buildPublicUrl(promo.photoKey) : null,
+      photoUrls,
+      // Miniature de la 1ère photo (liste de modération) — même fallback
+      // que côté client si la génération a échoué.
+      thumbnailUrl: promo.thumbnailKey
+        ? this.storageService.buildPublicUrl(promo.thumbnailKey)
+        : (photoUrls[0] ?? null),
       lifecycleStatus: promo.lifecycleStatus,
       moderationStatus: promo.moderationStatus,
       dateFin: promo.dateFin,
@@ -215,6 +250,24 @@ export class AdminController {
     );
   }
 
+  /**
+   * Garde IDOR (règle #1) : un agent ne peut consulter/gérer que les
+   * commerçants de ses propres communes — écran fiche commerçant partagé
+   * avec l'admin (décision produit 2026-07-12), même pattern que
+   * `assertCanModerate` ci-dessus.
+   */
+  private async assertCanManageCommercant(
+    user: AuthTokenPayload,
+    commercantId: string,
+  ): Promise<void> {
+    if (user.role !== 'agent') return;
+    const agent = await this.agentService.findByIdOrFail(user.sub);
+    await this.commercantService.assertCommuneMatches(
+      commercantId,
+      agent.communes.map((commune) => commune.id),
+    );
+  }
+
   private actorType(role: string): AuditActorType {
     return role === 'agent' ? AuditActorType.AGENT : AuditActorType.ADMIN;
   }
@@ -224,10 +277,13 @@ export class AdminController {
   @Get('moderation/queue')
   async moderationQueue(
     @CurrentUser() user: AuthTokenPayload,
-    @Query() query: PaginationQueryDto,
+    @Query() query: ListModerationQueueQueryDto,
   ) {
     const communeIds = await this.scopedCommuneIds(user);
-    const result = await this.moderationService.queue(query.page, query.limit, communeIds);
+    const result = await this.moderationService.queue(query.page, query.limit, communeIds, {
+      communeId: query.communeId,
+      wilaya: query.wilaya,
+    });
     return {
       ...result,
       items: result.items.map(({ promo, activeReportCount, reasonBreakdown }) => ({
@@ -300,51 +356,72 @@ export class AdminController {
 
   /**
    * Liste + recherche sur l'ensemble des commerçants (plan de correction,
-   * Phase 2) — jusqu'ici seule la file registre (en attente) était
-   * consultable, impossible de retrouver un compte précis autrement qu'en
-   * requêtant la base directement.
+   * Phase 2). `registreStatus` sert de filtre "en attente de validation" —
+   * l'ancienne file dédiée (`GET commercant/registre/queue`) a été retirée
+   * le 2026-07-11 au profit de ce filtre + de la fiche détail commerçant,
+   * qui affiche désormais le registre et permet de le valider/rejeter.
    */
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Get('commercant')
-  async listCommercants(@Query() query: ListCommercantQueryDto) {
-    const result = await this.commercantService.findAllForAdmin(query);
+  async listCommercants(
+    @CurrentUser() user: AuthTokenPayload,
+    @Query() query: ListCommercantQueryDto,
+  ) {
+    const communeIds = await this.scopedCommuneIds(user);
+    const result = await this.commercantService.findAllForAdmin(query, communeIds);
     return {
       ...result,
-      items: result.items.map((commercant) => ({
-        id: commercant.id,
-        nom: commercant.nom,
-        telephone: commercant.telephone,
-        communeId: commercant.communeId,
-        accountState: commercant.accountState,
-        originVerification: commercant.originVerification,
-        registreStatus: commercant.registreStatus,
-        suspended: commercant.deletedAt !== null,
-        createdAt: commercant.createdAt,
-      })),
+      items: await Promise.all(
+        result.items.map(async (commercant) => ({
+          id: commercant.id,
+          nom: commercant.nom,
+          telephone: commercant.telephone,
+          adresse: commercant.adresse,
+          categorie: commercant.categorie,
+          communeId: commercant.communeId,
+          photoUrl: commercant.photoKey
+            ? this.storageService.buildPublicUrl(commercant.photoKey)
+            : null,
+          latitude: commercant.latitude,
+          longitude: commercant.longitude,
+          accountState: commercant.accountState,
+          originVerification: commercant.originVerification,
+          registreStatus: commercant.registreStatus,
+          // URL pré-signée à courte durée de vie, jamais l'ACL publique
+          // permanente utilisée pour les photos (audit sécurité
+          // 2026-07-11 : le registre est un justificatif d'identité, pas
+          // un contenu destiné au public — voir `StorageService.PRIVATE_FOLDERS`).
+          registreUrl: commercant.registreKey
+            ? await this.storageService.getPresignedUrl(commercant.registreKey)
+            : null,
+          profilePendingReview: commercant.profilePendingReview,
+          suspended: commercant.suspendedAt !== null,
+          deleted: commercant.deletedAt !== null,
+          createdAt: commercant.createdAt,
+        })),
+      ),
     };
   }
 
   /**
-   * Suspend un compte (soft delete réutilisé — même effet que
-   * l'auto-suppression). `findByIdOrFail` d'abord (trouvé en relecture) :
-   * `deleteAccount`/`reactivateAccount` font un `update()` aveugle qui ne
-   * signale rien si `commercantId` n'existe pas (silencieux, 0 ligne
-   * affectée) — acceptable pour l'auto-suppression (l'id vient du JWT,
-   * garanti existant) mais pas ici où l'id vient d'un paramètre d'URL.
+   * Suspend un compte — réversible et arbitraire, distinct de la
+   * suppression depuis le 2026-07-14 (voir `CommercantService.suspend`).
+   * `assertCanManageCommercant` d'abord (IDOR, règle #1) ; l'existence du
+   * commerçant est vérifiée par le service lui-même.
    */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Post('commercant/:id/suspend')
   async suspendCommercant(
     @CurrentUser() user: AuthTokenPayload,
     @Param('id') commercantId: string,
   ) {
-    await this.commercantService.findByIdOrFail(commercantId);
-    await this.commercantService.deleteAccount(commercantId);
+    await this.assertCanManageCommercant(user, commercantId);
+    await this.commercantService.suspend(commercantId);
     await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
+      actorType: this.actorType(user.role),
       actorId: user.sub,
       action: 'commercant_suspend',
       targetType: 'commercant',
@@ -353,18 +430,19 @@ export class AdminController {
     return { ok: true };
   }
 
+  /** Lève une suspension (voir `CommercantService.unsuspend`) — pas de republication automatique des promos. */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Post('commercant/:id/reactivate')
   async reactivateCommercant(
     @CurrentUser() user: AuthTokenPayload,
     @Param('id') commercantId: string,
   ) {
-    await this.commercantService.findByIdOrFail(commercantId);
-    await this.commercantService.reactivateAccount(commercantId);
+    await this.assertCanManageCommercant(user, commercantId);
+    await this.commercantService.unsuspend(commercantId);
     await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
+      actorType: this.actorType(user.role),
       actorId: user.sub,
       action: 'commercant_reactivate',
       targetType: 'commercant',
@@ -373,43 +451,47 @@ export class AdminController {
     return { ok: true };
   }
 
-  /** File d'attente des vérifications registre en attente (specs §3.4). */
+  /**
+   * Suppression logique par l'admin/agent (nouvelle capacité, 2026-07-14) —
+   * distincte de la suspension : libère le numéro de téléphone et
+   * "supprime" les promos du commerçant (voir `CommercantService.deleteCommercant`).
+   * Pas de restauration prévue, contrairement à la suspension.
+   */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
-  @Get('commercant/registre/queue')
-  async registreQueue(@Query() query: PaginationQueryDto) {
-    const result = await this.commercantService.findPendingRegistreVerification(
-      query.page,
-      query.limit,
-    );
-    return {
-      ...result,
-      items: result.items.map((commercant) => ({
-        id: commercant.id,
-        nom: commercant.nom,
-        telephone: commercant.telephone,
-        registreUrl: commercant.registreKey
-          ? this.storageService.buildPublicUrl(commercant.registreKey)
-          : null,
-        createdAt: commercant.createdAt,
-      })),
-    };
+  @Roles('admin', 'agent')
+  @Post('commercant/:id/delete')
+  async deleteCommercant(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('id') commercantId: string,
+  ) {
+    await this.assertCanManageCommercant(user, commercantId);
+    await this.commercantService.deleteCommercant(commercantId);
+    await this.auditLogService.record({
+      actorType: this.actorType(user.role),
+      actorId: user.sub,
+      action: 'commercant_delete',
+      targetType: 'commercant',
+      targetId: commercantId,
+    });
+    return { ok: true };
   }
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Post('commercant/:id/registre/valider')
   async validerRegistre(
     @CurrentUser() user: AuthTokenPayload,
     @Param('id') commercantId: string,
   ) {
+    await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.resolveRegistreVerification(
       commercantId,
       true,
     );
     await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
+      actorType: this.actorType(user.role),
       actorId: user.sub,
       action: 'registre_valider',
       targetType: 'commercant',
@@ -418,18 +500,53 @@ export class AdminController {
     return { ok: true };
   }
 
-  /** PIN oublié : pas d'OTP, seul l'admin peut effacer le PIN (§3.2). */
+  /**
+   * Valide une modification de profil en attente (`profilePendingReview`)
+   * — débloque la publication de promo, s'applique à tous les commerçants
+   * quelle que soit leur origine de vérification (décision produit
+   * 2026-07-12).
+   */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
+  @Post('commercant/:id/profile/valider')
+  async validerProfil(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('id') commercantId: string,
+  ) {
+    await this.assertCanManageCommercant(user, commercantId);
+    await this.commercantService.validateProfile(commercantId);
+    await this.auditLogService.record({
+      actorType: this.actorType(user.role),
+      actorId: user.sub,
+      action: 'profile_valider',
+      targetType: 'commercant',
+      targetId: commercantId,
+    });
+    return { ok: true };
+  }
+
+  /**
+   * PIN vraiment oublié (le commerçant ne peut fournir aucun ancien PIN) —
+   * l'admin/agent fixe un nouveau PIN et le communique par téléphone après
+   * avoir identifié l'appelant pendant la conversation (§3.2, décision
+   * produit 2026-07-13 : remplace l'ancienne remise à zéro suivie d'une
+   * revendication publique, exploitable par quiconque connaissait juste le
+   * numéro de téléphone du commerçant).
+   */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'agent')
   @Post('commercant/:id/reset-pin')
   async resetPin(
     @CurrentUser() user: AuthTokenPayload,
     @Param('id') commercantId: string,
+    @Body() dto: ResetCommercantPinDto,
   ) {
-    await this.commercantService.adminResetPin(commercantId);
+    await this.assertCanManageCommercant(user, commercantId);
+    await this.commercantService.resetPin(commercantId, dto.newPin);
     await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
+      actorType: this.actorType(user.role),
       actorId: user.sub,
       action: 'commercant_reset_pin',
       targetType: 'commercant',
@@ -440,18 +557,19 @@ export class AdminController {
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Post('commercant/:id/registre/rejeter')
   async rejeterRegistre(
     @CurrentUser() user: AuthTokenPayload,
     @Param('id') commercantId: string,
   ) {
+    await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.resolveRegistreVerification(
       commercantId,
       false,
     );
     await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
+      actorType: this.actorType(user.role),
       actorId: user.sub,
       action: 'registre_rejeter',
       targetType: 'commercant',
@@ -473,22 +591,36 @@ export class AdminController {
     return this.auditLogService.findAll(query.page, query.limit, query.actorType);
   }
 
-  /** Dashboard global admin (specs §3.4). */
+  /**
+   * Dashboard (specs §3.4) — partagé admin/agent (décision produit
+   * 2026-07-12) : stats globales pour l'admin, restreintes aux communes de
+   * l'agent sinon (même `scopedCommuneIds` que modération/liste promos).
+   */
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'agent')
   @Get('dashboard')
-  async dashboard() {
-    const [commercesActifs, promosPubliees, signalementsEnAttente] =
-      await Promise.all([
-        this.commercantService.countActive(),
-        this.promoService.countVisible(),
-        this.reportService.countPendingModeration(),
-      ]);
+  async dashboard(@CurrentUser() user: AuthTokenPayload) {
+    const communeIds = await this.scopedCommuneIds(user);
+    const [
+      commercesActifs,
+      promosPubliees,
+      signalementsEnAttente,
+      registresEnAttente,
+      profilsEnAttente,
+    ] = await Promise.all([
+      this.commercantService.countActive(communeIds),
+      this.promoService.countVisible(communeIds),
+      this.reportService.countPendingModeration(communeIds),
+      this.commercantService.countPendingRegistre(communeIds),
+      this.commercantService.countPendingProfileReview(communeIds),
+    ]);
 
     return {
       commercesActifs,
       promosPubliees,
       signalementsEnAttente,
+      registresEnAttente,
+      profilsEnAttente,
     };
   }
 }

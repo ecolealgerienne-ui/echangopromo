@@ -37,12 +37,13 @@ Application mobile mettant en relation commerçants et clients autour des promot
 - **Identifiant device anonyme** généré à l'installation, stocké localement, utilisé uniquement pour la limitation des signalements (voir §5.4). Ce n'est pas un compte.
 - **Sélection de ville par défaut** : demandée au premier lancement, stockée en local (pas de compte), modifiable à tout moment.
 - Pour les grandes villes : sélection affinée par **commune** (découpage administratif officiel wilaya → commune).
-- **Liste des promos actives**, filtrée par commune sélectionnée.
+- **Multi-sélection de communes (2026-07-12)** : jusqu'à 4 communes simultanément (`kMaxSelectedCommunes`), pensé pour les grandes villes (ex. Alger) où les communes sont accolées — une promo dans l'une intéresse un client dans la voisine. Plafond imposé côté écran ET côté backend (`ListPromoQueryDto.communeIds`, `@ArrayMaxSize(4)`) : une garde uniquement côté app se contournerait en appelant l'API directement. Écran dédié avec bouton de confirmation explicite (pas d'application en direct à chaque coche), car ce filtre part en requête serveur — contrairement au filtre favoris/tri (§ci-dessous) qui reste local et s'applique en direct.
+- **Liste des promos actives**, filtrée par les communes sélectionnées (`IN (...)` sur `commercant.communeId`, déjà indexé).
 - **Filtre par catégorie** (liste fixe, voir §5.6).
-- **Fiche promo** : photo, produit, prix avant/après, nom et adresse du commerçant, date de fin de validité. Si le commerçant a renseigné une photo de son commerce et/ou une position GPS, la fiche affiche aussi la photo du commerce et un bouton "Itinéraire" qui ouvre l'app Google Maps (lien simple, pas d'intégration payante).
+- **Fiche promo** : jusqu'à 3 photos (2026-07-12 — une seule ne suffit pas à juger un produit, carousel swipeable si plusieurs), produit, prix avant/après, nom, adresse et téléphone du commerçant (numéro tap-pour-appeler, ajout 2026-07-12 — déjà renvoyé par l'API publique mais jamais affiché jusqu'ici), date de fin de validité. Si le commerçant a renseigné une photo de son commerce et/ou une position GPS, la fiche affiche aussi la photo du commerce et un bouton "Itinéraire" qui ouvre l'app Google Maps (lien simple, pas d'intégration payante).
 - **Signalement** "promo expirée / incorrecte" : action sans compte, limitée par device ID (voir §5.4). Objectif : limiter les abus côté commerçant autant que côté client.
 - **Recherche par catégorie** : sélection parmi la liste fermée de catégories (§5.6), pas de saisie libre. C'est une recherche guidée, pas un moteur de recherche texte.
-- **Favoris commerçant** : le client peut marquer un commerçant en favori, stocké **en local sur l'appareil** (pas de compte, cohérent avec le reste du parcours client). Affiche les commerçants favoris et leurs promos actives en priorité dans la liste. Sans notifications push (phase 2), c'est un raccourci d'affichage, pas une alerte proactive.
+- **Favoris promo** (corrigé le 2026-07-12 — cette section disait à tort "favoris commerçant", ce qui a d'ailleurs causé une régression lors d'un audit qui a aligné le code sur ce texte au lieu du comportement réel voulu) : le client peut marquer une promo précise en favori, stocké **en local sur l'appareil** (pas de compte, cohérent avec le reste du parcours client) par id de promo. Affiche les promos favorites en priorité dans la liste. Une promo republiée obtient un nouvel id et n'est donc pas favorite automatiquement — comportement accepté (favori = "j'aime cette offre précise", pas un abonnement au commerçant). Sans notifications push (phase 2), c'est un raccourci d'affichage, pas une alerte proactive.
 - **Hors V0 (phase 2)** : recherche par mot-clé/produit en texte libre, notifications push géolocalisées.
 
 ### 3.2 Commerçant
@@ -57,31 +58,41 @@ le SMS est jugé inutile et coûteux pour ce marché, aucune vérification de
 possession du numéro n'est effectuée) :
 
 1. Saisie du numéro de téléphone (auto-inscription) ou saisie par l'agent (création assistée).
-2. Définition d'un **code PIN** (4-6 chiffres) par le commerçant — directement à l'inscription, ou plus tard via l'écran de connexion pour un compte créé par l'agent (`claim`, voir cycle de vie ci-dessous). Aucune preuve de possession du numéro n'est demandée.
+2. Définition d'un **code PIN** (6-12 chiffres, relevé de 4-6 le 2026-07-13 — voir encart sécurité ci-dessous) par le commerçant à l'inscription, ou **choisi par l'agent et transmis en personne** pour un compte créé par l'agent.
 3. Connexions suivantes : téléphone + PIN.
-4. **PIN oublié** : pas de flux libre-service. Seul l'**admin** peut effacer le PIN d'un commerçant (sur demande, hors app) ; le commerçant en redéfinit ensuite un nouveau via `claim`, comme pour un compte créé par un agent.
+4. **Changement de PIN** : deux cas bien distincts.
+   - **Le commerçant connaît encore son PIN actuel** et veut le changer — **libre-service**, depuis son profil dans l'app (`PATCH /commercant/me/pin`, ancien + nouveau PIN, l'ancien faisant office de preuve d'identité). Pas besoin d'agent ni d'admin.
+   - **PIN vraiment oublié** (l'ancien est inconnu) — seul cas qui passe par un admin/agent : après avoir identifié l'appelant pendant la conversation, il fixe directement un nouveau PIN et le communique par téléphone, même mécanisme que la création par agent.
+
+> **Fermeture de faille (2026-07-13)** : jusqu'ici, un compte créé par un agent restait `créé_agent` (PIN non défini) jusqu'à ce que le commerçant le revendique lui-même via `POST /commercant/claim`, un endpoint public ne demandant que le numéro de téléphone — **n'importe qui connaissant ce numéro (souvent public : enseigne, carte de visite) pouvait donc revendiquer le compte avant le vrai commerçant**, avec le même risque à chaque réinitialisation de PIN par un admin. L'endpoint `claim` est supprimé : l'agent choisit désormais le PIN en personne à la création (compte `autonome` dès le départ, plus d'état intermédiaire) ; le PIN vraiment oublié passe par un admin/agent qui le fixe directement, communiqué uniquement de vive voix (jamais par SMS, cohérent avec la décision "pas d'OTP") ; un simple changement de PIN connu reste, lui, libre-service. La longueur minimale du PIN est montée à 6 chiffres à cette occasion (ancien minimum de 4 jugé trop faible) ; la connexion et la vérification de l'ancien PIN restent permissives sur 4-12 chiffres pour ne pas invalider les PIN déjà fixés avant ce changement.
 
 **Cycle de vie du compte** (états) :
 
 ```
-créé_agent → autonome (dès que le commerçant définit son PIN via `claim`)
+créé_agent → autonome (historique uniquement — un compte créé par un agent est
+              désormais autonome dès la création, voir encart ci-dessus ;
+              `créé_agent` ne subsiste que sur d'éventuelles lignes antérieures
+              au 2026-07-13, dont le PIN se fixe comme un PIN oublié ordinaire)
 auto_inscrit → autonome (directement, dès la saisie du PIN à l'inscription)
 ```
 
-- Un compte créé par l'agent reste `créé_agent` jusqu'à ce que le commerçant définisse lui-même son PIN pour ce numéro (`claim`) — il n'y a plus d'étape "revendication" distincte ni d'OTP intermédiaire.
+- Un compte créé par l'agent est `autonome` dès la création (l'agent choisit et transmet le PIN en personne) — plus d'étape de revendication publique.
 - Un compte auto-inscrit passe directement en `autonome` dès l'inscription — pas d'étape intermédiaire, car il n'y a pas de tiers (agent) à qui retirer la main.
 
 **Niveaux de vérification (indépendants du cycle de vie du compte)** :
 
 | Niveau | Condition | Effet |
 |---|---|---|
-| `auto_inscrit` | Inscription autonome — aucune vérification du numéro de téléphone | **Suffisant pour publier** — aucune vérification physique |
-| `confirmé_agent` | Constaté physiquement par l'agent lors de sa visite | **Suffisant pour publier** — niveau de confiance supérieur |
-| `vérifié_registre` | Upload volontaire du registre de commerce, validation manuelle par l'admin | Badge de confiance optionnel, **jamais bloquant** pour publier |
+| `auto_inscrit` | Inscription autonome — aucune vérification du numéro de téléphone | **Bloqué pour publier** tant que le registre n'est pas envoyé et validé par un admin (revert du 2026-07-11, voir ci-dessous) |
+| `confirmé_agent` | Constaté physiquement par l'agent lors de sa visite | **Suffisant pour publier** — la visite de l'agent vaut vérification, jamais concerné par la validation du registre |
 
-> Décision explicite : ne pas exiger le registre de commerce pour publier, afin de ne pas exclure le commerce informel, très présent localement.
+> **Revert du 2026-07-11** : la V0 avait explicitement choisi de ne jamais bloquer la publication sur le registre de commerce, pour ne pas exclure le commerce informel (décision d'origine conservée ci-dessous pour mémoire). Décision produit ultérieure : un commerçant auto-inscrit doit désormais envoyer une photo de son registre à l'inscription et attendre la validation d'un admin avant de pouvoir publier une promo (`CommercantService.assertRegistreValidated`, `ErrorCode.COMMERCANT_REGISTRE_NOT_VALIDATED`) — un commerçant confirmé par un agent n'est jamais concerné, la visite de l'agent vaut déjà vérification.
 >
-> **Conséquence de l'auto-inscription et de l'absence de vérification téléphonique dès la V0** : ni le niveau `confirmé_agent` ni une preuve de possession du numéro ne filtrent les faux comptes (un commerçant peut publier sans jamais avoir été vérifié physiquement, et un numéro usurpé peut techniquement créer un compte au nom d'un tiers). Le système de signalement/modération (§5.4) est donc la **seule ligne de défense** contre les faux commerces ou contenus abusifs — risque assumé pour le pilote, à réévaluer avant extension.
+> Décision d'origine (V0, abandonnée) : *« ne pas exiger le registre de commerce pour publier, afin de ne pas exclure le commerce informel, très présent localement »* — le badge `vérifié_registre` était alors optionnel et jamais bloquant.
+>
+> **Conséquence résiduelle de l'auto-inscription et de l'absence de vérification téléphonique** : le registre validé filtre maintenant les faux comptes côté auto-inscription, mais ni le niveau `confirmé_agent` ni une preuve de possession du numéro de téléphone n'apportent cette garantie — un numéro usurpé peut techniquement créer un compte au nom d'un tiers. Le système de signalement/modération (§5.4) reste la ligne de défense pour ce cas résiduel.
+>
+> **Ajout du 2026-07-12** : toute modification ultérieure du profil (`PATCH /commercant/me` — nom, adresse, catégorie, photo, position) bloque à son tour la publication jusqu'à validation par un admin (`CommercantService.assertProfileValidated`, `ErrorCode.COMMERCANT_PROFILE_PENDING_REVIEW`, colonne `profilePendingReview`) — contrairement au blocage registre ci-dessus, celui-ci s'applique à **tous** les commerçants sans exception, y compris `confirmé_agent` : une fois le compte créé, toute modification repasse par un contrôle humain quelle que soit l'origine de vérification initiale. Pas de rejet symétrique au registre — l'admin valide ou suspend le compte, il n'y a pas de motif de refus dédié à saisir. À l'inscription d'un auto-inscrit, l'envoi de la photo boutique allume les deux blocages en même temps (registre + profil) — `resolveRegistreVerification` purge donc aussi `profilePendingReview`, pour qu'une seule validation admin couvre les deux au moment de l'inscription plutôt que d'exiger deux actions distinctes pour un même nouveau compte.
 
 **Fiche commerçant — données saisies à la création** (auto-inscription ou
 création agent) :
@@ -144,18 +155,31 @@ brouillon → publiée → arrêtée
   les communes de cette wilaya, pas un champ distinct), le staffing "un agent
   par commune" n'étant pas soutenable.
 - Authentification **email + mot de passe**, compte créé exclusivement par l'Admin (pas d'auto-inscription agent).
-- Voit la liste des commerces de ses communes avec statut : jamais visité / à jour / à relancer.
 - Crée une fiche commerçant (numéro de téléphone, nom, adresse, catégorie) + première promo.
 - Prend la photo de la promo **obligatoirement dans l'app** (pas d'upload depuis la galerie), avec horodatage. **Pas de géolocalisation capturée** (décision explicite — écartée après discussion).
 - Met à jour une promo existante sur un commerce déjà onboardé.
 - N'a plus d'action à faire pour activer le compte du commerçant : celui-ci le fait lui-même, quand il le souhaite, en définissant son PIN sur l'écran de connexion (pas d'OTP à initier).
 - **Pas de mode hors-ligne en V0** (décision explicite malgré la couverture réseau variable à Djelfa — voir §7, risque à surveiller pendant le pilote).
+- **Agent = modérateur, mêmes écrans que l'admin** (décision produit
+  2026-07-12) : dashboard, modération, liste de promos, liste/fiche
+  commerçant (valider registre/profil, suspendre/réactiver, réinitialiser
+  le PIN, créer une fiche commerçant) — un seul jeu d'écrans partagé, scopé
+  automatiquement aux communes de l'agent côté backend (vue globale pour
+  l'admin). Seules deux fonctionnalités restent réservées à l'admin : la
+  gestion des agents et le journal d'audit.
+- **Liste "commerces de mes communes" avec statut de tournée (jamais
+  visité/à jour/à relancer) retirée le 2026-07-12** — décision produit,
+  jugée redondante avec la fiche commerçant unifiée ci-dessus. Le statut de
+  tournée n'est plus calculé ni affiché nulle part dans le produit.
 
 ### 3.4 Admin / Modérateur
 
 - Authentification **email + mot de passe**.
 - **Un seul rôle en V0** (pas de séparation admin/modérateur pour le pilote — à réévaluer si recrutement d'un modérateur dédié).
-- Valide ou rejette les demandes de badge `vérifié_registre`.
+- Gagne, depuis le 2026-07-12, la capacité de publier une promo pour un
+  commerçant (même écran que l'agent) — en plus de ses capacités de
+  modération/gestion déjà partagées avec l'agent (voir §3.3).
+- Valide ou rejette le registre envoyé par un commerçant auto-inscrit — condition désormais bloquante pour que celui-ci puisse publier (§3.2).
 - Traite la file de modération des promos signalées (masquer / valider en `vérifiée_ok` / avertir le commerçant).
 - Crée et gère les comptes agents, assigne un agent à une ou plusieurs communes.
 - **Transfère des communes** d'un agent à un autre (cas : départ d'un agent — sans ça, les fiches des communes concernées cessent d'être mises à jour silencieusement).
@@ -169,7 +193,7 @@ brouillon → publiée → arrêtée
 > Détail des schémas/relations à faire dans une passe dédiée "modèle de données" — ceci n'est qu'un inventaire d'entités et de leurs statuts/cycles de vie, nécessaire pour cadrer le développement.
 
 - **Commune** — référentiel administratif officiel (wilaya → commune), utilisé pour le filtre client et pour le rattachement territorial d'un agent (many-to-many `Agent` ↔ `Commune` — le concept de Zone séparée a été abandonné).
-- **Commerçant** — fiche + état de compte (`créé_agent` / `autonome`) + niveau de vérification (`confirmé_agent` / `vérifié_registre`).
+- **Commerçant** — fiche + état de compte (`créé_agent` / `autonome`) + origine de vérification (`auto_inscrit` / `confirmé_agent`) + statut registre (`en_attente` / `validé` / `rejeté`, bloquant pour publier uniquement si `auto_inscrit`).
 - **Promo** — liée à un commerçant, statut (`active` / `expirée` / `signalée` / `masquée` / `vérifiée_ok`), photo, prix avant/après, catégorie, date de fin, compteur de signalements.
 - **Agent** — compte + communes assignées (many-to-many).
 - **Admin** — compte, rôle unique en V0.
@@ -222,7 +246,7 @@ Saisie libre en arabe et/ou français par l'agent/commerçant, sans contrainte d
 ### 5.8 Stockage des images et rétention
 
 - **Stockage** : photos des promos hébergées sur **OVH S3** (cohérent avec l'infrastructure existante du porteur de projet).
-- **Compression/redimensionnement obligatoire côté app avant upload** (ex. max ~1200px de large, JPEG qualité ~80) — réduit le coût de stockage et la bande passante côté client, important vu la couverture réseau variable à Djelfa.
+- **Compression obligatoire côté app avant upload, cible ~250 Ko après compression** (décision 2026-07-12 : le premier plafond retenu, 5 Mo, était beaucoup trop généreux pour le marché algérien — coût data, couverture réseau variable à Djelfa). Compression par paliers largeur/qualité décroissants (1200px/q80 → … → 700px/q35, voir `StorageApi._compress` côté mobile) jusqu'à passer sous la cible, plutôt qu'un seul réglage fixe qui ne garantissait rien sur le poids réel produit. Même cible pour la photo de commerce et le document de registre — une seule règle de compression, pas de cas particulier par usage. Le plafond serveur (`MAX_UPLOAD_BYTES`, 500 Ko) n'est qu'un filet de sécurité au-dessus de cette cible, pas l'objectif.
 - **CDN devant le bucket recommandé** pour les lectures côté client (évite de taper S3 directement à chaque affichage de promo à volume).
 - **Structure de bucket** à prévoir dès le départ pour faciliter le nettoyage automatique, ex. `promo-photos/{commercant_id}/{promo_id}.jpg`.
 

@@ -14,10 +14,12 @@ import { Commune } from '../../commune/entities/commune.entity';
 import { Agent } from '../../agent/entities/agent.entity';
 
 /**
- * Cycle de vie du compte (specs §3.2). Sans OTP, il n'y a plus d'étape
- * intermédiaire de revendication : un commerçant créé par un agent reste
- * `cree_agent` jusqu'à ce qu'il définisse lui-même son PIN (`claim`), ce qui
- * le fait passer directement à `autonome`.
+ * Cycle de vie du compte (specs §3.2). `CREE_AGENT` n'est plus jamais
+ * assigné depuis le 2026-07-13 (l'agent choisit et transmet le PIN en
+ * personne à la création, le compte est `autonome` dès le départ — voir
+ * `CommercantService.createByAgent`) ; la valeur reste dans l'enum pour les
+ * lignes déjà en base créées avant ce changement, dont le PIN se fixe
+ * désormais via `CommercantService.resetPin` comme un PIN oublié ordinaire.
  */
 export enum CommercantAccountState {
   CREE_AGENT = 'cree_agent',
@@ -46,7 +48,16 @@ export class Commercant {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  /**
+   * Unique parmi les comptes actifs uniquement — index partiel
+   * `WHERE "deletedAt" IS NULL` posé par migration (pas exprimable par ce
+   * décorateur seul), pas une contrainte `unique` classique. Sans ça, un
+   * commerçant suspendu bloquait définitivement son numéro : impossible de
+   * le donner ensuite au vrai propriétaire en cas de changement de main du
+   * commerce (bug trouvé 2026-07-13, `assertPhoneAvailable` ne filtrait
+   * pas non plus les lignes supprimées avant ce correctif).
+   */
+  @Column()
   telephone: string;
 
   @Column()
@@ -90,8 +101,8 @@ export class Commercant {
 
   /**
    * Incrémenté pour révoquer tous les JWT émis avant (même mécanisme que
-   * Agent/Admin, audit règle #6) — notamment lors d'un `adminResetPin` :
-   * sans ça, effacer le PIN n'empêche pas un JWT déjà émis de continuer à
+   * Agent/Admin, audit règle #6) — notamment lors d'un `resetPin`/`changePin` :
+   * sans ça, changer le PIN n'empêche pas un JWT déjà émis de continuer à
    * fonctionner jusqu'à expiration (audit V1 §1).
    */
   @Column({ type: 'int', default: 0 })
@@ -117,11 +128,40 @@ export class Commercant {
   @Column({ type: 'enum', enum: RegistreStatus, nullable: true })
   registreStatus: RegistreStatus | null;
 
+  /**
+   * Clé S3 du justificatif de registre de commerce. Jamais exposée telle
+   * quelle (même précaution que `pinHash`/`photoKey`) : un endpoint qui
+   * renvoie l'entité brute ne doit jamais fuiter cette clé — accessible
+   * uniquement via `StorageService.getPresignedUrl` (audit sécurité
+   * 2026-07-11 : un agent pouvait reconstruire l'URL du document d'un
+   * commerçant de sa commune, hors du contrôle "admin only" voulu par le
+   * design — écran/rôle depuis étendus à l'agent le 2026-07-12, avec garde
+   * IDOR équivalente, voir `AdminController.assertCanManageCommercant`).
+   */
+  @Exclude()
   @Column({ type: 'varchar', nullable: true })
   registreKey: string | null;
 
   @Column({ type: 'timestamptz', nullable: true })
   registreValidatedAt: Date | null;
+
+  /**
+   * Toute modification du profil (nom/adresse/catégorie/photo/position, via
+   * `PATCH /commercant/me`) bloque la publication de promo jusqu'à ce
+   * qu'un admin la valide (`POST /admin/commercant/:id/profile/valider`) —
+   * décision produit du 2026-07-12, s'applique à **tous** les commerçants
+   * (y compris `confirme_agent`, contrairement au blocage registre qui ne
+   * concerne que `auto_inscrit`) : une fois le compte créé, toute
+   * modification ultérieure repasse par un contrôle humain, quelle que
+   * soit l'origine de vérification initiale. Purgé aussi par
+   * `resolveRegistreVerification` (2026-07-12) : à l'inscription d'un
+   * auto-inscrit, la photo boutique passe par `updateProfile` et allume ce
+   * flag en même temps que le registre — la validation du registre couvre
+   * donc aussi le profil pour ce cas précis, une seule action admin plutôt
+   * que deux pour un nouveau compte.
+   */
+  @Column({ type: 'boolean', default: false })
+  profilePendingReview: boolean;
 
   @CreateDateColumn()
   createdAt: Date;
@@ -130,13 +170,31 @@ export class Commercant {
   updatedAt: Date;
 
   /**
-   * Suppression de compte (bouton "Supprimer mon compte") — soft delete
-   * uniquement, jamais de suppression physique : conserve l'historique
-   * (promos, signalements) et permet une éventuelle restauration manuelle
-   * par l'admin. `null` = compte actif.
+   * Suppression de compte — soft delete uniquement, jamais de suppression
+   * physique : conserve l'historique (promos, signalements). Déclenchée par
+   * le commerçant lui-même (bouton "Supprimer mon compte") ou par
+   * l'admin/agent (`CommercantService.deleteCommercant`). `null` = compte
+   * non supprimé. Distinct de `suspendedAt` ci-dessous depuis le
+   * 2026-07-14 (les deux partageaient ce même champ auparavant, ce qui
+   * libérait par erreur le numéro de téléphone — voir `assertPhoneAvailable`
+   * — dès qu'un admin suspendait un compte) : seule la suppression libère le
+   * numéro et "supprime" les promos (`PromoLifecycleStatus.SUPPRIMEE`) ;
+   * pas de restauration prévue (le numéro peut entre-temps avoir été
+   * réattribué à un autre commerçant).
    */
   @Column({ type: 'timestamptz', nullable: true })
   deletedAt: Date | null;
+
+  /**
+   * Suspension — réversible et arbitraire (décision admin/agent sans motif
+   * métier particulier requis), contrairement à `deletedAt`. Ne libère
+   * jamais le numéro de téléphone. Dépublie les promos en cours (repassées
+   * en `BROUILLON`, republication manuelle après levée de la suspension —
+   * pas de republication automatique). Bloque la connexion comme
+   * `deletedAt` (voir `CommercantService.login`).
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  suspendedAt: Date | null;
 
   /**
    * Horodatage d'acceptation des CGU/politique de confidentialité (plan de

@@ -5,6 +5,7 @@ import '../../../domain/enums/audit_actor_type.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
+import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 
 final _auditLogProvider = FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).auditLog());
@@ -28,7 +29,7 @@ class AdminAuditLogScreen extends ConsumerWidget {
       ),
       body: entriesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
+        error: (error, _) => Center(child: ApiErrorText(error)),
         data: (entries) {
           if (entries.isEmpty) {
             return Center(child: Text(l10n.noAuditLogItems));

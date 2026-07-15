@@ -3,20 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../domain/enums/categorie.dart';
 import '../domain/models/auth_session.dart';
+import '../domain/models/admin_commercant_item.dart';
+import '../domain/models/agent.dart';
+import '../domain/models/moderation_item.dart';
 import '../domain/models/promo.dart';
+import '../features/admin/screens/admin_agent_detail_screen.dart';
 import '../features/admin/screens/admin_audit_log_screen.dart';
+import '../features/admin/screens/admin_commercant_detail_screen.dart';
 import '../features/admin/screens/admin_commercants_screen.dart';
 import '../features/admin/screens/admin_dashboard_screen.dart';
 import '../features/admin/screens/admin_login_screen.dart';
+import '../features/admin/screens/admin_promo_detail_screen.dart';
 import '../features/admin/screens/admin_promos_screen.dart';
 import '../features/admin/screens/agent_list_screen.dart';
 import '../features/admin/screens/create_agent_screen.dart';
 import '../features/admin/screens/moderation_queue_screen.dart';
-import '../features/admin/screens/registre_queue_screen.dart';
 import '../features/agent/screens/agent_login_screen.dart';
 import '../features/agent/screens/agent_promo_form_screen.dart';
 import '../features/agent/screens/create_commercant_screen.dart';
-import '../features/agent/screens/commune_commerces_screen.dart';
 import '../features/client/screens/commune_selection_screen.dart';
 import '../features/client/screens/promo_detail_screen.dart';
 import '../features/client/screens/promo_list_screen.dart';
@@ -27,6 +31,7 @@ import '../features/commercant/screens/commercant_register_screen.dart';
 import '../features/commercant/screens/edit_profile_screen.dart';
 import '../features/commercant/screens/my_promos_screen.dart';
 import '../features/commercant/screens/promo_form_screen.dart';
+import '../features/commercant/screens/registre_resend_screen.dart';
 import '../features/dev/screens/dev_profile_switcher_screen.dart';
 import '../features/shared/screens/legal_document_screen.dart';
 import '../features/shared/screens/notifications_screen.dart';
@@ -107,15 +112,15 @@ final _appRoutes = <_AppRoute>[
     (context, state) => const NotificationsScreen(),
     requiredRole: AppRole.commercant,
   ),
+  _AppRoute(
+    '/commercant/registre/resend',
+    (context, state) => const RegistreResendScreen(),
+    requiredRole: AppRole.commercant,
+  ),
 
   // Agent
   _AppRoute('/agent', (context, state) => const AgentLoginScreen()),
   _AppRoute('/agent/login', (context, state) => const AgentLoginScreen()),
-  _AppRoute(
-    '/agent/communes',
-    (context, state) => const CommuneCommercesScreen(),
-    requiredRole: AppRole.agent,
-  ),
   _AppRoute(
     '/agent/commercant/new',
     (context, state) => const CreateCommercantScreen(),
@@ -129,9 +134,17 @@ final _appRoutes = <_AppRoute>[
     ),
     requiredRole: AppRole.agent,
   ),
-  // Agent = modérateur (plan de correction, Phase 2) : mêmes écrans que
-  // l'admin, le backend scope automatiquement aux communes de l'agent
-  // (voir AdminController.scopedCommuneIds) — pas de duplication d'écran.
+  // Agent = modérateur (plan de correction, Phase 2, étendu 2026-07-12 à
+  // dashboard + fiche commerçant) : mêmes écrans que l'admin, le backend
+  // scope automatiquement aux communes de l'agent (voir
+  // AdminController.scopedCommuneIds) — pas de duplication d'écran, à
+  // l'exception volontaire de la gestion des agents et du journal d'audit
+  // (restés admin-only, voir AdminDashboardScreen).
+  _AppRoute(
+    '/agent/dashboard',
+    (context, state) => const AdminDashboardScreen(),
+    requiredRole: AppRole.agent,
+  ),
   _AppRoute(
     '/agent/moderation',
     (context, state) => const ModerationQueueScreen(),
@@ -140,6 +153,23 @@ final _appRoutes = <_AppRoute>[
   _AppRoute(
     '/agent/promos',
     (context, state) => const AdminPromosScreen(),
+    requiredRole: AppRole.agent,
+  ),
+  // Fiche promo modération — mêmes deux chemins par rôle que
+  // moderation/promos ci-dessus (widget partagé, backend scope par JWT).
+  _AppRoute(
+    '/agent/promo-detail',
+    (context, state) => AdminPromoDetailScreen(item: state.extra as ModerationItem),
+    requiredRole: AppRole.agent,
+  ),
+  _AppRoute(
+    '/agent/commercants',
+    (context, state) => const AdminCommercantsScreen(),
+    requiredRole: AppRole.agent,
+  ),
+  _AppRoute(
+    '/agent/commercants/detail',
+    (context, state) => AdminCommercantDetailScreen(item: state.extra as AdminCommercantItem),
     requiredRole: AppRole.agent,
   ),
 
@@ -165,8 +195,18 @@ final _appRoutes = <_AppRoute>[
     requiredRole: AppRole.admin,
   ),
   _AppRoute(
+    '/admin/promo-detail',
+    (context, state) => AdminPromoDetailScreen(item: state.extra as ModerationItem),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
     '/admin/commercants',
     (context, state) => const AdminCommercantsScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/commercants/detail',
+    (context, state) => AdminCommercantDetailScreen(item: state.extra as AdminCommercantItem),
     requiredRole: AppRole.admin,
   ),
   _AppRoute(
@@ -175,18 +215,29 @@ final _appRoutes = <_AppRoute>[
     requiredRole: AppRole.admin,
   ),
   _AppRoute(
-    '/admin/registre',
-    (context, state) => const RegistreQueueScreen(),
-    requiredRole: AppRole.admin,
-  ),
-  _AppRoute(
     '/admin/agents',
     (context, state) => const AgentListScreen(),
     requiredRole: AppRole.admin,
   ),
   _AppRoute(
+    '/admin/agents/detail',
+    (context, state) => AdminAgentDetailScreen(agent: state.extra as Agent),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
     '/admin/agents/new',
     (context, state) => const CreateAgentScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  // Admin gagne la capacité de publier une promo pour un commerçant
+  // (décision produit 2026-07-12) — même écran que l'agent, la garde de
+  // commune ne s'applique qu'au rôle agent côté backend (vue globale admin).
+  _AppRoute(
+    '/admin/promo/new/:commercantId',
+    (context, state) => AgentPromoFormScreen(
+      commercantId: state.pathParameters['commercantId']!,
+      defaultCategorie: state.extra as Categorie?,
+    ),
     requiredRole: AppRole.admin,
   ),
 ];
@@ -212,7 +263,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final session = authState.value;
       final path = state.matchedLocation;
 
-      if (path == '/' && ref.read(selectedCommuneProvider) == null) {
+      if (path == '/' && ref.read(selectedCommunesProvider).isEmpty) {
         return '/select-commune';
       }
 
@@ -223,7 +274,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         return session?.role == AppRole.commercant ? '/commercant/dashboard' : '/commercant/login';
       }
       if (path == '/agent') {
-        return session?.role == AppRole.agent ? '/agent/communes' : '/agent/login';
+        return session?.role == AppRole.agent ? '/agent/dashboard' : '/agent/login';
       }
       if (path == '/admin') {
         return session?.role == AppRole.admin ? '/admin/dashboard' : '/admin/login';

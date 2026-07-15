@@ -10,10 +10,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
 import { CreateCommercantByAgentDto } from '../commercant/dto/create-commercant-by-agent.dto';
-import {
-  BadRequestAppException,
-  ForbiddenAppException,
-} from '../common/errors/app-exception';
+import { ForbiddenAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
 import { AgentService } from './agent.service';
@@ -46,23 +43,6 @@ export class AgentController {
   @Get('me')
   async me(@CurrentUser() user: AuthTokenPayload) {
     return this.agentService.findByIdOrFail(user.sub);
-  }
-
-  /** Liste des commerces des communes de l'agent connecté, avec statut de tournée (specs §3.3). */
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('agent')
-  @Get('communes/commerces')
-  async communesCommerces(@CurrentUser() user: AuthTokenPayload) {
-    const agent = await this.agentService.findByIdOrFail(user.sub);
-    if (agent.communes.length === 0) {
-      throw new BadRequestAppException(
-        ErrorCode.AGENT_NO_COMMUNE_ASSIGNED,
-        "Cet agent n'est rattaché à aucune commune",
-      );
-    }
-    return this.commercantService.listByCommunesWithVisitStatus(
-      agent.communes.map((commune) => commune.id),
-    );
   }
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)

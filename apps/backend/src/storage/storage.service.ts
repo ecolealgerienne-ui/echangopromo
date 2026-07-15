@@ -1,17 +1,56 @@
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
+import sharp from 'sharp';
 import { BadRequestAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { detectImageFormat } from './image-signature';
 
 /**
- * Limite haute vu la compression obligatoire côté app avant upload (max
- * ~1200px, JPEG qualité ~80, specs §5.8) — sert de garde-fou contre un
- * upload arbitrairement volumineux (audit sécurité).
+ * Côté carré affiché par les plus grandes vignettes liste (`PromoCard`,
+ * 96dp) — marge pour les écrans haute densité (jusqu'à ~2.5x) sans
+ * viser la pleine résolution source, inutile pour une vignette (audit
+ * performance 2026-07-12 : la vignette téléchargeait la photo complète,
+ * `memCacheWidth` ne réduisant que le décodage mémoire, pas le réseau).
  */
-export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const THUMBNAIL_SIZE_PX = 240;
+
+/**
+ * Le client cible ~250 Ko après compression par paliers (`StorageApi.
+ * _compress`, mobile) — ce plafond n'est qu'un filet de sécurité serveur,
+ * pas l'objectif : 5 Mo (valeur d'origine) était beaucoup trop généreux
+ * pour le marché algérien (coût data, couverture réseau variable à Djelfa),
+ * decision 2026-07-12. Marge au-dessus de la cible client pour ne jamais
+ * rejeter une compression légitime qui atterrit un peu plus haut sur une
+ * image très texturée.
+ */
+export const MAX_UPLOAD_BYTES = 500 * 1024;
+
+export type UploadFolder = 'promo-photos' | 'commercant-photos' | 'registre-documents';
+
+/**
+ * Le registre de commerce est un justificatif d'identité professionnelle,
+ * pas une photo destinée au public (contrairement aux deux autres dossiers)
+ * — ACL privée + URL pré-signée à la demande (`getPresignedUrl`), plutôt que
+ * `public-read` (audit sécurité 2026-07-11 : la clé S3 fuitait déjà côté
+ * agent, une ACL publique la rendait exploitable sans même cette fuite).
+ */
+const PRIVATE_FOLDERS: readonly UploadFolder[] = ['registre-documents'];
+
+/**
+ * Régénérée à chaque `GET /admin/commercant`, jamais stockée telle quelle.
+ * 15 min plutôt qu'une durée très courte : l'URL est passée à l'écran détail
+ * via la navigation (`extra: item`, pas un nouveau fetch), le temps de
+ * consultation admin doit tenir dans cette fenêtre sans re-signer.
+ */
+const PRESIGNED_URL_TTL_SECONDS = 15 * 60;
 
 @Injectable()
 export class StorageService {
@@ -45,13 +84,14 @@ export class StorageService {
    * Structure de bucket prévue pour le nettoyage automatique (specs §5.8) —
    * uniquement les photos de promo (`promo-photos/`) sont purgées après
    * `IMAGE_RETENTION_DAYS` (voir `PromoService.purgeOldPhotosCron`) ; la
-   * photo de commerce (`commercant-photos/`) est permanente, d'où le préfixe
-   * distinct.
+   * photo de commerce (`commercant-photos/`) et le registre de commerce
+   * (`registre-documents/`, pièce justificative conservée pour traçabilité
+   * de la validation admin) sont permanents, d'où le préfixe distinct.
    */
   buildKey(
     commercantId: string,
     extension: string,
-    folder: 'promo-photos' | 'commercant-photos' = 'promo-photos',
+    folder: UploadFolder = 'promo-photos',
   ): string {
     return `${folder}/${commercantId}/${randomUUID()}.${extension}`;
   }
@@ -70,12 +110,12 @@ export class StorageService {
   async uploadPhoto(
     commercantId: string,
     buffer: Buffer,
-    folder: 'promo-photos' | 'commercant-photos' = 'promo-photos',
+    folder: UploadFolder = 'promo-photos',
   ): Promise<string> {
     if (buffer.length > MAX_UPLOAD_BYTES) {
       throw new BadRequestAppException(
         ErrorCode.STORAGE_FILE_TOO_LARGE,
-        'Le fichier dépasse la taille maximale autorisée (5 Mo).',
+        'Le fichier dépasse la taille maximale autorisée (500 Ko).',
       );
     }
     const format = detectImageFormat(buffer);
@@ -97,9 +137,16 @@ export class StorageService {
         // OVH n'implémente ni les bucket policies (NotImplemented sur
         // PutBucketPolicy) ni les requêtes anonymes en style path (400 sur
         // GET sans ACL) — seul l'ACL par objet `public-read` (testé et
-        // confirmé) rend la photo accessible via `buildPublicUrl`
-        // (style virtual-hosted, voir plus bas).
-        ACL: 'public-read',
+        // confirmé) rend la photo accessible via `buildPublicUrl` (style
+        // virtual-hosted, voir plus bas). `registre-documents/` reste privé
+        // (voir `PRIVATE_FOLDERS`) : consulté uniquement via
+        // `getPresignedUrl`, jamais via une URL publique permanente.
+        ACL: PRIVATE_FOLDERS.includes(folder) ? 'private' : 'public-read',
+        // `buildKey` génère toujours une nouvelle clé UUID, jamais un
+        // remplacement en place (voir plus haut) — un objet donné ne change
+        // donc jamais de contenu une fois écrit, cache navigateur/CDN
+        // immuable sur un an sans risque de servir une version périmée.
+        CacheControl: 'public, max-age=31536000, immutable',
       }),
     );
     return key;
@@ -131,9 +178,62 @@ export class StorageService {
     return `${endpoint}/${this.bucket}/${key}`;
   }
 
+  /**
+   * URL temporaire signée pour un objet privé (`registre-documents/`) —
+   * appelée à la demande par un admin authentifié uniquement (jamais
+   * stockée), contrairement à `buildPublicUrl` qui pointe vers un objet
+   * `public-read` permanent.
+   */
+  async getPresignedUrl(key: string): Promise<string> {
+    return getSignedUrl(
+      this.client,
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      { expiresIn: PRESIGNED_URL_TTL_SECONDS },
+    );
+  }
+
   async deleteObject(key: string): Promise<void> {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
     );
+  }
+
+  private async downloadObject(key: string): Promise<Buffer> {
+    const response = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    const bytes = await response.Body!.transformToByteArray();
+    return Buffer.from(bytes);
+  }
+
+  /**
+   * Génère et upload une miniature carrée à partir d'un objet déjà en
+   * ligne — utilisée uniquement pour la 1ère photo d'une promo (seule
+   * affichée en vignette liste, voir `PromoService.tryGenerateThumbnail`),
+   * jamais pour les photos 2/3 ni pour les autres dossiers (commerce,
+   * registre). `-thumb-<uuid>` plutôt qu'un remplacement en place, même
+   * logique que `buildKey` : un objet donné ne change jamais de contenu
+   * une fois écrit, cache navigateur/CDN immuable sans risque de servir
+   * une version périmée.
+   */
+  async generateThumbnail(sourceKey: string): Promise<string> {
+    const original = await this.downloadObject(sourceKey);
+    const thumbnail = await sharp(original)
+      .resize(THUMBNAIL_SIZE_PX, THUMBNAIL_SIZE_PX, { fit: 'cover' })
+      .jpeg({ quality: 70 })
+      .toBuffer();
+
+    const thumbnailKey = `${sourceKey.replace(/\.[^./]+$/, '')}-thumb-${randomUUID()}.jpg`;
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: thumbnailKey,
+        Body: thumbnail,
+        ContentType: 'image/jpeg',
+        ACL: 'public-read',
+        CacheControl: 'public, max-age=31536000, immutable',
+      }),
+    );
+    return thumbnailKey;
   }
 }

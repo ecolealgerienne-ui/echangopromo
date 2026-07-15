@@ -52,7 +52,7 @@ class _AgentLoginScreenState extends ConsumerState<AgentLoginScreen> {
             token: token,
             fetchId: () async => (await api.me()).id,
           );
-      if (mounted) context.go('/agent/communes');
+      if (mounted) context.go('/agent/dashboard');
     } catch (error) {
       setState(() => _error = extractApiErrorMessage(
             error,

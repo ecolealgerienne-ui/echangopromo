@@ -6,9 +6,11 @@ import {
   IsPhoneNumber,
   IsString,
   IsUUID,
+  Matches,
   MinLength,
 } from 'class-validator';
 import { Categorie } from '../../common/enums/categorie.enum';
+import { PIN_SET_MESSAGE, PIN_SET_PATTERN } from '../pin.constants';
 
 export class CreateCommercantByAgentDto {
   @IsPhoneNumber('DZ')
@@ -17,6 +19,16 @@ export class CreateCommercantByAgentDto {
   @IsString()
   @MinLength(2)
   nom: string;
+
+  /**
+   * Choisi par l'agent en personne (décision produit 2026-07-13, remplace
+   * la revendication publique par téléphone seul) — l'agent le communique
+   * directement au commerçant lors de la visite, aucune fenêtre publique
+   * où un tiers connaissant juste le numéro pourrait s'approprier le
+   * compte avant le vrai commerçant.
+   */
+  @Matches(PIN_SET_PATTERN, { message: PIN_SET_MESSAGE })
+  pin: string;
 
   @IsOptional()
   @IsString()

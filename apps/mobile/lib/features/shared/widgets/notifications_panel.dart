@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/theme.dart';
 import '../../../domain/models/notification.dart' as domain;
 import '../../../l10n/app_localizations.dart';
 import '../l10n/enum_labels.dart';
 import '../providers/notification_provider.dart';
+import 'api_error_text.dart';
 
 class NotificationsPanel extends ConsumerWidget {
   const NotificationsPanel({super.key, this.history = false});
@@ -53,7 +55,7 @@ class NotificationsPanel extends ConsumerWidget {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, st) => Center(
-        child: Text(l10n.commonError(error.toString())),
+        child: ApiErrorText(error),
       ),
     );
   }
@@ -61,16 +63,26 @@ class NotificationsPanel extends ConsumerWidget {
 
 /// Couleur/icône par type — partagées entre le panneau plein écran et le
 /// bandeau du dashboard (CLAUDE.md #21 : extraire dès la 2e duplication).
-Color notificationIconColor(domain.NotificationType type) {
+/// Couleurs dérivées du thème (audit design 2026-07-11) plutôt que des
+/// `Colors.*` fixes, non calibrées pour le fond sombre.
+Color notificationIconColor(BuildContext context, domain.NotificationType type) {
+  final colorScheme = Theme.of(context).colorScheme;
+  final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
   switch (type) {
     case domain.NotificationType.promoWarned:
-      return Colors.orange;
+      return semanticColors.warning;
     case domain.NotificationType.promoHidden:
-      return Colors.red;
+      return colorScheme.error;
     case domain.NotificationType.promoVerified:
-      return Colors.green;
+      return semanticColors.success;
     case domain.NotificationType.promoExpiringSoon:
-      return Colors.blue;
+      return colorScheme.secondary;
+    case domain.NotificationType.registreValidated:
+      return semanticColors.success;
+    case domain.NotificationType.registreRejected:
+      return colorScheme.error;
+    case domain.NotificationType.profileValidated:
+      return semanticColors.success;
   }
 }
 
@@ -84,6 +96,12 @@ IconData notificationIcon(domain.NotificationType type) {
       return Icons.check_circle_rounded;
     case domain.NotificationType.promoExpiringSoon:
       return Icons.schedule_rounded;
+    case domain.NotificationType.registreValidated:
+      return Icons.assignment_turned_in_rounded;
+    case domain.NotificationType.registreRejected:
+      return Icons.assignment_late_rounded;
+    case domain.NotificationType.profileValidated:
+      return Icons.person_search_rounded;
   }
 }
 
@@ -104,7 +122,7 @@ class _NotificationTile extends ConsumerWidget {
       child: ListTile(
         leading: Icon(
           notificationIcon(notification.type),
-          color: notificationIconColor(notification.type),
+          color: notificationIconColor(context, notification.type),
         ),
         title: Text(notification.message),
         subtitle: Text(notificationRelativeDate(context, notification.createdAt)),
@@ -115,7 +133,10 @@ class _NotificationTile extends ConsumerWidget {
                 onPressed: onMarkAsRead,
               )
             : null,
-        tileColor: notification.isRead ? null : Colors.grey.shade100,
+        // `colorScheme.primaryContainer` plutôt qu'un gris fixe : ce dernier
+        // restait clair en mode sombre alors que le texte du ListTile suit
+        // le thème (clair sur fond sombre) — contraste cassé.
+        tileColor: notification.isRead ? null : Theme.of(context).colorScheme.primaryContainer,
       ),
     );
   }

@@ -1,0 +1,599 @@
+<title>echango Promo face à la concurrence</title>
+<style>
+  :root {
+    --ink: #241811;
+    --muted: #7a6a57;
+    --paper: #fbf3e7;
+    --surface: #ffffff;
+    --surface-2: #f5ead9;
+    --line: #e4d5c0;
+    --terracotta: #e8571e;
+    --terracotta-tint: #fbe4d8;
+    --safran: #f2a93b;
+    --ok: #2f9e62;
+    --warn: #b45309;
+    --absent: #b0a08c;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #f2e8da;
+      --muted: #b8a890;
+      --paper: #1b140d;
+      --surface: #241a10;
+      --surface-2: #2c2013;
+      --line: #3c2e1e;
+      --terracotta: #ff7a42;
+      --terracotta-tint: #3a2417;
+      --safran: #ffc163;
+      --ok: #4ade80;
+      --warn: #fbbf24;
+      --absent: #6b5d4b;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #f2e8da;
+    --muted: #b8a890;
+    --paper: #1b140d;
+    --surface: #241a10;
+    --surface-2: #2c2013;
+    --line: #3c2e1e;
+    --terracotta: #ff7a42;
+    --terracotta-tint: #3a2417;
+    --safran: #ffc163;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --absent: #6b5d4b;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --ink: #241811;
+    --muted: #7a6a57;
+    --paper: #fbf3e7;
+    --surface: #ffffff;
+    --surface-2: #f5ead9;
+    --line: #e4d5c0;
+    --terracotta: #e8571e;
+    --terracotta-tint: #fbe4d8;
+    --safran: #f2a93b;
+    --ok: #2f9e62;
+    --warn: #b45309;
+    --absent: #b0a08c;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+  }
+
+  .wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--terracotta);
+    margin: 0 0 12px;
+  }
+
+  h1 {
+    font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+    font-weight: 700;
+    font-size: clamp(28px, 4vw, 42px);
+    line-height: 1.15;
+    margin: 0 0 14px;
+    text-wrap: balance;
+    max-width: 18ch;
+  }
+
+  .lede {
+    font-size: 16.5px;
+    color: var(--muted);
+    max-width: 62ch;
+    margin: 0 0 40px;
+  }
+
+  .verdict {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 18px;
+    align-items: start;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--terracotta);
+    border-radius: 6px;
+    padding: 22px 24px;
+    margin-bottom: 56px;
+  }
+  .verdict .mark {
+    font-family: Georgia, serif;
+    font-size: 34px;
+    color: var(--terracotta);
+    line-height: 1;
+  }
+  .verdict p { margin: 0; }
+  .verdict p + p { margin-top: 10px; }
+  .verdict strong { color: var(--ink); }
+
+  section { margin-bottom: 64px; }
+
+  h2 {
+    font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 6px;
+  }
+  .section-note {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0 0 24px;
+    max-width: 68ch;
+  }
+
+  /* ---- comparison table ---- */
+  .table-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 920px;
+    font-size: 13.5px;
+  }
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 2;
+    text-align: left;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  thead th.app-col span.region {
+    display: block;
+    font-weight: 400;
+    color: var(--muted);
+    text-transform: none;
+    letter-spacing: 0;
+    margin-top: 2px;
+  }
+  thead th:first-child {
+    left: 0;
+    z-index: 3;
+    min-width: 240px;
+  }
+  tbody th {
+    position: sticky;
+    left: 0;
+    background: var(--surface);
+    z-index: 1;
+    text-align: left;
+    font-weight: 500;
+    font-size: 13.5px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    min-width: 240px;
+  }
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+    color: var(--muted);
+  }
+  td .sym {
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    margin-right: 7px;
+  }
+  .sym.yes { color: var(--ok); }
+  .sym.partial { color: var(--warn); }
+  .sym.no { color: var(--absent); }
+
+  col.echango-col, th.echango-col, td.echango-col {
+    background: var(--terracotta-tint);
+  }
+  th.echango-col { color: var(--terracotta); }
+  tr:last-child td, tr:last-child th { border-bottom: none; }
+
+  .legend {
+    display: flex;
+    gap: 22px;
+    flex-wrap: wrap;
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 12px;
+  }
+  .legend span.sym { font-family: ui-monospace, monospace; font-weight: 700; margin-right: 5px; }
+
+  /* ---- app cards ---- */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px 20px;
+  }
+  .card h3 {
+    font-size: 15px;
+    margin: 0 0 4px;
+    font-weight: 700;
+  }
+  .card .tag {
+    display: inline-block;
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--safran);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .card p {
+    font-size: 13.5px;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+  .card a {
+    font-size: 12.5px;
+    color: var(--terracotta);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+  .card a:hover, .card a:focus-visible { border-bottom-color: var(--terracotta); }
+  .card a:focus-visible { outline: 2px solid var(--terracotta); outline-offset: 2px; }
+
+  /* ---- takeaways ---- */
+  .takeaways {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  @media (max-width: 720px) {
+    .takeaways { grid-template-columns: 1fr; }
+  }
+  .takeaway-col h3 {
+    font-family: Georgia, serif;
+    font-size: 16px;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .takeaway-col.learn h3 { color: var(--safran); }
+  .takeaway-col.diff h3 { color: var(--terracotta); }
+  .takeaway-col ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .takeaway-col li {
+    padding: 12px 0;
+    border-top: 1px solid var(--line);
+    font-size: 14px;
+  }
+  .takeaway-col li:first-child { border-top: none; padding-top: 0; }
+  .takeaway-col li strong { display: block; color: var(--ink); margin-bottom: 3px; }
+
+  footer {
+    margin-top: 72px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  footer a { color: var(--muted); }
+
+  a { color: inherit; }
+  ::selection { background: var(--terracotta-tint); }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">Benchmark concurrentiel — 2026-07-11</p>
+  <h1>echango Promo face aux applications de promos locales dans le monde</h1>
+  <p class="lede">
+    Sept applications déjà lancées, en Europe, en Asie, en Amérique du Nord et en Afrique,
+    qui résolvent une variante du même problème que le pilote de Djelfa : connecter des
+    commerces de proximité à des clients à pied. Comparatif fonctionnel colonne par colonne,
+    pas un classement — chacune a fait des arbitrages différents pour un contexte différent.
+  </p>
+
+  <div class="verdict">
+    <span class="mark">”</span>
+    <div>
+      <p>
+        <strong>echango Promo est la seule des huit à avoir été pensée pour le commerce informel</strong> :
+        pas d'OTP, onboarding par un agent qui se déplace en personne, PIN à la place d'un mot de passe,
+        aucune obligation de paiement en ligne. Toutes les autres supposent un commerçant déjà
+        « digitalisé » — compte bancaire, smartphone maîtrisé, parfois un point de vente électronique.
+      </p>
+      <p>
+        En contrepartie, echango Promo est la seule à n'avoir <strong>aucun modèle économique</strong> :
+        les six autres financent leur plateforme par une commission, un abonnement marchand ou de la
+        publicité display. Le pilote reste donc un choix produit à trancher avant toute extension
+        au-delà d'un quartier pilote.
+      </p>
+    </div>
+  </div>
+
+  <section>
+    <h2>Comparatif fonctionnel</h2>
+    <p class="section-note">
+      Colonne teintée = echango Promo. ✓ présent · ± présent sous une forme différente ou partielle · — absent.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th class="echango-col">echango Promo<span class="region">Djelfa, Algérie</span></th>
+            <th>Too Good To Go<span class="region">Europe → mondial</span></th>
+            <th>OLIO<span class="region">UK → mondial</span></th>
+            <th>Karrot (Danggeun)<span class="region">Corée du Sud</span></th>
+            <th>Nearbuy<span class="region">Inde</span></th>
+            <th>Groupon<span class="region">États-Unis → mondial</span></th>
+            <th>Bonial / Kimbino<span class="region">France, Allemagne…</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Modèle économique</th>
+            <td class="echango-col"><span class="sym no">—</span>gratuit, sans commission</td>
+            <td><span class="sym partial">±</span>commission/abonnement commerçant</td>
+            <td><span class="sym no">—</span>don, financé par mécénat</td>
+            <td><span class="sym partial">±</span>gratuit + services pro payants</td>
+            <td><span class="sym partial">±</span>commission sur bon prépayé</td>
+            <td><span class="sym partial">±</span>commission sur bon prépayé</td>
+            <td><span class="sym partial">±</span>publicité des enseignes</td>
+          </tr>
+          <tr>
+            <th scope="row">Portée géographique</th>
+            <td class="echango-col">un quartier</td>
+            <td>ville → international</td>
+            <td>quartier → international</td>
+            <td>quartier (rayon 6 km)</td>
+            <td>ville (33 villes)</td>
+            <td>ville → international</td>
+            <td>national (grandes enseignes)</td>
+          </tr>
+          <tr>
+            <th scope="row">Tout commerce, ou une niche ?</th>
+            <td class="echango-col">tout commerce (6 catégories)</td>
+            <td><span class="sym no">—</span>alimentaire uniquement</td>
+            <td><span class="sym partial">±</span>alimentaire + objets</td>
+            <td>tout commerce + occasion</td>
+            <td><span class="sym partial">±</span>loisirs/restauration/beauté</td>
+            <td>tout commerce + voyages</td>
+            <td><span class="sym partial">±</span>grande distribution</td>
+          </tr>
+          <tr>
+            <th scope="row">Réduction réelle affichée (prix avant/après)</th>
+            <td class="echango-col"><span class="sym yes">✓</span>obligatoire à la création</td>
+            <td><span class="sym partial">±</span>prix réduit, pas systématique</td>
+            <td><span class="sym no">—</span>gratuit, pas de prix</td>
+            <td><span class="sym no">—</span>prix libre, non structuré</td>
+            <td><span class="sym partial">±</span>% affiché</td>
+            <td><span class="sym partial">±</span>% affiché</td>
+            <td><span class="sym no">—</span>prospectus, pas item par item</td>
+          </tr>
+          <tr>
+            <th scope="row">Compte client requis pour parcourir</th>
+            <td class="echango-col"><span class="sym no">—</span>navigation anonyme</td>
+            <td><span class="sym yes">✓</span></td>
+            <td><span class="sym yes">✓</span></td>
+            <td><span class="sym yes">✓</span>+ vérif. téléphone/GPS</td>
+            <td><span class="sym yes">✓</span></td>
+            <td><span class="sym yes">✓</span></td>
+            <td><span class="sym no">—</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Paiement ou réservation dans l'app</th>
+            <td class="echango-col"><span class="sym no">—</span>retrait en magasin, non réservable</td>
+            <td><span class="sym yes">✓</span>achat du sac à l'avance</td>
+            <td><span class="sym no">—</span>demande, pas de paiement</td>
+            <td><span class="sym partial">±</span>souvent en personne</td>
+            <td><span class="sym yes">✓</span>bon prépayé obligatoire</td>
+            <td><span class="sym yes">✓</span>bon prépayé obligatoire</td>
+            <td><span class="sym no">—</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Modération par signalement client</th>
+            <td class="echango-col"><span class="sym yes">✓</span>seuil de 3 signalements distincts</td>
+            <td><span class="sym partial">±</span>notation/avis, pas de report</td>
+            <td><span class="sym yes">✓</span></td>
+            <td><span class="sym partial">±</span>note de confiance par profil</td>
+            <td><span class="sym no">—</span></td>
+            <td><span class="sym no">—</span></td>
+            <td><span class="sym no">—</span>contenu fourni par l'enseigne</td>
+          </tr>
+          <tr>
+            <th scope="row">Onboarding terrain du commerce informel</th>
+            <td class="echango-col"><span class="sym yes">✓</span>agent qui visite en personne</td>
+            <td><span class="sym no">—</span>équipe commerciale classique</td>
+            <td><span class="sym partial">±</span>collecte bénévole, pas d'onboarding</td>
+            <td><span class="sym no">—</span>auto-inscription</td>
+            <td><span class="sym no">—</span>équipe commerciale classique</td>
+            <td><span class="sym no">—</span>self-service + équipe commerciale</td>
+            <td><span class="sym no">—</span>partenariats grandes enseignes</td>
+          </tr>
+          <tr>
+            <th scope="row">Vérification d'identité commerçant</th>
+            <td class="echango-col"><span class="sym partial">±</span>registre requis si auto-inscrit</td>
+            <td><span class="sym no">—</span>commerce déjà établi</td>
+            <td><span class="sym no">—</span>partenaires enseignes connues</td>
+            <td><span class="sym partial">±</span>géolocalisation + téléphone</td>
+            <td><span class="sym no">—</span></td>
+            <td><span class="sym no">—</span></td>
+            <td><span class="sym no">—</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Partage social natif</th>
+            <td class="echango-col"><span class="sym yes">✓</span>WhatsApp</td>
+            <td><span class="sym partial">±</span></td>
+            <td><span class="sym partial">±</span></td>
+            <td><span class="sym partial">±</span></td>
+            <td><span class="sym yes">✓</span></td>
+            <td><span class="sym yes">✓</span></td>
+            <td><span class="sym partial">±</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Multi-langue avec RTL natif</th>
+            <td class="echango-col"><span class="sym yes">✓</span>FR / EN / AR</td>
+            <td><span class="sym partial">±</span>mondial, RTL non prioritaire</td>
+            <td><span class="sym partial">±</span></td>
+            <td><span class="sym no">—</span>coréen d'abord</td>
+            <td><span class="sym no">—</span>anglais/hindi</td>
+            <td><span class="sym partial">±</span></td>
+            <td><span class="sym partial">±</span>plusieurs pays UE</td>
+          </tr>
+          <tr>
+            <th scope="row">Notifications push</th>
+            <td class="echango-col"><span class="sym no">—</span>in-app uniquement (phase 2)</td>
+            <td><span class="sym yes">✓</span>alertes sur favoris</td>
+            <td><span class="sym yes">✓</span>alertes personnalisées</td>
+            <td><span class="sym yes">✓</span></td>
+            <td><span class="sym yes">✓</span></td>
+            <td><span class="sym yes">✓</span></td>
+            <td><span class="sym yes">✓</span>alertes catalogue</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <span><span class="sym yes">✓</span>présent</span>
+      <span><span class="sym partial">±</span>partiel / forme différente</span>
+      <span><span class="sym no">—</span>absent</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Les sept applications</h2>
+    <p class="section-note">Un profil en une ligne, avec la source utilisée pour ce comparatif.</p>
+    <div class="cards">
+      <div class="card">
+        <span class="tag">Food waste</span>
+        <h3>Too Good To Go</h3>
+        <p>« Sacs surprise » de nourriture invendue en fin de journée, à prix cassé, réservés et payés dans l'app avant le retrait.</p>
+        <a href="https://www.toogoodtogo.com/en-us/how-does-the-app-work" target="_blank" rel="noopener">toogoodtogo.com →</a>
+      </div>
+      <div class="card">
+        <span class="tag">Don communautaire</span>
+        <h3>OLIO</h3>
+        <p>Partage gratuit de surplus alimentaire et d'objets entre voisins, avec des grandes enseignes comme donateurs partenaires.</p>
+        <a href="https://olioapp.com/en/" target="_blank" rel="noopener">olioapp.com →</a>
+      </div>
+      <div class="card">
+        <span class="tag">Marché de quartier</span>
+        <h3>Karrot (Danggeun Market)</h3>
+        <p>Petites annonces d'occasion restreintes à un rayon de 6 km, étendues depuis 2023 aux profils commerçants (salons de coiffure, services).</p>
+        <a href="https://www.franvia.com/2026/03/karrot-market-korea-neighborhood-marketplace-culture.html" target="_blank" rel="noopener">franvia.com →</a>
+      </div>
+      <div class="card">
+        <span class="tag">Bons prépayés</span>
+        <h3>Nearbuy</h3>
+        <p>Bons de réduction prépayés sur restaurants, spas et loisirs dans 33 villes indiennes, à présenter au commerçant.</p>
+        <a href="https://www.nearbuy.com/help/aboutus" target="_blank" rel="noopener">nearbuy.com →</a>
+      </div>
+      <div class="card">
+        <span class="tag">Bons prépayés</span>
+        <h3>Groupon</h3>
+        <p>Le pionnier du bon de réduction local, devenu une place de marché mondiale (local, séjours, produits).</p>
+        <a href="https://www.groupon.com/local" target="_blank" rel="noopener">groupon.com →</a>
+      </div>
+      <div class="card">
+        <span class="tag">Prospectus numérique</span>
+        <h3>Bonial / Kimbino</h3>
+        <p>Catalogues et prospectus des grandes enseignes (supermarchés, bricolage, ameublement) géolocalisés, sans transaction dans l'app.</p>
+        <a href="https://www.bonial.com/en/" target="_blank" rel="noopener">bonial.com →</a>
+      </div>
+      <div class="card">
+        <span class="tag">Petites annonces</span>
+        <h3>Jumia Deals</h3>
+        <p>Petites annonces gratuites entre particuliers dans une vingtaine de pays africains — proche par le contexte informel, mais pas un système de promos commerçants.</p>
+        <a href="https://en.wikipedia.org/wiki/Jumia" target="_blank" rel="noopener">Jumia (Wikipédia) →</a>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ce que ça donne pour echango Promo</h2>
+    <div class="takeaways">
+      <div class="takeaway-col learn">
+        <h3>À emprunter</h3>
+        <ul>
+          <li>
+            <strong>Le badge de confiance progressif, à la Karrot</strong>
+            La vérification par géolocalisation + téléphone de Karrot fait le même travail que le
+            registre de commerce d'echango, sans document — à envisager en complément pour les
+            commerçants qui n'ont vraiment aucun justificatif.
+          </li>
+          <li>
+            <strong>L'alerte « favori disponible » de TGTG/OLIO</strong>
+            Déjà noté dans l'audit fonctionnel : une fois le bug des favoris corrigé, un simple
+            badge « nouvelle promo chez un favori » au lancement de l'app (sans infra push) capte
+            une bonne partie de ce bénéfice de rétention à coût nul.
+          </li>
+          <li>
+            <strong>Le profil commerçant de Karrot (2023)</strong>
+            Système de réservation intégré pour les salons/services — une piste d'extension au-delà
+            de la simple promo ponctuelle, une fois le pilote validé.
+          </li>
+        </ul>
+      </div>
+      <div class="takeaway-col diff">
+        <h3>Ce qui reste unique à echango</h3>
+        <ul>
+          <li>
+            <strong>Zéro barrière à l'entrée commerçant</strong>
+            Aucune des sept ne permet à un commerçant sans compte bancaire ni smartphone maîtrisé
+            de publier une offre en quelques minutes avec l'aide d'un agent — c'est le vrai créneau
+            non couvert par la concurrence mondiale.
+          </li>
+          <li>
+            <strong>Aucune transaction, aucune commission</strong>
+            Toutes les autres captent une commission ou un abonnement. echango Promo est une vitrine
+            pure : le client se déplace, paie en magasin — plus simple à adopter, mais aussi plus
+            difficile à monétiser une fois le pilote terminé.
+          </li>
+          <li>
+            <strong>RTL et arabe comme langue de premier rang</strong>
+            Aucun concurrent identifié ne traite l'arabe autrement qu'en langue additionnelle
+            tardive — la mobile app d'echango a été conçue avec le RTL dès la V0.
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Comparatif établi à partir des sources citées ci-dessus (recherche web, juillet 2026) et de l'état
+    actuel du code echango Promo (branche <code>claude/echango-promo-testing-45zh04</code>). Les
+    fonctionnalités concurrentes évoluent vite — à revalider avant toute décision produit structurante.
+  </footer>
+</div>

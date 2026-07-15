@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/theme.dart';
+import '../../../domain/enums/commercant_origin_verification.dart';
+import '../../../domain/enums/registre_status.dart';
+import '../../../domain/models/commercant.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/providers/notification_provider.dart';
+import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/notifications_panel.dart';
 
@@ -22,7 +27,7 @@ class CommercantDashboardScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const BackButtonIcon(),
           tooltip: l10n.backToHomeTooltip,
           // Ce dashboard est toujours atteint via un `go()` (jamais un
           // `push()`) depuis les écrans de connexion — la pile de
@@ -65,10 +70,14 @@ class CommercantDashboardScreen extends ConsumerWidget {
             const _UnreadNotificationsBanner(),
             meAsync.when(
               loading: () => const LinearProgressIndicator(),
-              error: (error, _) => Text(l10n.commonError(error.toString())),
-              data: (commercant) => Text(
-                commercant.nom,
-                style: Theme.of(context).textTheme.headlineSmall,
+              error: (error, _) => ApiErrorText(error),
+              data: (commercant) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(commercant.nom, style: Theme.of(context).textTheme.headlineSmall),
+                  _RegistreStatusBanner(commercant: commercant),
+                  if (commercant.profilePendingReview) const _ProfilePendingReviewBanner(),
+                ],
               ),
             ),
             const SizedBox(height: 16),
@@ -139,12 +148,12 @@ class _UnreadNotificationsBanner extends ConsumerWidget {
           children: [
             for (final notification in unread)
               Card(
-                color: notificationIconColor(notification.type).withValues(alpha: 0.1),
+                color: notificationIconColor(context, notification.type).withValues(alpha: 0.1),
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
                   leading: Icon(
                     notificationIcon(notification.type),
-                    color: notificationIconColor(notification.type),
+                    color: notificationIconColor(context, notification.type),
                   ),
                   title: Text(notification.message),
                   trailing: Row(
@@ -176,6 +185,119 @@ class _UnreadNotificationsBanner extends ConsumerWidget {
         );
       },
       orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+/// Statut du registre pour un commerçant auto-inscrit — aucune promo ne
+/// peut être publiée tant qu'il n'est pas `validé` par un admin (revert du
+/// 2026-07-11, voir `CommercantService.assertRegistreValidated`). Un
+/// commerçant confirmé par un agent n'est jamais concerné.
+class _RegistreStatusBanner extends ConsumerWidget {
+  const _RegistreStatusBanner({required this.commercant});
+
+  final Commercant commercant;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (commercant.originVerification != CommercantOriginVerification.autoInscrit) {
+      return const SizedBox.shrink();
+    }
+    if (commercant.registreStatus == RegistreStatus.valide) {
+      return const SizedBox.shrink();
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
+
+    // `null` (jamais envoyé) traité comme "en attente" — même bannière.
+    // Seul le cas rejeté propose une action (`RegistreResendScreen`) : un
+    // "en attente" n'a rien de plus à faire qu'attendre la décision admin.
+    final isRejected = commercant.registreStatus == RegistreStatus.rejete;
+    final title = isRejected ? l10n.registreRejectedBannerTitle : l10n.registrePendingBannerTitle;
+    final message =
+        isRejected ? l10n.registreRejectedBannerMessage : l10n.registrePendingBannerMessage;
+    final color = isRejected ? colorScheme.error : semanticColors.warning;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Card(
+        color: color.withValues(alpha: 0.1),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, color: color),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text(message),
+                    if (isRejected) ...[
+                      const SizedBox(height: 8),
+                      OutlinedButton(
+                        onPressed: () async {
+                          final sent = await context.push<bool>('/commercant/registre/resend');
+                          if (sent == true && context.mounted) ref.invalidate(_meProvider);
+                        },
+                        child: Text(l10n.registreResendSubmit),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bannière "profil en attente de validation" — indépendante du registre :
+/// toute modification de profil (`PATCH /commercant/me`) bloque la
+/// publication jusqu'à validation admin, pour tous les commerçants, y
+/// compris ceux confirmés par un agent (décision produit 2026-07-12).
+class _ProfilePendingReviewBanner extends StatelessWidget {
+  const _ProfilePendingReviewBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Card(
+        color: semanticColors.warning.withValues(alpha: 0.1),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, color: semanticColors.warning),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.profilePendingReviewBannerTitle,
+                      style: TextStyle(color: semanticColors.warning, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(l10n.profilePendingReviewBannerMessage),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

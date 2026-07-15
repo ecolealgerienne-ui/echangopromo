@@ -37,8 +37,8 @@ import { typeOrmBaseOptions } from './data-source';
       autoLoadEntities: true,
     }),
     ScheduleModule.forRoot(),
-    // Limite globale par défaut ; les endpoints sensibles (login, claim
-    // commerçant, signalement) ont une limite plus stricte via @Throttle()
+    // Limite globale par défaut ; les endpoints sensibles (login,
+    // inscription commerçant, signalement) ont une limite plus stricte via @Throttle()
     // (specs d'audit sécurité — @nestjs/throttler n'était pas installé du tout).
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     // AppLinksController (App Links/Universal Links, host

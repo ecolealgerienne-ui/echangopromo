@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import '../../domain/enums/categorie.dart';
 import '../../domain/models/agent.dart';
 import '../../domain/models/commercant.dart';
-import '../../domain/models/commune_commerce.dart';
 
 class AgentApi {
   AgentApi(this._dio);
@@ -22,17 +21,13 @@ class AgentApi {
     return Agent.fromJson(response.data!);
   }
 
-  Future<List<CommuneCommerce>> communesCommerces() async {
-    final response = await _dio.get<List<dynamic>>('/agent/communes/commerces');
-    return response.data!.map((e) => CommuneCommerce.fromJson(e as Map<String, dynamic>)).toList();
-  }
-
   Future<Commercant> createCommercant({
     required String telephone,
     required String nom,
     String? adresse,
     required Categorie categorie,
     required String communeId,
+    required String pin,
     String? photoKey,
     double? latitude,
     double? longitude,
@@ -43,6 +38,7 @@ class AgentApi {
       if (adresse != null && adresse.isNotEmpty) 'adresse': adresse,
       'categorie': categorie.value,
       'communeId': communeId,
+      'pin': pin,
       if (photoKey != null) 'photoKey': photoKey,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,

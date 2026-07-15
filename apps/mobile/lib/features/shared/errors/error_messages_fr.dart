@@ -11,7 +11,8 @@
 /// Volontairement absents de ce mapping : `VALIDATION_ERROR` (message par
 /// champ, dynamique, déjà en français côté backend) et les codes dont le
 /// message backend interpole une valeur (`PROMO_DATE_FIN_EXCEEDS_MAX`,
-/// `PROMO_ACTIVE_CAP_REACHED`) — un mapping statique leur ferait perdre
+/// `PROMO_ACTIVE_CAP_REACHED`, `PROMO_DAILY_CREATION_CAP_REACHED`,
+/// `PROMO_REPUBLISH_TOO_SOON`) — un mapping statique leur ferait perdre
 /// cette valeur. Pour ces codes, [ApiException.displayMessage] retombe sur
 /// le message backend brut.
 const Map<String, String> errorMessagesFr = {
@@ -25,7 +26,6 @@ const Map<String, String> errorMessagesFr = {
 
   'AGENT_EMAIL_TAKEN': 'Cet email est déjà utilisé par un agent.',
   'AGENT_NOT_FOUND': 'Agent introuvable.',
-  'AGENT_NO_COMMUNE_ASSIGNED': "Cet agent n'est rattaché à aucune commune.",
   'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT':
       "Au moins une de ces communes n'est pas actuellement assignée à cet agent.",
 
@@ -37,6 +37,7 @@ const Map<String, String> errorMessagesFr = {
 
   'STORAGE_INVALID_IMAGE': "Le fichier envoyé n'est pas une image valide. Réessayez avec une photo.",
   'STORAGE_FILE_TOO_LARGE': 'La photo est trop volumineuse. Réessayez avec une autre photo.',
+  'STORAGE_PURPOSE_NOT_ALLOWED': "Ce type d'upload n'est pas autorisé pour ce compte.",
 
   'PROMO_NOT_FOUND': 'Promotion introuvable.',
   'PROMO_NOT_OWNED_BY_COMMERCANT': "Cette promotion n'appartient pas à ce commerçant.",
@@ -48,11 +49,15 @@ const Map<String, String> errorMessagesFr = {
 
   'COMMERCANT_PHONE_TAKEN': 'Ce numéro de téléphone est déjà enregistré.',
   'COMMERCANT_NOT_FOUND': 'Commerçant introuvable.',
-  'COMMERCANT_PIN_ALREADY_SET':
-      'Un PIN est déjà défini pour ce numéro — contactez un administrateur pour le réinitialiser.',
+  'COMMERCANT_OLD_PIN_MISMATCH': "L'ancien PIN ne correspond pas.",
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'Aucune demande de vérification en attente.',
   'COMMERCANT_NOT_IN_AGENT_COMMUNES': "Ce commerçant n'est dans aucune des communes de cet agent.",
   'COMMERCANT_TERMS_NOT_ACCEPTED': "Vous devez accepter les conditions d'utilisation pour créer un compte.",
+  'COMMERCANT_REGISTRE_NOT_VALIDATED':
+      "Votre registre de commerce doit être validé par un administrateur avant de pouvoir publier des promos.",
+  'COMMERCANT_REGISTRE_KEY_MISMATCH': "Ce document n'appartient pas à ce commerçant.",
+  'COMMERCANT_PROFILE_PENDING_REVIEW':
+      'Les modifications de votre profil doivent être validées par un administrateur avant de pouvoir publier des promos.',
 
   'RATE_LIMITED': 'Trop de tentatives. Réessayez dans quelques instants.',
   'HTTP_ERROR': 'Une erreur est survenue.',

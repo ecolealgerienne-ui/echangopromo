@@ -141,7 +141,7 @@ class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScr
             token: token,
             fetchId: () async => (await api.me()).id,
           );
-      if (mounted) context.push('/agent/communes');
+      if (mounted) context.push('/agent/dashboard');
     } catch (error) {
       _showError(error);
     } finally {
@@ -228,7 +228,7 @@ class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScr
                 decoration: const InputDecoration(labelText: 'PIN'),
                 keyboardType: TextInputType.number,
                 obscureText: true,
-                maxLength: 6,
+                maxLength: 12,
               ),
             ],
           ),

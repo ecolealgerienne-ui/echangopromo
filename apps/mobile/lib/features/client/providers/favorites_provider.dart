@@ -7,12 +7,12 @@ class FavoritesController extends StateNotifier<Set<String>> {
 
   final FavoritesStore _store;
 
-  Future<void> toggle(String commercantId) async {
-    await _store.toggle(commercantId);
+  Future<void> toggle(String promoId) async {
+    await _store.toggle(promoId);
     state = _store.getAll();
   }
 
-  bool isFavorite(String commercantId) => state.contains(commercantId);
+  bool isFavorite(String promoId) => state.contains(promoId);
 }
 
 final favoritesProvider = StateNotifierProvider<FavoritesController, Set<String>>(

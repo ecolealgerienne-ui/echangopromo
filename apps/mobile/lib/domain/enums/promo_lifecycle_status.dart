@@ -4,7 +4,8 @@ enum PromoLifecycleStatus {
   brouillon('brouillon'),
   publiee('publiee'),
   arretee('arretee'),
-  expiree('expiree');
+  expiree('expiree'),
+  supprimee('supprimee');
 
   const PromoLifecycleStatus(this.value);
 

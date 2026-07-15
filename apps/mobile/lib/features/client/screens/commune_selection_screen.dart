@@ -2,16 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../shared/widgets/commune_cascade_field.dart';
+import '../../shared/widgets/api_error_text.dart';
+import '../../shared/widgets/commune_multi_select_field.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../providers/commune_providers.dart';
 
 /// Demandée au premier lancement, modifiable à tout moment (specs §3.1).
-/// Sélection guidée wilaya → commune (comme côté commerçant/agent) plutôt
-/// qu'une liste plate — ne change rien au pilote Djelfa (une seule wilaya)
-/// mais prépare l'extension multi-wilaya sans reprendre l'écran. Le choix
-/// reste stocké en local (`SelectedCommuneStore`) et donc réutilisé aux
-/// prochains lancements, comme avant.
+/// Sélection multi-communes (décision produit 2026-07-12, jusqu'à
+/// [kMaxSelectedCommunes]) : dans les grandes villes les communes sont
+/// accolées, une promo dans l'une intéresse un client dans la voisine. Écran
+/// dédié + bouton de confirmation explicite (pas d'application en direct à
+/// chaque coche) : ce filtre part en requête serveur, contrairement au
+/// filtre favoris/tri qui reste local.
 class CommuneSelectionScreen extends ConsumerStatefulWidget {
   const CommuneSelectionScreen({super.key});
 
@@ -20,18 +22,18 @@ class CommuneSelectionScreen extends ConsumerStatefulWidget {
 }
 
 class _CommuneSelectionScreenState extends ConsumerState<CommuneSelectionScreen> {
-  String? _selectedCommuneId;
+  late Set<String> _selectedCommuneIds;
 
   @override
   void initState() {
     super.initState();
     // Pré-remplit avec le choix déjà enregistré en local, s'il existe.
-    _selectedCommuneId = ref.read(selectedCommuneProvider);
+    _selectedCommuneIds = ref.read(selectedCommunesProvider).toSet();
   }
 
   Future<void> _confirm() async {
-    if (_selectedCommuneId == null) return;
-    await ref.read(selectedCommuneProvider.notifier).select(_selectedCommuneId!);
+    if (_selectedCommuneIds.isEmpty) return;
+    await ref.read(selectedCommunesProvider.notifier).select(_selectedCommuneIds.toList());
     if (mounted) context.go('/');
   }
 
@@ -49,18 +51,29 @@ class _CommuneSelectionScreenState extends ConsumerState<CommuneSelectionScreen>
         padding: const EdgeInsets.all(16),
         child: communesAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
+          error: (error, _) => Center(child: ApiErrorText(error)),
           data: (communes) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              CommuneCascadeField(
-                communes: communes,
-                selectedCommuneId: _selectedCommuneId,
-                onChanged: (id) => setState(() => _selectedCommuneId = id),
+              Text(
+                l10n.maxCommunesHint(kMaxSelectedCommunes),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: CommuneMultiSelectField(
+                    communes: communes,
+                    selectedCommuneIds: _selectedCommuneIds,
+                    maxSelection: kMaxSelectedCommunes,
+                    constrainListHeight: false,
+                    onChanged: (ids) => setState(() => _selectedCommuneIds = ids),
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
               FilledButton(
-                onPressed: _selectedCommuneId == null ? null : _confirm,
+                onPressed: _selectedCommuneIds.isEmpty ? null : _confirm,
                 child: Text(l10n.commonConfirm),
               ),
             ],

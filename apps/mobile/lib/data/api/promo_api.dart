@@ -2,12 +2,36 @@ import 'package:dio/dio.dart';
 import '../../domain/enums/categorie.dart';
 import '../../domain/models/promo.dart';
 
-/// Le backend pagine désormais `/promo` et `/promo/me/all` (`{items, total,
-/// page, limit}`) — le pilote (un seul quartier) reste largement sous cette
-/// taille de page, donc on récupère une seule page généreuse plutôt que de
-/// construire un vrai défilement infini pour l'instant. À revoir quand le
-/// volume de promos actives approchera `_pageSize`.
+/// Le backend pagine `/promo` et `/promo/me/all` (`{items, total, page,
+/// limit}`). `listMine()` reste une page unique généreuse (plafond métier de
+/// 5 promos actives par commerçant, jamais approché).
 const _pageSize = 100;
+
+/// `listActive()` pagine réellement côté mobile via bouton "Afficher plus"
+/// (retour terrain 2026-07-14 : grosses communes type Djelfa dépassant cette
+/// taille en promos actives simultanées).
+const _activePageSize = 50;
+
+/// Miroir mobile de `PaginatedResult<T>` (backend) pour `listActive()`.
+class PaginatedPromos {
+  PaginatedPromos({required this.items, required this.total, required this.page, required this.limit});
+
+  factory PaginatedPromos.fromJson(Map<String, dynamic> json) => PaginatedPromos(
+        items: (json['items'] as List<dynamic>)
+            .map((e) => Promo.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        total: json['total'] as int,
+        page: json['page'] as int,
+        limit: json['limit'] as int,
+      );
+
+  final List<Promo> items;
+  final int total;
+  final int page;
+  final int limit;
+
+  bool get hasMore => page * limit < total;
+}
 
 class PromoApi {
   PromoApi(this._dio);
@@ -15,21 +39,23 @@ class PromoApi {
   final Dio _dio;
 
   /// Liste des promos actives (specs §3.1) : favoris d'abord, puis
-  /// expiration la plus proche — tri appliqué côté backend.
-  Future<List<Promo>> listActive({
-    String? communeId,
+  /// expiration la plus proche — tri appliqué côté backend. `page` permet le
+  /// chargement incrémental ("Afficher plus" côté écran client).
+  Future<PaginatedPromos> listActive({
+    List<String> communeIds = const [],
     Categorie? categorie,
     List<String> favoriteIds = const [],
+    int page = 1,
   }) async {
     final query = <String, dynamic>{
-      if (communeId != null) 'communeId': communeId,
+      if (communeIds.isNotEmpty) 'communeIds': communeIds.join(','),
       if (categorie != null) 'categorie': categorie.value,
       if (favoriteIds.isNotEmpty) 'favoriteIds': favoriteIds.join(','),
-      'limit': _pageSize,
+      'page': page,
+      'limit': _activePageSize,
     };
     final response = await _dio.get<Map<String, dynamic>>('/promo', queryParameters: query);
-    final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => Promo.fromJson(e as Map<String, dynamic>)).toList();
+    return PaginatedPromos.fromJson(response.data!);
   }
 
   Future<Promo> detail(String id) async {
@@ -42,13 +68,13 @@ class PromoApi {
     required double prixAvant,
     required double prixApres,
     required Categorie categorie,
-    required String photoKey,
+    required List<String> photoKeys,
     DateTime? dateFin,
     bool asDraft = false,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/promo',
-      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKey, dateFin, asDraft),
+      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKeys, dateFin, asDraft),
     );
     return Promo.fromJson(response.data!);
   }
@@ -59,13 +85,13 @@ class PromoApi {
     required double prixAvant,
     required double prixApres,
     required Categorie categorie,
-    required String photoKey,
+    required List<String> photoKeys,
     DateTime? dateFin,
     bool asDraft = false,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/promo/agent/$commercantId',
-      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKey, dateFin, asDraft),
+      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKeys, dateFin, asDraft),
     );
     return Promo.fromJson(response.data!);
   }
@@ -85,14 +111,14 @@ class PromoApi {
     double? prixAvant,
     double? prixApres,
     Categorie? categorie,
-    String? photoKey,
+    List<String>? photoKeys,
   }) async {
     await _dio.patch<void>('/promo/$id', data: {
       if (description != null) 'description': description,
       if (prixAvant != null) 'prixAvant': prixAvant,
       if (prixApres != null) 'prixApres': prixApres,
       if (categorie != null) 'categorie': categorie.value,
-      if (photoKey != null) 'photoKey': photoKey,
+      if (photoKeys != null) 'photoKeys': photoKeys,
     });
   }
 
@@ -112,7 +138,7 @@ class PromoApi {
     double prixAvant,
     double prixApres,
     Categorie categorie,
-    String photoKey,
+    List<String> photoKeys,
     DateTime? dateFin,
     bool asDraft,
   ) =>
@@ -121,7 +147,7 @@ class PromoApi {
         'prixAvant': prixAvant,
         'prixApres': prixApres,
         'categorie': categorie.value,
-        'photoKey': photoKey,
+        'photoKeys': photoKeys,
         if (dateFin != null) 'dateFin': dateFin.toIso8601String(),
         if (asDraft) 'asDraft': asDraft,
       };

@@ -1,20 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../app/theme.dart';
 import '../../../data/api/api_exception.dart';
+import '../../../domain/enums/registre_status.dart';
+import '../../../domain/models/auth_session.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/l10n/enum_labels.dart';
+import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/status_chip.dart';
+import '../widgets/commune_filter_bar.dart';
 
 final _commercantSearchProvider = StateProvider.autoDispose<String>((ref) => '');
 
+/// Filtre "en attente de validation registre" — remplace l'ancienne file
+/// dédiée (`/admin/registre`, retirée le 2026-07-11), la fiche commerçant
+/// affiche désormais le registre et permet de le valider/rejeter.
+final _registrePendingFilterProvider = StateProvider.autoDispose<bool>((ref) => false);
+
+/// Filtre commune/wilaya (retour terrain 2026-07-14), en plus de la recherche.
+final _wilayaFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
+final _communeFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
+
+/// Même pattern que `ModerationQueueScreen._inFlightProvider` (audit UX 2026-07-11).
+final _inFlightProvider = StateProvider.autoDispose<Set<String>>((ref) => {});
+
 final _commercantsProvider = FutureProvider.autoDispose((ref) {
   final search = ref.watch(_commercantSearchProvider);
-  return ref.watch(adminApiProvider).listCommercants(search: search);
+  final pendingOnly = ref.watch(_registrePendingFilterProvider);
+  final wilaya = ref.watch(_wilayaFilterProvider);
+  final communeId = ref.watch(_communeFilterProvider);
+  return ref.watch(adminApiProvider).listCommercants(
+        search: search,
+        registreStatus: pendingOnly ? RegistreStatus.enAttente : null,
+        wilaya: wilaya,
+        communeId: communeId,
+      );
 });
 
 /// Liste + recherche sur l'ensemble des commerçants (plan de correction,
-/// Phase 2) — jusqu'ici seule la file registre (en attente) était
-/// consultable côté admin.
+/// Phase 2), avec filtre "en attente de validation registre".
 class AdminCommercantsScreen extends ConsumerWidget {
   const AdminCommercantsScreen({super.key});
 
@@ -32,15 +60,53 @@ class AdminCommercantsScreen extends ConsumerWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    await _act(context, ref, () => ref.read(adminApiProvider).suspendCommercant(commercantId));
+    await _act(
+      context,
+      ref,
+      commercantId,
+      () => ref.read(adminApiProvider).suspendCommercant(commercantId),
+    );
+  }
+
+  /// Suppression logique par l'admin/agent (2026-07-14) — distincte de la
+  /// suspension : libère le numéro de téléphone et "supprime" les promos,
+  /// pas de restauration prévue (contrairement à la suspension).
+  Future<void> _confirmAndDelete(BuildContext context, WidgetRef ref, String commercantId) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.deleteCommercantConfirmTitle),
+        content: Text(l10n.deleteCommercantConfirmMessage),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.commonCancel)),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              l10n.deleteCommercantLabel,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await _act(
+      context,
+      ref,
+      commercantId,
+      () => ref.read(adminApiProvider).deleteCommercant(commercantId),
+    );
   }
 
   Future<void> _act(
     BuildContext context,
     WidgetRef ref,
+    String commercantId,
     Future<void> Function() action,
   ) async {
     final l10n = AppLocalizations.of(context)!;
+    ref.read(_inFlightProvider.notifier).update((ids) => {...ids, commercantId});
     try {
       await action();
       ref.invalidate(_commercantsProvider);
@@ -56,6 +122,8 @@ class AdminCommercantsScreen extends ConsumerWidget {
           ),
         );
       }
+    } finally {
+      ref.read(_inFlightProvider.notifier).update((ids) => {...ids}..remove(commercantId));
     }
   }
 
@@ -63,16 +131,36 @@ class AdminCommercantsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final commercantsAsync = ref.watch(_commercantsProvider);
+    final pendingOnly = ref.watch(_registrePendingFilterProvider);
+    final inFlight = ref.watch(_inFlightProvider);
+    // Même pattern que AdminPromosScreen/ModerationQueueScreen (écran
+    // partagé admin/agent, décision produit 2026-07-12).
+    final role = ref.read(authControllerProvider).value?.role;
+    final detailPath = role == AppRole.agent ? '/agent/commercants/detail' : '/admin/commercants/detail';
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.commercantsLabel),
         actions: const [LanguageSwitcherButton()],
       ),
+      // Création de commerçant réservée à l'agent (specs §3.2/§3.3, jamais
+      // l'admin) — seul point d'entrée vers /agent/commercant/new depuis la
+      // suppression de CommuneCommercesScreen (écran de tournée retiré
+      // 2026-07-12, statut jamais visité/à jour/à relancer abandonné).
+      floatingActionButton: role == AppRole.agent
+          ? FloatingActionButton.extended(
+              icon: const Icon(Icons.add_business_outlined),
+              label: Text(l10n.newCommercantLabel),
+              onPressed: () async {
+                final created = await context.push<bool>('/agent/commercant/new');
+                if (created == true) ref.invalidate(_commercantsProvider);
+              },
+            )
+          : null,
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
             child: TextField(
               decoration: InputDecoration(
                 hintText: l10n.searchHint,
@@ -83,10 +171,30 @@ class AdminCommercantsScreen extends ConsumerWidget {
               onChanged: (value) => ref.read(_commercantSearchProvider.notifier).state = value,
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            child: CommuneFilterBar(
+              wilaya: ref.watch(_wilayaFilterProvider),
+              communeId: ref.watch(_communeFilterProvider),
+              onWilayaChanged: (value) => ref.read(_wilayaFilterProvider.notifier).state = value,
+              onCommuneChanged: (value) => ref.read(_communeFilterProvider.notifier).state = value,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: FilterChip(
+                label: Text(l10n.pendingRegistreFilterLabel),
+                selected: pendingOnly,
+                onSelected: (v) => ref.read(_registrePendingFilterProvider.notifier).state = v,
+              ),
+            ),
+          ),
           Expanded(
             child: commercantsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
+              error: (error, _) => Center(child: ApiErrorText(error)),
               data: (items) {
                 if (items.isEmpty) {
                   return Center(child: Text(l10n.noCommercantsFound));
@@ -98,24 +206,91 @@ class AdminCommercantsScreen extends ConsumerWidget {
                     itemBuilder: (context, index) {
                       final item = items[index];
                       return ListTile(
+                        onTap: () async {
+                          final changed = await context.push<bool>(detailPath, extra: item);
+                          if (changed == true) ref.invalidate(_commercantsProvider);
+                        },
                         title: Text(item.nom),
-                        subtitle: Text(item.telephone),
-                        trailing: item.suspended
-                            ? TextButton(
-                                onPressed: () => _act(
-                                  context,
-                                  ref,
-                                  () => ref.read(adminApiProvider).reactivateCommercant(item.id),
+                        // Statut visible d'un coup d'œil dans la liste — avant, seul
+                        // "en attente" avait un indicateur, "validé"/"rejeté"/"suspendu"
+                        // n'étaient visibles qu'en ouvrant la fiche détail (retour terrain
+                        // 2026-07-12).
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(item.telephone),
+                              if (item.registreStatus != null)
+                                StatusChip(
+                                  label: registreStatusLabel(context, item.registreStatus!),
+                                  color: registreStatusColor(context, item.registreStatus!),
                                 ),
-                                child: Text(l10n.reactivateLabel),
+                              if (item.suspended)
+                                StatusChip(
+                                  label: l10n.suspendedBadge,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              if (item.deleted)
+                                StatusChip(
+                                  label: l10n.deletedBadge,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              if (item.profilePendingReview)
+                                StatusChip(
+                                  label: l10n.profilePendingReviewBadgeLabel,
+                                  color: Theme.of(context).extension<AppSemanticColors>()!.warning,
+                                ),
+                            ],
+                          ),
+                        ),
+                        isThreeLine: item.registreStatus != null ||
+                            item.suspended ||
+                            item.deleted ||
+                            item.profilePendingReview,
+                        trailing: inFlight.contains(item.id)
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
                               )
-                            : TextButton(
-                                onPressed: () => _confirmAndSuspend(context, ref, item.id),
-                                child: Text(l10n.suspendLabel),
-                              ),
-                        leading: item.suspended
-                            ? const Icon(Icons.block, color: Colors.red)
-                            : const Icon(Icons.storefront_outlined),
+                            : item.deleted
+                                ? null
+                                : PopupMenuButton<String>(
+                                    onSelected: (action) {
+                                      switch (action) {
+                                        case 'suspend':
+                                          _confirmAndSuspend(context, ref, item.id);
+                                        case 'reactivate':
+                                          _act(
+                                            context,
+                                            ref,
+                                            item.id,
+                                            () => ref
+                                                .read(adminApiProvider)
+                                                .reactivateCommercant(item.id),
+                                          );
+                                        case 'delete':
+                                          _confirmAndDelete(context, ref, item.id);
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      item.suspended
+                                          ? PopupMenuItem(
+                                              value: 'reactivate', child: Text(l10n.reactivateLabel))
+                                          : PopupMenuItem(
+                                              value: 'suspend', child: Text(l10n.suspendLabel)),
+                                      PopupMenuItem(
+                                          value: 'delete', child: Text(l10n.deleteCommercantLabel)),
+                                    ],
+                                  ),
+                        leading: item.deleted
+                            ? Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error)
+                            : item.suspended
+                                ? Icon(Icons.block, color: Theme.of(context).colorScheme.error)
+                                : const Icon(Icons.storefront_outlined),
                       );
                     },
                   ),

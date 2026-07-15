@@ -9,7 +9,6 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../config/env.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/report_reason.dart';
@@ -18,7 +17,12 @@ import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
+import '../../shared/utils/maps_launcher.dart';
+import '../../shared/utils/phone_launcher.dart';
+import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/promo_photo_hero.dart';
+import '../../shared/widgets/promo_price_row.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/promo_providers.dart';
 
@@ -41,20 +45,19 @@ class PromoDetailScreen extends ConsumerWidget {
       ),
       body: promoAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
+        error: (error, _) => Center(child: ApiErrorText(error)),
         data: (promo) {
           final favorites = ref.watch(favoritesProvider);
           final isFavorite = favorites.contains(promo.id);
-          final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
           final dateFormat = DateFormat('dd/MM/yyyy');
 
           return ListView(
             children: [
-              if (promo.photoUrl != null)
-                AspectRatio(
-                  aspectRatio: 4 / 3,
-                  child: CachedNetworkImage(imageUrl: promo.photoUrl!, fit: BoxFit.cover),
-                ),
+              PromoPhotoHero(
+                photoUrls: promo.photoUrls,
+                prixAvant: promo.prixAvant,
+                prixApres: promo.prixApres,
+              ),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -73,29 +76,14 @@ class PromoDetailScreen extends ConsumerWidget {
                         ),
                         IconButton(
                           icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
+                          tooltip: isFavorite ? l10n.removeFavoriteTooltip : l10n.addFavoriteTooltip,
                           onPressed: () =>
                               ref.read(favoritesProvider.notifier).toggle(promo.id),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text(
-                          currency.format(promo.prixAvant),
-                          style: const TextStyle(
-                            decoration: TextDecoration.lineThrough,
-                            color: Colors.grey,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          currency.format(promo.prixApres),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-                        ),
-                      ],
-                    ),
+                    PromoPriceRow(prixAvant: promo.prixAvant, prixApres: promo.prixApres),
                     const SizedBox(height: 4),
                     if (promo.dateFin != null)
                       Text(l10n.validUntil(dateFormat.format(promo.dateFin!))),
@@ -229,7 +217,7 @@ class _CommercantInfo extends ConsumerWidget {
 
     return commercantAsync.when(
       loading: () => const SizedBox(height: 40, child: Center(child: CircularProgressIndicator())),
-      error: (error, _) => Text(l10n.commonError(error.toString())),
+      error: (error, _) => ApiErrorText(error),
       data: (commercant) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -243,6 +231,8 @@ class _CommercantInfo extends ConsumerWidget {
                     width: 48,
                     height: 48,
                     fit: BoxFit.cover,
+                    memCacheWidth: (48 * MediaQuery.of(context).devicePixelRatio).round(),
+                    memCacheHeight: (48 * MediaQuery.of(context).devicePixelRatio).round(),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -256,10 +246,41 @@ class _CommercantInfo extends ConsumerWidget {
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.place_outlined, size: 18, color: Colors.grey),
+                Icon(
+                  Icons.place_outlined,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
                 const SizedBox(width: 4),
                 Expanded(child: Text(commercant.adresse!)),
               ],
+            ),
+          ],
+          if (commercant.telephone != null && commercant.telephone!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Tooltip(
+              message: l10n.callTooltip,
+              child: InkWell(
+                onTap: () => callPhone(commercant.telephone!),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.phone_outlined,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      commercant.telephone!,
+                      style: TextStyle(
+                        decoration: TextDecoration.underline,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
           if (commercant.latitude != null && commercant.longitude != null) ...[
@@ -267,18 +288,11 @@ class _CommercantInfo extends ConsumerWidget {
             OutlinedButton.icon(
               icon: const Icon(Icons.directions_outlined),
               label: Text(l10n.itineraryButton),
-              onPressed: () => _openMaps(commercant.latitude!, commercant.longitude!),
+              onPressed: () => openMapsAt(commercant.latitude!, commercant.longitude!),
             ),
           ],
         ],
       ),
     );
-  }
-
-  Future<void> _openMaps(double latitude, double longitude) async {
-    final uri = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
-    );
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }

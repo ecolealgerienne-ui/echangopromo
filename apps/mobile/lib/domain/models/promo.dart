@@ -14,8 +14,12 @@ class Promo {
     required this.dateFin,
     required this.lifecycleStatus,
     required this.moderationStatus,
-    required this.photoUrl,
+    required this.photoUrls,
+    this.thumbnailUrl,
+    this.photoKeys,
     this.viewCount,
+    required this.createdAt,
+    this.publishedAt,
   });
 
   factory Promo.fromJson(Map<String, dynamic> json) => Promo(
@@ -29,8 +33,15 @@ class Promo {
         dateFin: json['dateFin'] != null ? DateTime.parse(json['dateFin'] as String) : null,
         lifecycleStatus: PromoLifecycleStatus.fromValue(json['lifecycleStatus'] as String),
         moderationStatus: PromoModerationStatus.fromValue(json['moderationStatus'] as String),
-        photoUrl: json['photoUrl'] as String?,
+        photoUrls: (json['photoUrls'] as List<dynamic>? ?? const [])
+            .map((e) => e as String)
+            .toList(),
+        thumbnailUrl: json['thumbnailUrl'] as String?,
+        photoKeys: (json['photoKeys'] as List<dynamic>?)?.map((e) => e as String).toList(),
         viewCount: json['viewCount'] as int?,
+        createdAt: DateTime.parse(json['createdAt'] as String),
+        publishedAt:
+            json['publishedAt'] != null ? DateTime.parse(json['publishedAt'] as String) : null,
       );
 
   final String id;
@@ -45,13 +56,47 @@ class Promo {
   final DateTime? dateFin;
   final PromoLifecycleStatus lifecycleStatus;
   final PromoModerationStatus moderationStatus;
-  final String? photoUrl;
+  final List<String> photoUrls;
+
+  /// Miniature (~240px) de la 1ère photo, générée côté serveur — à utiliser
+  /// pour toute vignette liste (`PromoCard`, `MyPromosScreen`...), jamais
+  /// pour la fiche détail (`PromoPhotoHero`, pleine résolution). Retombe
+  /// déjà sur la photo complète côté backend si la génération a échoué,
+  /// donc non-null dès qu'il y a au moins une photo.
+  final String? thumbnailUrl;
+
+  /// Clés S3 brutes, dans le même ordre que [photoUrls] — renseignées
+  /// uniquement par `GET /promo/me/all` (propriétaire authentifié), jamais
+  /// par la liste/fiche publique. Utilisées par l'écran d'édition pour
+  /// renvoyer les photos inchangées sans les réuploader (voir
+  /// `PromoFormScreen`) ; `null` partout ailleurs.
+  final List<String>? photoKeys;
   final int? viewCount;
+  final DateTime createdAt;
+
+  /// Horodatage de la (dernière) publication — posé uniquement par
+  /// `publish()` côté backend, distinct de [createdAt] (peut dater d'un
+  /// brouillon créé bien avant sa publication). `null` tant que la promo
+  /// n'a jamais été publiée (toujours en brouillon).
+  final DateTime? publishedAt;
+
+  /// Photo principale (première de [photoUrls]) — c'est la seule affichée en
+  /// liste/vignette, les écrans qui n'ont besoin que d'un aperçu unique
+  /// (`PromoCard`, `MyPromosScreen`...) n'ont donc rien à changer.
+  String? get photoUrl => photoUrls.isEmpty ? null : photoUrls.first;
 
   bool get isDraft => lifecycleStatus == PromoLifecycleStatus.brouillon;
   bool get isPublished => lifecycleStatus == PromoLifecycleStatus.publiee;
   bool get isStopped => lifecycleStatus == PromoLifecycleStatus.arretee;
+  bool get isDeleted => lifecycleStatus == PromoLifecycleStatus.supprimee;
   bool get isExpired =>
       lifecycleStatus == PromoLifecycleStatus.expiree ||
       (dateFin != null && dateFin!.isBefore(DateTime.now()));
+
+  /// Même fenêtre que `PromoService.notifyExpiringSoonCron` côté backend —
+  /// une seule définition de "bientôt" dans tout le produit.
+  bool get isExpiringSoon =>
+      !isExpired && dateFin != null && dateFin!.isBefore(DateTime.now().add(const Duration(hours: 24)));
+
+  double get discountPercent => (prixAvant - prixApres) / prixAvant * 100;
 }

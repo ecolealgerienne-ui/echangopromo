@@ -19,7 +19,7 @@ import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
 import { DeviceId } from '../common/decorators/device-id.decorator';
 import { StorageService } from '../storage/storage.service';
 import { CommercantService } from './commercant.service';
-import { ClaimCommercantDto } from './dto/claim-commercant.dto';
+import { ChangeCommercantPinDto } from './dto/change-commercant-pin.dto';
 import { Commercant } from './entities/commercant.entity';
 import { LoginCommercantDto } from './dto/login-commercant.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
@@ -44,20 +44,6 @@ export class CommercantController {
   @Post('register')
   async register(@Body() dto: RegisterCommercantDto) {
     const commercant = await this.commercantService.selfRegister(dto);
-    return {
-      accessToken: this.authService.issueToken(
-        commercant.id,
-        'commercant',
-        commercant.tokenVersion,
-      ),
-    };
-  }
-
-  /** Active un compte créé par un agent (ou réinitialisé par l'admin) — pas d'OTP. */
-  @Throttle(STRICT_THROTTLE)
-  @Post('claim')
-  async claim(@Body() dto: ClaimCommercantDto) {
-    const commercant = await this.commercantService.claim(dto);
     return {
       accessToken: this.authService.issueToken(
         commercant.id,
@@ -94,6 +80,11 @@ export class CommercantController {
       adresse: commercant.adresse,
       categorie: commercant.categorie,
       communeId: commercant.communeId,
+      // Ajouté 2026-07-12 : le client a besoin d'appeler le commerçant
+      // depuis la fiche promo (tap-pour-appeler), pas seulement de voir son
+      // adresse — jusqu'ici omis de cette réponse publique (contrairement à
+      // `toMeJson`), pas une décision de confidentialité documentée.
+      telephone: commercant.telephone,
       photoUrl: this.photoUrl(commercant),
       latitude: commercant.latitude,
       longitude: commercant.longitude,
@@ -111,6 +102,7 @@ export class CommercantController {
       accountState: commercant.accountState,
       originVerification: commercant.originVerification,
       registreStatus: commercant.registreStatus,
+      profilePendingReview: commercant.profilePendingReview,
       photoUrl: this.photoUrl(commercant),
       latitude: commercant.latitude,
       longitude: commercant.longitude,
@@ -136,6 +128,26 @@ export class CommercantController {
   ) {
     const commercant = await this.commercantService.updateProfile(user.sub, dto);
     return this.toMeJson(commercant);
+  }
+
+  /**
+   * Le commerçant connaît encore son PIN actuel et veut le changer — libre-
+   * service (décision produit 2026-07-13 : contrairement au flux "PIN
+   * oublié", pas besoin de passer par un admin/agent quand on a déjà la
+   * preuve de possession du PIN en main). Incrémente `tokenVersion` côté
+   * service, donc le token courant devient invalide juste après cet appel —
+   * le mobile déconnecte et renvoie vers l'écran de connexion.
+   */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('commercant')
+  @Patch('me/pin')
+  async changeMyPin(
+    @CurrentUser() user: AuthTokenPayload,
+    @Body() dto: ChangeCommercantPinDto,
+  ) {
+    await this.commercantService.changePin(user.sub, dto.oldPin, dto.newPin);
+    return { ok: true };
   }
 
   /**

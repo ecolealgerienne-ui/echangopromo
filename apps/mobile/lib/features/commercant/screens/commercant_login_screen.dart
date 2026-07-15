@@ -83,90 +83,6 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
     }
   }
 
-  /// Active un compte créé par un agent : pas d'OTP, le commerçant définit
-  /// directement son PIN pour le numéro que l'agent a enregistré (specs §3.2/§3.3).
-  Future<void> _claim(BuildContext context) async {
-    final l10n = AppLocalizations.of(context)!;
-    final telephoneController = TextEditingController();
-    final pinController = TextEditingController();
-    final pinConfirmController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    final result = await showDialog<(String, String)>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.setMyPinTitle),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: telephoneController,
-                decoration: InputDecoration(labelText: l10n.telephoneLabel, hintText: l10n.telephoneHint),
-                keyboardType: TextInputType.phone,
-                validator: (v) => (v == null || v.isEmpty) ? l10n.telephoneRequired : null,
-              ),
-              TextFormField(
-                controller: pinController,
-                decoration: InputDecoration(labelText: l10n.newPinLabel),
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                maxLength: 6,
-                validator: validatePin(context),
-              ),
-              TextFormField(
-                controller: pinConfirmController,
-                decoration: InputDecoration(labelText: l10n.confirmPinLabel),
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                maxLength: 6,
-                validator: (v) => (v != pinController.text) ? l10n.pinMismatch : null,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(l10n.commonCancel)),
-          FilledButton(
-            onPressed: () {
-              if (!formKey.currentState!.validate()) return;
-              Navigator.pop(
-                context,
-                (telephoneController.text.trim(), pinController.text.trim()),
-              );
-            },
-            child: Text(l10n.commonConfirm),
-          ),
-        ],
-      ),
-    );
-
-    if (result == null || result.$1.isEmpty || result.$2.isEmpty || !context.mounted) return;
-
-    try {
-      final api = ref.read(commercantApiProvider);
-      final token = await api.claim(telephone: result.$1, pin: result.$2);
-      await ref.read(authControllerProvider.notifier).loginThenResolveId(
-            role: AppRole.commercant,
-            token: token,
-            fetchId: () async => (await api.me()).id,
-          );
-      if (context.mounted) context.go('/commercant/dashboard');
-    } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(extractApiErrorMessage(
-              error,
-              fallback: l10n.activationFailed,
-              locale: Localizations.localeOf(context),
-            )),
-          ),
-        );
-      }
-    }
-  }
-
   void _showForgotPinInfo(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     showDialog<void>(
@@ -213,10 +129,13 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
                 decoration: InputDecoration(labelText: _isAdminMode ? l10n.passwordLabel : l10n.pinLabel),
                 keyboardType: _isAdminMode ? TextInputType.visiblePassword : TextInputType.number,
                 obscureText: true,
-                maxLength: _isAdminMode ? null : 6,
+                maxLength: _isAdminMode ? null : 12,
+                // Validateur permissif (4-12 chiffres) : un PIN valide fixé
+                // avant le relèvement du minimum à 6 (2026-07-13) doit
+                // rester utilisable pour se connecter.
                 validator: _isAdminMode
                     ? (v) => (v == null || v.length < 8) ? l10n.passwordRequired : null
-                    : validatePin(context),
+                    : validateExistingPin(context),
               ),
               ErrorText(_error),
               const SizedBox(height: 16),
@@ -232,10 +151,6 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
                 TextButton(
                   onPressed: () => _showForgotPinInfo(context),
                   child: Text(l10n.forgotPin),
-                ),
-                TextButton(
-                  onPressed: () => _claim(context),
-                  child: Text(l10n.claimAccount),
                 ),
               ],
               // TEMPORAIRE — accès à l'écran de test de changement de

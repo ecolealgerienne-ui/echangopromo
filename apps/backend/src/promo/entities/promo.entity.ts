@@ -18,12 +18,21 @@ import { Commercant } from '../../commercant/entities/commercant.entity';
  * combiner cycle de vie et modération dans un seul enum, leçon tirée d'un
  * bug réel de comptage avant ce projet). Le commerçant peut éditer une promo
  * quel que soit son statut ici.
+ *
+ * `SUPPRIMEE` (2026-07-14) : cascade posée par `CommercantService` quand le
+ * commerçant lui-même OU l'admin/agent supprime le compte
+ * (`deleteAccount`/`deleteCommercant`) — distincte d'`ARRETEE` (arrêt
+ * volontaire d'une promo précise par le commerçant, compte toujours actif)
+ * pour ne pas mélanger deux causes différentes dans une même valeur. Jamais
+ * assignée par une suspension de compte, qui repasse les promos en
+ * `BROUILLON` (réversible) plutôt que `SUPPRIMEE` (définitif).
  */
 export enum PromoLifecycleStatus {
   BROUILLON = 'brouillon',
   PUBLIEE = 'publiee',
   ARRETEE = 'arretee',
   EXPIREE = 'expiree',
+  SUPPRIMEE = 'supprimee',
 }
 
 /**
@@ -77,18 +86,48 @@ export class Promo {
   categorie: Categorie;
 
   /**
-   * Clé de l'objet S3 (voir docs/ARCHITECTURE.md — structure de bucket).
-   * Jamais exposée au client : pour les promos créées par un agent, cette
-   * clé contient l'UUID de l'agent (pas du commerçant) — fuite d'identifiant
-   * interne évitable. Le contrôleur expose `photoUrl` à la place.
+   * Clés des objets S3, jusqu'à 3, ordonnées (voir docs/ARCHITECTURE.md —
+   * structure de bucket ; décision produit 2026-07-12, une seule photo ne
+   * suffit pas à juger un produit). Jamais exposées publiquement : pour les
+   * promos créées par un agent, ces clés contiennent l'UUID de l'agent (pas
+   * du commerçant) — fuite d'identifiant interne évitable. Le contrôleur
+   * expose `photoUrls` à la place, et ne réexpose les clés brutes que sur
+   * `GET /promo/me/all` (propriétaire authentifié uniquement) pour permettre
+   * l'édition sans réuploader les photos inchangées.
    */
   @Exclude()
-  @Column()
-  photoKey: string;
+  @Column('text', { array: true })
+  photoKeys: string[];
+
+  /**
+   * Miniature (~240px) générée côté serveur à partir de la 1ère photo
+   * uniquement (décision produit 2026-07-12 — seule la photo principale
+   * sert de vignette dans les listes, les photos 2/3 ne sont jamais
+   * affichées en petit). `null` si la génération a échoué (best-effort,
+   * ne bloque jamais la création/édition — voir
+   * `PromoService.tryGenerateThumbnail`) : le contrôleur retombe alors sur
+   * la photo complète.
+   */
+  @Exclude()
+  @Column({ type: 'varchar', nullable: true })
+  thumbnailKey: string | null;
 
   /** Null tant que la promo est en `brouillon` — fixée à la publication. */
   @Column({ type: 'timestamptz', nullable: true })
   dateFin: Date | null;
+
+  /**
+   * Horodatage de la (dernière) publication — posé/rafraîchi uniquement par
+   * `PromoService.publish()` (2026-07-14). Distinct de `createdAt` (peut
+   * dater d'un brouillon créé bien avant sa publication) et d'`updatedAt`
+   * (écrasé par toute modification ultérieure : édition, arrêt, résolution
+   * de modération...) — seule source fiable pour trier "nouveautés" côté
+   * client. Une republication (promo arrêtée/expirée republiée) le
+   * rafraîchit à nouveau : c'est un geste de publication à part entière,
+   * pas une simple prolongation.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  publishedAt: Date | null;
 
   @Column({
     type: 'enum',

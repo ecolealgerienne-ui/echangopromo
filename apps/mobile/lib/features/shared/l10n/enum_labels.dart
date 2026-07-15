@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../app/theme.dart';
 import '../../../domain/enums/audit_actor_type.dart';
 import '../../../domain/enums/categorie.dart';
+import '../../../domain/enums/commercant_origin_verification.dart';
 import '../../../domain/enums/promo_lifecycle_status.dart';
+import '../../../domain/enums/promo_moderation_status.dart';
+import '../../../domain/enums/registre_status.dart';
 import '../../../domain/enums/report_reason.dart';
 import '../../../l10n/app_localizations.dart';
 
@@ -40,22 +44,97 @@ String promoLifecycleLabel(BuildContext context, PromoLifecycleStatus status, {r
       return l10n.lifecycleStopped;
     case PromoLifecycleStatus.expiree:
       return l10n.lifecycleExpired;
+    case PromoLifecycleStatus.supprimee:
+      return l10n.lifecycleDeleted;
   }
 }
 
-/// Couleur du badge de statut affiché dans "Mes promos" — indépendante de
-/// la localisation du texte, juste un repère visuel rapide.
-Color promoLifecycleColor(PromoLifecycleStatus status, {required bool isExpired}) {
-  if (isExpired) return Colors.grey;
+/// Couleur du badge de statut affiché dans "Mes promos" — dérivée du thème
+/// (`AppSemanticColors`/`colorScheme`) pour rester calibrée en mode sombre,
+/// plutôt que des `Colors.*` fixes (audit design 2026-07-11).
+Color promoLifecycleColor(BuildContext context, PromoLifecycleStatus status, {required bool isExpired}) {
+  final colorScheme = Theme.of(context).colorScheme;
+  if (isExpired) return colorScheme.onSurfaceVariant;
+  final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
   switch (status) {
     case PromoLifecycleStatus.brouillon:
-      return Colors.blueGrey;
+      return colorScheme.onSurfaceVariant;
     case PromoLifecycleStatus.publiee:
-      return Colors.green;
+      return semanticColors.success;
     case PromoLifecycleStatus.arretee:
-      return Colors.orange;
+      return semanticColors.warning;
     case PromoLifecycleStatus.expiree:
-      return Colors.grey;
+      return colorScheme.onSurfaceVariant;
+    case PromoLifecycleStatus.supprimee:
+      return colorScheme.error;
+  }
+}
+
+String moderationStatusLabel(BuildContext context, PromoModerationStatus status) {
+  final l10n = AppLocalizations.of(context)!;
+  switch (status) {
+    case PromoModerationStatus.normale:
+      return l10n.moderationNormale;
+    case PromoModerationStatus.signalee:
+      return l10n.moderationSignalee;
+    case PromoModerationStatus.masquee:
+      return l10n.moderationMasquee;
+    case PromoModerationStatus.verifieeOk:
+      return l10n.moderationVerifieeOk;
+  }
+}
+
+/// Couleur du badge de statut de modération — même logique dérivée du
+/// thème que `promoLifecycleColor`.
+Color moderationStatusColor(BuildContext context, PromoModerationStatus status) {
+  final colorScheme = Theme.of(context).colorScheme;
+  final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
+  switch (status) {
+    case PromoModerationStatus.normale:
+      return semanticColors.success;
+    case PromoModerationStatus.signalee:
+      return semanticColors.warning;
+    case PromoModerationStatus.masquee:
+      return colorScheme.error;
+    case PromoModerationStatus.verifieeOk:
+      return colorScheme.onSurfaceVariant;
+  }
+}
+
+String commercantOriginVerificationLabel(
+  BuildContext context,
+  CommercantOriginVerification origin,
+) {
+  final l10n = AppLocalizations.of(context)!;
+  switch (origin) {
+    case CommercantOriginVerification.autoInscrit:
+      return l10n.originAutoInscrit;
+    case CommercantOriginVerification.confirmeAgent:
+      return l10n.originConfirmeAgent;
+  }
+}
+
+String registreStatusLabel(BuildContext context, RegistreStatus status) {
+  final l10n = AppLocalizations.of(context)!;
+  switch (status) {
+    case RegistreStatus.enAttente:
+      return l10n.registreStatusEnAttente;
+    case RegistreStatus.valide:
+      return l10n.registreStatusValide;
+    case RegistreStatus.rejete:
+      return l10n.registreStatusRejete;
+  }
+}
+
+Color registreStatusColor(BuildContext context, RegistreStatus status) {
+  final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
+  switch (status) {
+    case RegistreStatus.enAttente:
+      return semanticColors.warning;
+    case RegistreStatus.valide:
+      return semanticColors.success;
+    case RegistreStatus.rejete:
+      return Theme.of(context).colorScheme.error;
   }
 }
 
@@ -92,19 +171,5 @@ String reportReasonLabel(BuildContext context, ReportReason reason) {
       return l10n.reportReasonPhotoTrompeuse;
     case ReportReason.autre:
       return l10n.reportReasonAutre;
-  }
-}
-
-String visitStatusLabel(BuildContext context, String visitStatus) {
-  final l10n = AppLocalizations.of(context)!;
-  switch (visitStatus) {
-    case 'jamais_visite':
-      return l10n.visitStatusNeverVisited;
-    case 'a_jour':
-      return l10n.visitStatusUpToDate;
-    case 'a_relancer':
-      return l10n.visitStatusToFollowUp;
-    default:
-      return visitStatus;
   }
 }

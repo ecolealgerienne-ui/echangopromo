@@ -27,7 +27,11 @@ class PhotoPickerField extends StatelessWidget {
   final String? existingImageUrl;
 
   Future<void> _pick(ImageSource source) async {
-    final picked = await ImagePicker().pickImage(source: source, imageQuality: 90);
+    // Pas de `imageQuality` ici : `StorageApi._compress` recompresse de
+    // toute façon par paliers jusqu'à la cible finale (~250 Ko) juste avant
+    // l'upload — un premier passage JPEG qualité 90 ici n'aurait fait que
+    // décoder/réencoder l'image pour rien.
+    final picked = await ImagePicker().pickImage(source: source);
     if (picked != null) onChanged(File(picked.path));
   }
 

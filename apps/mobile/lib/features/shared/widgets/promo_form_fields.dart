@@ -1,24 +1,21 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../l10n/app_localizations.dart';
 import 'category_dropdown.dart';
-import 'photo_picker_field.dart';
+import 'multi_photo_picker_field.dart';
 
 const promoDescriptionMaxLength = 140;
 
-/// Champs communs aux formulaires de promo (commerçant et agent) : photo,
+/// Champs communs aux formulaires de promo (commerçant et agent) : photos,
 /// description, prix avant/après, catégorie, et éventuellement la durée de
 /// validité — factorisé pour éviter la duplication entre
 /// `PromoFormScreen`/`AgentPromoFormScreen` (audit qualité de code).
 class PromoFormFields extends StatelessWidget {
   const PromoFormFields({
     super.key,
-    required this.photo,
-    required this.onPhotoChanged,
+    required this.photoItems,
+    required this.onPhotoItemsChanged,
     this.cameraOnly = false,
-    this.existingPhotoUrl,
     required this.descriptionController,
     required this.prixAvantController,
     required this.prixApresController,
@@ -30,13 +27,9 @@ class PromoFormFields extends StatelessWidget {
     this.maxDureeJours = 7,
   });
 
-  final File? photo;
-  final ValueChanged<File> onPhotoChanged;
+  final List<PhotoSlotItem> photoItems;
+  final ValueChanged<List<PhotoSlotItem>> onPhotoItemsChanged;
   final bool cameraOnly;
-
-  /// Photo déjà enregistrée (édition) — affichée tant qu'aucune nouvelle
-  /// photo locale n'a été choisie. Null en création (rien à afficher).
-  final String? existingPhotoUrl;
   final TextEditingController descriptionController;
   final TextEditingController prixAvantController;
   final TextEditingController prixApresController;
@@ -55,11 +48,10 @@ class PromoFormFields extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        PhotoPickerField(
-          file: photo,
+        MultiPhotoPickerField(
+          items: photoItems,
+          onChanged: onPhotoItemsChanged,
           cameraOnly: cameraOnly,
-          onChanged: onPhotoChanged,
-          existingImageUrl: existingPhotoUrl,
         ),
         const SizedBox(height: 16),
         TextFormField(

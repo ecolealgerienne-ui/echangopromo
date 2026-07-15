@@ -8,7 +8,9 @@ import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
+import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/status_chip.dart';
 
 final myPromosProvider = FutureProvider.autoDispose((ref) => ref.watch(promoApiProvider).listMine());
 
@@ -93,7 +95,7 @@ class MyPromosScreen extends ConsumerWidget {
       ),
       body: promosAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text(l10n.commonError(error.toString()))),
+        error: (error, _) => Center(child: ApiErrorText(error)),
         data: (promos) {
           if (promos.isEmpty) {
             return Center(child: Text(l10n.noPromosYet));
@@ -113,33 +115,32 @@ class MyPromosScreen extends ConsumerWidget {
                         ? l10n.untilDate(dateFormat.format(promo.dateFin!))
                         : l10n.notPublishedYet;
                     final statusColor = promoLifecycleColor(
+                      context,
                       promo.lifecycleStatus,
                       isExpired: promo.isExpired,
                     );
+                    // CircleAvatar par défaut : 40dp de diamètre — décodage
+                    // limité à cette taille plutôt qu'à la résolution
+                    // source de l'image.
+                    final avatarCachePx =
+                        (40 * MediaQuery.of(context).devicePixelRatio).round();
                     return ListTile(
                       leading: CircleAvatar(
-                        backgroundImage:
-                            promo.photoUrl != null ? CachedNetworkImageProvider(promo.photoUrl!) : null,
+                        backgroundImage: (promo.thumbnailUrl ?? promo.photoUrl) != null
+                            ? ResizeImage(
+                                CachedNetworkImageProvider((promo.thumbnailUrl ?? promo.photoUrl)!),
+                                width: avatarCachePx,
+                              )
+                            : null,
                       ),
                       title: Row(
                         children: [
                           Expanded(child: Text(promo.description, overflow: TextOverflow.ellipsis)),
                           const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: statusColor),
-                            ),
-                            child: Text(
-                              promoLifecycleLabel(context, promo.lifecycleStatus, isExpired: promo.isExpired),
-                              style: TextStyle(
-                                color: statusColor,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                          StatusChip(
+                            label: promoLifecycleLabel(context, promo.lifecycleStatus,
+                                isExpired: promo.isExpired),
+                            color: statusColor,
                           ),
                         ],
                       ),

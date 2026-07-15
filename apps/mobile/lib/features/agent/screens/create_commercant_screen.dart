@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../shared/validators/pin_validator.dart';
 import '../../shared/widgets/commercant_fields_form.dart';
 import '../../shared/widgets/error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
@@ -13,9 +14,10 @@ import '../../shared/widgets/loading_button.dart';
 import '../../../providers/core_providers.dart';
 
 /// Création assistée par l'agent (specs §3.2, voie 2) : numéro de
-/// téléphone, nom, adresse, catégorie. Le commerçant active lui-même son
-/// compte plus tard, sans OTP, en définissant son PIN depuis l'écran de
-/// connexion commerçant.
+/// téléphone, nom, adresse, catégorie. L'agent choisit aussi le PIN et le
+/// communique en personne au commerçant (décision produit 2026-07-13,
+/// remplace l'ancienne revendication publique par téléphone seul,
+/// exploitable par un tiers connaissant juste le numéro).
 class CreateCommercantScreen extends ConsumerStatefulWidget {
   const CreateCommercantScreen({super.key});
 
@@ -28,6 +30,8 @@ class _CreateCommercantScreenState extends ConsumerState<CreateCommercantScreen>
   final _telephoneController = TextEditingController();
   final _nomController = TextEditingController();
   final _adresseController = TextEditingController();
+  final _pinController = TextEditingController();
+  final _pinConfirmController = TextEditingController();
   Categorie? _categorie;
   String? _communeId;
   File? _photo;
@@ -41,6 +45,8 @@ class _CreateCommercantScreenState extends ConsumerState<CreateCommercantScreen>
     _telephoneController.dispose();
     _nomController.dispose();
     _adresseController.dispose();
+    _pinController.dispose();
+    _pinConfirmController.dispose();
     super.dispose();
   }
 
@@ -67,6 +73,7 @@ class _CreateCommercantScreenState extends ConsumerState<CreateCommercantScreen>
             adresse: _adresseController.text.trim(),
             categorie: _categorie!,
             communeId: _communeId!,
+            pin: _pinController.text.trim(),
             photoKey: photoKey,
             latitude: _latitude,
             longitude: _longitude,
@@ -141,6 +148,23 @@ class _CreateCommercantScreenState extends ConsumerState<CreateCommercantScreen>
                 onCategorieChanged: (v) => setState(() => _categorie = v),
                 communeId: _communeId,
                 onCommuneChanged: (v) => setState(() => _communeId = v),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _pinController,
+                decoration: InputDecoration(labelText: l10n.choosePinLabel),
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 12,
+                validator: validatePin(context),
+              ),
+              TextFormField(
+                controller: _pinConfirmController,
+                decoration: InputDecoration(labelText: l10n.confirmPinLabel),
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 12,
+                validator: (v) => (v != _pinController.text) ? l10n.pinMismatch : null,
               ),
               ErrorText(_error),
               const SizedBox(height: 16),

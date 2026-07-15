@@ -1,10 +1,10 @@
 import 'package:dio/dio.dart';
+import '../../domain/enums/registre_status.dart';
 import '../../domain/models/admin.dart';
 import '../../domain/models/admin_commercant_item.dart';
 import '../../domain/models/agent.dart';
 import '../../domain/models/audit_log_entry.dart';
 import '../../domain/models/moderation_item.dart';
-import '../../domain/models/registre_item.dart';
 
 /// Page unique généreuse plutôt qu'une vraie pagination UI — même décision
 /// que `PromoApi` (pilote un seul quartier, volume largement sous ce seuil).
@@ -28,22 +28,35 @@ class AdminApi {
     return Admin.fromJson(response.data!);
   }
 
-  Future<({int commercesActifs, int promosPubliees, int signalementsEnAttente})> dashboard() async {
+  Future<
+      ({
+        int commercesActifs,
+        int promosPubliees,
+        int signalementsEnAttente,
+        int registresEnAttente,
+        int profilsEnAttente,
+      })> dashboard() async {
     final response = await _dio.get<Map<String, dynamic>>('/admin/dashboard');
     final data = response.data!;
     return (
       commercesActifs: data['commercesActifs'] as int,
       promosPubliees: data['promosPubliees'] as int,
       signalementsEnAttente: data['signalementsEnAttente'] as int,
+      registresEnAttente: data['registresEnAttente'] as int,
+      profilsEnAttente: data['profilsEnAttente'] as int,
     );
   }
 
   // --- Modération ---
 
-  Future<List<ModerationItem>> moderationQueue() async {
+  Future<List<ModerationItem>> moderationQueue({String? communeId, String? wilaya}) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/moderation/queue',
-      queryParameters: {'limit': _pageSize},
+      queryParameters: {
+        'limit': _pageSize,
+        if (communeId != null) 'communeId': communeId,
+        if (wilaya != null) 'wilaya': wilaya,
+      },
     );
     final items = response.data!['items'] as List<dynamic>;
     return items.map((e) => ModerationItem.fromJson(e as Map<String, dynamic>)).toList();
@@ -64,10 +77,19 @@ class AdminApi {
   /// Vue globale de toutes les promos (plan de correction, Phase 2) — pas
   /// seulement celles ayant atteint le seuil de signalements, pour pouvoir
   /// masquer un contenu problématique repéré directement.
-  Future<List<ModerationItem>> listAllPromos({String? search}) async {
+  Future<List<ModerationItem>> listAllPromos({
+    String? search,
+    String? communeId,
+    String? wilaya,
+  }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/promo',
-      queryParameters: {'limit': _pageSize, if (search != null && search.isNotEmpty) 'search': search},
+      queryParameters: {
+        'limit': _pageSize,
+        if (search != null && search.isNotEmpty) 'search': search,
+        if (communeId != null) 'communeId': communeId,
+        if (wilaya != null) 'wilaya': wilaya,
+      },
     );
     final items = response.data!['items'] as List<dynamic>;
     return items.map((e) => ModerationItem.fromJson(e as Map<String, dynamic>)).toList();
@@ -75,10 +97,23 @@ class AdminApi {
 
   // --- Commerçants (plan de correction, Phase 2) ---
 
-  Future<List<AdminCommercantItem>> listCommercants({String? search}) async {
+  Future<List<AdminCommercantItem>> listCommercants({
+    String? search,
+    RegistreStatus? registreStatus,
+    bool? profilePendingReview,
+    String? communeId,
+    String? wilaya,
+  }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/commercant',
-      queryParameters: {'limit': _pageSize, if (search != null && search.isNotEmpty) 'search': search},
+      queryParameters: {
+        'limit': _pageSize,
+        if (search != null && search.isNotEmpty) 'search': search,
+        if (registreStatus != null) 'registreStatus': registreStatus.value,
+        if (profilePendingReview != null) 'profilePendingReview': profilePendingReview,
+        if (communeId != null) 'communeId': communeId,
+        if (wilaya != null) 'wilaya': wilaya,
+      },
     );
     final items = response.data!['items'] as List<dynamic>;
     return items.map((e) => AdminCommercantItem.fromJson(e as Map<String, dynamic>)).toList();
@@ -92,16 +127,13 @@ class AdminApi {
     await _dio.post<void>('/admin/commercant/$commercantId/reactivate');
   }
 
-  // --- Registre ---
-
-  Future<List<RegistreItem>> registreQueue() async {
-    final response = await _dio.get<Map<String, dynamic>>(
-      '/admin/commercant/registre/queue',
-      queryParameters: {'limit': _pageSize},
-    );
-    final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => RegistreItem.fromJson(e as Map<String, dynamic>)).toList();
+  /// Suppression logique (2026-07-14) — distincte de la suspension, libère
+  /// le numéro de téléphone et "supprime" les promos, pas de restauration.
+  Future<void> deleteCommercant(String commercantId) async {
+    await _dio.post<void>('/admin/commercant/$commercantId/delete');
   }
+
+  // --- Registre ---
 
   Future<void> validerRegistre(String commercantId) async {
     await _dio.post<void>('/admin/commercant/$commercantId/registre/valider');
@@ -111,8 +143,17 @@ class AdminApi {
     await _dio.post<void>('/admin/commercant/$commercantId/registre/rejeter');
   }
 
-  Future<void> resetPin(String commercantId) async {
-    await _dio.post<void>('/admin/commercant/$commercantId/reset-pin');
+  /// PIN vraiment oublié — fixe directement un nouveau PIN (décision produit
+  /// 2026-07-13), à communiquer au commerçant par téléphone.
+  Future<void> resetPin(String commercantId, String newPin) async {
+    await _dio.post<void>(
+      '/admin/commercant/$commercantId/reset-pin',
+      data: {'newPin': newPin},
+    );
+  }
+
+  Future<void> validerProfil(String commercantId) async {
+    await _dio.post<void>('/admin/commercant/$commercantId/profile/valider');
   }
 
   // --- Agents ---
@@ -147,6 +188,16 @@ class AdminApi {
 
   Future<void> revokeAgentToken(String agentId) async {
     await _dio.post<void>('/admin/agent/$agentId/revoke-token');
+  }
+
+  /// Mot de passe agent oublié/perdu — l'agent ne peut pas le changer
+  /// lui-même (décision produit 2026-07-14), seul l'admin fixe un nouveau
+  /// mot de passe, à communiquer de vive voix.
+  Future<void> resetAgentPassword(String agentId, String newPassword) async {
+    await _dio.post<void>(
+      '/admin/agent/$agentId/reset-password',
+      data: {'newPassword': newPassword},
+    );
   }
 
   Future<void> transferCommunes({
