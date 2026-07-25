@@ -192,10 +192,13 @@ Deux points à vérifier côté infra, quel que soit l'hébergeur choisi :
 | `IOS_TEAM_ID` | `apps/backend/.env` | developer.apple.com → Membership details |
 | `IOS_BUNDLE_ID` | `apps/backend/.env` | Le bundle id choisi à l'étape 0 |
 | `PLAY_STORE_URL` / `APP_STORE_URL` (mobile) | build mobile | `--dart-define=PLAY_STORE_URL=...` (voir `env.dart`) — un nouveau build est nécessaire, ces valeurs sont figées à la compilation |
+| `API_BASE_URL` (mobile) | build mobile | `--dart-define=API_BASE_URL=https://promo.echango.com` — **obligatoire** pour tout build de release, sans quoi l'app garde le défaut `http://localhost:3000` (`env.dart`) et ne fonctionne pour personne |
 
-Aucune de ces variables n'est requise pour démarrer le backend
+Aucune des variables backend n'est requise pour démarrer le backend
 aujourd'hui (contrairement à `JWT_SECRET`, validé au boot) — les
 renseigner active la fonctionnalité, ne pas les renseigner ne casse rien.
+`API_BASE_URL` côté mobile fait exception : sans elle, le build de
+release pointe vers `localhost` et l'app est inutilisable.
 
 ---
 
@@ -212,4 +215,5 @@ renseigner active la fonctionnalité, ne pas les renseigner ne casse rien.
 - [ ] DNS `promo.echango.com` configuré, reverse proxy transmet le header `Host`
 - [ ] Les 6 variables backend renseignées dans `.env` de prod
 - [ ] Mobile rebuild avec `--dart-define=PLAY_STORE_URL=...`/`APP_STORE_URL=...`
+- [ ] Mobile rebuild avec `--dart-define=API_BASE_URL=https://promo.echango.com` (sinon l'app pointe vers `localhost`)
 - [ ] Test réel : lien partagé → app installée → ouvre la fiche promo ; app absente → redirige vers le store
