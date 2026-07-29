@@ -25,6 +25,10 @@ import '../features/client/screens/commune_selection_screen.dart';
 import '../features/client/screens/map_screen.dart';
 import '../features/client/screens/promo_detail_screen.dart';
 import '../features/client/screens/promo_list_screen.dart';
+// Conservé volontairement : n'est plus référencé que par la redirection de
+// sélection de commune, désactivée temporairement plus bas. Le retirer
+// obligerait à le remettre au moment de réactiver.
+// ignore: unused_import
 import '../features/client/providers/commune_providers.dart';
 import '../features/commercant/screens/commercant_dashboard_screen.dart';
 import '../features/commercant/screens/commercant_login_screen.dart';
@@ -288,9 +292,24 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/onboarding';
       }
 
-      if (path == '/' && ref.read(selectedCommunesProvider).isEmpty) {
-        return '/select-commune';
-      }
+      // DÉSACTIVÉ TEMPORAIREMENT (2026-07-29, demande utilisateur) : la
+      // sélection de commune bloquait l'accès à l'accueil au premier
+      // lancement, juste après l'onboarding. L'écran et la route
+      // `/select-commune` restent en place et accessibles (le sélecteur de
+      // commune en tête de l'accueil y mène) — seule la redirection
+      // obligatoire est suspendue.
+      //
+      // Effet de bord à connaître : sans commune sélectionnée,
+      // `selectedCommunesProvider` est vide, donc `communeIds` n'est pas
+      // envoyé et le backend ne filtre pas — l'accueil affiche les promos
+      // de toutes les communes. Acceptable au volume du pilote, à
+      // réactiver avant l'extension multi-wilaya.
+      //
+      // Pour rétablir : décommenter le bloc ci-dessous.
+      //
+      // if (path == '/' && ref.read(selectedCommunesProvider).isEmpty) {
+      //   return '/select-commune';
+      // }
 
       // Points d'entrée par rôle : redirigent vers le dashboard si déjà
       // connecté avec ce rôle, sinon vers l'écran de connexion — distinct
