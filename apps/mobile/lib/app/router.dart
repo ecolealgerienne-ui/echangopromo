@@ -45,7 +45,7 @@ import '../features/onboarding/screens/splash_screen.dart';
 import '../features/shared/screens/legal_document_screen.dart';
 import '../features/shared/screens/notifications_screen.dart';
 import '../providers/auth_provider.dart';
-import '../providers/core_providers.dart';
+import 'launch_state.dart';
 
 /// Associe le rôle requis directement à la déclaration de route plutôt qu'à
 /// une liste de chemins protégés maintenue à part (audit règle #22) — un
@@ -284,11 +284,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       final session = authState.value;
       final path = state.matchedLocation;
 
-      // Onboarding de premier lancement. Comme la redirection commune
-      // juste en dessous, il n'intercepte que '/' : un lien profond
-      // (`/p/:id` partagé sur WhatsApp) ou un point d'entrée pro reste
-      // atteignable sans passer par le splash.
-      if (path == '/' && !ref.read(onboardingStoreProvider).isCompleted()) {
+      // Splash au lancement, puis onboarding s'il n'a jamais été fait.
+      // N'intercepte que '/' : un lien profond (`/p/:id` partagé sur
+      // WhatsApp) ou un point d'entrée pro reste atteignable directement,
+      // sans détour par le splash.
+      //
+      // L'état de l'onboarding n'est plus consulté ici mais dans le splash
+      // lui-même, qui décide de la suite (accueil ou choix du rôle) : c'est
+      // le seul endroit où l'animation est terminée.
+      if (path == '/' && !splashShownThisLaunch) {
         return '/onboarding';
       }
 

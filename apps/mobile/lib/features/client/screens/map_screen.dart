@@ -134,12 +134,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               onTap: (_, __) => setState(() => _selected = null),
             ),
             children: [
+              // Fond de carte volontairement minimal (CARTO Positron) plutôt
+              // que le rendu OpenStreetMap standard : celui-ci est très
+              // coloré et dense en détails (commerces, POI, routes
+              // hiérarchisées), au point que les pastilles de réduction s'y
+              // perdent. Un fond gris clair quasi blanc laisse le terracotta
+              // des marqueurs être la seule couleur forte de l'écran.
+              //
+              // Toujours sans clé API ni facturation, mais attribution
+              // obligatoire (CARTO + OpenStreetMap, ci-dessous).
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                // Exigé par la politique d'usage des tuiles OpenStreetMap :
-                // une requête sans identification applicative est bloquée.
+                urlTemplate:
+                    'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+                subdomains: const ['a', 'b', 'c', 'd'],
                 userAgentPackageName: 'com.echango.echango_promo',
-                maxNativeZoom: 19,
+                maxNativeZoom: 20,
               ),
               if (userPosition != null)
                 MarkerLayer(
@@ -170,6 +179,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               const RichAttributionWidget(
                 attributions: [
                   TextSourceAttribution('OpenStreetMap contributors'),
+                  TextSourceAttribution('CARTO'),
                 ],
               ),
             ],

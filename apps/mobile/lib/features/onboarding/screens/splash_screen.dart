@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/launch_state.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../providers/core_providers.dart';
 
-/// Écran d'ouverture animé. Le soulignement safran et le badge de réduction
-/// reprennent volontairement le langage visuel de l'affiche commerçant
-/// (support papier posé en vitrine) : l'app et l'affiche partagent la même
-/// signature, c'est ce qui fait reconnaître l'une depuis l'autre.
+/// Écran d'ouverture animé, affiché à chaque lancement à froid de l'app.
+///
+/// Le soulignement safran et le badge de réduction reprennent volontairement
+/// le langage visuel de l'affiche commerçant (support papier posé en
+/// vitrine) : l'app et l'affiche partagent la même signature, c'est ce qui
+/// fait reconnaître l'une depuis l'autre.
+///
+/// C'est ici, et pas dans la redirection du routeur, qu'on décide de la
+/// suite : l'onboarding n'a de sens qu'une fois l'animation terminée.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -55,7 +62,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // Petite pause une fois l'animation finie, pour que le splash reste
     // lisible plutôt que de disparaître à l'instant précis où il se termine.
     Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) context.go('/onboarding/role');
+      if (!mounted) return;
+      // Avant de naviguer : sans ça, la redirection du routeur renverrait
+      // aussitôt sur le splash puisqu'elle intercepte '/'.
+      markSplashShown();
+      final onboardingDone = ref.read(onboardingStoreProvider).isCompleted();
+      context.go(onboardingDone ? '/' : '/onboarding/role');
     });
   }
 
