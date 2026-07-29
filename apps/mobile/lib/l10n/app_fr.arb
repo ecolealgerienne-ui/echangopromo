@@ -317,5 +317,25 @@
   "mapBackToList": "Revenir à la liste",
   "mapNoActivePromo": "Aucune promo en cours dans ce commerce.",
   "mapLoadError": "Impossible de charger les promos de cette zone.",
-  "mapTooManyShops": "Trop de commerces dans cette zone — zoomez pour tous les voir."
+  "mapTooManyShops": "Trop de commerces dans cette zone — zoomez pour tous les voir.",
+
+  "searchPromoHint": "Une promo, un magasin…",
+  "searchClear": "Effacer la recherche",
+  "topPromosTitle": "Top promos",
+  "allPromosTitle": "Toutes les promos",
+  "promoCount": "{count, plural, =0{aucune} =1{1 promo} other{{count} promos}}",
+  "@promoCount": { "placeholders": { "count": { "type": "int" } } },
+  "noSearchResults": "Aucun résultat pour « {query} ».",
+  "@noSearchResults": { "placeholders": { "query": { "type": "String" } } },
+  "tabHome": "Accueil",
+  "tabMap": "Carte",
+  "tabFavorites": "Favoris",
+  "youSave": "Vous économisez {amount}",
+  "@youSave": { "placeholders": { "amount": { "type": "String" } } },
+  "endsToday": "Se termine aujourd'hui",
+  "endsTomorrow": "Se termine demain",
+  "endsInDays": "Se termine dans {days} jours",
+  "@endsInDays": { "placeholders": { "days": { "type": "int" } } },
+  "otherShopPromosTitle": "Autres promos du magasin",
+  "callButton": "Appeler"
 }

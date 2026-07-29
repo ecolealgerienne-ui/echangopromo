@@ -30,7 +30,7 @@ import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
 import { ListPromoAdminQueryDto } from './dto/list-promo-admin-query.dto';
 import { ListPromoMapQueryDto } from './dto/list-promo-map-query.dto';
-import { ListPromoQueryDto } from './dto/list-promo-query.dto';
+import { ListPromoQueryDto, PromoSortOrder } from './dto/list-promo-query.dto';
 import { UpdatePromoDto } from './dto/update-promo.dto';
 import { PromoView } from './entities/promo-view.entity';
 import {
@@ -362,6 +362,38 @@ export class PromoService {
       qb.andWhere('promo.categorie = :categorie', {
         categorie: query.categorie,
       });
+    }
+    if (query.commercantId) {
+      qb.andWhere('promo.commercantId = :commercantId', {
+        commercantId: query.commercantId,
+      });
+    }
+    if (query.search) {
+      // Même formulation que la recherche admin (`findAllForAdmin`) : la
+      // description de la promo ou le nom du commerce. Non indexé (ILIKE
+      // '%…%'), acceptable au volume du pilote — à revoir en trigrammes
+      // (pg_trgm) avant l'extension multi-wilaya.
+      qb.andWhere(
+        '(promo.description ILIKE :search OR commercant.nom ILIKE :search)',
+        { search: `%${query.search}%` },
+      );
+    }
+
+    // Tri "meilleures réductions" (bandeau Top promos de l'accueil) : la
+    // remise est recalculée en SQL, aucune colonne dérivée n'existe. Le
+    // garde-fou sur `prixAvant > 0` évite une division par zéro sur une
+    // ligne aberrante.
+    if (query.sort === PromoSortOrder.DISCOUNT) {
+      qb.addSelect(
+        `CASE WHEN promo."prixAvant" > 0
+              THEN (promo."prixAvant" - promo."prixApres") / promo."prixAvant"
+              ELSE 0 END`,
+        'discount_ratio',
+      ).orderBy('discount_ratio', 'DESC');
+      qb.addOrderBy('promo.publishedAt', 'DESC', 'NULLS LAST');
+      qb.skip((query.page - 1) * query.limit).take(query.limit);
+      const [items, total] = await qb.getManyAndCount();
+      return toPaginatedResult(items, total, query.page, query.limit);
     }
 
     if (query.favoriteIds?.length) {

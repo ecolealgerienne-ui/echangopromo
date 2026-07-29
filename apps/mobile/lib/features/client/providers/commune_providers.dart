@@ -28,3 +28,17 @@ final selectedCommunesProvider =
     StateNotifierProvider<SelectedCommunesController, List<String>>(
   (ref) => SelectedCommunesController(ref.watch(selectedCommuneStoreProvider)),
 );
+
+/// Libellé des communes sélectionnées, affiché en tête de l'accueil. Au-delà
+/// d'une commune on n'aligne pas les noms (la barre déborderait) : la
+/// première suivie du nombre de communes restantes. `null` tant que la liste
+/// des communes n'est pas chargée — l'appelant affiche alors un libellé
+/// générique plutôt qu'une chaîne vide.
+final selectedCommuneLabelProvider = Provider.autoDispose<String?>((ref) {
+  final ids = ref.watch(selectedCommunesProvider);
+  final communes = ref.watch(communeListProvider).valueOrNull;
+  if (ids.isEmpty || communes == null) return null;
+  final names = communes.where((commune) => ids.contains(commune.id)).map((c) => c.nom).toList();
+  if (names.isEmpty) return null;
+  return names.length == 1 ? names.first : '${names.first} +${names.length - 1}';
+});

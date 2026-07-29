@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/promo_api.dart';
 import '../../../domain/enums/categorie.dart';
+import '../../../domain/models/commercant.dart';
 import '../../../domain/models/promo.dart';
 import '../../../providers/core_providers.dart';
 import 'commune_providers.dart';
@@ -14,6 +15,11 @@ final categoryFilterProvider = StateProvider<Categorie?>((ref) => null);
 /// tri" (proposition 2026-07-11 : liste plutôt que grille, filtre par
 /// favoris/date).
 final favoritesOnlyFilterProvider = StateProvider.autoDispose<bool>((ref) => false);
+
+/// Texte saisi dans la barre de recherche de l'accueil (nom de promo ou de
+/// magasin). Envoyé au backend (`search`), pas filtré localement : filtrer
+/// côté client ne chercherait que dans les promos déjà chargées.
+final searchQueryProvider = StateProvider.autoDispose<String>((ref) => '');
 
 enum PromoSort { expireBientot, plusGrosseReduction, nouveautes }
 
@@ -74,10 +80,12 @@ class PromoListController extends StateNotifier<PromoListState> {
     required List<String> communeIds,
     required Categorie? categorie,
     required List<String> favoriteIds,
+    required String search,
   })  : _api = api,
         _communeIds = communeIds,
         _categorie = categorie,
         _favoriteIds = favoriteIds,
+        _search = search,
         super(const PromoListState(status: PromoListStatus.loading)) {
     _load();
   }
@@ -86,6 +94,7 @@ class PromoListController extends StateNotifier<PromoListState> {
   final List<String> _communeIds;
   final Categorie? _categorie;
   final List<String> _favoriteIds;
+  final String _search;
 
   Future<void> _load() async {
     state = const PromoListState(status: PromoListStatus.loading);
@@ -130,6 +139,7 @@ class PromoListController extends StateNotifier<PromoListState> {
         communeIds: _communeIds,
         categorie: _categorie,
         favoriteIds: _favoriteIds,
+        search: _search,
         page: page,
       );
 }
@@ -144,11 +154,13 @@ final promoListProvider = StateNotifierProvider.autoDispose<PromoListController,
   final communeIds = ref.watch(selectedCommunesProvider);
   final categorie = ref.watch(categoryFilterProvider);
   final favorites = ref.watch(favoritesProvider);
+  final search = ref.watch(searchQueryProvider);
   return PromoListController(
     api: api,
     communeIds: communeIds,
     categorie: categorie,
     favoriteIds: favorites.toList(),
+    search: search,
   );
 });
 
@@ -186,4 +198,40 @@ final visiblePromosProvider = Provider.autoDispose<List<Promo>>((ref) {
 final promoDetailProvider =
     FutureProvider.autoDispose.family<Promo, String>((ref, promoId) {
   return ref.watch(promoApiProvider).detail(promoId);
+});
+
+/// Bandeau "Top promos" de l'accueil : les plus fortes réductions de la
+/// commune, calculées par le backend (`sort=discount`). Un tri local ne
+/// donnerait que le meilleur de la page déjà chargée, pas le meilleur tout
+/// court. Volontairement indépendant de `promoListProvider` : ce bandeau ne
+/// suit ni la recherche ni la catégorie, il reste une vitrine stable.
+final topPromosProvider = FutureProvider.autoDispose<List<Promo>>((ref) async {
+  final communeIds = ref.watch(selectedCommunesProvider);
+  final result = await ref.watch(promoApiProvider).listActive(
+        communeIds: communeIds,
+        sort: PromoServerSort.discount,
+        limit: 8,
+      );
+  return result.items;
+});
+
+/// "Autres promos du magasin" sur la fiche promo. La promo consultée est
+/// retirée de la liste côté client : le backend n'a pas à connaître le
+/// contexte d'affichage pour ça.
+final shopPromosProvider =
+    FutureProvider.autoDispose.family<List<Promo>, ({String commercantId, String excludePromoId})>(
+        (ref, args) async {
+  final result = await ref.watch(promoApiProvider).listActive(
+        commercantId: args.commercantId,
+        limit: 10,
+      );
+  return result.items.where((promo) => promo.id != args.excludePromoId).toList();
+});
+
+/// Fiche publique du commerçant. Partagée entre la fiche promo et tout écran
+/// qui a besoin du téléphone ou de la position — évite qu'un second écran
+/// redéclare le même appel dans son propre fichier (règle d'audit #21).
+final commercantPublicProfileProvider =
+    FutureProvider.autoDispose.family<Commercant, String>((ref, commercantId) {
+  return ref.watch(commercantApiProvider).publicProfile(commercantId);
 });

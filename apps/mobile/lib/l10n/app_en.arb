@@ -301,5 +301,25 @@
   "mapBackToList": "Back to the list",
   "mapNoActivePromo": "No deal running at this shop right now.",
   "mapLoadError": "Couldn't load deals for this area.",
-  "mapTooManyShops": "Too many shops in this area — zoom in to see them all."
+  "mapTooManyShops": "Too many shops in this area — zoom in to see them all.",
+
+  "searchPromoHint": "A deal, a shop…",
+  "searchClear": "Clear search",
+  "topPromosTitle": "Top deals",
+  "allPromosTitle": "All deals",
+  "promoCount": "{count, plural, =0{none} =1{1 deal} other{{count} deals}}",
+  "@promoCount": { "placeholders": { "count": { "type": "int" } } },
+  "noSearchResults": "No results for \"{query}\".",
+  "@noSearchResults": { "placeholders": { "query": { "type": "String" } } },
+  "tabHome": "Home",
+  "tabMap": "Map",
+  "tabFavorites": "Favourites",
+  "youSave": "You save {amount}",
+  "@youSave": { "placeholders": { "amount": { "type": "String" } } },
+  "endsToday": "Ends today",
+  "endsTomorrow": "Ends tomorrow",
+  "endsInDays": "Ends in {days} days",
+  "@endsInDays": { "placeholders": { "days": { "type": "int" } } },
+  "otherShopPromosTitle": "Other deals from this shop",
+  "callButton": "Call"
 }

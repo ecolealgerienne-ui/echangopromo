@@ -5,10 +5,12 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../../app/theme.dart';
 import '../../../config/env.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/report_reason.dart';
@@ -20,14 +22,15 @@ import '../../shared/l10n/enum_labels.dart';
 import '../../shared/utils/maps_launcher.dart';
 import '../../shared/utils/phone_launcher.dart';
 import '../../shared/widgets/api_error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/promo_discount_badge.dart';
 import '../../shared/widgets/promo_photo_hero.dart';
-import '../../shared/widgets/promo_price_row.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/promo_providers.dart';
 
-/// Fiche promo (specs §3.1) : photo, description, prix avant/après, nom et
-/// adresse du commerçant, date de fin de validité, signalement.
+/// Fiche promo (specs §3.1). Écran de décision : il répond à « combien »,
+/// « jusqu'à quand » et « où » avant tout défilement, et garde l'appel et
+/// l'itinéraire fixés en bas — les deux seules actions qui font se déplacer
+/// un client n'ont pas à être cherchées.
 class PromoDetailScreen extends ConsumerWidget {
   const PromoDetailScreen({super.key, required this.promoId});
 
@@ -35,72 +38,17 @@ class PromoDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context)!;
     final promoAsync = ref.watch(promoDetailProvider(promoId));
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.promoDetailTitle),
-        actions: const [LanguageSwitcherButton()],
-      ),
       body: promoAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: ApiErrorText(error)),
-        data: (promo) {
-          final favorites = ref.watch(favoritesProvider);
-          final isFavorite = favorites.contains(promo.id);
-          final dateFormat = DateFormat('dd/MM/yyyy');
-
-          return ListView(
-            children: [
-              PromoPhotoHero(
-                photoUrls: promo.photoUrls,
-                prixAvant: promo.prixAvant,
-                prixApres: promo.prixApres,
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(promo.description, style: Theme.of(context).textTheme.headlineSmall),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.share_outlined),
-                          tooltip: l10n.shareTooltip,
-                          onPressed: () => _share(context, promo),
-                        ),
-                        IconButton(
-                          icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
-                          tooltip: isFavorite ? l10n.removeFavoriteTooltip : l10n.addFavoriteTooltip,
-                          onPressed: () =>
-                              ref.read(favoritesProvider.notifier).toggle(promo.id),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    PromoPriceRow(prixAvant: promo.prixAvant, prixApres: promo.prixApres),
-                    const SizedBox(height: 4),
-                    if (promo.dateFin != null)
-                      Text(l10n.validUntil(dateFormat.format(promo.dateFin!))),
-                    const Divider(height: 32),
-                    _CommercantInfo(commercantId: promo.commercantId),
-                    const SizedBox(height: 24),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.flag_outlined),
-                      label: Text(l10n.reportButton),
-                      onPressed: () => _report(context, ref),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
+        data: (promo) => _PromoDetailBody(
+          promo: promo,
+          onShare: () => _share(context, promo),
+          onReport: () => _report(context, ref),
+        ),
       ),
     );
   }
@@ -200,98 +148,512 @@ class PromoDetailScreen extends ConsumerWidget {
   }
 }
 
-final _commercantPublicProfileProvider =
-    FutureProvider.autoDispose.family<Commercant, String>((ref, commercantId) {
-  return ref.watch(commercantApiProvider).publicProfile(commercantId);
-});
+class _PromoDetailBody extends ConsumerWidget {
+  const _PromoDetailBody({
+    required this.promo,
+    required this.onShare,
+    required this.onReport,
+  });
 
-class _CommercantInfo extends ConsumerWidget {
-  const _CommercantInfo({required this.commercantId});
-
-  final String commercantId;
+  final Promo promo;
+  final VoidCallback onShare;
+  final VoidCallback onReport;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final commercantAsync = ref.watch(_commercantPublicProfileProvider(commercantId));
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final isFavorite = ref.watch(favoritesProvider).contains(promo.id);
+    final commercantAsync = ref.watch(commercantPublicProfileProvider(promo.commercantId));
+    final commercant = commercantAsync.valueOrNull;
 
-    return commercantAsync.when(
-      loading: () => const SizedBox(height: 40, child: Center(child: CircularProgressIndicator())),
-      error: (error, _) => ApiErrorText(error),
-      data: (commercant) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.zero,
             children: [
-              if (commercant.photoUrl != null) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: CachedNetworkImage(
-                    imageUrl: commercant.photoUrl!,
-                    width: 48,
-                    height: 48,
-                    fit: BoxFit.cover,
-                    memCacheWidth: (48 * MediaQuery.of(context).devicePixelRatio).round(),
-                    memCacheHeight: (48 * MediaQuery.of(context).devicePixelRatio).round(),
+              Stack(
+                children: [
+                  PromoPhotoHero(
+                    photoUrls: promo.photoUrls,
+                    prixAvant: promo.prixAvant,
+                    prixApres: promo.prixApres,
                   ),
-                ),
-                const SizedBox(width: 12),
-              ],
-              Expanded(
-                child: Text(commercant.nom, style: Theme.of(context).textTheme.titleMedium),
-              ),
-            ],
-          ),
-          if (commercant.adresse != null && commercant.adresse!.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(
-                  Icons.place_outlined,
-                  size: 18,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 4),
-                Expanded(child: Text(commercant.adresse!)),
-              ],
-            ),
-          ],
-          if (commercant.telephone != null && commercant.telephone!.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Tooltip(
-              message: l10n.callTooltip,
-              child: InkWell(
-                onTap: () => callPhone(commercant.telephone!),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.phone_outlined,
-                      size: 18,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      commercant.telephone!,
-                      style: TextStyle(
-                        decoration: TextDecoration.underline,
-                        color: Theme.of(context).colorScheme.primary,
+                  // Retour, partage et favori flottent sur la photo plutôt
+                  // que dans une AppBar : la photo garde toute sa hauteur.
+                  SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Row(
+                        children: [
+                          _GlassButton(
+                            icon: Icons.arrow_back,
+                            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                            onTap: () =>
+                                context.canPop() ? context.pop() : context.go('/'),
+                          ),
+                          const Spacer(),
+                          _GlassButton(
+                            icon: Icons.share_outlined,
+                            tooltip: l10n.shareTooltip,
+                            onTap: onShare,
+                          ),
+                          const SizedBox(width: 6),
+                          _GlassButton(
+                            icon: isFavorite ? Icons.favorite : Icons.favorite_border,
+                            tooltip: isFavorite
+                                ? l10n.removeFavoriteTooltip
+                                : l10n.addFavoriteTooltip,
+                            highlighted: isFavorite,
+                            onTap: () => ref.read(favoritesProvider.notifier).toggle(promo.id),
+                          ),
+                        ],
                       ),
                     ),
+                  ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(promo.description, style: textTheme.titleLarge),
+                    const SizedBox(height: 12),
+                    _PriceBlock(promo: promo),
+                    if (promo.dateFin != null) ...[
+                      const SizedBox(height: 12),
+                      _DeadlineChip(dateFin: promo.dateFin!),
+                    ],
+                    const Divider(height: 32),
+                    if (commercantAsync.hasError)
+                      ApiErrorText(commercantAsync.error!)
+                    else if (commercant == null)
+                      const SizedBox(
+                        height: 64,
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else
+                      _ShopCard(commercant: commercant),
+                    _OtherShopPromos(
+                      commercantId: promo.commercantId,
+                      excludePromoId: promo.id,
+                    ),
+                    // Le signalement reste en bas et en discret : nécessaire
+                    // à la modération, mais ce n'est pas ce qu'on vient faire
+                    // sur cette fiche.
+                    Center(
+                      child: TextButton.icon(
+                        icon: const Icon(Icons.flag_outlined, size: 18),
+                        label: Text(l10n.reportButton),
+                        style: TextButton.styleFrom(
+                          foregroundColor: colorScheme.onSurfaceVariant,
+                        ),
+                        onPressed: onReport,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),
+            ],
+          ),
+        ),
+        _ActionBar(commercant: commercant),
+      ],
+    );
+  }
+}
+
+class _GlassButton extends StatelessWidget {
+  const _GlassButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.highlighted = false,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool highlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: colorScheme.surface.withValues(alpha: 0.92),
+      shape: const CircleBorder(),
+      child: IconButton(
+        icon: Icon(icon, size: 20),
+        tooltip: tooltip,
+        color: highlighted ? colorScheme.primary : colorScheme.onSurface,
+        onPressed: onTap,
+        constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+        padding: EdgeInsets.zero,
+      ),
+    );
+  }
+}
+
+/// Prix barré, prix promo, puis l'économie **en dinars** : un montant parle
+/// plus qu'un pourcentage, lequel figure déjà sur la photo.
+class _PriceBlock extends StatelessWidget {
+  const _PriceBlock({required this.promo});
+
+  final Promo promo;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final l10n = AppLocalizations.of(context)!;
+    final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
+    final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
+    final saved = promo.prixAvant - promo.prixApres;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                currency.format(promo.prixAvant),
+                style: textTheme.bodyMedium?.copyWith(
+                  decoration: TextDecoration.lineThrough,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              Text(
+                currency.format(promo.prixApres),
+                style: textTheme.headlineMedium?.copyWith(color: colorScheme.primary),
+              ),
+            ],
+          ),
+        ),
+        if (saved > 0)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: semanticColors.success.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(AppRadii.pill),
             ),
-          ],
-          if (commercant.latitude != null && commercant.longitude != null) ...[
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.directions_outlined),
-              label: Text(l10n.itineraryButton),
-              onPressed: () => openMapsAt(commercant.latitude!, commercant.longitude!),
+            child: Text(
+              l10n.youSave(currency.format(saved)),
+              style: textTheme.labelMedium?.copyWith(
+                color: semanticColors.success,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ],
+          ),
+      ],
+    );
+  }
+}
+
+/// Échéance en durée relative plutôt qu'en date : « se termine demain » fait
+/// se déplacer aujourd'hui, « 30/07/2026 » demande un calcul mental.
+class _DeadlineChip extends StatelessWidget {
+  const _DeadlineChip({required this.dateFin});
+
+  final DateTime dateFin;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
+
+    // Comparaison sur les jours calendaires, pas sur 24h glissantes : une
+    // promo finissant ce soir à 23h et une autre demain à 1h ne doivent pas
+    // afficher la même chose.
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final endDay = DateTime(dateFin.year, dateFin.month, dateFin.day);
+    final days = endDay.difference(today).inDays;
+
+    final label = switch (days) {
+      <= 0 => l10n.endsToday,
+      1 => l10n.endsTomorrow,
+      _ => l10n.endsInDays(days),
+    };
+    final urgent = days <= 1;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: (urgent ? semanticColors.warning : colorScheme.onSurfaceVariant)
+            .withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(AppRadii.md),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.schedule,
+            size: 18,
+            color: urgent ? semanticColors.warning : colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              label,
+              style: textTheme.labelLarge?.copyWith(
+                color: urgent ? semanticColors.warning : colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _ShopCard extends StatelessWidget {
+  const _ShopCard({required this.commercant});
+
+  final Commercant commercant;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(AppRadii.lg),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          if (commercant.photoUrl != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadii.md),
+              child: CachedNetworkImage(
+                imageUrl: commercant.photoUrl!,
+                width: 46,
+                height: 46,
+                fit: BoxFit.cover,
+                errorWidget: (context, url, error) =>
+                    Container(color: colorScheme.surfaceContainerHighest),
+              ),
+            )
+          else
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadii.md),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [colorScheme.secondary, colorScheme.primary],
+                ),
+              ),
+              child: Icon(Icons.storefront, color: colorScheme.onPrimary, size: 22),
+            ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(commercant.nom, style: textTheme.titleSmall),
+                if (commercant.adresse != null && commercant.adresse!.isNotEmpty)
+                  Row(
+                    children: [
+                      Icon(Icons.place_outlined,
+                          size: 14, color: colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: Text(
+                          commercant.adresse!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.bodySmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// « Autres promos du magasin » — réutilise `GET /promo` avec un filtre
+/// `commercantId`, sans nouvel endpoint. Section absente s'il n'y en a pas.
+class _OtherShopPromos extends ConsumerWidget {
+  const _OtherShopPromos({required this.commercantId, required this.excludePromoId});
+
+  final String commercantId;
+  final String excludePromoId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final textTheme = Theme.of(context).textTheme;
+    final promos = ref
+            .watch(shopPromosProvider(
+                (commercantId: commercantId, excludePromoId: excludePromoId)))
+            .valueOrNull ??
+        const <Promo>[];
+    if (promos.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(height: 32),
+        Text(l10n.otherShopPromosTitle, style: textTheme.titleSmall),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 150,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: promos.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 10),
+            itemBuilder: (context, index) => _MiniPromoCard(promo: promos[index]),
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+}
+
+class _MiniPromoCard extends StatelessWidget {
+  const _MiniPromoCard({required this.promo});
+
+  final Promo promo;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
+    final photo =
+        promo.thumbnailUrl ?? (promo.photoUrls.isNotEmpty ? promo.photoUrls.first : null);
+
+    return SizedBox(
+      width: 132,
+      child: InkWell(
+        // `pushReplacement` : enchaîner les promos d'un même magasin ne doit
+        // pas empiler dix fiches dans l'historique de retour.
+        onTap: () => context.pushReplacement('/promo/${promo.id}'),
+        borderRadius: BorderRadius.circular(AppRadii.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadii.md),
+              child: Stack(
+                children: [
+                  SizedBox(
+                    height: 92,
+                    width: 132,
+                    child: photo == null
+                        ? Container(color: colorScheme.surfaceContainerHighest)
+                        : CachedNetworkImage(
+                            imageUrl: photo,
+                            fit: BoxFit.cover,
+                            errorWidget: (context, url, error) =>
+                                Container(color: colorScheme.surfaceContainerHighest),
+                          ),
+                  ),
+                  PositionedDirectional(
+                    top: 6,
+                    start: 6,
+                    child: PromoDiscountBadge(
+                      prixAvant: promo.prixAvant,
+                      prixApres: promo.prixApres,
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      textStyle: textTheme.labelSmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              promo.description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.bodySmall,
+            ),
+            Text(
+              currency.format(promo.prixApres),
+              style: textTheme.labelLarge?.copyWith(
+                color: colorScheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Appeler et Itinéraire, fixés en bas. Un bouton est désactivé plutôt que
+/// masqué quand la donnée manque : sa disparition ferait bouger l'autre
+/// d'une fiche à l'autre.
+class _ActionBar extends StatelessWidget {
+  const _ActionBar({required this.commercant});
+
+  final Commercant? commercant;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final telephone = commercant?.telephone;
+    final latitude = commercant?.latitude;
+    final longitude = commercant?.longitude;
+
+    return Material(
+      color: colorScheme.surface,
+      elevation: 3,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.phone),
+                  label: Text(l10n.callButton),
+                  onPressed: (telephone != null && telephone.isNotEmpty)
+                      ? () => callPhone(telephone)
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.directions_outlined),
+                  label: Text(l10n.itineraryButton),
+                  onPressed: (latitude != null && longitude != null)
+                      ? () => openMapsAt(latitude, longitude)
+                      : null,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

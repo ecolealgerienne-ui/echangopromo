@@ -301,5 +301,25 @@
   "mapBackToList": "العودة إلى القائمة",
   "mapNoActivePromo": "لا يوجد عرض جارٍ في هذا المحل حاليًا.",
   "mapLoadError": "تعذّر تحميل عروض هذه المنطقة.",
-  "mapTooManyShops": "عدد المحلات كبير في هذه المنطقة — قرّب الصورة لرؤيتها كلها."
+  "mapTooManyShops": "عدد المحلات كبير في هذه المنطقة — قرّب الصورة لرؤيتها كلها.",
+
+  "searchPromoHint": "عرض أو محل…",
+  "searchClear": "مسح البحث",
+  "topPromosTitle": "أفضل العروض",
+  "allPromosTitle": "كل العروض",
+  "promoCount": "{count, plural, =0{لا شيء} =1{عرض واحد} =2{عرضان} few{{count} عروض} many{{count} عرضًا} other{{count} عرض}}",
+  "@promoCount": { "placeholders": { "count": { "type": "int" } } },
+  "noSearchResults": "لا توجد نتائج لـ «{query}».",
+  "@noSearchResults": { "placeholders": { "query": { "type": "String" } } },
+  "tabHome": "الرئيسية",
+  "tabMap": "الخريطة",
+  "tabFavorites": "المفضلة",
+  "youSave": "توفّر {amount}",
+  "@youSave": { "placeholders": { "amount": { "type": "String" } } },
+  "endsToday": "ينتهي اليوم",
+  "endsTomorrow": "ينتهي غدًا",
+  "endsInDays": "ينتهي خلال {days} أيام",
+  "@endsInDays": { "placeholders": { "days": { "type": "int" } } },
+  "otherShopPromosTitle": "عروض أخرى من هذا المحل",
+  "callButton": "اتصال"
 }
