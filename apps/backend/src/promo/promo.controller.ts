@@ -23,6 +23,7 @@ import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
+import { ListPromoMapQueryDto } from './dto/list-promo-map-query.dto';
 import { ListPromoQueryDto } from './dto/list-promo-query.dto';
 import { UpdatePromoDto } from './dto/update-promo.dto';
 import { Promo, VISIBLE_MODERATION_STATUSES } from './entities/promo.entity';
@@ -106,6 +107,37 @@ export class PromoController {
   async list(@Query() query: ListPromoQueryDto) {
     const result = await this.promoService.findActiveForClient(query);
     return { ...result, items: result.items.map((promo) => this.toClientJson(promo)) };
+  }
+
+  /**
+   * Commerçants géolocalisés de la zone visible, avec leurs promos actives
+   * (écran carte). Le regroupement en "ronds" se calcule côté app à partir
+   * de ces positions — pas de clustering serveur, qui dépendrait du niveau
+   * de zoom et de la taille d'écran.
+   *
+   * DOIT rester déclaré avant `@Get(':id')` : `map` est un segment unique,
+   * il serait sinon capturé comme un identifiant de promo et répondrait
+   * `PROMO_NOT_FOUND` au lieu d'atteindre cette méthode.
+   */
+  @Get('map')
+  async map(@Query() query: ListPromoMapQueryDto) {
+    const { commercants, truncated } = await this.promoService.findActiveForMap(query);
+    return {
+      truncated,
+      items: commercants.map(({ commercant, promos }) => ({
+        id: commercant.id,
+        nom: commercant.nom,
+        categorie: commercant.categorie,
+        adresse: commercant.adresse,
+        telephone: commercant.telephone,
+        latitude: commercant.latitude,
+        longitude: commercant.longitude,
+        photoUrl: commercant.photoKey
+          ? this.storageService.buildPublicUrl(commercant.photoKey)
+          : null,
+        promos: promos.map((promo) => this.toClientJson(promo)),
+      })),
+    };
   }
 
   /**

@@ -1,0 +1,342 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
+import '../../../app/theme.dart';
+import '../../../domain/models/map_shop.dart';
+import '../../../l10n/app_localizations.dart';
+import '../providers/map_providers.dart';
+import '../utils/marker_cluster.dart';
+import '../widgets/map_shop_sheet.dart';
+
+/// Centre par défaut : Djelfa, le quartier pilote. Utilisé tant que la
+/// position de l'utilisateur n'est pas connue (localisation refusée ou pas
+/// encore obtenue) — une carte centrée sur l'océan serait inexploitable.
+const _fallbackCenter = LatLng(34.6703, 3.2630);
+const _initialZoom = 13.0;
+
+/// Au-delà de ce zoom, deux commerces distincts ne se chevauchent plus :
+/// inutile de continuer à les regrouper.
+const _maxClusterZoom = 17.0;
+
+/// Carte "autour de moi" : les commerces trop proches à l'écran sont
+/// regroupés en ronds qui se scindent au zoom, jusqu'aux points exacts.
+/// Un clic sur un rond zoome dessus ; un clic sur un point ouvre la fiche
+/// du commerçant.
+class MapScreen extends ConsumerStatefulWidget {
+  const MapScreen({super.key});
+
+  @override
+  ConsumerState<MapScreen> createState() => _MapScreenState();
+}
+
+class _MapScreenState extends ConsumerState<MapScreen> {
+  final MapController _map = MapController();
+
+  MapBounds? _bounds;
+  double _zoom = _initialZoom;
+  MapShop? _selected;
+
+  @override
+  void dispose() {
+    _map.dispose();
+    super.dispose();
+  }
+
+  /// Appelé à la fin de chaque déplacement/zoom : `MapCamera` n'est pas
+  /// disponible avant le premier rendu, d'où la mise à jour ici plutôt qu'en
+  /// `initState`.
+  void _onMapEvent(MapEvent event) {
+    final camera = event.camera;
+    final visible = camera.visibleBounds;
+    final next = MapBounds(
+      north: visible.north,
+      south: visible.south,
+      east: visible.east,
+      west: visible.west,
+    );
+    if (next == _bounds && camera.zoom == _zoom) return;
+    // Différé d'une frame : certains événements de la carte sont émis
+    // pendant la phase de layout (redimensionnement initial), et un
+    // `setState` synchrone y déclencherait "setState() called during build".
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _bounds = next;
+        _zoom = camera.zoom;
+      });
+    });
+  }
+
+  void _openCluster(ShopCluster cluster) {
+    if (cluster.isSingle) {
+      setState(() => _selected = cluster.single);
+      return;
+    }
+    // Un rond représente plusieurs commerces : il ne peut pas ouvrir une
+    // fiche, il zoome pour se scinder.
+    setState(() => _selected = null);
+    // `.clamp()` est déclaré sur `num` et renvoie `num` : sans `toDouble()`,
+    // le type ne passe pas sur `MapController.move(LatLng, double)`.
+    _map.move(cluster.center, (_zoom + 2).clamp(1.0, 18.0).toDouble());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final bounds = _bounds;
+    final shopsAsync =
+        bounds == null ? null : ref.watch(mapShopsProvider(bounds));
+
+    final shops = shopsAsync?.valueOrNull?.items ?? const <MapShop>[];
+    final clusters = clusterShops(
+      shops,
+      zoom: _zoom >= _maxClusterZoom ? _maxClusterZoom : _zoom,
+    );
+
+    return Scaffold(
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController: _map,
+            options: MapOptions(
+              initialCenter: _fallbackCenter,
+              initialZoom: _initialZoom,
+              maxZoom: 18,
+              minZoom: 5,
+              onMapEvent: _onMapEvent,
+              // Un clic hors marqueur referme la fiche, comme un retour.
+              onTap: (_, __) => setState(() => _selected = null),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                // Exigé par la politique d'usage des tuiles OpenStreetMap :
+                // une requête sans identification applicative est bloquée.
+                userAgentPackageName: 'com.echango.echango_promo',
+                maxNativeZoom: 19,
+              ),
+              MarkerLayer(
+                markers: [
+                  for (final cluster in clusters)
+                    Marker(
+                      point: cluster.center,
+                      width: cluster.isSingle ? 86 : 64,
+                      height: cluster.isSingle ? 40 : 64,
+                      child: _ClusterMarker(
+                        cluster: cluster,
+                        isSelected: cluster.isSingle && cluster.single.id == _selected?.id,
+                        onTap: () => _openCluster(cluster),
+                      ),
+                    ),
+                ],
+              ),
+              const RichAttributionWidget(
+                attributions: [
+                  TextSourceAttribution('OpenStreetMap contributors'),
+                ],
+              ),
+            ],
+          ),
+
+          // Barre du haut : retour à la liste.
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  _RoundButton(
+                    icon: Icons.arrow_back,
+                    tooltip: l10n.mapBackToList,
+                    onTap: () => context.go('/'),
+                  ),
+                  const Spacer(),
+                  if (shopsAsync?.isLoading ?? false)
+                    const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+
+          if (shopsAsync?.hasError ?? false)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 24,
+              child: _Banner(
+                message: l10n.mapLoadError,
+                color: colorScheme.errorContainer,
+                onColor: colorScheme.onErrorContainer,
+              ),
+            )
+          else if ((shopsAsync?.valueOrNull?.truncated ?? false) && _selected == null)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 24,
+              child: _Banner(
+                message: l10n.mapTooManyShops,
+                color: colorScheme.secondaryContainer,
+                onColor: colorScheme.onSecondaryContainer,
+              ),
+            ),
+
+          if (_selected != null)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: MapShopSheet(
+                shop: _selected!,
+                onPromoTap: (promo) => context.push('/promo/${promo.id}'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClusterMarker extends StatelessWidget {
+  const _ClusterMarker({
+    required this.cluster,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final ShopCluster cluster;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    if (cluster.isSingle) {
+      final discount = cluster.single.bestDiscountPercent;
+      return GestureDetector(
+        onTap: onTap,
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: isSelected ? colorScheme.onSurface : colorScheme.primary,
+              borderRadius: BorderRadius.circular(AppRadii.pill),
+              border: Border.all(color: colorScheme.onPrimary, width: 2.5),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.shadow.withValues(alpha: 0.3),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              discount != null ? '−$discount%' : cluster.single.nom,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.labelMedium?.copyWith(
+                color: colorScheme.onPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Le rond grossit avec le nombre de commerces qu'il regroupe — le halo
+    // reprend le code visuel universel du clustering cartographique.
+    final size = cluster.count >= 20 ? 60.0 : (cluster.count >= 8 ? 52.0 : 44.0);
+    return GestureDetector(
+      onTap: onTap,
+      child: Center(
+        child: Container(
+          width: size,
+          height: size,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: colorScheme.primary,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: colorScheme.primary.withValues(alpha: 0.28),
+                blurRadius: 0,
+                spreadRadius: 6,
+              ),
+              BoxShadow(
+                color: colorScheme.shadow.withValues(alpha: 0.28),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Text(
+            '${cluster.count}',
+            style: textTheme.titleMedium?.copyWith(
+              color: colorScheme.onPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoundButton extends StatelessWidget {
+  const _RoundButton({required this.icon, required this.tooltip, required this.onTap});
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: colorScheme.surface,
+      shape: const CircleBorder(),
+      elevation: 3,
+      child: IconButton(
+        onPressed: onTap,
+        icon: Icon(icon),
+        tooltip: tooltip,
+        color: colorScheme.onSurface,
+      ),
+    );
+  }
+}
+
+class _Banner extends StatelessWidget {
+  const _Banner({required this.message, required this.color, required this.onColor});
+
+  final String message;
+  final Color color;
+  final Color onColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color,
+      borderRadius: BorderRadius.circular(AppRadii.md),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: onColor),
+        ),
+      ),
+    );
+  }
+}

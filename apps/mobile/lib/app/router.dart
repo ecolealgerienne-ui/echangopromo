@@ -22,6 +22,7 @@ import '../features/agent/screens/agent_login_screen.dart';
 import '../features/agent/screens/agent_promo_form_screen.dart';
 import '../features/agent/screens/create_commercant_screen.dart';
 import '../features/client/screens/commune_selection_screen.dart';
+import '../features/client/screens/map_screen.dart';
 import '../features/client/screens/promo_detail_screen.dart';
 import '../features/client/screens/promo_list_screen.dart';
 import '../features/client/providers/commune_providers.dart';
@@ -67,6 +68,8 @@ Widget _unusedBuilder(BuildContext context, GoRouterState state) => const SizedB
 final _appRoutes = <_AppRoute>[
   _AppRoute('/', (context, state) => const PromoListScreen()),
   _AppRoute('/select-commune', (context, state) => const CommuneSelectionScreen()),
+  // Carte "autour de moi" — publique comme la liste : pas de compte client.
+  _AppRoute('/carte', (context, state) => const MapScreen()),
   // Premier lancement (splash → rôle → localisation). Publics : ces écrans
   // précèdent par nature toute authentification.
   _AppRoute('/onboarding', (context, state) => const SplashScreen()),

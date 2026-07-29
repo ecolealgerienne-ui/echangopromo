@@ -4,11 +4,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/core_providers.dart';
 
-/// Destination une fois la localisation accordée. L'écran carte « autour de
-/// moi » (flutter_map + OpenStreetMap) n'est pas encore construit : on
-/// retombe pour l'instant sur la liste des promos. Quand la carte existera,
-/// c'est cette seule constante qui change.
-const kDestinationWithLocation = '/';
+/// Destination une fois la localisation accordée : la carte « autour de
+/// moi », qui n'a d'intérêt qu'avec une position connue.
+const kDestinationWithLocation = '/carte';
 
 /// Destination quand la localisation est refusée ou reportée.
 const kDestinationWithoutLocation = '/';

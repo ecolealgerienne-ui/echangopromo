@@ -310,5 +310,12 @@
   "onboardingSecondChanceTitle": "Des promos tout autour de vous",
   "onboardingSecondChanceSubtitle": "Sans localisation, on ne peut pas trier par proximité — vous verrez toutes les promos de la commune.",
   "onboardingSecondChanceContinue": "Continuer sans",
-  "onboardingSecondChanceFine": "Vous pourrez l'activer à tout moment depuis les réglages."
+  "onboardingSecondChanceFine": "Vous pourrez l'activer à tout moment depuis les réglages.",
+
+  "mapDirections": "Itinéraire",
+  "mapCall": "Appeler",
+  "mapBackToList": "Revenir à la liste",
+  "mapNoActivePromo": "Aucune promo en cours dans ce commerce.",
+  "mapLoadError": "Impossible de charger les promos de cette zone.",
+  "mapTooManyShops": "Trop de commerces dans cette zone — zoomez pour tous les voir."
 }

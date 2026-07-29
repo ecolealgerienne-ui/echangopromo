@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../domain/enums/categorie.dart';
+import '../../domain/models/map_shop.dart';
 import '../../domain/models/promo.dart';
 
 /// Le backend pagine `/promo` et `/promo/me/all` (`{items, total, page,
@@ -56,6 +57,29 @@ class PromoApi {
     };
     final response = await _dio.get<Map<String, dynamic>>('/promo', queryParameters: query);
     return PaginatedPromos.fromJson(response.data!);
+  }
+
+  /// Commerçants géolocalisés de la zone visible de la carte, avec leurs
+  /// promos actives. Pas de pagination : on ne peut pas afficher "la page 2"
+  /// d'une carte — le backend plafonne et renvoie `truncated`.
+  Future<MapShopsResult> listForMap({
+    required double north,
+    required double south,
+    required double east,
+    required double west,
+    Categorie? categorie,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/promo/map',
+      queryParameters: <String, dynamic>{
+        'north': north,
+        'south': south,
+        'east': east,
+        'west': west,
+        if (categorie != null) 'categorie': categorie.value,
+      },
+    );
+    return MapShopsResult.fromJson(response.data!);
   }
 
   Future<Promo> detail(String id) async {

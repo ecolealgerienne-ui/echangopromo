@@ -294,5 +294,12 @@
   "onboardingSecondChanceTitle": "Deals all around you",
   "onboardingSecondChanceSubtitle": "Without location we can't sort by distance — you'll see every deal in the commune.",
   "onboardingSecondChanceContinue": "Continue without",
-  "onboardingSecondChanceFine": "You can turn it on at any time from settings."
+  "onboardingSecondChanceFine": "You can turn it on at any time from settings.",
+
+  "mapDirections": "Directions",
+  "mapCall": "Call",
+  "mapBackToList": "Back to the list",
+  "mapNoActivePromo": "No deal running at this shop right now.",
+  "mapLoadError": "Couldn't load deals for this area.",
+  "mapTooManyShops": "Too many shops in this area — zoom in to see them all."
 }

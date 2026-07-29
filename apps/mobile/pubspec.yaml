@@ -41,6 +41,15 @@ dependencies:
   geolocator: ^13.0.1
   url_launcher: ^6.3.0
 
+  # Carte "autour de moi" — tuiles OpenStreetMap, pour la même raison que
+  # geolocator : aucune clé API ni compte de facturation Google.
+  # Le regroupement des commerces en "ronds" est calculé dans
+  # `features/client/utils/marker_cluster.dart`, sans package de clustering
+  # supplémentaire : ceux-ci suivent avec retard les versions majeures de
+  # flutter_map et bloqueraient `flutter pub get` (règle d'audit #18).
+  flutter_map: ^7.0.0
+  latlong2: ^0.9.0
+
   # Compression avant upload — §5.8 des specs
   flutter_image_compress: ^2.3.0
   path_provider: ^2.1.3

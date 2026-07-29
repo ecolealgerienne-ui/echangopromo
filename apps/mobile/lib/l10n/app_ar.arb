@@ -294,5 +294,12 @@
   "onboardingSecondChanceTitle": "عروض في كل مكان حولك",
   "onboardingSecondChanceSubtitle": "بدون تحديد الموقع لا يمكننا الترتيب حسب القرب — سترى جميع عروض البلدية.",
   "onboardingSecondChanceContinue": "المتابعة بدون",
-  "onboardingSecondChanceFine": "يمكنك تفعيله في أي وقت من الإعدادات."
+  "onboardingSecondChanceFine": "يمكنك تفعيله في أي وقت من الإعدادات.",
+
+  "mapDirections": "الاتجاهات",
+  "mapCall": "اتصال",
+  "mapBackToList": "العودة إلى القائمة",
+  "mapNoActivePromo": "لا يوجد عرض جارٍ في هذا المحل حاليًا.",
+  "mapLoadError": "تعذّر تحميل عروض هذه المنطقة.",
+  "mapTooManyShops": "عدد المحلات كبير في هذه المنطقة — قرّب الصورة لرؤيتها كلها."
 }
