@@ -51,14 +51,14 @@ class RoleChoiceScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 28),
               _RoleCard(
-                icon: Icons.local_offer_outlined,
+                icon: Icons.person_outline,
                 title: l10n.onboardingRoleClientTitle,
                 description: l10n.onboardingRoleClientDesc,
                 onTap: () => _choose(context, ref, OnboardingRole.client),
               ),
               const SizedBox(height: 12),
               _RoleCard(
-                icon: Icons.person_outline,
+                icon: Icons.storefront_outlined,
                 title: l10n.onboardingRoleMerchantTitle,
                 description: l10n.onboardingRoleMerchantDesc,
                 tintWithSecondary: true,
