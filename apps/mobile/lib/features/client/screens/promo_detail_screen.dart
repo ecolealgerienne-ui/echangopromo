@@ -19,12 +19,14 @@ import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
+import '../../shared/utils/distance_format.dart';
 import '../../shared/utils/maps_launcher.dart';
 import '../../shared/utils/phone_launcher.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/promo_discount_badge.dart';
 import '../../shared/widgets/promo_photo_hero.dart';
 import '../providers/favorites_provider.dart';
+import '../providers/location_providers.dart';
 import '../providers/promo_providers.dart';
 
 /// Fiche promo (specs §3.1). Écran de décision : il répond à « combien »,
@@ -237,7 +239,14 @@ class _PromoDetailBody extends ConsumerWidget {
                         child: Center(child: CircularProgressIndicator()),
                       )
                     else
-                      _ShopCard(commercant: commercant),
+                      _ShopCard(
+                        commercant: commercant,
+                        distanceMeters: distanceTo(
+                          ref.watch(userPositionProvider).valueOrNull,
+                          commercant.latitude,
+                          commercant.longitude,
+                        ),
+                      ),
                     _OtherShopPromos(
                       commercantId: promo.commercantId,
                       excludePromoId: promo.id,
@@ -417,9 +426,24 @@ class _DeadlineChip extends StatelessWidget {
 }
 
 class _ShopCard extends StatelessWidget {
-  const _ShopCard({required this.commercant});
+  const _ShopCard({required this.commercant, this.distanceMeters});
 
   final Commercant commercant;
+
+  /// `null` si la localisation n'est pas accordée ou si le commerçant n'a
+  /// pas renseigné sa position.
+  final double? distanceMeters;
+
+  /// Adresse et distance sur une seule ligne, en sautant proprement ce qui
+  /// manque — l'adresse est facultative, la distance dépend de la
+  /// localisation.
+  String _subtitle(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return [
+      if (commercant.adresse != null && commercant.adresse!.isNotEmpty) commercant.adresse!,
+      if (distanceMeters != null) formatDistance(l10n, distanceMeters!),
+    ].join(' · ');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -467,7 +491,7 @@ class _ShopCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(commercant.nom, style: textTheme.titleSmall),
-                if (commercant.adresse != null && commercant.adresse!.isNotEmpty)
+                if (_subtitle(context).isNotEmpty)
                   Row(
                     children: [
                       Icon(Icons.place_outlined,
@@ -475,7 +499,7 @@ class _ShopCard extends StatelessWidget {
                       const SizedBox(width: 3),
                       Expanded(
                         child: Text(
-                          commercant.adresse!,
+                          _subtitle(context),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: textTheme.bodySmall

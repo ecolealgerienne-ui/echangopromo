@@ -5,6 +5,7 @@ import '../../../domain/models/map_shop.dart';
 import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../shared/l10n/enum_labels.dart';
+import '../../shared/utils/distance_format.dart';
 import '../../shared/utils/maps_launcher.dart';
 import '../../shared/utils/phone_launcher.dart';
 import '../../shared/widgets/promo_discount_badge.dart';
@@ -13,10 +14,19 @@ import '../../shared/widgets/promo_price_row.dart';
 /// Fiche du commerçant, remontée depuis le bas de la carte au clic sur un
 /// point. Les promos défilent horizontalement quand il y en a plusieurs.
 class MapShopSheet extends StatefulWidget {
-  const MapShopSheet({super.key, required this.shop, required this.onPromoTap});
+  const MapShopSheet({
+    super.key,
+    required this.shop,
+    required this.onPromoTap,
+    this.distanceMeters,
+  });
 
   final MapShop shop;
   final void Function(Promo promo) onPromoTap;
+
+  /// `null` si la localisation n'est pas accordée — la ligne se réduit alors
+  /// à la catégorie, sans trou ni séparateur orphelin.
+  final double? distanceMeters;
 
   @override
   State<MapShopSheet> createState() => _MapShopSheetState();
@@ -86,7 +96,11 @@ class _MapShopSheetState extends State<MapShopSheet> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          categorieLabel(context, shop.categorie),
+                          [
+                            categorieLabel(context, shop.categorie),
+                            if (widget.distanceMeters != null)
+                              formatDistance(l10n, widget.distanceMeters!),
+                          ].join(' · '),
                           style: textTheme.bodySmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),

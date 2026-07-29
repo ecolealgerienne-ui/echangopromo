@@ -321,5 +321,11 @@
   "endsInDays": "ينتهي خلال {days} أيام",
   "@endsInDays": { "placeholders": { "days": { "type": "int" } } },
   "otherShopPromosTitle": "عروض أخرى من هذا المحل",
-  "callButton": "اتصال"
+  "callButton": "اتصال",
+
+  "distanceMeters": "{meters} م",
+  "@distanceMeters": { "placeholders": { "meters": { "type": "int" } } },
+  "distanceKilometers": "{km} كم",
+  "@distanceKilometers": { "placeholders": { "km": { "type": "String" } } },
+  "mapRecenter": "العودة إلى موقعي"
 }

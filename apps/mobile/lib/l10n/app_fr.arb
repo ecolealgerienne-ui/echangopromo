@@ -337,5 +337,11 @@
   "endsInDays": "Se termine dans {days} jours",
   "@endsInDays": { "placeholders": { "days": { "type": "int" } } },
   "otherShopPromosTitle": "Autres promos du magasin",
-  "callButton": "Appeler"
+  "callButton": "Appeler",
+
+  "distanceMeters": "{meters} m",
+  "@distanceMeters": { "placeholders": { "meters": { "type": "int" } } },
+  "distanceKilometers": "{km} km",
+  "@distanceKilometers": { "placeholders": { "km": { "type": "String" } } },
+  "mapRecenter": "Recentrer sur ma position"
 }

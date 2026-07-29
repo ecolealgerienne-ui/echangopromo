@@ -6,13 +6,15 @@ import 'package:latlong2/latlong.dart';
 import '../../../app/theme.dart';
 import '../../../domain/models/map_shop.dart';
 import '../../../l10n/app_localizations.dart';
+import '../providers/location_providers.dart';
 import '../providers/map_providers.dart';
 import '../utils/marker_cluster.dart';
 import '../widgets/map_shop_sheet.dart';
 
-/// Centre par défaut : Djelfa, le quartier pilote. Utilisé tant que la
-/// position de l'utilisateur n'est pas connue (localisation refusée ou pas
-/// encore obtenue) — une carte centrée sur l'océan serait inexploitable.
+/// Centre de repli : Djelfa, le quartier pilote. Utilisé tant que la
+/// position de l'utilisateur n'est pas connue (localisation refusée, service
+/// coupé, ou position pas encore remontée) — une carte centrée sur l'océan
+/// serait inexploitable.
 const _fallbackCenter = LatLng(34.6703, 3.2630);
 const _initialZoom = 13.0;
 
@@ -37,6 +39,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   MapBounds? _bounds;
   double _zoom = _initialZoom;
   MapShop? _selected;
+
+  /// La position arrive de façon asynchrone, après le premier rendu :
+  /// `initialCenter` est déjà consommé à ce moment-là, il faut donc déplacer
+  /// la caméra une fois. Ce drapeau évite de la ramener sur l'utilisateur à
+  /// chaque reconstruction, ce qui empêcherait toute exploration manuelle.
+  bool _centeredOnUser = false;
 
   @override
   void dispose() {
@@ -69,6 +77,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
   }
 
+  void _recenterOn(LatLng position, {double? zoom}) {
+    _map.move(position, zoom ?? (_zoom < 14 ? 15.0 : _zoom));
+  }
+
   void _openCluster(ShopCluster cluster) {
     if (cluster.isSingle) {
       setState(() => _selected = cluster.single);
@@ -89,6 +101,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final bounds = _bounds;
     final shopsAsync =
         bounds == null ? null : ref.watch(mapShopsProvider(bounds));
+    final userPosition = ref.watch(userPositionProvider).valueOrNull;
+
+    // Premier centrage sur l'utilisateur dès que sa position est connue —
+    // après le premier rendu, sinon `MapController` n'est pas encore relié
+    // à la carte.
+    if (userPosition != null && !_centeredOnUser) {
+      _centeredOnUser = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _recenterOn(userPosition, zoom: 15);
+      });
+    }
 
     final shops = shopsAsync?.valueOrNull?.items ?? const <MapShop>[];
     final clusters = clusterShops(
@@ -118,6 +141,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 userAgentPackageName: 'com.echango.echango_promo',
                 maxNativeZoom: 19,
               ),
+              if (userPosition != null)
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: userPosition,
+                      width: 22,
+                      height: 22,
+                      child: const _UserDot(),
+                    ),
+                  ],
+                ),
               MarkerLayer(
                 markers: [
                   for (final cluster in clusters)
@@ -190,11 +224,30 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ),
             ),
 
+          // Masqué plutôt que désactivé quand la position est inconnue : un
+          // bouton "me localiser" présent mais inerte laisse croire à une
+          // panne, alors que la localisation a simplement été refusée.
+          if (userPosition != null && _selected == null)
+            PositionedDirectional(
+              end: 16,
+              bottom: 24,
+              child: _RoundButton(
+                icon: Icons.my_location,
+                tooltip: l10n.mapRecenter,
+                onTap: () => _recenterOn(userPosition, zoom: 15),
+              ),
+            ),
+
           if (_selected != null)
             Align(
               alignment: Alignment.bottomCenter,
               child: MapShopSheet(
                 shop: _selected!,
+                distanceMeters: distanceTo(
+                  userPosition,
+                  _selected!.latitude,
+                  _selected!.longitude,
+                ),
                 onPromoTap: (promo) => context.push('/promo/${promo.id}'),
               ),
             ),
@@ -336,6 +389,28 @@ class _Banner extends StatelessWidget {
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: onColor),
         ),
+      ),
+    );
+  }
+}
+
+/// Position de l'utilisateur. Bleu volontairement hors palette de l'app :
+/// c'est la convention cartographique universelle, la reconnaître prime sur
+/// la cohérence chromatique.
+class _UserDot extends StatelessWidget {
+  const _UserDot();
+
+  @override
+  Widget build(BuildContext context) {
+    const blue = Color(0xFF1F6FEB);
+    return Container(
+      decoration: BoxDecoration(
+        color: blue,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 3),
+        boxShadow: [
+          BoxShadow(color: blue.withValues(alpha: 0.3), blurRadius: 0, spreadRadius: 5),
+        ],
       ),
     );
   }

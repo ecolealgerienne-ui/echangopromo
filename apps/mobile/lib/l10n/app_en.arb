@@ -321,5 +321,11 @@
   "endsInDays": "Ends in {days} days",
   "@endsInDays": { "placeholders": { "days": { "type": "int" } } },
   "otherShopPromosTitle": "Other deals from this shop",
-  "callButton": "Call"
+  "callButton": "Call",
+
+  "distanceMeters": "{meters} m",
+  "@distanceMeters": { "placeholders": { "meters": { "type": "int" } } },
+  "distanceKilometers": "{km} km",
+  "@distanceKilometers": { "placeholders": { "km": { "type": "String" } } },
+  "mapRecenter": "Recentre on my position"
 }
