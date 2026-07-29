@@ -33,9 +33,14 @@ import '../features/commercant/screens/my_promos_screen.dart';
 import '../features/commercant/screens/promo_form_screen.dart';
 import '../features/commercant/screens/registre_resend_screen.dart';
 import '../features/dev/screens/dev_profile_switcher_screen.dart';
+import '../features/onboarding/screens/location_permission_screen.dart';
+import '../features/onboarding/screens/location_second_chance_screen.dart';
+import '../features/onboarding/screens/role_choice_screen.dart';
+import '../features/onboarding/screens/splash_screen.dart';
 import '../features/shared/screens/legal_document_screen.dart';
 import '../features/shared/screens/notifications_screen.dart';
 import '../providers/auth_provider.dart';
+import '../providers/core_providers.dart';
 
 /// Associe le rôle requis directement à la déclaration de route plutôt qu'à
 /// une liste de chemins protégés maintenue à part (audit règle #22) — un
@@ -62,6 +67,15 @@ Widget _unusedBuilder(BuildContext context, GoRouterState state) => const SizedB
 final _appRoutes = <_AppRoute>[
   _AppRoute('/', (context, state) => const PromoListScreen()),
   _AppRoute('/select-commune', (context, state) => const CommuneSelectionScreen()),
+  // Premier lancement (splash → rôle → localisation). Publics : ces écrans
+  // précèdent par nature toute authentification.
+  _AppRoute('/onboarding', (context, state) => const SplashScreen()),
+  _AppRoute('/onboarding/role', (context, state) => const RoleChoiceScreen()),
+  _AppRoute('/onboarding/location', (context, state) => const LocationPermissionScreen()),
+  _AppRoute(
+    '/onboarding/location/second-chance',
+    (context, state) => const LocationSecondChanceScreen(),
+  ),
   // Publics, sans rôle requis — accessibles depuis l'inscription commerçant
   // et un lien général (plan de correction, Phase 4).
   _AppRoute('/legal/cgu', (context, state) => const LegalDocumentScreen.cgu()),
@@ -262,6 +276,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (authState.isLoading) return null;
       final session = authState.value;
       final path = state.matchedLocation;
+
+      // Onboarding de premier lancement. Comme la redirection commune
+      // juste en dessous, il n'intercepte que '/' : un lien profond
+      // (`/p/:id` partagé sur WhatsApp) ou un point d'entrée pro reste
+      // atteignable sans passer par le splash.
+      if (path == '/' && !ref.read(onboardingStoreProvider).isCompleted()) {
+        return '/onboarding';
+      }
 
       if (path == '/' && ref.read(selectedCommunesProvider).isEmpty) {
         return '/select-commune';
