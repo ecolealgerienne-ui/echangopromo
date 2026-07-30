@@ -51,9 +51,12 @@ class HighlightApi {
     return Highlight.fromJson(response.data!);
   }
 
-  /// Patch partiel côté backend : un champ absent reste inchangé, un champ
-  /// envoyé à `null` est effacé. D'où les drapeaux `clear*` explicites —
-  /// passer `null` en Dart voudrait autrement dire « ne touche pas ».
+  /// Patch partiel : un champ absent du corps reste inchangé côté backend.
+  ///
+  /// Effacer passe par les drapeaux `clearPromo`/`clearImage`, pas par une
+  /// valeur `null` : le backend ne peut pas distinguer un `null` envoyé d'un
+  /// champ absent (voir `UpdateHighlightDto`). Pour les textes, la chaîne
+  /// vide vaut effacement.
   Future<Highlight> update(
     String id, {
     String? promoId,
@@ -65,10 +68,10 @@ class HighlightApi {
     bool clearImage = false,
   }) async {
     final response = await _dio.patch<Map<String, dynamic>>('/admin/highlight/$id', data: {
-      if (clearPromo) 'promoId': null else if (promoId != null) 'promoId': promoId,
-      if (clearImage) 'imageKey': null else if (imageKey != null) 'imageKey': imageKey,
-      if (titre != null) 'titre': titre.isEmpty ? null : titre,
-      if (sousTitre != null) 'sousTitre': sousTitre.isEmpty ? null : sousTitre,
+      if (clearPromo) 'clearPromo': true else if (promoId != null) 'promoId': promoId,
+      if (clearImage) 'clearImage': true else if (imageKey != null) 'imageKey': imageKey,
+      if (titre != null) 'titre': titre,
+      if (sousTitre != null) 'sousTitre': sousTitre,
       if (active != null) 'active': active,
     });
     return Highlight.fromJson(response.data!);

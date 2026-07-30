@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Commercant } from '../commercant/entities/commercant.entity';
 import {
   BadRequestAppException,
@@ -45,7 +45,6 @@ export class HighlightService {
     private readonly highlights: Repository<Highlight>,
     private readonly promoService: PromoService,
     private readonly storageService: StorageService,
-    private readonly dataSource: DataSource,
   ) {}
 
   // --- Lecture client ---
@@ -197,50 +196,85 @@ export class HighlightService {
     return { highlight, promoVisible };
   }
 
+  /**
+   * Plafond et position calculés **dans la même transaction** que
+   * l'insertion, derrière un verrou consultatif — un `count()` suivi d'un
+   * `save()` laisserait passer deux créations simultanées au-delà du
+   * plafond, et deux diapositives sur la même position (CLAUDE.md #13, même
+   * schéma que `PromoService.withCommercantLock` pour le plafond de 5
+   * promos). Le compte admin est unique en V0, mais la règle ne dépend pas
+   * de cette hypothèse : elle tombera le jour où il y aura deux admins.
+   */
   async create(dto: CreateHighlightDto): Promise<Highlight> {
-    const total = await this.highlights.count();
-    if (total >= HIGHLIGHT_MAX_SLIDES) {
-      throw new BadRequestAppException(
-        ErrorCode.HIGHLIGHT_CAP_REACHED,
-        `Le bandeau d'accueil est limité à ${HIGHLIGHT_MAX_SLIDES} mises en avant. Supprimez-en une pour en ajouter une nouvelle.`,
-      );
-    }
     this.assertHasContent(dto.imageKey ?? null, dto.promoId ?? null);
+    // Hors transaction : c'est une lecture sur une autre table, la garder
+    // dedans allongerait la section critique sans rien protéger de plus.
     await this.assertPromoExists(dto.promoId ?? null);
 
-    // Ajoutée en fin de bandeau : l'admin la remonte ensuite par
-    // glisser-déposer s'il le souhaite, plutôt qu'une nouvelle entrée
-    // vienne s'imposer en tête de vitrine.
-    const highestPosition = await this.highlights
-      .createQueryBuilder('highlight')
-      .select('MAX(highlight.position)', 'max')
-      .getRawOne<{ max: number | null }>();
+    return this.highlights.manager.transaction(async (manager) => {
+      await manager.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [
+        'highlight-cap',
+      ]);
 
-    return this.highlights.save(
-      this.highlights.create({
-        position: (highestPosition?.max ?? 0) + 1,
-        active: dto.active ?? true,
-        promoId: dto.promoId ?? null,
-        imageKey: dto.imageKey ?? null,
-        titre: dto.titre ?? null,
-        sousTitre: dto.sousTitre ?? null,
-      }),
-    );
+      const total = await manager.count(Highlight);
+      if (total >= HIGHLIGHT_MAX_SLIDES) {
+        throw new BadRequestAppException(
+          ErrorCode.HIGHLIGHT_CAP_REACHED,
+          `Le bandeau d'accueil est limité à ${HIGHLIGHT_MAX_SLIDES} mises en avant. Supprimez-en une pour en ajouter une nouvelle.`,
+        );
+      }
+
+      // Ajoutée en fin de bandeau : l'admin la remonte ensuite par
+      // glisser-déposer s'il le souhaite, plutôt qu'une nouvelle entrée
+      // vienne s'imposer en tête de vitrine.
+      const highestPosition = await manager
+        .createQueryBuilder(Highlight, 'highlight')
+        .select('MAX(highlight.position)', 'max')
+        .getRawOne<{ max: number | null }>();
+
+      return manager.save(
+        manager.create(Highlight, {
+          position: (highestPosition?.max ?? 0) + 1,
+          active: dto.active ?? true,
+          promoId: dto.promoId ?? null,
+          imageKey: dto.imageKey ?? null,
+          titre: dto.titre?.trim() || null,
+          sousTitre: dto.sousTitre?.trim() || null,
+        }),
+      );
+    });
   }
 
   /**
-   * Patch partiel : `undefined` = champ inchangé, `null` = champ effacé
-   * (retirer l'image importée, retirer la cible) — d'où le `in` plutôt
-   * qu'une comparaison à `undefined`.
+   * Patch partiel : champ absent = inchangé, drapeau `clear*` = effacé.
+   *
+   * Uniquement des tests `!== undefined` ici, jamais `'champ' in dto` : le
+   * DTO transformé porte une propriété propre `undefined` pour chaque champ
+   * déclaré non envoyé (voir `UpdateHighlightDto`), un test d'existence de
+   * clé serait donc toujours vrai et effacerait la promo et l'image au
+   * moindre PATCH partiel — par exemple la simple bascule visible/masqué
+   * depuis la liste admin.
    */
   async update(id: string, dto: UpdateHighlightDto): Promise<Highlight> {
     const highlight = await this.findRowOrFail(id);
     const previousImageKey = highlight.imageKey;
 
-    if ('promoId' in dto) highlight.promoId = dto.promoId ?? null;
-    if ('imageKey' in dto) highlight.imageKey = dto.imageKey ?? null;
-    if ('titre' in dto) highlight.titre = dto.titre ?? null;
-    if ('sousTitre' in dto) highlight.sousTitre = dto.sousTitre ?? null;
+    if (dto.clearPromo === true) {
+      highlight.promoId = null;
+    } else if (dto.promoId !== undefined) {
+      highlight.promoId = dto.promoId;
+    }
+
+    if (dto.clearImage === true) {
+      highlight.imageKey = null;
+    } else if (dto.imageKey !== undefined) {
+      highlight.imageKey = dto.imageKey;
+    }
+
+    if (dto.titre !== undefined) highlight.titre = dto.titre.trim() || null;
+    if (dto.sousTitre !== undefined) {
+      highlight.sousTitre = dto.sousTitre.trim() || null;
+    }
     if (dto.active !== undefined) highlight.active = dto.active;
 
     this.assertHasContent(highlight.imageKey, highlight.promoId);
@@ -307,12 +341,14 @@ export class HighlightService {
       );
     }
 
-    await this.dataSource.transaction(async (manager) => {
-      await Promise.all(
-        dto.ids.map((id, index) =>
-          manager.update(Highlight, { id }, { position: index + 1 }),
-        ),
-      );
+    await this.highlights.manager.transaction(async (manager) => {
+      // Séquentiel, pas `Promise.all` : une transaction TypeORM tient une
+      // seule connexion, y lancer des requêtes en parallèle n'est pas
+      // supporté. Dix lignes au maximum (`HIGHLIGHT_MAX_SLIDES`), le coût
+      // est sans objet.
+      for (const [index, id] of dto.ids.entries()) {
+        await manager.update(Highlight, { id }, { position: index + 1 });
+      }
     });
     return this.findAllForAdmin();
   }

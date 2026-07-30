@@ -8,32 +8,49 @@ import {
 } from 'class-validator';
 
 /**
- * Patch partiel : un champ absent du corps reste inchangé, un champ envoyé à
- * `null` est effacé (retirer l'image importée, retirer la cible). Le service
- * distingue les deux avec `'champ' in dto` — `@IsOptional()` laisse passer
- * `null` sans le confondre avec une absence, ce que ferait un simple
- * `dto.champ === undefined`.
+ * Patch partiel. « Effacer un champ » passe par un drapeau explicite
+ * (`clearPromo`, `clearImage`), **jamais** par une valeur `null` distinguée
+ * d'une absence : `ValidationPipe` transforme le corps en instance de cette
+ * classe, et TypeScript (`useDefineForClassFields`, actif dès la cible
+ * ES2022) crée une propriété propre valant `undefined` pour **chaque** champ
+ * déclaré, envoyé ou non. Un test `'champ' in dto` serait donc toujours vrai
+ * — piège déjà rencontré sur `UpdatePromoDto`/`updateProfile` (voir
+ * `PromoService.update`). Seul `!== undefined` distingue réellement les deux
+ * cas, d'où cette forme.
+ *
+ * Pour les textes, la chaîne vide vaut effacement : un titre vide et un
+ * titre absent n'ont pas à être distingués côté produit.
  */
 export class UpdateHighlightDto {
   @IsOptional()
   @IsUUID()
-  promoId?: string | null;
+  promoId?: string;
+
+  /** Retire la promo ciblée : la diapositive devient une affiche seule. */
+  @IsOptional()
+  @IsBoolean()
+  clearPromo?: boolean;
 
   @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(255)
-  imageKey?: string | null;
+  imageKey?: string;
+
+  /** Retire l'image importée : la photo de la promo reprend sa place. */
+  @IsOptional()
+  @IsBoolean()
+  clearImage?: boolean;
 
   @IsOptional()
   @IsString()
   @MaxLength(60)
-  titre?: string | null;
+  titre?: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(100)
-  sousTitre?: string | null;
+  sousTitre?: string;
 
   @IsOptional()
   @IsBoolean()
