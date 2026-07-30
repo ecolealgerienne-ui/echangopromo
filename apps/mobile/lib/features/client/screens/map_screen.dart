@@ -59,11 +59,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void _onMapEvent(MapEvent event) {
     final camera = event.camera;
     final visible = camera.visibleBounds;
+    // Bornage indispensable : dézoomé, ou pendant la toute première passe de
+    // layout où la taille de la carte n'est pas encore établie, la zone
+    // visible peut déborder du monde réel (longitude au-delà de ±180,
+    // latitude au-delà de ±90). Le backend valide ces quatre champs avec
+    // `@IsLatitude`/`@IsLongitude` et rejette la requête en 400 — la carte
+    // affichait alors « impossible de charger les promos de cette zone »
+    // pour une raison qui n'avait rien à voir avec les promos.
+    // `.clamp()` est déclaré sur `num` et renvoie `num`, d'où `.toDouble()`.
     final next = MapBounds(
-      north: visible.north,
-      south: visible.south,
-      east: visible.east,
-      west: visible.west,
+      north: visible.north.clamp(-90.0, 90.0).toDouble(),
+      south: visible.south.clamp(-90.0, 90.0).toDouble(),
+      east: visible.east.clamp(-180.0, 180.0).toDouble(),
+      west: visible.west.clamp(-180.0, 180.0).toDouble(),
     );
     if (next == _bounds && camera.zoom == _zoom) return;
     // Différé d'une frame : certains événements de la carte sont émis
