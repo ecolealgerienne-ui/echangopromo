@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -125,17 +126,42 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _map.move(position, zoom ?? (_zoom < 14 ? 15.0 : _zoom));
   }
 
-  void _openCluster(ShopCluster cluster) {
+  Future<void> _openCluster(ShopCluster cluster) async {
     if (cluster.isSingle) {
       setState(() => _selected = cluster.single);
       return;
     }
-    // Un rond représente plusieurs commerces : il ne peut pas ouvrir une
-    // fiche, il zoome pour se scinder.
+    // Zoomer n'a de sens que si le groupe finit par se scinder. Deux
+    // commerces à la même adresse — galerie marchande, même immeuble, ou
+    // simplement deux fiches saisies au même point — occupent le même pixel
+    // quel que soit le zoom : le rond zoomait alors indéfiniment dans le
+    // vide en affichant toujours « 2 » (retour terrain 2026-07-30).
+    //
+    // Le test est exact et non approximatif : on rejoue le regroupement au
+    // zoom maximal, celui où les cellules sont les plus fines. S'il ne
+    // produit toujours qu'un groupe, aucun zoom ne les séparera jamais.
+    final splitsEventually =
+        clusterShops(cluster.shops, zoom: _maxClusterZoom).length > 1;
+    if (!splitsEventually || _zoom >= _maxClusterZoom) {
+      await _showClusterPicker(cluster);
+      return;
+    }
     setState(() => _selected = null);
     // `.clamp()` est déclaré sur `num` et renvoie `num` : sans `toDouble()`,
     // le type ne passe pas sur `MapController.move(LatLng, double)`.
     _map.move(cluster.center, (_zoom + 2).clamp(1.0, 18.0).toDouble());
+  }
+
+  /// Dernier recours quand le zoom ne peut plus départager : on liste les
+  /// commerces du groupe et l'utilisateur choisit. Une carte doit toujours
+  /// mener quelque part.
+  Future<void> _showClusterPicker(ShopCluster cluster) async {
+    setState(() => _selected = null);
+    final chosen = await showModalBottomSheet<MapShop>(
+      context: context,
+      builder: (context) => _ClusterPicker(shops: cluster.shops),
+    );
+    if (chosen != null && mounted) setState(() => _selected = chosen);
   }
 
   @override
@@ -453,6 +479,90 @@ class _ClusterMarker extends StatelessWidget {
 /// Pastilles et non ronds illustrés comme sur l'accueil : au-dessus d'un
 /// fond cartographique, un libellé lisible prime sur l'image, et la barre
 /// doit manger le moins de carte possible.
+/// Liste des commerces d'un groupe que le zoom ne peut pas départager.
+///
+/// Sans ça, deux fiches saisies au même point restaient inatteignables :
+/// le rond affichait « 2 » et zoomer n'y changeait rien.
+class _ClusterPicker extends StatelessWidget {
+  const _ClusterPicker({required this.shops});
+
+  final List<MapShop> shops;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+            child: Text(l10n.mapShopsHere(shops.length), style: textTheme.titleMedium),
+          ),
+          // `Flexible` + `shrinkWrap` : la feuille s'ajuste à deux commerces
+          // comme à dix, sans occuper l'écran entier pour rien.
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: shops.length,
+              itemBuilder: (context, index) {
+                final shop = shops[index];
+                final discount = shop.bestDiscountPercent;
+                return ListTile(
+                  leading: ClipOval(
+                    child: SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: shop.photoUrl == null
+                          ? Container(
+                              color: colorScheme.surfaceContainerHighest,
+                              child: Icon(
+                                Icons.storefront_outlined,
+                                color: colorScheme.outline,
+                              ),
+                            )
+                          : CachedNetworkImage(
+                              imageUrl: shop.photoUrl!,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) =>
+                                  Container(color: colorScheme.surfaceContainerHighest),
+                              errorWidget: (context, url, error) =>
+                                  Container(color: colorScheme.surfaceContainerHighest),
+                            ),
+                    ),
+                  ),
+                  title: Text(shop.nom, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                    '${categorieLabel(context, shop.categorie)} · '
+                    '${l10n.promoCount(shop.promos.length)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: discount == null
+                      ? null
+                      : Text(
+                          '−$discount%',
+                          style: textTheme.labelLarge?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                  onTap: () => Navigator.pop(context, shop),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
 class _CategoryFilterBar extends ConsumerWidget {
   const _CategoryFilterBar();
 

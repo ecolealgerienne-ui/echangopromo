@@ -304,6 +304,8 @@
   "mapNoActivePromo": "No deal running at this shop right now.",
   "mapLoadError": "Couldn't load deals for this area.",
   "mapTooManyShops": "Too many shops in this area — zoom in to see them all.",
+  "mapShopsHere": "{count, plural, one{1 shop here} other{{count} shops here}}",
+  "@mapShopsHere": { "placeholders": { "count": { "type": "int" } } },
 
   "searchPromoHint": "A deal, a shop…",
   "searchClear": "Clear search",

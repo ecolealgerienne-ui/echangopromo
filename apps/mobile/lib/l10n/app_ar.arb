@@ -304,6 +304,8 @@
   "mapNoActivePromo": "لا يوجد عرض جارٍ في هذا المحل حاليًا.",
   "mapLoadError": "تعذّر تحميل عروض هذه المنطقة.",
   "mapTooManyShops": "عدد المحلات كبير في هذه المنطقة — قرّب الصورة لرؤيتها كلها.",
+  "mapShopsHere": "{count, plural, zero{لا يوجد محل هنا} one{محل واحد هنا} two{محلان هنا} few{{count} محلات هنا} many{{count} محلًا هنا} other{{count} محل هنا}}",
+  "@mapShopsHere": { "placeholders": { "count": { "type": "int" } } },
 
   "searchPromoHint": "عرض أو محل…",
   "searchClear": "مسح البحث",

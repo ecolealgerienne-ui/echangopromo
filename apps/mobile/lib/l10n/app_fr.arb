@@ -320,6 +320,8 @@
   "mapNoActivePromo": "Aucune promo en cours dans ce commerce.",
   "mapLoadError": "Impossible de charger les promos de cette zone.",
   "mapTooManyShops": "Trop de commerces dans cette zone — zoomez pour tous les voir.",
+  "mapShopsHere": "{count, plural, one{1 commerce ici} other{{count} commerces ici}}",
+  "@mapShopsHere": { "placeholders": { "count": { "type": "int" } } },
 
   "searchPromoHint": "Une promo, un magasin…",
   "searchClear": "Effacer la recherche",
