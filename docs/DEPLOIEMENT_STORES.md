@@ -50,36 +50,60 @@ détaillé ci-dessous, dans l'ordre.
 
 ---
 
-## 0. Préalable bloquant : fixer l'identité de l'app
+## 0. Identité de l'app — fixée le 2026-07-30
 
-L'`applicationId` Android est encore `com.example.echango_promo` — **la
-valeur par défaut générée par Flutter, jamais changée**. Google refuse de
-publier sous `com.example.*`. Il faut choisir l'identifiant définitif
-**avant** de générer un certificat de signature ou de créer une fiche
-App Store, parce que le changer après publication casse la mise à jour
-de l'app pour les utilisateurs existants (Android/iOS traitent un
-changement d'id comme une app différente).
+**`com.echango.promo`**, identique côté Android et iOS, aligné sur le
+domaine `promo.echango.com` déjà utilisé par les App Links.
 
-Suggestion cohérente avec le domaine déjà choisi : `com.echango.promo`
-(Android) et le même en bundle identifier iOS.
+Appliqué partout :
 
-Recommandé plutôt qu'un renommage manuel (fastidieux : il faut renommer
-le dossier de package Kotlin/Java, `build.gradle`, `AndroidManifest.xml`,
-le bundle id Xcode...) : le package pub
-[`rename`](https://pub.dev/packages/rename) :
+| Endroit | Valeur |
+|---|---|
+| `android/app/build.gradle.kts` | `applicationId` et `namespace` |
+| `android/app/src/main/kotlin/com/echango/promo/MainActivity.kt` | déclaration `package` |
+| `ios/Runner.xcodeproj/project.pbxproj` | `PRODUCT_BUNDLE_IDENTIFIER` (6 configurations) |
+| `apps/backend/.env.example` | `ANDROID_PACKAGE_NAME`, `IOS_BUNDLE_ID` |
+
+**Ne plus jamais le changer.** Android comme iOS traitent un identifiant
+différent comme une application distincte : après publication, le modifier
+couperait la mise à jour pour tous les utilisateurs déjà installés, qui
+resteraient bloqués sur l'ancienne version sans aucun message.
+
+Les valeurs backend doivent rester strictement identiques à celles
+compilées dans l'app — un écart fait échouer la vérification App
+Links/Universal Links **en silence** : le lien s'ouvre alors dans le
+navigateur au lieu de l'app, sans erreur nulle part.
+
+### Signature de release (Android)
+
+`android/app/build.gradle.kts` lit `android/key.properties`, volontairement
+absent du dépôt (`.gitignore`, avec `*.jks`/`*.keystore`) — Google
+n'accepte **qu'une seule clé de signature par application, à vie** : la
+publier dans le dépôt reviendrait à la perdre.
+
+Créer le keystore, puis le fichier de configuration :
 
 ```bash
-cd apps/mobile
-dart pub global activate rename
-dart pub global run rename setAppId --targets android,ios --value "com.echango.promo"
-dart pub global run rename setBundleId --targets ios --value "com.echango.promo"
+keytool -genkey -v -keystore ~/echango-upload.jks -keyalg RSA \
+  -keysize 2048 -validity 10000 -alias upload
 ```
 
-Vérifier ensuite `android/app/build.gradle` (`applicationId`) et, sous
-Xcode (Mac requis), l'onglet *Signing & Capabilities* du target Runner
-pour le bundle identifier iOS.
+`apps/mobile/android/key.properties` :
 
----
+```properties
+storePassword=<mot de passe du keystore>
+keyPassword=<mot de passe de la clé>
+keyAlias=upload
+storeFile=C:/chemin/absolu/vers/echango-upload.jks
+```
+
+Sans ce fichier, la release retombe sur la clé de **debug** : pratique pour
+un `flutter run --release` local, mais l'artefact est refusé par Google
+Play. C'est délibéré — l'oubli devient impossible à ignorer.
+
+Sauvegarder le keystore ailleurs que sur la machine de développement.
+Perdu, il n'existe aucun recours : l'application doit être republiée sous
+un nouvel identifiant, en repartant de zéro côté installations et avis.
 
 ## 1. Google Play
 

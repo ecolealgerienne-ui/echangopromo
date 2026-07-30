@@ -58,7 +58,7 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
   /// un échec réseau juste après l'inscription) sans retenter `register()`,
   /// qui échouerait alors avec "téléphone déjà utilisé". Vérifie
   /// explicitement le rôle (bug trouvé 2026-07-12) : sans ça, une session
-  /// admin/agent restée active (session pro ouverte sans
+  /// admin/agent restée active (ex. test via `/dev/profiles` sans
   /// déconnexion) était prise pour un enregistrement déjà réussi, sautait
   /// `register()` et envoyait la photo avec un token du mauvais rôle —
   /// `/storage/upload` (réservé à commerçant/agent) rejetait alors

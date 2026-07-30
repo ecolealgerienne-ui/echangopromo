@@ -27,7 +27,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.echango_promo"
+    namespace = "com.echango.promo"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -41,8 +41,13 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.echango_promo"
+        // Identifiant définitif, aligné sur le domaine `promo.echango.com`
+        // utilisé par les App Links. Ne plus jamais le changer : Android et
+        // iOS traitent un identifiant différent comme une autre application,
+        // ce qui couperait la mise à jour pour tous les utilisateurs déjà
+        // installés. Doit rester identique à `ANDROID_PACKAGE_NAME` côté
+        // backend (`/.well-known/assetlinks.json`).
+        applicationId = "com.echango.promo"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
