@@ -7,10 +7,13 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../app/theme.dart';
 import '../../../data/api/api_exception.dart';
+import '../../../domain/enums/categorie.dart';
 import '../../../domain/models/map_shop.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../shared/l10n/enum_labels.dart';
 import '../providers/location_providers.dart';
 import '../providers/map_providers.dart';
+import '../providers/promo_providers.dart';
 import '../utils/marker_cluster.dart';
 import '../widgets/map_shop_sheet.dart';
 
@@ -235,29 +238,36 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ],
           ),
 
-          // Barre du haut : retour à la liste.
+          // Barre du haut : retour à la liste, puis filtre par catégorie.
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  _RoundButton(
-                    icon: Icons.arrow_back,
-                    tooltip: l10n.mapBackToList,
-                    onTap: () => context.go('/'),
-                  ),
-                  const Spacer(),
-                  if (shopsAsync?.isLoading ?? false)
-                    const Padding(
-                      padding: EdgeInsets.all(10),
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2.5),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      _RoundButton(
+                        icon: Icons.arrow_back,
+                        tooltip: l10n.mapBackToList,
+                        onTap: () => context.go('/'),
                       ),
-                    ),
-                ],
-              ),
+                      const Spacer(),
+                      if (shopsAsync?.isLoading ?? false)
+                        const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2.5),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const _CategoryFilterBar(),
+              ],
             ),
           ),
 
@@ -406,6 +416,101 @@ class _ClusterMarker extends StatelessWidget {
             style: textTheme.titleMedium?.copyWith(
               color: colorScheme.onPrimary,
               fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Filtre par catégorie, en pastilles flottantes au-dessus de la carte.
+///
+/// Pilote le **même** `categoryFilterProvider` que les ronds de l'accueil :
+/// un filtre choisi ici reste actif en revenant à la liste, et
+/// inversement. Deux filtres indépendants pour la même notion se
+/// contrediraient à l'écran sans que le client comprenne pourquoi.
+///
+/// Aucune requête supplémentaire : `mapShopsProvider` observe déjà ce
+/// provider, et le filtrage se fait côté serveur (`GET /promo/map`) plutôt
+/// que sur les commerces déjà chargés — sinon les commerces d'une autre
+/// catégorie occuperaient le plafond de `MAX_MAP_COMMERCANTS` pour rien.
+///
+/// Pastilles et non ronds illustrés comme sur l'accueil : au-dessus d'un
+/// fond cartographique, un libellé lisible prime sur l'image, et la barre
+/// doit manger le moins de carte possible.
+class _CategoryFilterBar extends ConsumerWidget {
+  const _CategoryFilterBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final selected = ref.watch(categoryFilterProvider);
+
+    return SizedBox(
+      height: 38,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        children: [
+          _CategoryChip(
+            label: l10n.allCategoriesChip,
+            selected: selected == null,
+            onTap: () => ref.read(categoryFilterProvider.notifier).state = null,
+          ),
+          for (final categorie in Categorie.values) ...[
+            const SizedBox(width: 8),
+            _CategoryChip(
+              label: categorieLabel(context, categorie),
+              selected: selected == categorie,
+              // Retaper la catégorie active la retire : sans ça, revenir à
+              // "toutes" obligerait à viser la première pastille, souvent
+              // hors écran après avoir fait défiler la barre.
+              onTap: () => ref.read(categoryFilterProvider.notifier).state =
+                  selected == categorie ? null : categorie,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryChip extends StatelessWidget {
+  const _CategoryChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Material(
+      color: selected ? colorScheme.primary : colorScheme.surface,
+      borderRadius: BorderRadius.circular(AppRadii.pill),
+      // Ombre portée : au-dessus d'une carte, une pastille sans relief se
+      // confond avec le fond dès qu'elle passe sur une zone claire.
+      elevation: 2,
+      shadowColor: colorScheme.shadow,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadii.pill),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Center(
+            child: Text(
+              label,
+              style: textTheme.labelLarge?.copyWith(
+                color: selected ? colorScheme.onPrimary : colorScheme.onSurface,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
             ),
           ),
         ),
