@@ -43,6 +43,7 @@
 
   "locationEnableService": "Active la localisation sur ton téléphone.",
   "locationPermissionDenied": "Permission de localisation refusée.",
+  "locationUnavailable": "Position introuvable. Sortez ou approchez-vous d'une fenêtre, puis réessayez.",
   "locationSaved": "Position captée — relocaliser",
   "locationCapture": "Localiser mon commerce (optionnel)",
 

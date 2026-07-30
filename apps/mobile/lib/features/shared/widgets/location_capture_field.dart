@@ -31,9 +31,14 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
       _error = null;
     });
 
+    // Message localisé posé directement, jamais `'$error'` : une exception
+    // brute s'affichait telle quelle au commerçant — préfixe « Exception: »
+    // pour nos propres messages, et texte anglais du framework pour les
+    // autres (`TimeoutException after 0:00:12...`).
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
-        throw Exception(l10n.locationEnableService);
+        _fail(l10n.locationEnableService);
+        return;
       }
 
       var permission = await Geolocator.checkPermission();
@@ -42,7 +47,8 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        throw Exception(l10n.locationPermissionDenied);
+        _fail(l10n.locationPermissionDenied);
+        return;
       }
 
       // `medium` (~100-500 m) et une limite explicite : `high` force un
@@ -51,7 +57,7 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
       // 2026-07-30 : le bouton restait bloqué, le commerçant enregistrait
       // avant que la position n'arrive, et la fiche partait sans
       // coordonnées (donc absente de la carte, sans le moindre message).
-      Position position;
+      Position? position;
       try {
         position = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
@@ -63,16 +69,22 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
         // Repli sur la dernière position connue de l'appareil : à l'échelle
         // d'un commerce de quartier elle reste exploitable, et vaut
         // infiniment mieux qu'une fiche sans position.
-        final cached = await Geolocator.getLastKnownPosition();
-        if (cached == null) rethrow;
-        position = cached;
+        position = await Geolocator.getLastKnownPosition();
+      }
+      if (position == null) {
+        _fail(l10n.locationUnavailable);
+        return;
       }
       widget.onChanged(position.latitude, position.longitude);
-    } catch (error) {
-      setState(() => _error = '$error');
+    } catch (_) {
+      _fail(l10n.locationUnavailable);
     } finally {
       if (mounted) setState(() => _locating = false);
     }
+  }
+
+  void _fail(String message) {
+    if (mounted) setState(() => _error = message);
   }
 
   @override

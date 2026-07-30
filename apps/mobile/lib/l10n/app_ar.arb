@@ -40,6 +40,7 @@
 
   "locationEnableService": "فعّل تحديد الموقع في هاتفك.",
   "locationPermissionDenied": "تم رفض إذن تحديد الموقع.",
+  "locationUnavailable": "تعذّر تحديد الموقع. اخرج أو اقترب من نافذة ثم أعد المحاولة.",
   "locationSaved": "تم التقاط الموقع — إعادة التحديد",
   "locationCapture": "حدد موقع محلك (اختياري)",
 

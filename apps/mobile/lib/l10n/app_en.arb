@@ -40,6 +40,7 @@
 
   "locationEnableService": "Enable location on your phone.",
   "locationPermissionDenied": "Location permission denied.",
+  "locationUnavailable": "Location unavailable. Step outside or move near a window, then try again.",
   "locationSaved": "Location captured — locate again",
   "locationCapture": "Locate my shop (optional)",
 
