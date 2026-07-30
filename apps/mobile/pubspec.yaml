@@ -75,3 +75,10 @@ flutter:
   generate: true
   assets:
     - assets/images/
+    # Déclaration séparée : côté Flutter, `assets/images/` n'inclut que les
+    # fichiers directement dans ce dossier, pas ses sous-dossiers.
+    - assets/images/brand/
+    # Visuels de catégorie, facultatifs : `categorieAssetPath()` retombe sur
+    # une icône Material tant que le fichier n'est pas déposé (voir le README
+    # du dossier pour les noms attendus).
+    - assets/images/categories/

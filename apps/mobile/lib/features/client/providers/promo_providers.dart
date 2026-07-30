@@ -21,6 +21,14 @@ final favoritesOnlyFilterProvider = StateProvider.autoDispose<bool>((ref) => fal
 /// côté client ne chercherait que dans les promos déjà chargées.
 final searchQueryProvider = StateProvider.autoDispose<String>((ref) => '');
 
+/// Liste déployée par glissement, sans qu'aucun filtre ne soit actif
+/// (demande 2026-07-29). Distinct de la catégorie et de la recherche : le
+/// client peut vouloir voir « toutes les promos » en plein écran sans
+/// restreindre quoi que ce soit. Les trois états produisent la même
+/// disposition, d'où un booléen à part plutôt qu'un détournement des
+/// filtres existants.
+final listExpandedProvider = StateProvider.autoDispose<bool>((ref) => false);
+
 enum PromoSort { expireBientot, plusGrosseReduction, nouveautes }
 
 /// `nouveautes` reproduit le tri par défaut déjà appliqué côté backend

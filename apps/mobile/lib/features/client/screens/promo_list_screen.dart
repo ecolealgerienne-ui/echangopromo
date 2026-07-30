@@ -10,6 +10,7 @@ import '../../../domain/enums/categorie.dart';
 import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../shared/l10n/enum_labels.dart';
+import '../../shared/utils/categorie_asset.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/promo_discount_badge.dart';
@@ -58,11 +59,13 @@ class PromoListScreen extends ConsumerWidget {
     final selectedCategorie = ref.watch(categoryFilterProvider);
     final favoritesOnly = ref.watch(favoritesOnlyFilterProvider);
     final search = ref.watch(searchQueryProvider);
+    final expanded = ref.watch(listExpandedProvider);
 
-    // Mode "filtré" : une catégorie choisie, une recherche en cours ou le
-    // filtre favoris actif. Dans les trois cas le client cherche quelque
-    // chose de précis — la vitrine du haut n'a plus lieu d'être.
-    final focused = selectedCategorie != null || search.isNotEmpty || favoritesOnly;
+    // Liste en plein écran : soit le client a filtré (catégorie, recherche,
+    // favoris) et cherche donc quelque chose de précis, soit il a simplement
+    // tiré la liste vers le haut. Même disposition dans les deux cas — la
+    // vitrine du haut n'a plus lieu d'être.
+    final focused = expanded || selectedCategorie != null || search.isNotEmpty || favoritesOnly;
 
     return Scaffold(
       body: SafeArea(
@@ -490,16 +493,32 @@ class _CategoryCircle extends StatelessWidget {
               height: diameter,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isSelected ? colorScheme.primary : colorScheme.surface,
+                color: colorScheme.surfaceContainerHighest,
                 border: Border.all(
                   color: isSelected ? colorScheme.primary : colorScheme.outlineVariant,
-                  width: 1.5,
+                  // L'anneau s'épaissit à la sélection plutôt que de remplir
+                  // le rond : avec une image dedans, un fond plein la
+                  // masquerait complètement.
+                  width: isSelected ? 2.5 : 1.5,
                 ),
               ),
-              child: Icon(
-                _icons[categorie] ?? Icons.local_offer_outlined,
-                size: diameter * 0.42,
-                color: isSelected ? colorScheme.onPrimary : colorScheme.onSurface,
+              child: ClipOval(
+                child: Image.asset(
+                  categorieAssetPath(categorie),
+                  fit: BoxFit.cover,
+                  width: diameter,
+                  height: diameter,
+                  // Repli sur l'icône Material tant que le visuel n'a pas été
+                  // déposé dans `assets/images/categories/` — l'accueil doit
+                  // rester utilisable sans ces images.
+                  errorBuilder: (context, error, stackTrace) => Center(
+                    child: Icon(
+                      _icons[categorie] ?? Icons.local_offer_outlined,
+                      size: diameter * 0.42,
+                      color: isSelected ? colorScheme.primary : colorScheme.onSurface,
+                    ),
+                  ),
+                ),
               ),
             ),
             if (showLabel) ...[
@@ -539,11 +558,18 @@ class _ListHeader extends ConsumerWidget {
   final bool favoritesOnly;
   final int count;
 
+  /// Ramène l'accueil : la liste se replie et tous les filtres retombent.
   void _reset(WidgetRef ref) {
+    ref.read(listExpandedProvider.notifier).state = false;
     ref.read(categoryFilterProvider.notifier).state = null;
     ref.read(favoritesOnlyFilterProvider.notifier).state = false;
     ref.read(searchQueryProvider.notifier).state = '';
   }
+
+  /// Vitesse minimale, en pixels par seconde, pour qu'un glissement compte.
+  /// En dessous, c'est un frôlement en tentant de faire défiler la liste, pas
+  /// une intention de replier ou déployer.
+  static const _dragVelocityThreshold = 120.0;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -556,29 +582,36 @@ class _ListHeader extends ConsumerWidget {
         : (favoritesOnly ? l10n.favoritesOnlyLabel : l10n.allPromosTitle);
 
     return GestureDetector(
-      // Seul un geste vers le bas, et seulement en mode filtré, ramène
-      // l'accueil — un glissement vers le haut reste au défilement.
-      onVerticalDragEnd: focused
-          ? (details) {
-              if ((details.primaryVelocity ?? 0) > 120) _reset(ref);
-            }
-          : null,
+      // Glissement dans les deux sens sur cet en-tête (demande 2026-07-29) :
+      // vers le haut on déploie la liste, vers le bas on ramène l'accueil.
+      // Le geste est capté ici et pas sur la liste elle-même, sinon il
+      // entrerait en conflit avec le défilement des promos.
+      onVerticalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity > _dragVelocityThreshold) {
+          if (focused) _reset(ref);
+        } else if (velocity < -_dragVelocityThreshold) {
+          if (!focused) ref.read(listExpandedProvider.notifier).state = true;
+        }
+      },
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (focused)
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 10),
-                decoration: BoxDecoration(
-                  color: colorScheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(AppRadii.pill),
-                ),
+            // Poignée visible dans les deux états : c'est ce qui signale
+            // qu'on peut tirer, y compris pour déployer. La cacher en mode
+            // découverte rendait le geste vers le haut indécouvrable.
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(AppRadii.pill),
               ),
+            ),
             Row(
               children: [
                 Expanded(child: Text(title, style: textTheme.titleSmall)),

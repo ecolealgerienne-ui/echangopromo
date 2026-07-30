@@ -276,7 +276,13 @@ String _loginPathFor(AppRole role) {
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: '/',
+    // Le splash, pas l'accueil (retour terrain 2026-07-29) : avec
+    // `initialLocation: '/'`, `PromoListScreen` était construit puis remplacé
+    // par la redirection, ce qui laissait voir l'accueil une fraction de
+    // seconde avant le splash. Démarrer directement sur le splash supprime ce
+    // clignotement — et un lien profond entrant ignore de toute façon
+    // `initialLocation`, la plateforme fournissant sa propre route.
+    initialLocation: '/onboarding',
     refreshListenable: ref.watch(routerRefreshProvider),
     redirect: (context, state) {
       final authState = ref.read(authControllerProvider);

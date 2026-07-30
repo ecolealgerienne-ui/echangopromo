@@ -56,7 +56,18 @@ class AppTheme {
 
   static const _terracotta = Color(0xFFE8571E);
   static const _safran = Color(0xFFF2A93B);
-  static const _surfaceLight = Color(0xFFFDF6EE);
+
+  /// Blanc pur (retour terrain 2026-07-29). Auparavant un crème
+  /// (`0xFFFDF6EE`) : l'ensemble tirait vers le beige et l'orange de la
+  /// marque, posé dessus, perdait sa force. Sur blanc, le terracotta est la
+  /// seule couleur saturée de l'écran — c'est ce qui fait « blanc avec un
+  /// effet orange » plutôt que « tout orange pâle ».
+  ///
+  /// Les nuances de surface intermédiaires (`surfaceContainerHighest`, fonds
+  /// de vignette...) restent dérivées du terracotta par `fromSeed` : elles
+  /// gardent donc une pointe de chaud, ce qui évite un gris neutre qui
+  /// jurerait avec la marque.
+  static const _surfaceLight = Color(0xFFFFFFFF);
   static const _surfaceDark = Color(0xFF211710);
   static const _errorLight = Color(0xFFD6303D);
   static const _errorDark = Color(0xFFF87171);
