@@ -37,9 +37,18 @@ class MapScreen extends ConsumerStatefulWidget {
 class _MapScreenState extends ConsumerState<MapScreen> {
   final MapController _map = MapController();
 
+  /// Zone **chargée**, volontairement plus large que l'écran — pas la zone
+  /// visible. Sert de clé au provider : tant que ce qu'on regarde tient
+  /// dedans, aucune requête n'est relancée.
   MapBounds? _bounds;
   double _zoom = _initialZoom;
   MapShop? _selected;
+
+  /// Derniers commerces reçus, conservés pendant qu'une nouvelle zone se
+  /// charge. Sans ça, changer de zone vide `valueOrNull` et fait disparaître
+  /// tous les points le temps de la requête — la carte se « rechargeait »
+  /// visiblement à chaque geste.
+  List<MapShop> _lastShops = const [];
 
   /// La position arrive de façon asynchrone, après le premier rendu :
   /// `initialCenter` est déjà consommé à ce moment-là, il faut donc déplacer
@@ -73,14 +82,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       east: visible.east.clamp(-180.0, 180.0).toDouble(),
       west: visible.west.clamp(-180.0, 180.0).toDouble(),
     );
-    if (next == _bounds && camera.zoom == _zoom) return;
+    // Ne recharger que si la zone regardée sort de ce qui est déjà chargé.
+    // Zoomer, ou se déplacer dans la marge, n'appelle donc plus le serveur :
+    // les commerces sont déjà là, seul le regroupement change. Dézoomer
+    // découvre en revanche du terrain neuf et reste une vraie requête.
+    final loaded = _bounds;
+    final needsFetch = loaded == null || !loaded.contains(next);
+    final zoomChanged = camera.zoom != _zoom;
+    if (!needsFetch && !zoomChanged) return;
     // Différé d'une frame : certains événements de la carte sont émis
     // pendant la phase de layout (redimensionnement initial), et un
     // `setState` synchrone y déclencherait "setState() called during build".
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() {
-        _bounds = next;
+        if (needsFetch) _bounds = next.padded();
         _zoom = camera.zoom;
       });
     });
@@ -122,7 +138,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       });
     }
 
-    final shops = shopsAsync?.valueOrNull?.items ?? const <MapShop>[];
+    // Les points restent affichés pendant qu'une nouvelle zone se charge, et
+    // même si elle échoue : une carte qui se vide à chaque geste donne
+    // l'impression de tout recharger en permanence.
+    final fresh = shopsAsync?.valueOrNull?.items;
+    if (fresh != null && !identical(fresh, _lastShops)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _lastShops = fresh);
+      });
+    }
+    final shops = fresh ?? _lastShops;
     final clusters = clusterShops(
       shops,
       zoom: _zoom >= _maxClusterZoom ? _maxClusterZoom : _zoom,

@@ -17,6 +17,29 @@ class MapBounds {
   final double east;
   final double west;
 
+  /// Zone élargie autour de la zone visible. On charge volontairement plus
+  /// large que l'écran pour qu'un déplacement modéré reste servi par les
+  /// données déjà en main, au lieu de relancer une requête — et de faire
+  /// clignoter les points — au moindre glissement du doigt.
+  MapBounds padded([double factor = 0.6]) {
+    final latMargin = (north - south) * factor / 2;
+    final lngMargin = (east - west) * factor / 2;
+    return MapBounds(
+      north: (north + latMargin).clamp(-90.0, 90.0).toDouble(),
+      south: (south - latMargin).clamp(-90.0, 90.0).toDouble(),
+      east: (east + lngMargin).clamp(-180.0, 180.0).toDouble(),
+      west: (west - lngMargin).clamp(-180.0, 180.0).toDouble(),
+    );
+  }
+
+  /// `true` si [other] tient entièrement dans cette zone — donc si les
+  /// commerces déjà chargés couvrent ce que l'utilisateur regarde.
+  bool contains(MapBounds other) =>
+      other.north <= north &&
+      other.south >= south &&
+      other.east <= east &&
+      other.west >= west;
+
   @override
   bool operator ==(Object other) =>
       other is MapBounds &&
