@@ -20,7 +20,7 @@ import { DeviceId } from '../common/decorators/device-id.decorator';
 import { ForbiddenAppException, NotFoundAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
-import { SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
+import { MAP_THROTTLE, SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
 import { ListPromoMapQueryDto } from './dto/list-promo-map-query.dto';
@@ -119,6 +119,7 @@ export class PromoController {
    * il serait sinon capturé comme un identifiant de promo et répondrait
    * `PROMO_NOT_FOUND` au lieu d'atteindre cette méthode.
    */
+  @Throttle(MAP_THROTTLE)
   @Get('map')
   async map(@Query() query: ListPromoMapQueryDto) {
     const { commercants, truncated } = await this.promoService.findActiveForMap(query);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,6 +24,11 @@ const _initialZoom = 13.0;
 /// Au-delà de ce zoom, deux commerces distincts ne se chevauchent plus :
 /// inutile de continuer à les regrouper.
 const _maxClusterZoom = 17.0;
+
+/// Immobilité requise avant de réagir à un déplacement de carte. Assez court
+/// pour rester imperceptible à la main, assez long pour qu'un pincement
+/// complet ne compte que pour un seul traitement.
+const _settleDelay = Duration(milliseconds: 300);
 
 /// Carte "autour de moi" : les commerces trop proches à l'écran sont
 /// regroupés en ronds qui se scindent au zoom, jusqu'aux points exacts.
@@ -50,6 +57,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   /// visiblement à chaque geste.
   List<MapShop> _lastShops = const [];
 
+  /// Attente que la carte se stabilise avant de réagir. Pendant un pincement
+  /// ou un vol, `flutter_map` émet un événement **par frame** : traiter
+  /// chacun d'eux, c'était des dizaines de requêtes par geste — de quoi
+  /// épuiser la limite de débit du serveur en quelques secondes et vider la
+  /// batterie en recalculant le regroupement à chaque image.
+  Timer? _settle;
+
   /// La position arrive de façon asynchrone, après le premier rendu :
   /// `initialCenter` est déjà consommé à ce moment-là, il faut donc déplacer
   /// la caméra une fois. Ce drapeau évite de la ramener sur l'utilisateur à
@@ -58,6 +72,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   void dispose() {
+    _settle?.cancel();
     _map.dispose();
     super.dispose();
   }
@@ -82,19 +97,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       east: visible.east.clamp(-180.0, 180.0).toDouble(),
       west: visible.west.clamp(-180.0, 180.0).toDouble(),
     );
-    // Ne recharger que si la zone regardée sort de ce qui est déjà chargé.
-    // Zoomer, ou se déplacer dans la marge, n'appelle donc plus le serveur :
-    // les commerces sont déjà là, seul le regroupement change. Dézoomer
-    // découvre en revanche du terrain neuf et reste une vraie requête.
-    final loaded = _bounds;
-    final needsFetch = loaded == null || !loaded.contains(next);
-    final zoomChanged = camera.zoom != _zoom;
-    if (!needsFetch && !zoomChanged) return;
-    // Différé d'une frame : certains événements de la carte sont émis
-    // pendant la phase de layout (redimensionnement initial), et un
-    // `setState` synchrone y déclencherait "setState() called during build".
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Un seul traitement par geste, une fois la carte immobile. Ce délai
+    // règle aussi le "setState() called during build" : les événements émis
+    // pendant la phase de layout sont absorbés par le minuteur, qui se
+    // déclenche forcément hors construction.
+    _settle?.cancel();
+    _settle = Timer(_settleDelay, () {
       if (!mounted) return;
+      // Ne recharger que si la zone regardée sort de ce qui est déjà chargé.
+      // Zoomer, ou se déplacer dans la marge, n'appelle donc pas le serveur :
+      // les commerces sont déjà là, seul le regroupement change. Dézoomer
+      // découvre en revanche du terrain neuf et reste une vraie requête.
+      final loaded = _bounds;
+      final needsFetch = loaded == null || !loaded.contains(next);
+      if (!needsFetch && camera.zoom == _zoom) return;
       setState(() {
         if (needsFetch) _bounds = next.padded();
         _zoom = camera.zoom;
