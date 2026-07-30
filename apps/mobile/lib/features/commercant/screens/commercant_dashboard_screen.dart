@@ -7,6 +7,9 @@ import '../../../domain/enums/commercant_origin_verification.dart';
 import '../../../domain/enums/promo_lifecycle_status.dart';
 import '../../../domain/enums/registre_status.dart';
 import '../../../domain/models/commercant.dart';
+// Préfixé comme dans `notifications_panel.dart` : `Notification` entre en
+// collision avec la classe du même nom du framework Flutter.
+import '../../../domain/models/notification.dart' as domain;
 import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
@@ -577,67 +580,202 @@ class _PromoPreviewRow extends StatelessWidget {
   }
 }
 
-/// Alertes de modération affichées directement sur le dashboard — pas
-/// seulement derrière l'icône cloche, pour que le commerçant ne les
-/// découvre pas seulement s'il pense à cliquer dessus. Reste affichée tant
-/// que le commerçant n'a pas marqué la notification comme lue (aucune
-/// republication automatique de la promo).
-class _UnreadNotificationsBanner extends ConsumerWidget {
+/// Alertes affichées directement sur le dashboard — pas seulement derrière
+/// l'icône cloche, pour que le commerçant ne les découvre pas s'il pense à
+/// cliquer dessus. Chacune reste visible tant qu'elle n'est pas marquée lue
+/// (aucune republication automatique de la promo).
+///
+/// En slider horizontal et non plus en pile verticale (retour terrain
+/// 2026-07-29) : plusieurs promos arrivant à expiration le même jour
+/// produisaient autant de cartes pleine largeur, qui repoussaient le quota et
+/// la liste hors de l'écran. Dix alertes occupent désormais la place d'une.
+class _UnreadNotificationsBanner extends ConsumerStatefulWidget {
   const _UnreadNotificationsBanner();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_UnreadNotificationsBanner> createState() =>
+      _UnreadNotificationsBannerState();
+}
+
+class _UnreadNotificationsBannerState
+    extends ConsumerState<_UnreadNotificationsBanner> {
+  final PageController _controller = PageController();
+  int _index = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _markAsRead(String notificationId) async {
+    await ref.read(notificationControllerProvider).markAsRead(notificationId);
+    _invalidate();
+  }
+
+  Future<void> _markAllAsRead() async {
+    await ref.read(notificationControllerProvider).markAllAsRead();
+    _invalidate();
+  }
+
+  void _invalidate() {
+    ref.invalidate(notificationsProvider);
+    ref.invalidate(notificationHistoryProvider);
+    ref.invalidate(unreadNotificationCountProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final notificationsAsync = ref.watch(notificationsProvider);
-    final controller = ref.watch(notificationControllerProvider);
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
-    return notificationsAsync.maybeWhen(
-      data: (paginated) {
-        final unread = paginated.items;
-        if (unread.isEmpty) return const SizedBox.shrink();
+    final unread = ref.watch(notificationsProvider).valueOrNull?.items ?? const [];
+    if (unread.isEmpty) return const SizedBox.shrink();
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    // La page courante peut dépasser après un "marquer comme lu" : la liste
+    // rétrécit sans que le PageController en soit informé.
+    final index = _index.clamp(0, unread.length - 1);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
           children: [
-            for (final notification in unread)
-              Card(
-                color: notificationIconColor(context, notification.type).withValues(alpha: 0.1),
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: Icon(
-                    notificationIcon(notification.type),
-                    color: notificationIconColor(context, notification.type),
+            Icon(Icons.notifications_active_outlined, size: 17, color: colorScheme.primary),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                l10n.alertsCount(unread.length),
+                style: textTheme.titleSmall,
+              ),
+            ),
+            // Avec plusieurs alertes du même type, les écarter une par une
+            // est fastidieux — l'API sait déjà tout marquer d'un coup.
+            if (unread.length > 1)
+              TextButton(
+                onPressed: _markAllAsRead,
+                child: Text(l10n.markAllReadLabel),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          // Hauteur fixe imposée par `PageView`, calée sur trois lignes de
+          // message plus la rangée d'actions.
+          height: 116,
+          child: PageView.builder(
+            controller: _controller,
+            itemCount: unread.length,
+            onPageChanged: (page) => setState(() => _index = page),
+            itemBuilder: (context, i) {
+              final notification = unread[i];
+              return Padding(
+                // Laisse deviner la carte suivante : sans ce décalage, rien
+                // n'indique qu'on peut faire glisser.
+                padding: EdgeInsetsDirectional.only(end: i == unread.length - 1 ? 0 : 8),
+                child: _AlertCard(
+                  notification: notification,
+                  onOpen: () => context.push('/commercant/promos'),
+                  onMarkRead: () => _markAsRead(notification.id),
+                ),
+              );
+            },
+          ),
+        ),
+        if (unread.length > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (var i = 0; i < unread.length; i++)
+                  AnimatedContainer(
+                    duration: kAppTransitionDuration,
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: i == index ? 16 : 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: i == index ? colorScheme.primary : colorScheme.outlineVariant,
+                      borderRadius: BorderRadius.circular(AppRadii.pill),
+                    ),
                   ),
-                  title: Text(notification.message),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextButton(
-                        onPressed: () => context.push('/commercant/promos'),
-                        child: Text(l10n.reviewPromoCta),
-                      ),
-                      // Sans ce bouton, une notification traitée (promo déjà
-                      // republiée) n'avait aucun moyen de quitter la liste
-                      // des non lues — elle ne passait jamais à l'historique.
-                      IconButton(
-                        icon: const Icon(Icons.check),
-                        tooltip: l10n.markAsReadTooltip,
-                        onPressed: () async {
-                          await controller.markAsRead(notification.id);
-                          ref.invalidate(notificationsProvider);
-                          ref.invalidate(notificationHistoryProvider);
-                          ref.invalidate(unreadNotificationCountProvider);
-                        },
-                      ),
-                    ],
+              ],
+            ),
+          ),
+        const SizedBox(height: 14),
+      ],
+    );
+  }
+}
+
+class _AlertCard extends StatelessWidget {
+  const _AlertCard({
+    required this.notification,
+    required this.onOpen,
+    required this.onMarkRead,
+  });
+
+  final domain.Notification notification;
+  final VoidCallback onOpen;
+  final VoidCallback onMarkRead;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final textTheme = Theme.of(context).textTheme;
+    final color = notificationIconColor(context, notification.type);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.09),
+        border: Border.all(color: color.withValues(alpha: 0.32)),
+        borderRadius: BorderRadius.circular(AppRadii.md),
+      ),
+      padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 6, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(notificationIcon(notification.type), color: color, size: 19),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    notification.message,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodySmall,
                   ),
                 ),
+              ],
+            ),
+          ),
+          Row(
+            children: [
+              TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: color,
+                  minimumSize: const Size(0, 32),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+                onPressed: onOpen,
+                child: Text(l10n.reviewPromoCta),
               ),
-            const SizedBox(height: 8),
-          ],
-        );
-      },
-      orElse: () => const SizedBox.shrink(),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.check, size: 18),
+                tooltip: l10n.markAsReadTooltip,
+                visualDensity: VisualDensity.compact,
+                onPressed: onMarkRead,
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

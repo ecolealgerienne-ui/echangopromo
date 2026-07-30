@@ -355,5 +355,8 @@
   "@dashboardSlotsLeft": { "placeholders": { "count": { "type": "int" } } },
   "dashboardPromoViewsLabel": "Vues de mes promos",
   "verifiedBadge": "Vérifié",
-  "seeAllLabel": "Tout voir"
+  "seeAllLabel": "Tout voir",
+
+  "alertsCount": "{count, plural, =1{1 alerte} other{{count} alertes}}",
+  "@alertsCount": { "placeholders": { "count": { "type": "int" } } }
 }

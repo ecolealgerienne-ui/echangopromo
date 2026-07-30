@@ -339,5 +339,8 @@
   "@dashboardSlotsLeft": { "placeholders": { "count": { "type": "int" } } },
   "dashboardPromoViewsLabel": "Views on my deals",
   "verifiedBadge": "Verified",
-  "seeAllLabel": "See all"
+  "seeAllLabel": "See all",
+
+  "alertsCount": "{count, plural, =1{1 alert} other{{count} alerts}}",
+  "@alertsCount": { "placeholders": { "count": { "type": "int" } } }
 }

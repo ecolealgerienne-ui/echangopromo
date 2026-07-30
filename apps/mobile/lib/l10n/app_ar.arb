@@ -339,5 +339,8 @@
   "@dashboardSlotsLeft": { "placeholders": { "count": { "type": "int" } } },
   "dashboardPromoViewsLabel": "مشاهدات عروضي",
   "verifiedBadge": "موثَّق",
-  "seeAllLabel": "عرض الكل"
+  "seeAllLabel": "عرض الكل",
+
+  "alertsCount": "{count, plural, =1{تنبيه واحد} =2{تنبيهان} few{{count} تنبيهات} many{{count} تنبيهًا} other{{count} تنبيه}}",
+  "@alertsCount": { "placeholders": { "count": { "type": "int" } } }
 }
