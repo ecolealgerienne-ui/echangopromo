@@ -327,5 +327,8 @@
   "@distanceMeters": { "placeholders": { "meters": { "type": "int" } } },
   "distanceKilometers": "{km} كم",
   "@distanceKilometers": { "placeholders": { "km": { "type": "String" } } },
-  "mapRecenter": "العودة إلى موقعي"
+  "mapRecenter": "العودة إلى موقعي",
+
+  "themeSwitchToDark": "التبديل إلى الوضع الداكن",
+  "themeSwitchToLight": "التبديل إلى الوضع الفاتح"
 }

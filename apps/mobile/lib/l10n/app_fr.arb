@@ -343,5 +343,8 @@
   "@distanceMeters": { "placeholders": { "meters": { "type": "int" } } },
   "distanceKilometers": "{km} km",
   "@distanceKilometers": { "placeholders": { "km": { "type": "String" } } },
-  "mapRecenter": "Recentrer sur ma position"
+  "mapRecenter": "Recentrer sur ma position",
+
+  "themeSwitchToDark": "Passer en mode sombre",
+  "themeSwitchToLight": "Passer en mode clair"
 }
