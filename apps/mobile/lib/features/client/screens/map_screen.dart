@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../app/theme.dart';
+import '../../../data/api/api_exception.dart';
 import '../../../domain/models/map_shop.dart';
 import '../../../l10n/app_localizations.dart';
 import '../providers/location_providers.dart';
@@ -217,7 +218,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               right: 16,
               bottom: 24,
               child: _Banner(
-                message: l10n.mapLoadError,
+                // Le message du backend quand il y en a un (code d'erreur
+                // localisé), le texte générique sinon (panne réseau, DNS,
+                // timeout). Afficher `mapLoadError` dans tous les cas rendait
+                // indistinguables une zone rejetée par l'API et une absence
+                // de réseau — donc impossible à diagnostiquer sur le terrain.
+                message: extractApiErrorMessage(
+                  shopsAsync!.error!,
+                  fallback: l10n.mapLoadError,
+                  locale: Localizations.localeOf(context),
+                ),
                 color: colorScheme.errorContainer,
                 onColor: colorScheme.onErrorContainer,
               ),
