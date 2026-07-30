@@ -28,7 +28,11 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
   final Color success;
   final Color warning;
 
-  static const light = AppSemanticColors(success: Color(0xFF2F9E62), warning: Color(0xFFB45309));
+  /// `warning` en ambre franc et non plus en ambre foncé (`0xFFB45309`) :
+  /// les bandeaux d'alerte l'affichent à ~13 % d'opacité sur blanc, et un
+  /// ambre trop sombre y produisait un beige — exactement le rendu « marron »
+  /// qu'on cherchait à supprimer.
+  static const light = AppSemanticColors(success: Color(0xFF2F9E62), warning: Color(0xFFD97706));
   static const dark = AppSemanticColors(success: Color(0xFF4ADE80), warning: Color(0xFFFBBF24));
 
   @override
@@ -46,29 +50,62 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
   }
 }
 
-/// Système de design "Chaleureux & communautaire" (terracotta/safran) —
-/// piste choisie pour incarner le lien de quartier du pilote plutôt que les
-/// codes visuels "app durable" vert/bleu. L'icône de l'app est recolorée
-/// dans le même terracotta pour se distinguer des autres apps de la famille
-/// echango (qui restent en teal) sur l'écran d'accueil.
+/// Blanc franc, orange en accent (refonte 2026-07-29).
+///
+/// Le thème partait d'un `ColorScheme.fromSeed(seedColor: terracotta)` avec
+/// seul `surface` surchargé. Insuffisant : `fromSeed` dérive **tous** les
+/// autres tons de la graine, donc `onSurface`, `onSurfaceVariant`,
+/// `outlineVariant`, les fonds de conteneur et surtout `surfaceTint` (qui
+/// teinte en orange toute surface élevée) restaient bruns. Résultat, une
+/// interface qui lisait « beige/marron » alors que seule la graine était
+/// orange.
+///
+/// D'où des neutres **explicites**, indépendants de la graine : gris purs
+/// côté surfaces et textes, et l'orange réservé à ce qui doit attirer l'œil
+/// (prix, badges de réduction, sélection, boutons d'action). C'est cette
+/// séparation stricte qui donne « fond blanc, détails orange » — pas un
+/// simple éclaircissement de la teinte de fond.
 class AppTheme {
   AppTheme._();
 
   static const _terracotta = Color(0xFFE8571E);
   static const _safran = Color(0xFFF2A93B);
+  /// Orange plus clair sur fond sombre : le terracotta manque de contraste
+  /// une fois posé sur du noir.
+  static const _terracottaDark = Color(0xFFFF7A45);
 
-  /// Blanc pur (retour terrain 2026-07-29). Auparavant un crème
-  /// (`0xFFFDF6EE`) : l'ensemble tirait vers le beige et l'orange de la
-  /// marque, posé dessus, perdait sa force. Sur blanc, le terracotta est la
-  /// seule couleur saturée de l'écran — c'est ce qui fait « blanc avec un
-  /// effet orange » plutôt que « tout orange pâle ».
-  ///
-  /// Les nuances de surface intermédiaires (`surfaceContainerHighest`, fonds
-  /// de vignette...) restent dérivées du terracotta par `fromSeed` : elles
-  /// gardent donc une pointe de chaud, ce qui évite un gris neutre qui
-  /// jurerait avec la marque.
-  static const _surfaceLight = Color(0xFFFFFFFF);
-  static const _surfaceDark = Color(0xFF211710);
+  // --- Neutres clairs : gris purs, aucune trace de la graine orange ---
+  static const _white = Color(0xFFFFFFFF);
+  static const _ink = Color(0xFF1A1A1A);
+  static const _inkMuted = Color(0xFF6B6B6B);
+  static const _greyLowest = Color(0xFFFFFFFF);
+  static const _greyLow = Color(0xFFFAFAFA);
+  static const _grey = Color(0xFFF6F6F6);
+  static const _greyHigh = Color(0xFFF1F1F1);
+  static const _greyHighest = Color(0xFFEBEBEB);
+  static const _outlineLight = Color(0xFFC9C9C9);
+  static const _outlineVariantLight = Color(0xFFE6E6E6);
+
+  /// Fond des pastilles et indicateurs orange pâle — le seul endroit où une
+  /// surface est teintée, et volontairement (chip de catégorie sélectionnée,
+  /// indicateur d'onglet).
+  static const _orangeTintLight = Color(0xFFFFEDE4);
+  static const _onOrangeTintLight = Color(0xFF8A2E06);
+
+  // --- Neutres sombres : gris neutres également, plus de brun 0xFF211710 ---
+  static const _surfaceDark = Color(0xFF141414);
+  static const _inkDark = Color(0xFFECECEC);
+  static const _inkMutedDark = Color(0xFFA8A8A8);
+  static const _greyLowestDark = Color(0xFF0F0F0F);
+  static const _greyLowDark = Color(0xFF1A1A1A);
+  static const _greyDark = Color(0xFF1F1F1F);
+  static const _greyHighDark = Color(0xFF262626);
+  static const _greyHighestDark = Color(0xFF2E2E2E);
+  static const _outlineDark = Color(0xFF5A5A5A);
+  static const _outlineVariantDark = Color(0xFF303030);
+  static const _orangeTintDark = Color(0xFF3D1B0C);
+  static const _onOrangeTintDark = Color(0xFFFFCBB4);
+
   static const _errorLight = Color(0xFFD6303D);
   static const _errorDark = Color(0xFFF87171);
 
@@ -78,14 +115,59 @@ class AppTheme {
   static ThemeData _build({required Brightness brightness}) {
     final isDark = brightness == Brightness.dark;
 
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: _terracotta,
-      brightness: brightness,
-      primary: _terracotta,
-      secondary: _safran,
-      surface: isDark ? _surfaceDark : _surfaceLight,
-      error: isDark ? _errorDark : _errorLight,
-    );
+    /// `ColorScheme` construit à la main plutôt que par `fromSeed` : c'est le
+    /// seul moyen de garantir que pas un seul ton neutre ne soit dérivé de
+    /// l'orange. Un `fromSeed(...).copyWith(...)` laisserait passer tout ton
+    /// oublié, et il y en a une quinzaine.
+    final colorScheme = isDark
+        ? const ColorScheme.dark(
+            primary: _terracottaDark,
+            onPrimary: Color(0xFF3D1200),
+            primaryContainer: _orangeTintDark,
+            onPrimaryContainer: _onOrangeTintDark,
+            secondary: _safran,
+            onSecondary: Color(0xFF3D2A00),
+            secondaryContainer: _orangeTintDark,
+            onSecondaryContainer: _onOrangeTintDark,
+            surface: _surfaceDark,
+            onSurface: _inkDark,
+            onSurfaceVariant: _inkMutedDark,
+            surfaceContainerLowest: _greyLowestDark,
+            surfaceContainerLow: _greyLowDark,
+            surfaceContainer: _greyDark,
+            surfaceContainerHigh: _greyHighDark,
+            surfaceContainerHighest: _greyHighestDark,
+            outline: _outlineDark,
+            outlineVariant: _outlineVariantDark,
+            error: _errorDark,
+            onError: Color(0xFF3D0006),
+            // Neutralise la teinte d'élévation Material 3 : sans ça, toute
+            // carte ou feuille surélevée reprend un voile orange.
+            surfaceTint: Colors.transparent,
+          )
+        : const ColorScheme.light(
+            primary: _terracotta,
+            onPrimary: _white,
+            primaryContainer: _orangeTintLight,
+            onPrimaryContainer: _onOrangeTintLight,
+            secondary: _safran,
+            onSecondary: _ink,
+            secondaryContainer: _orangeTintLight,
+            onSecondaryContainer: _onOrangeTintLight,
+            surface: _white,
+            onSurface: _ink,
+            onSurfaceVariant: _inkMuted,
+            surfaceContainerLowest: _greyLowest,
+            surfaceContainerLow: _greyLow,
+            surfaceContainer: _grey,
+            surfaceContainerHigh: _greyHigh,
+            surfaceContainerHighest: _greyHighest,
+            outline: _outlineLight,
+            outlineVariant: _outlineVariantLight,
+            error: _errorLight,
+            onError: _white,
+            surfaceTint: Colors.transparent,
+          );
 
     final textTheme = _textTheme(colorScheme);
     final outline = colorScheme.outlineVariant;
@@ -97,12 +179,33 @@ class AppTheme {
       scaffoldBackgroundColor: colorScheme.surface,
       textTheme: textTheme,
       extensions: [isDark ? AppSemanticColors.dark : AppSemanticColors.light],
+      // Barre blanche, titre en encre, icônes orange. Une barre pleine
+      // orange en tête de chaque écran pro ferait de l'orange la couleur
+      // dominante, pas un détail — l'inverse de l'intention.
       appBarTheme: AppBarTheme(
-        backgroundColor: colorScheme.primary,
-        foregroundColor: colorScheme.onPrimary,
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
         elevation: 0,
-        titleTextStyle: textTheme.titleLarge?.copyWith(color: colorScheme.onPrimary),
-        iconTheme: IconThemeData(color: colorScheme.onPrimary),
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: textTheme.titleLarge?.copyWith(color: colorScheme.onSurface),
+        iconTheme: IconThemeData(color: colorScheme.primary),
+        actionsIconTheme: IconThemeData(color: colorScheme.primary),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: colorScheme.surface,
+        indicatorColor: colorScheme.primaryContainer,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+      ),
+      dividerTheme: DividerThemeData(color: outline, thickness: 1),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
       ),
       cardTheme: CardThemeData(
         elevation: 0,
