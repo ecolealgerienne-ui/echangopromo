@@ -45,9 +45,28 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
         throw Exception(l10n.locationPermissionDenied);
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      );
+      // `medium` (~100-500 m) et une limite explicite : `high` force un
+      // verrou GPS satellite qui peut dépasser 30 s en intérieur — or un
+      // commerce se trouve précisément à l'intérieur. Retour terrain
+      // 2026-07-30 : le bouton restait bloqué, le commerçant enregistrait
+      // avant que la position n'arrive, et la fiche partait sans
+      // coordonnées (donc absente de la carte, sans le moindre message).
+      Position position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 12),
+          ),
+        );
+      } on Exception {
+        // Repli sur la dernière position connue de l'appareil : à l'échelle
+        // d'un commerce de quartier elle reste exploitable, et vaut
+        // infiniment mieux qu'une fiche sans position.
+        final cached = await Geolocator.getLastKnownPosition();
+        if (cached == null) rethrow;
+        position = cached;
+      }
       widget.onChanged(position.latitude, position.longitude);
     } catch (error) {
       setState(() => _error = '$error');
@@ -71,6 +90,20 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
         ),
         if (_locating)
           const Padding(padding: EdgeInsets.only(top: 8), child: LinearProgressIndicator()),
+        // Coordonnées affichées en clair : le commerçant voit que quelque
+        // chose a réellement été capté, plutôt qu'un libellé de bouton qui
+        // change. Sert aussi au support — une position aberrante se repère
+        // à l'œil.
+        if (located && !_locating)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              '${widget.latitude!.toStringAsFixed(5)}, ${widget.longitude!.toStringAsFixed(5)}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),

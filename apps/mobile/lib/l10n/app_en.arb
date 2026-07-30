@@ -40,7 +40,7 @@
 
   "locationEnableService": "Enable location on your phone.",
   "locationPermissionDenied": "Location permission denied.",
-  "locationSaved": "Location saved — update location",
+  "locationSaved": "Location captured — locate again",
   "locationCapture": "Locate my shop (optional)",
 
   "telephoneLabel": "Phone",

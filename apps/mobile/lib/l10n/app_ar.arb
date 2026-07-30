@@ -40,7 +40,7 @@
 
   "locationEnableService": "فعّل تحديد الموقع في هاتفك.",
   "locationPermissionDenied": "تم رفض إذن تحديد الموقع.",
-  "locationSaved": "تم حفظ الموقع — إعادة التحديد",
+  "locationSaved": "تم التقاط الموقع — إعادة التحديد",
   "locationCapture": "حدد موقع محلك (اختياري)",
 
   "telephoneLabel": "الهاتف",
