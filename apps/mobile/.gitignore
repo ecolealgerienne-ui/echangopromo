@@ -11,3 +11,10 @@ build/
 # — jamais commité, jamais édité à la main.
 lib/l10n/app_localizations.dart
 lib/l10n/app_localizations_*.dart
+
+# Signature de release Android — keystore et mots de passe. Jamais versionnés :
+# Google n'accepte qu'une seule clé de signature par application, à vie. La
+# publier ici reviendrait à la perdre définitivement.
+android/key.properties
+*.jks
+*.keystore

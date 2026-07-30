@@ -207,14 +207,6 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
                         onPressed: () => context.push('/commercant/register'),
                       ),
                     ],
-                    // TEMPORAIRE — accès à l'écran de test de changement de
-                    // profil, à supprimer avant l'ouverture publique (même écran
-                    // que /dev/profiles, inaccessible autrement dans l'app).
-                    const SizedBox(height: 32),
-                    TextButton(
-                      onPressed: () => context.push('/dev/profiles'),
-                      child: const Text('[TEST] Changer de profil'),
-                    ),
                   ],
                 ),
               ),
