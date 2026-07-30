@@ -346,5 +346,14 @@
   "mapRecenter": "Recentrer sur ma position",
 
   "themeSwitchToDark": "Passer en mode sombre",
-  "themeSwitchToLight": "Passer en mode clair"
+  "themeSwitchToLight": "Passer en mode clair",
+
+  "commercantLoginSubtitle": "Connectez-vous pour publier et suivre vos promos.",
+  "commonOr": "ou",
+  "dashboardActivePromosLabel": "Promos en ligne",
+  "dashboardSlotsLeft": "{count, plural, =0{Plus d'emplacement disponible.} =1{Il vous reste 1 emplacement.} other{Il vous reste {count} emplacements.}}",
+  "@dashboardSlotsLeft": { "placeholders": { "count": { "type": "int" } } },
+  "dashboardPromoViewsLabel": "Vues de mes promos",
+  "verifiedBadge": "Vérifié",
+  "seeAllLabel": "Tout voir"
 }

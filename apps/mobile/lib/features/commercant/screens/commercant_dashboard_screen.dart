@@ -1,28 +1,44 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../domain/enums/commercant_origin_verification.dart';
+import '../../../domain/enums/promo_lifecycle_status.dart';
 import '../../../domain/enums/registre_status.dart';
 import '../../../domain/models/commercant.dart';
+import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
-import '../../../providers/core_providers.dart';
+import '../../shared/l10n/enum_labels.dart';
 import '../../shared/providers/notification_provider.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/notifications_panel.dart';
+import '../../shared/widgets/status_chip.dart';
+import '../providers/commercant_providers.dart';
 
 /// Dashboard commerçant (specs §3.2) : donne une raison concrète de revenir
 /// régulièrement dans l'app, en plus de l'obligation de republication.
+///
+/// Organisé autour des deux questions qu'un commerçant se pose en ouvrant
+/// l'app : « combien de promos ai-je en ligne ? » et « est-ce que ça
+/// marche ? ». Le plafond de 5 actives est donc affiché en tête — c'est une
+/// règle structurelle du produit, et il ne la découvrait jusqu'ici qu'en se
+/// faisant refuser une publication.
 class CommercantDashboardScreen extends ConsumerWidget {
   const CommercantDashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final meAsync = ref.watch(_meProvider);
-    final statsAsync = ref.watch(_statsProvider);
+    final meAsync = ref.watch(commercantMeProvider);
+    final promosAsync = ref.watch(myPromosProvider);
+    final profileViewsAsync = ref.watch(commercantProfileViewsProvider);
+
+    final promos = promosAsync.valueOrNull ?? const <Promo>[];
+    final activeCount = countActivePromos(promos);
+    final atCap = activeCount >= kMaxPromosActives;
 
     return Scaffold(
       appBar: AppBar(
@@ -48,12 +64,19 @@ class CommercantDashboardScreen extends ConsumerWidget {
             icon: const Icon(Icons.account_circle_outlined),
             onSelected: (action) async {
               switch (action) {
+                case 'editProfile':
+                  final updated = await context.push<bool>('/commercant/profile/edit');
+                  if (updated == true) ref.invalidate(commercantMeProvider);
                 case 'logout':
                   await ref.read(authControllerProvider.notifier).logout();
                   if (context.mounted) context.go('/');
               }
             },
             itemBuilder: (context) => [
+              // Modifier sa fiche passe en menu : un commerçant le fait deux
+              // fois par an, publier une promo dix fois par mois. Les deux
+              // partageaient jusqu'ici le même poids visuel.
+              PopupMenuItem(value: 'editProfile', child: Text(l10n.editProfileLabel)),
               PopupMenuItem(value: 'logout', child: Text(l10n.logoutTooltip)),
             ],
           ),
@@ -61,57 +84,491 @@ class CommercantDashboardScreen extends ConsumerWidget {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          ref.invalidate(_meProvider);
-          ref.invalidate(_statsProvider);
+          ref.invalidate(commercantMeProvider);
+          ref.invalidate(myPromosProvider);
+          ref.invalidate(commercantProfileViewsProvider);
         },
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
-            const _UnreadNotificationsBanner(),
             meAsync.when(
               loading: () => const LinearProgressIndicator(),
               error: (error, _) => ApiErrorText(error),
               data: (commercant) => Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(commercant.nom, style: Theme.of(context).textTheme.headlineSmall),
+                  _ShopHeader(commercant: commercant),
                   _RegistreStatusBanner(commercant: commercant),
                   if (commercant.profilePendingReview) const _ProfilePendingReviewBanner(),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.visibility_outlined),
-                title: Text(l10n.profileViewsLabel),
-                trailing: statsAsync.when(
-                  loading: () => const SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+            _QuotaCard(activeCount: activeCount, loading: promosAsync.isLoading),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _StatTile(
+                    label: l10n.profileViewsLabel,
+                    value: profileViewsAsync.valueOrNull,
+                    loading: profileViewsAsync.isLoading,
+                    icon: Icons.storefront_outlined,
                   ),
-                  error: (_, __) => const Text('-'),
-                  data: (count) => Text('$count', style: Theme.of(context).textTheme.titleLarge),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _StatTile(
+                    label: l10n.dashboardPromoViewsLabel,
+                    value: promosAsync.valueOrNull == null ? null : totalPromoViews(promos),
+                    loading: promosAsync.isLoading,
+                    icon: Icons.visibility_outlined,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            // Les alertes de modération restent au-dessus de la liste, pas
+            // derrière l'icône cloche : le commerçant ne doit pas avoir à
+            // penser à cliquer pour les découvrir.
+            const _UnreadNotificationsBanner(),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(l10n.myPromosLabel, style: Theme.of(context).textTheme.titleSmall),
+                ),
+                TextButton(
+                  onPressed: () => context.push('/commercant/promos'),
+                  child: Text(l10n.seeAllLabel),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            switch (promosAsync) {
+              AsyncValue(hasError: true, :final error?) => ApiErrorText(error),
+              AsyncValue(isLoading: true) => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+              _ => _PromoPreviewList(promos: promos),
+            },
+          ],
+        ),
+      ),
+      // Une seule action mise en avant, fixée en bas : publier est ce qu'un
+      // commerçant vient faire, tout le reste en découle.
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: atCap ? null : () => context.push('/commercant/promos/new'),
+        backgroundColor: atCap ? Theme.of(context).colorScheme.surfaceContainerHighest : null,
+        foregroundColor: atCap ? Theme.of(context).colorScheme.onSurfaceVariant : null,
+        icon: Icon(atCap ? Icons.block : Icons.add),
+        // Désactivé plutôt que masqué au plafond : sa disparition laisserait
+        // croire à un bug, alors que le message explique la limite.
+        label: Text(atCap ? l10n.capReachedLabel : l10n.newPromoTitle),
+      ),
+    );
+  }
+}
+
+/// Nom, catégorie et badge « Vérifié » — l'identité que le client voit.
+class _ShopHeader extends StatelessWidget {
+  const _ShopHeader({required this.commercant});
+
+  final Commercant commercant;
+
+  String get _initials {
+    final words =
+        commercant.nom.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    if (words.isEmpty) return '?';
+    if (words.length == 1) return words.first.characters.first.toUpperCase();
+    return (words[0].characters.first + words[1].characters.first).toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
+    final verified = isRegistreVerified(commercant);
+
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadii.md),
+          child: commercant.photoUrl != null
+              ? CachedNetworkImage(
+                  imageUrl: commercant.photoUrl!,
+                  width: 46,
+                  height: 46,
+                  fit: BoxFit.cover,
+                  errorWidget: (context, url, error) => _InitialsBox(initials: _initials),
+                )
+              : _InitialsBox(initials: _initials),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                commercant.nom,
+                style: textTheme.titleMedium,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      categorieLabel(context, commercant.categorie),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodySmall
+                          ?.copyWith(color: colorScheme.onSurfaceVariant),
+                    ),
+                  ),
+                  if (verified) ...[
+                    const SizedBox(width: 6),
+                    Icon(Icons.verified, size: 15, color: semanticColors.success),
+                    const SizedBox(width: 2),
+                    Text(
+                      l10n.verifiedBadge,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: semanticColors.success,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InitialsBox extends StatelessWidget {
+  const _InitialsBox({required this.initials});
+
+  final String initials;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 46,
+      height: 46,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadii.md),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [colorScheme.secondary, colorScheme.primary],
+        ),
+      ),
+      child: Text(
+        initials,
+        style: Theme.of(context)
+            .textTheme
+            .titleMedium
+            ?.copyWith(color: colorScheme.onPrimary),
+      ),
+    );
+  }
+}
+
+/// Emplacements de promos occupés sur le plafond autorisé. Le plafond est une
+/// règle serveur appliquée à tout le monde ; l'afficher évite au commerçant
+/// de ne le découvrir qu'au moment d'un refus de publication.
+class _QuotaCard extends StatelessWidget {
+  const _QuotaCard({required this.activeCount, required this.loading});
+
+  final int activeCount;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final remaining = kMaxPromosActives - activeCount;
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: colorScheme.outlineVariant, width: 1.5),
+        borderRadius: BorderRadius.circular(AppRadii.lg),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      l10n.dashboardActivePromosLabel.toUpperCase(),
+                      style: textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        letterSpacing: 0.8,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (loading)
+                      const SizedBox(
+                        height: 28,
+                        width: 28,
+                        child: Padding(
+                          padding: EdgeInsets.all(4),
+                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                        ),
+                      )
+                    else
+                      Text.rich(
+                        TextSpan(
+                          text: '$activeCount',
+                          style: textTheme.headlineMedium,
+                          children: [
+                            TextSpan(
+                              text: ' / $kMaxPromosActives',
+                              style: textTheme.titleMedium
+                                  ?.copyWith(color: colorScheme.onSurfaceVariant),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               ),
+              if (!loading)
+                Flexible(
+                  child: Text(
+                    l10n.dashboardSlotsLeft(remaining),
+                    textAlign: TextAlign.end,
+                    style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Une barre par emplacement : le commerçant compte d'un regard,
+          // sans lire le chiffre.
+          Row(
+            children: [
+              for (var i = 0; i < kMaxPromosActives; i++) ...[
+                if (i > 0) const SizedBox(width: 5),
+                Expanded(
+                  child: Container(
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: i < activeCount
+                          ? colorScheme.primary
+                          : colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(AppRadii.pill),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  const _StatTile({
+    required this.label,
+    required this.value,
+    required this.loading,
+    required this.icon,
+  });
+
+  final String label;
+  final int? value;
+  final bool loading;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: colorScheme.outlineVariant, width: 1.5),
+        borderRadius: BorderRadius.circular(AppRadii.lg),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: colorScheme.primary),
+          const SizedBox(height: 8),
+          if (loading)
+            const SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            )
+          else
+            Text(
+              value?.toString() ?? '—',
+              style: textTheme.titleLarge,
             ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              icon: const Icon(Icons.local_offer_outlined),
-              label: Text(l10n.myPromosLabel),
-              onPressed: () => context.push('/commercant/promos'),
+          Text(
+            label,
+            style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Trois promos au plus, avec leur statut. Assez pour savoir ce qui travaille
+/// et ce qui dort ; la liste complète reste derrière « Tout voir ».
+class _PromoPreviewList extends StatelessWidget {
+  const _PromoPreviewList({required this.promos});
+
+  final List<Promo> promos;
+
+  static const _previewCount = 3;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (promos.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Center(
+          child: Text(
+            l10n.noPromosYet,
+            textAlign: TextAlign.center,
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: colorScheme.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
+
+    // En ligne d'abord : c'est ce qui est visible des clients maintenant.
+    final sorted = [...promos]..sort((a, b) {
+      final aLive = a.lifecycleStatus == PromoLifecycleStatus.publiee ? 0 : 1;
+      final bLive = b.lifecycleStatus == PromoLifecycleStatus.publiee ? 0 : 1;
+      return aLive.compareTo(bLive);
+    });
+
+    return Column(
+      children: [
+        for (final promo in sorted.take(_previewCount))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _PromoPreviewRow(promo: promo),
+          ),
+      ],
+    );
+  }
+}
+
+class _PromoPreviewRow extends StatelessWidget {
+  const _PromoPreviewRow({required this.promo});
+
+  final Promo promo;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final photo = promo.thumbnailUrl ?? promo.photoUrl;
+    final isExpired = promo.dateFin != null && promo.dateFin!.isBefore(DateTime.now());
+
+    return InkWell(
+      onTap: () => context.push('/commercant/promos'),
+      borderRadius: BorderRadius.circular(AppRadii.lg),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: colorScheme.outlineVariant, width: 1.5),
+          borderRadius: BorderRadius.circular(AppRadii.lg),
+        ),
+        padding: const EdgeInsets.all(8),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadii.sm),
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: photo == null
+                    ? Container(color: colorScheme.surfaceContainerHighest)
+                    : CachedNetworkImage(
+                        imageUrl: photo,
+                        fit: BoxFit.cover,
+                        errorWidget: (context, url, error) =>
+                            Container(color: colorScheme.surfaceContainerHighest),
+                      ),
+              ),
             ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.storefront_outlined),
-              label: Text(l10n.editProfileLabel),
-              onPressed: () async {
-                final updated = await context.push<bool>('/commercant/profile/edit');
-                if (updated == true) {
-                  ref.invalidate(_meProvider);
-                }
-              },
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    promo.description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      StatusChip(
+                        label: promoLifecycleLabel(
+                          context,
+                          promo.lifecycleStatus,
+                          isExpired: isExpired,
+                        ),
+                        color: promoLifecycleColor(
+                          context,
+                          promo.lifecycleStatus,
+                          isExpired: isExpired,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          l10n.myPromosViewsCount(promo.viewCount ?? 0),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.bodySmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -119,10 +576,6 @@ class CommercantDashboardScreen extends ConsumerWidget {
     );
   }
 }
-
-final _meProvider = FutureProvider.autoDispose((ref) => ref.watch(commercantApiProvider).me());
-final _statsProvider =
-    FutureProvider.autoDispose((ref) => ref.watch(commercantApiProvider).dashboardProfileViewCount());
 
 /// Alertes de modération affichées directement sur le dashboard — pas
 /// seulement derrière l'icône cloche, pour que le commerçant ne les
@@ -220,39 +673,20 @@ class _RegistreStatusBanner extends ConsumerWidget {
     final color = isRejected ? colorScheme.error : semanticColors.warning;
 
     return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Card(
-        color: color.withValues(alpha: 0.1),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.info_outline, color: color),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    Text(message),
-                    if (isRejected) ...[
-                      const SizedBox(height: 8),
-                      OutlinedButton(
-                        onPressed: () async {
-                          final sent = await context.push<bool>('/commercant/registre/resend');
-                          if (sent == true && context.mounted) ref.invalidate(_meProvider);
-                        },
-                        child: Text(l10n.registreResendSubmit),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+      padding: const EdgeInsets.only(top: 14),
+      child: _AlertBox(
+        color: color,
+        title: title,
+        message: message,
+        action: isRejected
+            ? _AlertAction(
+                label: l10n.registreResendSubmit,
+                onPressed: () async {
+                  final sent = await context.push<bool>('/commercant/registre/resend');
+                  if (sent == true && context.mounted) ref.invalidate(commercantMeProvider);
+                },
+              )
+            : null,
       ),
     );
   }
@@ -271,32 +705,83 @@ class _ProfilePendingReviewBanner extends StatelessWidget {
     final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
 
     return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Card(
-        color: semanticColors.warning.withValues(alpha: 0.1),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.info_outline, color: semanticColors.warning),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.profilePendingReviewBannerTitle,
-                      style: TextStyle(color: semanticColors.warning, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(l10n.profilePendingReviewBannerMessage),
-                  ],
+      padding: const EdgeInsets.only(top: 14),
+      child: _AlertBox(
+        color: semanticColors.warning,
+        title: l10n.profilePendingReviewBannerTitle,
+        message: l10n.profilePendingReviewBannerMessage,
+      ),
+    );
+  }
+}
+
+class _AlertAction {
+  const _AlertAction({required this.label, required this.onPressed});
+
+  final String label;
+  final Future<void> Function() onPressed;
+}
+
+/// Bandeau d'alerte teinté. Remplace la `Card` des deux bannières : sur fond
+/// blanc, une carte grise sans bordure colorée ne se distinguait plus d'un
+/// bloc de contenu ordinaire.
+class _AlertBox extends StatelessWidget {
+  const _AlertBox({
+    required this.color,
+    required this.title,
+    required this.message,
+    this.action,
+  });
+
+  final Color color;
+  final String title;
+  final String message;
+  final _AlertAction? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final currentAction = action;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+        borderRadius: BorderRadius.circular(AppRadii.md),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, color: color, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: textTheme.titleSmall?.copyWith(color: color),
                 ),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(message, style: textTheme.bodySmall),
+                if (currentAction != null) ...[
+                  const SizedBox(height: 6),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: color,
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: currentAction.onPressed,
+                    child: Text(currentAction.label),
+                  ),
+                ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

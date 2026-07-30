@@ -11,8 +11,10 @@ import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/language_switcher_button.dart';
 import '../../shared/widgets/status_chip.dart';
+import '../providers/commercant_providers.dart';
 
-final myPromosProvider = FutureProvider.autoDispose((ref) => ref.watch(promoApiProvider).listMine());
+// `myPromosProvider` vit désormais dans `providers/commercant_providers.dart` :
+// le tableau de bord l'utilise aussi (règle d'audit #21).
 
 /// Jusqu'à 5 promos actives simultanément (specs §3.2/§5.3). Workflow
 /// brouillon → publiée → arrêtée, édition toujours possible quel que soit

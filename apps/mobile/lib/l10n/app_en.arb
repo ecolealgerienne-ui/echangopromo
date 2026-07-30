@@ -330,5 +330,14 @@
   "mapRecenter": "Recentre on my position",
 
   "themeSwitchToDark": "Switch to dark mode",
-  "themeSwitchToLight": "Switch to light mode"
+  "themeSwitchToLight": "Switch to light mode",
+
+  "commercantLoginSubtitle": "Sign in to publish and track your deals.",
+  "commonOr": "or",
+  "dashboardActivePromosLabel": "Deals online",
+  "dashboardSlotsLeft": "{count, plural, =0{No slot left.} =1{1 slot left.} other{{count} slots left.}}",
+  "@dashboardSlotsLeft": { "placeholders": { "count": { "type": "int" } } },
+  "dashboardPromoViewsLabel": "Views on my deals",
+  "verifiedBadge": "Verified",
+  "seeAllLabel": "See all"
 }

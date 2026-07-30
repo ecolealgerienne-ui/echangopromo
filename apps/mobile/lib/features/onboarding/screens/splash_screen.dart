@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/launch_state.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../shared/widgets/echango_wordmark.dart';
 import '../../../providers/core_providers.dart';
 
 /// Écran d'ouverture animé, affiché à chaque lancement à froid de l'app.
@@ -97,7 +98,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   opacity: _wordmark.value,
                   child: Transform.translate(
                     offset: Offset(0, 16 * (1 - _wordmark.value)),
-                    child: _Wordmark(underlineProgress: _underline.value),
+                    child: EchangoWordmark(underlineProgress: _underline.value),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -140,95 +141,4 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       ),
     );
   }
-}
-
-/// « echango promo » — `echango` reste dans la couleur du texte, `promo`
-/// prend le terracotta et porte le soulignement animé.
-class _Wordmark extends StatelessWidget {
-  const _Wordmark({required this.underlineProgress});
-
-  final double underlineProgress;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final style = Theme.of(context).textTheme.displaySmall?.copyWith(
-          fontWeight: FontWeight.w900,
-          height: 1.0,
-        );
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Text('echango', style: style),
-        const SizedBox(width: 6),
-        Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.bottomCenter,
-          children: [
-            Text('promo', style: style?.copyWith(color: colorScheme.primary)),
-            Positioned(
-              left: -2,
-              right: -2,
-              bottom: -7,
-              height: 11,
-              child: CustomPaint(
-                painter: _SquigglePainter(
-                  progress: underlineProgress,
-                  color: colorScheme.secondary,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// Trait ondulé qui se dessine de gauche à droite. `PathMetric.extractPath`
-/// donne la portion déjà tracée — c'est ce qui produit l'effet « au feutre »
-/// plutôt qu'une simple apparition en fondu.
-class _SquigglePainter extends CustomPainter {
-  const _SquigglePainter({required this.progress, required this.color});
-
-  final double progress;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (progress <= 0 || size.width <= 0) return;
-
-    final path = Path()..moveTo(0, size.height * 0.55);
-    const waves = 4;
-    final step = size.width / waves;
-    for (var i = 0; i < waves; i++) {
-      path.quadraticBezierTo(
-        step * i + step * 0.5,
-        i.isEven ? size.height * 0.02 : size.height * 0.98,
-        step * (i + 1),
-        size.height * 0.55,
-      );
-    }
-
-    final drawn = Path();
-    for (final metric in path.computeMetrics()) {
-      drawn.addPath(metric.extractPath(0, metric.length * progress), Offset.zero);
-    }
-
-    canvas.drawPath(
-      drawn,
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = size.height * 0.5
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_SquigglePainter oldDelegate) =>
-      oldDelegate.progress != progress || oldDelegate.color != color;
 }

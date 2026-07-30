@@ -330,5 +330,14 @@
   "mapRecenter": "العودة إلى موقعي",
 
   "themeSwitchToDark": "التبديل إلى الوضع الداكن",
-  "themeSwitchToLight": "التبديل إلى الوضع الفاتح"
+  "themeSwitchToLight": "التبديل إلى الوضع الفاتح",
+
+  "commercantLoginSubtitle": "سجّل الدخول لنشر عروضك ومتابعتها.",
+  "commonOr": "أو",
+  "dashboardActivePromosLabel": "العروض المنشورة",
+  "dashboardSlotsLeft": "{count, plural, =0{لم يتبقَّ أي مكان.} =1{يتبقّى مكان واحد.} =2{يتبقّى مكانان.} few{يتبقّى {count} أماكن.} many{يتبقّى {count} مكانًا.} other{يتبقّى {count} مكان.}}",
+  "@dashboardSlotsLeft": { "placeholders": { "count": { "type": "int" } } },
+  "dashboardPromoViewsLabel": "مشاهدات عروضي",
+  "verifiedBadge": "موثَّق",
+  "seeAllLabel": "عرض الكل"
 }
