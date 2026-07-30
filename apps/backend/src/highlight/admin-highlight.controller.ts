@@ -80,10 +80,15 @@ export class AdminHighlightController {
     };
   }
 
+  /**
+   * `targetId` omis pour une action qui porte sur le bandeau entier
+   * (réordonnancement) : un identifiant inventé du type `'all'` polluerait
+   * le journal d'audit, qui est relu tel quel par l'écran admin.
+   */
   private record(
     user: AuthTokenPayload,
     action: string,
-    targetId: string,
+    targetId?: string,
     metadata?: Record<string, unknown>,
   ) {
     return this.auditLogService.record({
@@ -128,7 +133,7 @@ export class AdminHighlightController {
     @Body() dto: ReorderHighlightsDto,
   ) {
     const items = await this.highlightService.reorder(dto);
-    await this.record(user, 'highlight.reorder', 'all', { ids: dto.ids });
+    await this.record(user, 'highlight.reorder', undefined, { ids: dto.ids });
     return {
       items: items.map(({ highlight, promoVisible }) =>
         this.toAdminJson(highlight, promoVisible),
