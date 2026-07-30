@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/commune_multi_select_field.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../providers/commune_providers.dart';
 
 /// Demandée au premier lancement, modifiable à tout moment (specs §3.1).
@@ -45,7 +45,7 @@ class _CommuneSelectionScreenState extends ConsumerState<CommuneSelectionScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.chooseCommuneTitle),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),

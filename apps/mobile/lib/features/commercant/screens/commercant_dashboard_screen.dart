@@ -16,7 +16,7 @@ import '../../../providers/auth_provider.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/providers/notification_provider.dart';
 import '../../shared/widgets/api_error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/notifications_panel.dart';
 import '../../shared/widgets/status_chip.dart';
 import '../providers/commercant_providers.dart';
@@ -57,7 +57,7 @@ class CommercantDashboardScreen extends ConsumerWidget {
         ),
         title: Text(l10n.myCommercantSpaceTitle),
         actions: [
-          const LanguageSwitcherButton(),
+          const AppSettingsActions(),
           IconButton(
             icon: const NotificationBadge(),
             tooltip: l10n.notificationsTooltip,

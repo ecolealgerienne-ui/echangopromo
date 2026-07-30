@@ -11,7 +11,7 @@ import '../../../providers/auth_provider.dart';
 import '../../shared/validators/pin_validator.dart';
 import '../../shared/widgets/commercant_fields_form.dart';
 import '../../shared/widgets/error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/loading_button.dart';
 import '../../shared/widgets/photo_picker_field.dart';
 import '../../../providers/core_providers.dart';
@@ -140,7 +140,7 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.registerTitle),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),

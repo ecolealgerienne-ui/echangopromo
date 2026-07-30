@@ -6,7 +6,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/api_error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 
 final _dashboardProvider = FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).dashboard());
 
@@ -37,7 +37,7 @@ class AdminDashboardScreen extends ConsumerWidget {
         automaticallyImplyLeading: false,
         title: Text(isAdmin ? l10n.adminSpaceTitle : l10n.agentSpaceTitle),
         actions: [
-          const LanguageSwitcherButton(),
+          const AppSettingsActions(),
           PopupMenuButton<String>(
             icon: const Icon(Icons.account_circle_outlined),
             onSelected: (action) async {

@@ -8,7 +8,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/commune_multi_select_field.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 
 final _agentsProvider = FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).listAgents());
 final _communesProvider = FutureProvider.autoDispose((ref) => ref.watch(communeApiProvider).list());
@@ -289,7 +289,7 @@ class AgentListScreen extends ConsumerWidget {
                 ? null
                 : () => _transferCommunes(context, ref, agentsAsync.value!, communesAsync.value!),
           ),
-          const LanguageSwitcherButton(),
+          const AppSettingsActions(),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(

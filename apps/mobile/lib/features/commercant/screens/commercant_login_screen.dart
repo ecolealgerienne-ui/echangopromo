@@ -10,7 +10,7 @@ import '../../../providers/core_providers.dart';
 import '../../shared/validators/pin_validator.dart';
 import '../../shared/widgets/echango_wordmark.dart';
 import '../../shared/widgets/error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/loading_button.dart';
 
 /// Authentification téléphone + code PIN, sans SMS (specs §3.2).
@@ -128,7 +128,7 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
                     onPressed: () => context.canPop() ? context.pop() : context.go('/'),
                   ),
                   const Spacer(),
-                  const LanguageSwitcherButton(),
+                  const AppSettingsActions(),
                 ],
               ),
             ),

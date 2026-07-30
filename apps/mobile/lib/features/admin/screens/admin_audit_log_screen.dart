@@ -6,7 +6,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/api_error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 
 final _auditLogProvider = FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).auditLog());
 
@@ -25,7 +25,7 @@ class AdminAuditLogScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.auditLogLabel),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
       body: entriesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),

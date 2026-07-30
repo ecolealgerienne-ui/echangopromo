@@ -358,5 +358,20 @@
   "seeAllLabel": "Tout voir",
 
   "alertsCount": "{count, plural, =1{1 alerte} other{{count} alertes}}",
-  "@alertsCount": { "placeholders": { "count": { "type": "int" } } }
+  "@alertsCount": { "placeholders": { "count": { "type": "int" } } },
+
+  "promoSectionPhotos": "Photos",
+  "promoSectionPhotosHint": "La première photo est celle que le client voit dans la liste.",
+  "promoSectionProduct": "Le produit",
+  "promoSectionPrice": "Le prix",
+  "promoSectionDuration": "Durée",
+  "discountPreview": "Le client économise {amount}.",
+  "@discountPreview": { "placeholders": { "amount": { "type": "String" } } },
+  "profileSectionStorefront": "Ma vitrine",
+  "profileSectionStorefrontHint": "Ce que le client voit avant d'entrer.",
+  "profileSectionLocation": "Où me trouver",
+  "profileSectionLocationHint": "La position permet l'itinéraire et l'affichage sur la carte.",
+  "profileSectionSecurity": "Sécurité",
+  "profileSectionDanger": "Zone sensible",
+  "profileSectionDangerHint": "Cette action est définitive."
 }

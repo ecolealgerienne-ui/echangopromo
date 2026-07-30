@@ -7,7 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/api_error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../widgets/commune_filter_bar.dart';
 import '../widgets/promo_moderation_tile.dart';
 
@@ -71,7 +71,7 @@ class ModerationQueueScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.moderationLabel),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
       body: Column(
         children: [

@@ -6,7 +6,7 @@ import '../../../providers/core_providers.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/commune_multi_select_field.dart';
 import '../../shared/widgets/error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/loading_button.dart';
 
 final _communesForCreateAgentProvider =
@@ -72,7 +72,7 @@ class _CreateAgentScreenState extends ConsumerState<CreateAgentScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.newAgentLabel),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),

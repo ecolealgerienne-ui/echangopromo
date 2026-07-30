@@ -12,7 +12,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/utils/categorie_asset.dart';
 import '../../shared/widgets/api_error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/promo_discount_badge.dart';
 import '../../shared/widgets/theme_mode_button.dart';
 import '../providers/commune_providers.dart';
@@ -235,7 +235,7 @@ class _TopBarState extends ConsumerState<_TopBar> {
                 ),
               ),
               const ThemeModeButton(),
-              const LanguageSwitcherButton(),
+              const AppSettingsActions(),
             ],
           ),
           const SizedBox(height: 6),

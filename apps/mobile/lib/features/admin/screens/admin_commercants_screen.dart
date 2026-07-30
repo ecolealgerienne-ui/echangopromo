@@ -10,7 +10,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/api_error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/status_chip.dart';
 import '../widgets/commune_filter_bar.dart';
 
@@ -141,7 +141,7 @@ class AdminCommercantsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.commercantsLabel),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
       // Création de commerçant réservée à l'agent (specs §3.2/§3.3, jamais
       // l'admin) — seul point d'entrée vers /agent/commercant/new depuis la

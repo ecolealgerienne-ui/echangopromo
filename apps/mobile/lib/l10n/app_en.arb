@@ -342,5 +342,20 @@
   "seeAllLabel": "See all",
 
   "alertsCount": "{count, plural, =1{1 alert} other{{count} alerts}}",
-  "@alertsCount": { "placeholders": { "count": { "type": "int" } } }
+  "@alertsCount": { "placeholders": { "count": { "type": "int" } } },
+
+  "promoSectionPhotos": "Photos",
+  "promoSectionPhotosHint": "The first photo is the one customers see in the list.",
+  "promoSectionProduct": "The product",
+  "promoSectionPrice": "The price",
+  "promoSectionDuration": "Duration",
+  "discountPreview": "Customers save {amount}.",
+  "@discountPreview": { "placeholders": { "amount": { "type": "String" } } },
+  "profileSectionStorefront": "My storefront",
+  "profileSectionStorefrontHint": "What customers see before walking in.",
+  "profileSectionLocation": "Where to find me",
+  "profileSectionLocationHint": "The location enables directions and the map view.",
+  "profileSectionSecurity": "Security",
+  "profileSectionDanger": "Sensitive area",
+  "profileSectionDangerHint": "This action is permanent."
 }

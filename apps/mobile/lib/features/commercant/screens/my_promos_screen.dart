@@ -9,7 +9,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/api_error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/status_chip.dart';
 import '../providers/commercant_providers.dart';
 
@@ -80,7 +80,7 @@ class MyPromosScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.myPromosTitle),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add),

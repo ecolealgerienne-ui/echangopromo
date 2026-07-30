@@ -342,5 +342,20 @@
   "seeAllLabel": "عرض الكل",
 
   "alertsCount": "{count, plural, =1{تنبيه واحد} =2{تنبيهان} few{{count} تنبيهات} many{{count} تنبيهًا} other{{count} تنبيه}}",
-  "@alertsCount": { "placeholders": { "count": { "type": "int" } } }
+  "@alertsCount": { "placeholders": { "count": { "type": "int" } } },
+
+  "promoSectionPhotos": "الصور",
+  "promoSectionPhotosHint": "الصورة الأولى هي التي يراها العميل في القائمة.",
+  "promoSectionProduct": "المنتج",
+  "promoSectionPrice": "السعر",
+  "promoSectionDuration": "المدة",
+  "discountPreview": "يوفّر العميل {amount}.",
+  "@discountPreview": { "placeholders": { "amount": { "type": "String" } } },
+  "profileSectionStorefront": "واجهة محلي",
+  "profileSectionStorefrontHint": "ما يراه العميل قبل الدخول.",
+  "profileSectionLocation": "مكان تواجدي",
+  "profileSectionLocationHint": "الموقع يسمح بالاتجاهات والظهور على الخريطة.",
+  "profileSectionSecurity": "الأمان",
+  "profileSectionDanger": "منطقة حسّاسة",
+  "profileSectionDangerHint": "هذا الإجراء نهائي."
 }
