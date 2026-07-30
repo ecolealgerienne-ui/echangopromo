@@ -357,5 +357,12 @@
   "profileSectionLocationHint": "الموقع يسمح بالاتجاهات والظهور على الخريطة.",
   "profileSectionSecurity": "الأمان",
   "profileSectionDanger": "منطقة حسّاسة",
-  "profileSectionDangerHint": "هذا الإجراء نهائي."
+  "profileSectionDangerHint": "هذا الإجراء نهائي.",
+
+  "commercantSectionShop": "المحل",
+  "commercantSectionShopHint": "ما يراه العميل قبل الدخول.",
+  "commercantSectionWhere": "أين يجده",
+  "commercantSectionWhereHint": "الموقع يسمح بالاتجاهات والظهور على الخريطة.",
+  "registerSectionPin": "رمز الدخول الخاص بي",
+  "registerSectionPinHint": "ستستعمله لتسجيل الدخول. لا يعرفه أحد غيرك."
 }

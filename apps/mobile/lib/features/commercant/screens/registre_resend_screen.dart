@@ -7,6 +7,7 @@ import '../../../data/api/api_exception.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/error_text.dart';
+import '../../shared/widgets/form_section.dart';
 import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/loading_button.dart';
 import '../../shared/widgets/photo_picker_field.dart';
@@ -62,22 +63,36 @@ class _RegistreResendScreenState extends ConsumerState<RegistreResendScreen> {
         title: Text(l10n.registreResendTitle),
         actions: const [AppSettingsActions()],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ListView(
-          children: [
-            Text(l10n.registreResendHelperText),
-            const SizedBox(height: 16),
-            Text(l10n.registrePhotoLabel, style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            PhotoPickerField(
-              file: _photo,
-              onChanged: (file) => setState(() => _photo = file),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        children: [
+          FormSection(
+            title: l10n.registrePhotoLabel,
+            subtitle: l10n.registreResendHelperText,
+            icon: Icons.description_outlined,
+            children: [
+              PhotoPickerField(
+                file: _photo,
+                onChanged: (file) => setState(() => _photo = file),
+              ),
+            ],
+          ),
+          ErrorText(_error),
+        ],
+      ),
+      bottomNavigationBar: Material(
+        color: Theme.of(context).colorScheme.surface,
+        elevation: 3,
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+            child: LoadingButton(
+              loading: _loading,
+              onPressed: _submit,
+              label: l10n.registreResendSubmit,
             ),
-            ErrorText(_error),
-            const SizedBox(height: 16),
-            LoadingButton(loading: _loading, onPressed: _submit, label: l10n.registreResendSubmit),
-          ],
+          ),
         ),
       ),
     );

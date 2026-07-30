@@ -357,5 +357,12 @@
   "profileSectionLocationHint": "The location enables directions and the map view.",
   "profileSectionSecurity": "Security",
   "profileSectionDanger": "Sensitive area",
-  "profileSectionDangerHint": "This action is permanent."
+  "profileSectionDangerHint": "This action is permanent.",
+
+  "commercantSectionShop": "The shop",
+  "commercantSectionShopHint": "What customers see before walking in.",
+  "commercantSectionWhere": "Where to find it",
+  "commercantSectionWhereHint": "The location enables directions and the map view.",
+  "registerSectionPin": "My access code",
+  "registerSectionPinHint": "You'll use it to sign in. Nobody else knows it."
 }

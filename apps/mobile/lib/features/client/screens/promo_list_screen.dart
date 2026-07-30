@@ -14,7 +14,6 @@ import '../../shared/utils/categorie_asset.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/promo_discount_badge.dart';
-import '../../shared/widgets/theme_mode_button.dart';
 import '../providers/commune_providers.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/promo_providers.dart';
@@ -234,7 +233,6 @@ class _TopBarState extends ConsumerState<_TopBar> {
                   ),
                 ),
               ),
-              const ThemeModeButton(),
               const AppSettingsActions(),
             ],
           ),

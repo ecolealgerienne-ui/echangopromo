@@ -14,6 +14,7 @@ class FormSection extends StatelessWidget {
     this.subtitle,
     this.icon,
     this.tone,
+    this.index,
   });
 
   final String title;
@@ -23,6 +24,12 @@ class FormSection extends StatelessWidget {
   /// Couleur du titre et du cadre. `null` = neutre. Sert à distinguer une
   /// section destructrice (suppression de compte) du reste du formulaire.
   final Color? tone;
+
+  /// Numéro d'étape, affiché en pastille à la place de l'icône. Réservé aux
+  /// formulaires qui se remplissent réellement de haut en bas (inscription) :
+  /// numéroter des sections sans ordre imposé laisserait croire à une
+  /// progression obligatoire qui n'existe pas.
+  final int? index;
 
   final List<Widget> children;
 
@@ -44,7 +51,25 @@ class FormSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              if (icon != null) ...[
+              if (index != null) ...[
+                Container(
+                  width: 22,
+                  height: 22,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: tone ?? colorScheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '$index',
+                    style: textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 9),
+              ] else if (icon != null) ...[
                 Icon(icon, size: 18, color: tone ?? colorScheme.primary),
                 const SizedBox(width: 8),
               ],
