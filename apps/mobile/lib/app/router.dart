@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../domain/enums/categorie.dart';
 import '../domain/models/auth_session.dart';
 import '../domain/models/admin_commercant_item.dart';
+import '../domain/models/highlight.dart';
 import '../domain/models/agent.dart';
 import '../domain/models/moderation_item.dart';
 import '../domain/models/promo.dart';
@@ -12,6 +13,8 @@ import '../features/admin/screens/admin_audit_log_screen.dart';
 import '../features/admin/screens/admin_commercant_detail_screen.dart';
 import '../features/admin/screens/admin_commercants_screen.dart';
 import '../features/admin/screens/admin_dashboard_screen.dart';
+import '../features/admin/screens/admin_highlight_form_screen.dart';
+import '../features/admin/screens/admin_highlights_screen.dart';
 import '../features/admin/screens/admin_login_screen.dart';
 import '../features/admin/screens/admin_promo_detail_screen.dart';
 import '../features/admin/screens/admin_promos_screen.dart';
@@ -228,6 +231,23 @@ final _appRoutes = <_AppRoute>[
   _AppRoute(
     '/admin/commercants/detail',
     (context, state) => AdminCommercantDetailScreen(item: state.extra as AdminCommercantItem),
+    requiredRole: AppRole.admin,
+  ),
+  // Curation du bandeau « Top promos » de l'accueil client — admin seul
+  // (voir AdminDashboardScreen).
+  _AppRoute(
+    '/admin/highlights',
+    (context, state) => const AdminHighlightsScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/highlights/new',
+    (context, state) => const AdminHighlightFormScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/highlights/edit',
+    (context, state) => AdminHighlightFormScreen(existing: state.extra as Highlight),
     requiredRole: AppRole.admin,
   ),
   _AppRoute(

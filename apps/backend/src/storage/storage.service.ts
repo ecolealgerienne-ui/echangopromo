@@ -33,7 +33,11 @@ const THUMBNAIL_SIZE_PX = 240;
  */
 export const MAX_UPLOAD_BYTES = 500 * 1024;
 
-export type UploadFolder = 'promo-photos' | 'commercant-photos' | 'registre-documents';
+export type UploadFolder =
+  | 'promo-photos'
+  | 'commercant-photos'
+  | 'registre-documents'
+  | 'highlight-images';
 
 /**
  * Le registre de commerce est un justificatif d'identité professionnelle,
@@ -87,6 +91,9 @@ export class StorageService {
    * photo de commerce (`commercant-photos/`) et le registre de commerce
    * (`registre-documents/`, pièce justificative conservée pour traçabilité
    * de la validation admin) sont permanents, d'où le préfixe distinct.
+   * `highlight-images/` (visuel importé par l'admin pour le bandeau
+   * d'accueil) l'est aussi — supprimé explicitement avec sa diapositive
+   * (`HighlightService.remove`), jamais par la purge de rétention.
    */
   buildKey(
     commercantId: string,

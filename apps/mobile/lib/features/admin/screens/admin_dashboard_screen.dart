@@ -115,6 +115,15 @@ class AdminDashboardScreen extends ConsumerWidget {
             ),
             if (isAdmin) ...[
               const SizedBox(height: 24),
+              // Admin uniquement : le bandeau d'accueil est une vitrine
+              // globale, pas un outil de terrain scopé à des communes
+              // (le backend refuse d'ailleurs le rôle agent sur ces routes).
+              OutlinedButton.icon(
+                icon: const Icon(Icons.view_carousel_outlined),
+                label: Text(l10n.highlightsTitle),
+                onPressed: () => context.push('/admin/highlights'),
+              ),
+              const SizedBox(height: 8),
               OutlinedButton.icon(
                 icon: const Icon(Icons.badge_outlined),
                 label: Text(l10n.agentsLabel),

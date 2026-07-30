@@ -588,6 +588,35 @@ export class PromoService {
     });
   }
 
+  /**
+   * Sous-ensemble de [ids] réellement visible par un client — même règle que
+   * `findActiveForClient` (publiée, modération non bloquante, non expirée,
+   * commerçant ni supprimé ni suspendu), appliquée ici plutôt que réécrite
+   * par l'appelant (CLAUDE.md règle #9 : la définition de « promo visible »
+   * ne vit qu'ici).
+   *
+   * Utilisé par le bandeau d'accueil curé (`HighlightService`) : une
+   * diapositive pointant vers une promo devenue invisible doit disparaître,
+   * pas afficher un lien mort.
+   */
+  async findVisibleByIds(ids: string[]): Promise<Promo[]> {
+    if (ids.length === 0) return [];
+    return this.promos
+      .createQueryBuilder('promo')
+      .innerJoinAndSelect('promo.commercant', 'commercant')
+      .where('promo.id IN (:...ids)', { ids })
+      .andWhere('promo.lifecycleStatus = :lifecycleStatus', {
+        lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
+      })
+      .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
+        moderationStatuses: VISIBLE_MODERATION_STATUSES,
+      })
+      .andWhere('promo.dateFin > NOW()')
+      .andWhere('commercant.deletedAt IS NULL')
+      .andWhere('commercant.suspendedAt IS NULL')
+      .getMany();
+  }
+
   async listByCommercant(
     commercantId: string,
     page: number,

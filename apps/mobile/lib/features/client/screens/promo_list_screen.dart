@@ -7,7 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
-import '../../../domain/models/promo.dart';
+import '../../../domain/models/highlight.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/utils/categorie_asset.dart';
@@ -284,10 +284,12 @@ class _TopBarState extends ConsumerState<_TopBar> {
   }
 }
 
-/// Bandeau "Top promos" : les plus fortes réductions de la commune, calculées
-/// par le backend. Silencieux en cas d'erreur — c'est une vitrine, pas un
-/// contenu essentiel : une erreur ici volerait la place de la liste, qui a
-/// son propre traitement d'erreur.
+/// Bandeau "Top promos" : les diapositives mises en avant par l'admin, ou à
+/// défaut les plus fortes réductions calculées par le backend — l'app ne
+/// distingue pas les deux, elle affiche ce que `GET /highlight` renvoie.
+/// Silencieux en cas d'erreur : c'est une vitrine, pas un contenu essentiel,
+/// et une erreur ici volerait la place de la liste, qui a son propre
+/// traitement d'erreur.
 class _TopPromosSection extends ConsumerWidget {
   const _TopPromosSection();
 
@@ -295,8 +297,8 @@ class _TopPromosSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final textTheme = Theme.of(context).textTheme;
-    final promos = ref.watch(topPromosProvider).valueOrNull ?? const <Promo>[];
-    if (promos.isEmpty) return const SizedBox.shrink();
+    final highlights = ref.watch(topPromosProvider).valueOrNull ?? const <Highlight>[];
+    if (highlights.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -311,9 +313,9 @@ class _TopPromosSection extends ConsumerWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: promos.length,
+            itemCount: highlights.length,
             separatorBuilder: (context, index) => const SizedBox(width: 10),
-            itemBuilder: (context, index) => _TopPromoCard(promo: promos[index]),
+            itemBuilder: (context, index) => _TopPromoCard(highlight: highlights[index]),
           ),
         ),
         const SizedBox(height: 4),
@@ -322,22 +324,28 @@ class _TopPromosSection extends ConsumerWidget {
   }
 }
 
+/// Vignette du bandeau : image (importée par l'admin ou photo de la promo),
+/// badge de réduction, titre et sous-titre. Le clic ouvre la promo ciblée ;
+/// une diapositive purement informative (image seule, sans promo) reste
+/// simplement non cliquable.
 class _TopPromoCard extends StatelessWidget {
-  const _TopPromoCard({required this.promo});
+  const _TopPromoCard({required this.highlight});
 
-  final Promo promo;
+  final Highlight highlight;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final photo =
-        promo.thumbnailUrl ?? (promo.photoUrls.isNotEmpty ? promo.photoUrls.first : null);
+    final photo = highlight.imageUrl;
+    final titre = highlight.displayTitre;
+    final sousTitre = highlight.displaySousTitre;
+    final promoId = highlight.promoId;
 
     return SizedBox(
       width: 232,
       child: InkWell(
-        onTap: () => context.push('/promo/${promo.id}'),
+        onTap: promoId == null ? null : () => context.push('/promo/$promoId'),
         borderRadius: BorderRadius.circular(AppRadii.lg),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(AppRadii.lg),
@@ -356,7 +364,7 @@ class _TopPromoCard extends StatelessWidget {
                       Container(color: colorScheme.surfaceContainerHighest),
                 ),
               // Voile du bas : le texte doit rester lisible quelle que soit
-              // la photo envoyée par le commerçant.
+              // l'image, photo commerçant comme visuel importé.
               DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -370,15 +378,16 @@ class _TopPromoCard extends StatelessWidget {
                   ),
                 ),
               ),
-              Positioned(
-                top: 8,
-                left: 8,
-                child: PromoDiscountBadge(
-                  prixAvant: promo.prixAvant,
-                  prixApres: promo.prixApres,
-                  textStyle: textTheme.labelSmall,
+              if (highlight.hasDiscount)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: PromoDiscountBadge(
+                    prixAvant: highlight.prixAvant!,
+                    prixApres: highlight.prixApres!,
+                    textStyle: textTheme.labelSmall,
+                  ),
                 ),
-              ),
               Positioned(
                 left: 10,
                 right: 10,
@@ -387,15 +396,16 @@ class _TopPromoCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      promo.description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.titleSmall?.copyWith(color: Colors.white),
-                    ),
-                    if (promo.commercantNom != null)
+                    if (titre != null)
                       Text(
-                        promo.commercantNom!,
+                        titre,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.titleSmall?.copyWith(color: Colors.white),
+                      ),
+                    if (sousTitre != null)
+                      Text(
+                        sousTitre,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: textTheme.bodySmall

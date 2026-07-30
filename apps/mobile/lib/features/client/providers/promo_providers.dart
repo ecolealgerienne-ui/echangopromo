@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/promo_api.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/models/commercant.dart';
+import '../../../domain/models/highlight.dart';
 import '../../../domain/models/promo.dart';
 import '../../../providers/core_providers.dart';
 import 'commune_providers.dart';
@@ -229,19 +230,22 @@ final promoDetailProvider =
   return ref.watch(promoApiProvider).detail(promoId);
 });
 
-/// Bandeau "Top promos" de l'accueil : les plus fortes réductions de la
-/// commune, calculées par le backend (`sort=discount`). Un tri local ne
-/// donnerait que le meilleur de la page déjà chargée, pas le meilleur tout
-/// court. Volontairement indépendant de `promoListProvider` : ce bandeau ne
-/// suit ni la recherche ni la catégorie, il reste une vitrine stable.
-final topPromosProvider = FutureProvider.autoDispose<List<Promo>>((ref) async {
+/// Bandeau "Top promos" de l'accueil.
+///
+/// Depuis 2026-07-30 il est **curé par l'admin** (`GET /highlight`) : c'est
+/// lui qui choisit les diapositives, leur ordre, et peut y importer une
+/// image dédiée. Sans curation active exploitable, le backend retombe de
+/// lui-même sur le classement calculé d'avant (les plus fortes réductions,
+/// `sort=discount`) — l'app n'a donc qu'un seul appel et le bandeau ne se
+/// vide jamais faute de configuration.
+///
+/// Volontairement indépendant de `promoListProvider` : ce bandeau ne suit ni
+/// la recherche ni la catégorie, il reste une vitrine stable. La commune
+/// n'est transmise que pour le repli calculé, une sélection éditoriale étant
+/// globale par nature.
+final topPromosProvider = FutureProvider.autoDispose<List<Highlight>>((ref) {
   final communeIds = ref.watch(selectedCommunesProvider);
-  final result = await ref.watch(promoApiProvider).listActive(
-        communeIds: communeIds,
-        sort: PromoServerSort.discount,
-        limit: 8,
-      );
-  return result.items;
+  return ref.watch(highlightApiProvider).list(communeIds: communeIds);
 });
 
 /// "Autres promos du magasin" sur la fiche promo. La promo consultée est
