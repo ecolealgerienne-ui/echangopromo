@@ -229,7 +229,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     ),
                 ],
               ),
+              // Attribution obligatoire, pas décorative : OpenStreetMap est
+              // sous ODbL (le crédit fait partie de la licence) et les fonds
+              // CARTO gratuits l'imposent dans leurs conditions. La retirer
+              // nous mettrait en infraction, et c'est le genre de point que
+              // les magasins d'applications vérifient.
+              //
+              // Ce qu'on peut faire, et qu'on fait : la réduire au minimum.
+              // `showFlutterMapAttribution: false` retire « made with
+              // flutter_map », qui n'est qu'une politesse du paquet (option
+              // prévue pour ça) et non une contrainte de licence. Et on la
+              // pose à gauche : par défaut elle occupe le coin bas-droit,
+              // exactement là où se trouve le bouton « me recentrer ».
               const RichAttributionWidget(
+                alignment: AttributionAlignment.bottomLeft,
+                showFlutterMapAttribution: false,
                 attributions: [
                   TextSourceAttribution('OpenStreetMap contributors'),
                   TextSourceAttribution('CARTO'),
