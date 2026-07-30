@@ -140,6 +140,8 @@ class PromoListScreen extends ConsumerWidget {
                           promo: promo,
                           isFavorite: favorites.contains(promo.id),
                           onTap: () => context.push('/promo/${promo.id}'),
+                          onToggleFavorite: () =>
+                              ref.read(favoritesProvider.notifier).toggle(promo.id),
                         );
                       },
                     ),

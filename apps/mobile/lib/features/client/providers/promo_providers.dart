@@ -180,8 +180,29 @@ final visiblePromosProvider = Provider.autoDispose<List<Promo>>((ref) {
   final favoritesOnly = ref.watch(favoritesOnlyFilterProvider);
   final sort = ref.watch(promoSortProvider);
 
-  final filtered =
+  final search = ref.watch(searchQueryProvider).trim().toLowerCase();
+
+  var filtered =
       favoritesOnly ? state.items.where((p) => favorites.contains(p.id)).toList() : [...state.items];
+
+  // Le backend filtre déjà via `search`, mais on refiltre ici. Deux raisons :
+  // le résultat est immédiat pendant que la requête part (pas d'attente de
+  // l'aller-retour), et surtout la liste reste juste même si le serveur
+  // ignore le paramètre — c'est exactement ce qui s'est produit avec un
+  // backend pas encore déployé : `ValidationPipe({whitelist: true})` retire
+  // silencieusement tout paramètre qu'il ne connaît pas, et la recherche
+  // renvoyait alors la totalité des promos.
+  if (search.isNotEmpty) {
+    final terms = search.split(RegExp(r'\s+')).where((t) => t.isNotEmpty);
+    filtered = filtered.where((promo) {
+      final haystack =
+          '${promo.description} ${promo.commercantNom ?? ''}'.toLowerCase();
+      // Tous les mots doivent apparaître, dans n'importe quel ordre :
+      // « brosse dents » trouve « brosse à dents » sans exiger la formulation
+      // exacte, mais « brosse » seul ne remonte plus tout le catalogue.
+      return terms.every(haystack.contains);
+    }).toList();
+  }
 
   switch (sort) {
     case PromoSort.expireBientot:
