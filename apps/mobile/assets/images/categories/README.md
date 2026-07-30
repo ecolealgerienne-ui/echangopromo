@@ -15,6 +15,7 @@ d'affichage :
 | Fichier | Catégorie |
 |---|---|
 | `alimentation.jpg` | Alimentation |
+| `restauration.jpg` | Restauration |
 | `vetements_textile.jpg` | Vêtements / Textile |
 | `electromenager.jpg` | Électroménager |
 | `beaute_hygiene.jpg` | Beauté / Hygiène |

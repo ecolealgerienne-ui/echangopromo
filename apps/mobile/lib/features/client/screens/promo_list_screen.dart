@@ -477,7 +477,10 @@ class _CategoryCircle extends StatelessWidget {
   final VoidCallback onTap;
 
   static const _icons = <Categorie, IconData>{
-    Categorie.alimentation: Icons.restaurant,
+    // `restaurant` est passée à la catégorie restauration : l'alimentation
+    // désigne les courses à emporter, pas le repas sur place.
+    Categorie.alimentation: Icons.local_grocery_store,
+    Categorie.restauration: Icons.restaurant,
     Categorie.vetementsTextile: Icons.checkroom,
     Categorie.electromenager: Icons.kitchen,
     Categorie.beauteHygiene: Icons.spa,

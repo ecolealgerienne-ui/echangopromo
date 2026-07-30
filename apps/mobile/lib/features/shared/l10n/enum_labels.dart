@@ -20,6 +20,8 @@ String categorieLabel(BuildContext context, Categorie categorie) {
   switch (categorie) {
     case Categorie.alimentation:
       return l10n.categorieAlimentation;
+    case Categorie.restauration:
+      return l10n.categorieRestauration;
     case Categorie.vetementsTextile:
       return l10n.categorieVetementsTextile;
     case Categorie.electromenager:
