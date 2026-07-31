@@ -11,23 +11,35 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
+      vars:
+        APP_DIR: "apps/mobile"
 
     # PAS de `working_directory` : il s'applique à TOUS les scripts, y
     # compris ceux qui n'ont rien à voir avec le projet Flutter (keychain,
-    # signature). Les trois workflows qui compilent déjà (TikMeal, echango
-    # POS, echango Vendeur) n'en ont aucun — leurs apps sont à la racine du
-    # dépôt. Ici l'app est dans un monorepo, donc chaque étape qui touche
-    # au projet Flutter fait son `cd apps/mobile` elle-même.
+    # signature). Les workflows qui compilent déjà (TikMeal, echango POS,
+    # echango Vendeur) n'en ont aucun alors que leur app est elle aussi
+    # dans un sous-dossier (`mobile/`) : ce sont leurs scripts qui font le
+    # `cd`. Même principe ici, via `$APP_DIR` — une seule valeur à changer
+    # si le dépôt construit par Codemagic n'a pas cette arborescence
+    # (surchargeable depuis les variables d'environnement Codemagic, sans
+    # toucher au fichier).
 
     scripts:
       - name: Récupérer les dépendances Flutter
         script: |
-          cd apps/mobile
+          if [ ! -f "$APP_DIR/pubspec.yaml" ]; then
+            echo ">>> Aucun pubspec.yaml dans '$APP_DIR' — arborescence du dépôt :"
+            ls -la
+            find . -maxdepth 3 -name pubspec.yaml -not -path '*/build/*'
+            echo ">>> Corriger la variable APP_DIR en conséquence."
+            exit 1
+          fi
+          cd "$APP_DIR"
           flutter pub get
 
       - name: Build iOS sans signature de code
         script: |
-          cd apps/mobile
+          cd "$APP_DIR"
           flutter build ios \
             --release \
             --no-codesign \
@@ -36,7 +48,7 @@ workflows:
 
       - name: Créer l'IPA non-signé
         script: |
-          cd apps/mobile
+          cd "$APP_DIR"
           APP_PATH="build/ios/iphoneos/Runner.app"
 
           if [ ! -d "$APP_PATH" ]; then
@@ -88,6 +100,7 @@ workflows:
         - appstore_credentials
       vars:
         BUNDLE_ID: "com.echango.promo"
+        APP_DIR: "apps/mobile"
 
     scripts:
       - name: Initialiser le keychain
@@ -122,22 +135,29 @@ workflows:
 
       - name: Configurer Xcode pour utiliser les profils
         script: |
-          cd apps/mobile/ios
+          if [ ! -f "$APP_DIR/pubspec.yaml" ]; then
+            echo ">>> Aucun pubspec.yaml dans '$APP_DIR' — arborescence du dépôt :"
+            ls -la
+            find . -maxdepth 3 -name pubspec.yaml -not -path '*/build/*'
+            echo ">>> Corriger la variable APP_DIR en conséquence."
+            exit 1
+          fi
+          cd "$APP_DIR/ios"
           xcode-project use-profiles
 
       - name: Récupérer les dépendances Flutter
         script: |
-          cd apps/mobile
+          cd "$APP_DIR"
           flutter pub get
 
       - name: Installer les pods iOS
         script: |
-          cd apps/mobile/ios
+          cd "$APP_DIR/ios"
           pod install --repo-update
 
       - name: Build IPA signé
         script: |
-          cd apps/mobile
+          cd "$APP_DIR"
           # `$BUILD_NUMBER` est le compteur de Codemagic : il augmente à
           # chaque build et ne collisionne jamais. Évite d'interroger
           # TestFlight, qui échoue tant qu'aucune build n'existe —
@@ -149,7 +169,9 @@ workflows:
             --export-options-plist=/Users/builder/export_options.plist
 
     artifacts:
-      - apps/mobile/build/ios/ipa/*.ipa
+      # Motif large : `artifacts` n'interpole pas $APP_DIR, et le chemin
+      # dépend de l'arborescence du dépôt construit.
+      - "**/build/ios/ipa/*.ipa"
       - /tmp/xcodebuild_logs/*.log
 
     publishing:
