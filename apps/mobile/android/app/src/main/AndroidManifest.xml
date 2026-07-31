@@ -1,4 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- INDISPENSABLE ICI, et pas seulement dans les manifestes debug/profile
+         générés par Flutter : ceux-ci ne sont fusionnés que pour les builds de
+         développement. Un build release n'obtenait donc aucun accès réseau —
+         l'app s'ouvrait normalement puis échouait sur le premier appel API
+         avec « Impossible de contacter le serveur », alors que `flutter run`
+         fonctionnait parfaitement (trouvé au premier test interne Play,
+         2026-07-30). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Localisation GPS optionnelle du commerce à l'inscription (gratuit,
          pas de clé API Google Maps) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
