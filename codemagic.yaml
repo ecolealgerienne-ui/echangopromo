@@ -12,23 +12,31 @@ workflows:
       xcode: latest
       cocoapods: default
 
-    working_directory: apps/mobile
+    # PAS de `working_directory` : il s'applique à TOUS les scripts, y
+    # compris ceux qui n'ont rien à voir avec le projet Flutter (keychain,
+    # signature). Les trois workflows qui compilent déjà (TikMeal, echango
+    # POS, echango Vendeur) n'en ont aucun — leurs apps sont à la racine du
+    # dépôt. Ici l'app est dans un monorepo, donc chaque étape qui touche
+    # au projet Flutter fait son `cd apps/mobile` elle-même.
 
     scripts:
       - name: Récupérer les dépendances Flutter
         script: |
+          cd apps/mobile
           flutter pub get
 
       - name: Build iOS sans signature de code
         script: |
+          cd apps/mobile
           flutter build ios \
             --release \
             --no-codesign \
             --build-name=1.0.0 \
-            --build-number=$PROJECT_BUILD_NUMBER
+            --build-number=$(($BUILD_NUMBER))
 
       - name: Créer l'IPA non-signé
         script: |
+          cd apps/mobile
           APP_PATH="build/ios/iphoneos/Runner.app"
 
           if [ ! -d "$APP_PATH" ]; then
@@ -46,21 +54,23 @@ workflows:
           ls -lh "$CM_BUILD_DIR/EchangoPromo-unsigned.ipa"
 
     artifacts:
-      - $CM_BUILD_DIR/EchangoPromo-unsigned.ipa
+      - EchangoPromo-unsigned.ipa
 
   # ============================================================
   # 2) Build signé + upload TestFlight
   # ----------------------------------------------------------
-  # Signature pilotée par scripts, avec les identifiants App Store Connect
-  # passés EXPLICITEMENT depuis le groupe de variables — et non via une
-  # intégration Codemagic (`integrations:`), qui est un autre écran de
-  # l'interface et attendait une clé jamais enregistrée là.
+  # Structure calquée à l'identique sur les workflows echango POS /
+  # echango Vendeur, qui compilent et publient déjà : keychain en toute
+  # première étape, `fetch-signing-files` SANS identifiants explicites
+  # (Codemagic injecte lui-même APP_STORE_CONNECT_* du groupe de variables
+  # dans l'environnement de la CLI — les repasser en `--issuer-id`/
+  # `--key-id`/`--private-key` était inutile).
   #
   # Pré-requis :
   #   - Groupe `appstore_credentials` contenant :
   #       APP_STORE_CONNECT_ISSUER_ID
   #       APP_STORE_CONNECT_KEY_IDENTIFIER
-  #       APP_STORE_CONNECT_PRIVATE_KEY   (contenu du .p8, brut ou base64)
+  #       APP_STORE_CONNECT_PRIVATE_KEY   (contenu brut du .p8)
   #   - App ID `com.echango.promo` enregistré sur developer.apple.com
   #   - App créée dans App Store Connect (nécessaire seulement pour l'envoi
   #     TestFlight, pas pour la signature)
@@ -79,91 +89,30 @@ workflows:
       vars:
         BUNDLE_ID: "com.echango.promo"
 
-    working_directory: apps/mobile
-
     scripts:
-      # Placée AVANT le keychain : rien ici n'en dépend, et le verdict sur
-      # les identifiants doit rester lisible même si l'étape suivante
-      # échoue. Aucune valeur n'est imprimée, seulement leur forme.
-      - name: Vérifier les identifiants App Store Connect
-        script: |
-          erreurs=0
-
-          if [ -z "$APP_STORE_CONNECT_ISSUER_ID" ]; then
-            echo ">>> APP_STORE_CONNECT_ISSUER_ID : ABSENT"
-            erreurs=1
-          else
-            echo "ISSUER_ID       : ${#APP_STORE_CONNECT_ISSUER_ID} caractères (attendu 36, format UUID)"
-          fi
-
-          if [ -z "$APP_STORE_CONNECT_KEY_IDENTIFIER" ]; then
-            echo ">>> APP_STORE_CONNECT_KEY_IDENTIFIER : ABSENT"
-            erreurs=1
-          else
-            echo "KEY_IDENTIFIER  : ${#APP_STORE_CONNECT_KEY_IDENTIFIER} caractères (attendu 10)"
-          fi
-
-          if [ -z "$APP_STORE_CONNECT_PRIVATE_KEY" ]; then
-            echo ">>> APP_STORE_CONNECT_PRIVATE_KEY : ABSENT"
-            erreurs=1
-          else
-            echo "PRIVATE_KEY     : ${#APP_STORE_CONNECT_PRIVATE_KEY} caractères"
-          fi
-
-          if [ "$erreurs" = "1" ]; then
-            echo ">>> Une ou plusieurs variables ne sont pas arrivées jusqu'ici."
-            echo ">>> Vérifier qu'elles sont bien dans le groupe 'appstore_credentials'."
-            exit 1
-          fi
-
-          # Clé privée du certificat iOS : la CLI Codemagic ne la génère pas,
-          # on la fournit plus loin via `--certificate-key`.
-          openssl genrsa -out /tmp/cert_key.pem 2048
-
-          # Le .p8 peut avoir été enregistré brut (PEM) ou encodé en base64
-          # selon la façon dont la variable a été collée. On normalise ici
-          # plutôt que d'imposer un format : les deux échouent de la même
-          # manière, avec un message qui n'indique pas lequel est en cause.
-          if printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" | grep -q "BEGIN PRIVATE KEY"; then
-            echo "Format .p8      : PEM (brut)"
-            printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" > /tmp/asc_key.p8
-          else
-            echo "Format .p8      : base64, décodage en cours"
-            printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" | base64 --decode > /tmp/asc_key.p8 2>/dev/null || true
-          fi
-
-          if ! grep -q "BEGIN PRIVATE KEY" /tmp/asc_key.p8; then
-            echo ">>> APP_STORE_CONNECT_PRIVATE_KEY ne contient pas une clé .p8"
-            echo ">>> valide, ni en PEM ni en base64. Recoller le CONTENU du"
-            echo ">>> fichier .p8, lignes -----BEGIN/END PRIVATE KEY----- comprises."
-            exit 1
-          fi
-
-          echo "Identifiants App Store Connect : OK"
-
       - name: Initialiser le keychain
         script: |
-          # En cas d'échec, on affiche le système : `keychain` n'existe que
-          # sur les instances macOS, et l'erreur sortait auparavant sans le
-          # moindre message exploitable.
-          keychain initialize || {
-            echo ">>> Échec de keychain initialize. Système :"
-            uname -a
-            sw_vers || echo ">>> CE N'EST PAS UNE MACHINE macOS"
-            exit 1
-          }
+          keychain initialize
 
       - name: Récupérer / générer le profil App Store + certificat
         script: |
+          # Clé privée du certificat iOS Distribution. Si la variable
+          # CERTIFICATE_PRIVATE_KEY est définie dans Codemagic, on la
+          # réutilise — sinon on en génère une. Attention : une nouvelle clé
+          # à chaque build fait créer un NOUVEAU certificat de distribution
+          # côté Apple, et le compte est plafonné (3 max). Après le premier
+          # build réussi, enregistrer le contenu de /tmp/cert_key.pem dans
+          # CERTIFICATE_PRIVATE_KEY pour réutiliser toujours le même.
+          if [ -n "$CERTIFICATE_PRIVATE_KEY" ]; then
+            printf '%s' "$CERTIFICATE_PRIVATE_KEY" > /tmp/cert_key.pem
+          else
+            openssl genrsa -out /tmp/cert_key.pem 2048
+          fi
+
           # `--create` crée le certificat iOS Distribution ET le profil App
-          # Store pour ce bundle id si l'un ou l'autre manque. Les trois
-          # identifiants sont passés explicitement : sans eux, la CLI
-          # chercherait une intégration Codemagic inexistante.
+          # Store pour ce bundle id si l'un ou l'autre manque.
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
-            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
-            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
-            --private-key @file:/tmp/asc_key.p8 \
             --certificate-key=@file:/tmp/cert_key.pem \
             --create
 
@@ -173,39 +122,34 @@ workflows:
 
       - name: Configurer Xcode pour utiliser les profils
         script: |
+          cd apps/mobile/ios
           xcode-project use-profiles
 
       - name: Récupérer les dépendances Flutter
         script: |
+          cd apps/mobile
           flutter pub get
 
       - name: Installer les pods iOS
         script: |
-          cd ios && pod install --repo-update && cd ..
+          cd apps/mobile/ios
+          pod install --repo-update
 
       - name: Build IPA signé
         script: |
-          # `$PROJECT_BUILD_NUMBER` est le compteur de Codemagic : il
-          # augmente à chaque build et ne collisionne jamais. Évite
-          # d'interroger TestFlight, qui échoue tant qu'aucune build
-          # n'existe — c'est-à-dire au tout premier envoi.
+          cd apps/mobile
+          # `$BUILD_NUMBER` est le compteur de Codemagic : il augmente à
+          # chaque build et ne collisionne jamais. Évite d'interroger
+          # TestFlight, qui échoue tant qu'aucune build n'existe —
+          # c'est-à-dire au tout premier envoi.
           flutter build ipa \
             --release \
             --build-name=1.0.0 \
-            --build-number=$PROJECT_BUILD_NUMBER \
+            --build-number=$(($BUILD_NUMBER)) \
             --export-options-plist=/Users/builder/export_options.plist
 
-      - name: Copier l'IPA vers le répertoire de build CodeMagic
-        script: |
-          # `working_directory: apps/mobile` rend les paths d'artifacts ambigus.
-          # On copie explicitement l'IPA vers $CM_BUILD_DIR pour que la
-          # section `publishing` et `artifacts` la trouvent à coup sûr.
-          mkdir -p "$CM_BUILD_DIR"
-          cp build/ios/ipa/*.ipa "$CM_BUILD_DIR/EchangoPromo.ipa"
-          ls -lh "$CM_BUILD_DIR/EchangoPromo.ipa"
-
     artifacts:
-      - $CM_BUILD_DIR/EchangoPromo.ipa
+      - apps/mobile/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
 
     publishing:
