@@ -1,33 +1,6 @@
-# Build iOS d'echango Promo sur Codemagic.
-#
-# Ce fichier vit à la racine du dépôt (Codemagic ne le cherche que là),
-# mais l'app Flutter est dans `apps/mobile` — d'où le `working_directory`
-# de chaque workflow. Les chemins d'artefacts restent donc ambigus, et sont
-# résolus par une copie explicite vers `$CM_BUILD_DIR`.
-#
-# Android n'est pas ici : il se construit en local sous Windows
-# (`flutter build appbundle`), voir docs/DEPLOIEMENT_STORES.md.
-
-definitions:
-  common_env: &common_env
-    flutter: stable
-    xcode: latest
-    cocoapods: default
-    vars:
-      BUNDLE_ID: "com.echango.promo"
-      # Doit rester identique à `applicationId` (Android) et à
-      # `PRODUCT_BUNDLE_IDENTIFIER` (Xcode) — un écart fait échouer en
-      # silence la vérification des Universal Links.
-      APP_VERSION: "1.0.0"
-      # Backend de production. `Env.apiBaseUrl` a déjà ce défaut, mais
-      # l'expliciter ici évite qu'un changement de défaut passe inaperçu
-      # dans un binaire distribué.
-      API_BASE_URL: "https://promo.echango.com"
-
 workflows:
   # ============================================================
-  # 1) IPA non signé — vérifier que le projet compile sous iOS
-  #    sans attendre le compte Apple Developer.
+  # 1) Build IPA non-signé — pour sideload (sans compte Developer)
   # ============================================================
   ios-unsigned-build:
     name: iOS - Build IPA sans compte Developer
@@ -35,7 +8,9 @@ workflows:
     instance_type: mac_mini_m1
 
     environment:
-      <<: *common_env
+      flutter: stable
+      xcode: latest
+      cocoapods: default
 
     working_directory: apps/mobile
 
@@ -44,25 +19,15 @@ workflows:
         script: |
           flutter pub get
 
-      - name: Analyse statique
-        script: |
-          # Non bloquant volontairement : l'analyse n'a jamais tourné sur ce
-          # projet, la rendre bloquante d'emblée casserait le premier build
-          # pour des avertissements préexistants. Retirer le `|| true` dès
-          # que la sortie est propre — c'est le seul filet automatique
-          # contre une régression Dart.
-          flutter analyze || true
-
       - name: Build iOS sans signature de code
         script: |
           flutter build ios \
             --release \
             --no-codesign \
-            --build-name="$APP_VERSION" \
-            --build-number=$((BUILD_NUMBER)) \
-            --dart-define=API_BASE_URL="$API_BASE_URL"
+            --build-name=1.0.0 \
+            --build-number=$((BUILD_NUMBER))
 
-      - name: Créer l'IPA non signé
+      - name: Créer l'IPA non-signé
         script: |
           APP_PATH="build/ios/iphoneos/Runner.app"
 
@@ -84,20 +49,17 @@ workflows:
       - $CM_BUILD_DIR/EchangoPromo-unsigned.ipa
 
   # ============================================================
-  # 2) Build signé + envoi TestFlight
-  # ------------------------------------------------------------
-  # Prérequis, une seule fois :
-  #   - Compte Apple Developer (99 $/an) — l'inscription prend plusieurs
-  #     jours en compte personnel, 1 à 2 semaines en société (D-U-N-S).
-  #   - App créée dans App Store Connect avec le bundle id com.echango.promo.
-  #   - App Store Connect API Key ajoutée dans Codemagic
-  #     (Teams → Integrations → App Store Connect).
-  #   - Groupe de variables `appstore_credentials` contenant :
-  #       APP_STORE_CONNECT_KEY_IDENTIFIER
+  # 2) Build signé + upload TestFlight
+  # ----------------------------------------------------------
+  # Pré-requis (une seule fois, voir docs/DEPLOIEMENT_STORES.md) :
+  #   - Compte Apple Developer ($99/an)
+  #   - App ID créé dans App Store Connect (bundle id : com.echango.promo)
+  #   - App Store Connect API Key uploadée dans CodeMagic
+  #     → Codemagic / Teams / Integrations / App Store Connect
+  #   - Variables ajoutées dans le groupe `appstore_credentials` :
+  #       APP_STORE_CONNECT_KEY_IDENTIFIER (Key ID)
   #       APP_STORE_CONNECT_ISSUER_ID
-  #       APP_STORE_CONNECT_PRIVATE_KEY   (.p8)
-  #   - APP_STORE_APPLE_ID ci-dessous remplacé par l'identifiant numérique
-  #     de l'app (App Store Connect → General → App Information → Apple ID).
+  #       APP_STORE_CONNECT_PRIVATE_KEY (.p8 base64)
   # ============================================================
   ios-testflight-build:
     name: iOS - Build signé + TestFlight
@@ -105,18 +67,18 @@ workflows:
     instance_type: mac_mini_m1
 
     environment:
-      <<: *common_env
+      flutter: stable
+      xcode: latest
+      cocoapods: default
       groups:
         - appstore_credentials
       vars:
         BUNDLE_ID: "com.echango.promo"
-        APP_VERSION: "1.0.0"
-        API_BASE_URL: "https://promo.echango.com"
-        # ⚠️ À remplacer après création de la fiche App Store Connect.
-        APP_STORE_APPLE_ID: "0000000000"
-      # Pas de bloc `ios_signing` : la signature est pilotée à la main par
-      # les scripts ci-dessous. Les deux ensemble entrent en conflit
-      # ("No matching profiles found").
+        APP_STORE_APPLE_ID: "0000000000" # Apple ID numérique de l'app Echango Promo dans App Store Connect
+      # Pas de bloc `ios_signing` ici : on gère le signing manuellement via
+      # les scripts ci-dessous (app-store-connect fetch-signing-files
+      # --create) pour avoir un meilleur contrôle. Mettre les deux entre
+      # en conflit ("No matching profiles found").
 
     working_directory: apps/mobile
 
@@ -127,15 +89,17 @@ workflows:
 
       - name: Générer une clé privée RSA pour le certificat iOS
         script: |
-          # La CLI Codemagic ne génère pas la clé privée : on la fournit via
-          # `--certificate-key=@file:` à l'étape suivante, sinon
-          # "Cannot save Signing Certificates without certificate private key".
+          # CodeMagic CLI ne génère pas la clé privée automatiquement.
+          # On la fournit via `--certificate-key=@file:` ci-dessous.
           openssl genrsa -out /tmp/cert_key.pem 2048
 
-      - name: Récupérer ou créer le profil App Store et le certificat
+      - name: Récupérer / générer le profil App Store + certificat
         script: |
-          # `--create` crée le certificat iOS Distribution ET le profil App
-          # Store pour ce bundle id si l'un ou l'autre manque.
+          # `--create` : crée le cert iOS Distribution ET le profil
+          # App Store pour notre bundle id si l'un ou l'autre manque.
+          # `--certificate-key=@file:` : indique la clé privée à utiliser
+          # pour signer le CSR (sans ça, "Cannot save Signing Certificates
+          # without certificate private key").
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --certificate-key=@file:/tmp/cert_key.pem \
@@ -157,30 +121,19 @@ workflows:
         script: |
           cd ios && pod install --repo-update && cd ..
 
-      - name: Calculer le numéro de build
-        script: |
-          # `get-latest-testflight-build-number` échoue tant qu'aucune build
-          # n'existe — c'est exactement le cas au tout premier envoi. Le
-          # repli sur 0 évite de faire échouer ce premier build, qui est
-          # précisément celui qu'on veut réussir.
-          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo "0")
-          echo "Dernière build TestFlight : $LATEST"
-          echo "IOS_BUILD_NUMBER=$((LATEST + 1))" >> "$CM_ENV"
-
       - name: Build IPA signé
         script: |
           flutter build ipa \
             --release \
-            --build-name="$APP_VERSION" \
-            --build-number="$IOS_BUILD_NUMBER" \
-            --dart-define=API_BASE_URL="$API_BASE_URL" \
+            --build-name=1.0.0 \
+            --build-number=$(($(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID") + 1)) \
             --export-options-plist=/Users/builder/export_options.plist
 
-      - name: Copier l'IPA vers le répertoire de build Codemagic
+      - name: Copier l'IPA vers le répertoire de build CodeMagic
         script: |
-          # `working_directory: apps/mobile` rend les chemins d'artefacts
-          # ambigus : on copie explicitement pour que `artifacts` et
-          # `publishing` la trouvent à coup sûr.
+          # `working_directory: apps/mobile` rend les paths d'artifacts ambigus.
+          # On copie explicitement l'IPA vers $CM_BUILD_DIR pour que la
+          # section `publishing` et `artifacts` la trouvent à coup sûr.
           mkdir -p "$CM_BUILD_DIR"
           cp build/ios/ipa/*.ipa "$CM_BUILD_DIR/EchangoPromo.ipa"
           ls -lh "$CM_BUILD_DIR/EchangoPromo.ipa"
@@ -194,6 +147,8 @@ workflows:
         api_key: $APP_STORE_CONNECT_PRIVATE_KEY
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        # submit_to_testflight: true → la build est dispo dans TestFlight automatiquement
         submit_to_testflight: true
+        # beta_groups: liste des groupes TestFlight qui reçoivent la build
         # beta_groups:
-        #   - "Beta interne Echango"
+        #   - "Beta interne Echango Promo"
