@@ -51,5 +51,20 @@
 	<string>Utilisée pour prendre la photo de votre commerce ou d'une promo.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Utilisée pour choisir une photo existante de votre commerce depuis votre galerie.</string>
+	<!-- Conformité export (chiffrement). Sans cette clé, chaque build arrive
+	     dans TestFlight avec la mention « Missing Compliance » et n'est PAS
+	     distribuable : les testeurs reçoivent bien l'invitation, mais aucune
+	     build n'apparaît dans l'app TestFlight, sans le moindre message
+	     d'erreur (trouvé au premier envoi TestFlight, 2026-07-31). La
+	     déclarer ici évite d'avoir à répondre au questionnaire à la main
+	     pour chaque build.
+
+	     `false` est la bonne valeur ici : l'app n'utilise que HTTPS/TLS via
+	     les API standard du système, ce qui relève de l'exemption prévue par
+	     l'Export Administration Regulations. À repasser à `true` (avec
+	     dépôt d'un CCATS) uniquement si un jour on embarque notre propre
+	     implémentation de chiffrement — ce qui n'est pas le cas. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
