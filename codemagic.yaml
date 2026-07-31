@@ -25,7 +25,7 @@ workflows:
             --release \
             --no-codesign \
             --build-name=1.0.0 \
-            --build-number=$((BUILD_NUMBER))
+            --build-number=$PROJECT_BUILD_NUMBER
 
       - name: Créer l'IPA non-signé
         script: |
@@ -51,87 +51,49 @@ workflows:
   # ============================================================
   # 2) Build signé + upload TestFlight
   # ----------------------------------------------------------
-  # Pré-requis (une seule fois, voir docs/DEPLOIEMENT_STORES.md) :
-  #   - Compte Apple Developer ($99/an)
-  #   - App ID créé dans App Store Connect (bundle id : com.echango.promo)
-  #   - App Store Connect API Key uploadée dans CodeMagic
-  #     → Codemagic / Teams / Integrations / App Store Connect
-  #   - Variables ajoutées dans le groupe `appstore_credentials` :
-  #       APP_STORE_CONNECT_KEY_IDENTIFIER (Key ID)
-  #       APP_STORE_CONNECT_ISSUER_ID
-  #       APP_STORE_CONNECT_PRIVATE_KEY (.p8 base64)
+  # Signature gérée par Codemagic via `ios_signing`, et non plus à la main
+  # (`keychain initialize`, `openssl genrsa`, `fetch-signing-files`,
+  # `keychain add-certificates`). Ces quatre étapes échouaient dès la
+  # première, sans message exploitable ; Codemagic fait exactement la même
+  # chose de façon maintenue, à partir de l'intégration ci-dessous.
+  #
+  # Pré-requis, une seule fois :
+  #   1. Codemagic → Teams → Integrations → App Store Connect → Add key
+  #      avec les trois valeurs déjà en main (Issuer ID, Key ID, .p8).
+  #      Le NOM donné à cette clé doit être recopié dans `integrations`
+  #      ci-dessous, au caractère près.
+  #   2. App créée dans App Store Connect avec le bundle id
+  #      com.echango.promo (voir docs/DEPLOIEMENT_STORES.md).
+  #
+  # Le groupe de variables `appstore_credentials` n'est plus nécessaire :
+  # l'intégration porte les mêmes identifiants, sans les dupliquer.
   # ============================================================
   ios-testflight-build:
     name: iOS - Build signé + TestFlight
     max_build_duration: 90
     instance_type: mac_mini_m2
 
+    integrations:
+      # ⚠️ À remplacer par le nom exact donné à la clé dans
+      # Teams → Integrations → App Store Connect.
+      app_store_connect: Echango App Store Connect
+
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.echango.promo
       flutter: stable
       xcode: latest
       cocoapods: default
-      groups:
-        - appstore_credentials
-      vars:
-        BUNDLE_ID: "com.echango.promo"
-        APP_STORE_APPLE_ID: "0000000000" # Apple ID numérique de l'app Echango Promo dans App Store Connect
-      # Pas de bloc `ios_signing` ici : on gère le signing manuellement via
-      # les scripts ci-dessous (app-store-connect fetch-signing-files
-      # --create) pour avoir un meilleur contrôle. Mettre les deux entre
-      # en conflit ("No matching profiles found").
 
     working_directory: apps/mobile
 
     scripts:
-      - name: Diagnostic environnement
+      - name: Appliquer les profils de signature au projet Xcode
         script: |
-          # TEMPORAIRE — à retirer une fois le build vert. `keychain
-          # initialize` sortait en code 1 sans rien afficher : ces lignes
-          # disent lequel des trois cas c'est (machine non-macOS, outils
-          # Codemagic absents, ou vraie erreur du keychain).
-          echo "=== Système ==="
-          uname -a
-          sw_vers || echo ">>> sw_vers absent : CE N'EST PAS UNE MACHINE macOS"
-          echo "=== Outils de signature Codemagic ==="
-          which keychain || echo ">>> keychain INTROUVABLE dans le PATH"
-          which app-store-connect || echo ">>> app-store-connect INTROUVABLE"
-          which xcode-project || echo ">>> xcode-project INTROUVABLE"
-          echo "=== Variables du groupe appstore_credentials ==="
-          # Valeurs jamais affichées : on ne vérifie que leur présence.
-          [ -n "$APP_STORE_CONNECT_ISSUER_ID" ] && echo "ISSUER_ID: présent" || echo ">>> ISSUER_ID MANQUANT"
-          [ -n "$APP_STORE_CONNECT_KEY_IDENTIFIER" ] && echo "KEY_IDENTIFIER: présent" || echo ">>> KEY_IDENTIFIER MANQUANT"
-          [ -n "$APP_STORE_CONNECT_PRIVATE_KEY" ] && echo "PRIVATE_KEY: présent" || echo ">>> PRIVATE_KEY MANQUANT"
-          echo "=== keychain initialize, sortie complète ==="
-          keychain initialize --verbose || echo ">>> ÉCHEC keychain initialize, code $?"
-
-      - name: Initialiser le keychain
-        script: |
-          keychain initialize
-
-      - name: Générer une clé privée RSA pour le certificat iOS
-        script: |
-          # CodeMagic CLI ne génère pas la clé privée automatiquement.
-          # On la fournit via `--certificate-key=@file:` ci-dessous.
-          openssl genrsa -out /tmp/cert_key.pem 2048
-
-      - name: Récupérer / générer le profil App Store + certificat
-        script: |
-          # `--create` : crée le cert iOS Distribution ET le profil
-          # App Store pour notre bundle id si l'un ou l'autre manque.
-          # `--certificate-key=@file:` : indique la clé privée à utiliser
-          # pour signer le CSR (sans ça, "Cannot save Signing Certificates
-          # without certificate private key").
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --certificate-key=@file:/tmp/cert_key.pem \
-            --create
-
-      - name: Ajouter le certificat au keychain
-        script: |
-          keychain add-certificates
-
-      - name: Configurer Xcode pour utiliser les profils
-        script: |
+          # Codemagic a déjà récupéré certificat et profil depuis
+          # l'intégration : cette commande les câble dans le projet et
+          # génère /Users/builder/export_options.plist utilisé au build.
           xcode-project use-profiles
 
       - name: Récupérer les dépendances Flutter
@@ -144,10 +106,14 @@ workflows:
 
       - name: Build IPA signé
         script: |
+          # `$PROJECT_BUILD_NUMBER` est le compteur de Codemagic : il
+          # augmente à chaque build et ne collisionne jamais. Évite
+          # d'interroger TestFlight, qui échoue tant qu'aucune build
+          # n'existe — c'est-à-dire au tout premier envoi.
           flutter build ipa \
             --release \
             --build-name=1.0.0 \
-            --build-number=$(($(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID") + 1)) \
+            --build-number=$PROJECT_BUILD_NUMBER \
             --export-options-plist=/Users/builder/export_options.plist
 
       - name: Copier l'IPA vers le répertoire de build CodeMagic
@@ -165,10 +131,9 @@ workflows:
 
     publishing:
       app_store_connect:
-        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
-        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
-        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
-        # submit_to_testflight: true → la build est dispo dans TestFlight automatiquement
+        # `auth: integration` réutilise la clé déclarée dans `integrations`,
+        # plutôt que de redonner Issuer ID / Key ID / .p8 en variables.
+        auth: integration
         submit_to_testflight: true
         # beta_groups: liste des groupes TestFlight qui reçoivent la build
         # beta_groups:
