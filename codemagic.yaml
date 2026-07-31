@@ -82,6 +82,65 @@ workflows:
     working_directory: apps/mobile
 
     scripts:
+      # Placée AVANT le keychain : rien ici n'en dépend, et le verdict sur
+      # les identifiants doit rester lisible même si l'étape suivante
+      # échoue. Aucune valeur n'est imprimée, seulement leur forme.
+      - name: Vérifier les identifiants App Store Connect
+        script: |
+          erreurs=0
+
+          if [ -z "$APP_STORE_CONNECT_ISSUER_ID" ]; then
+            echo ">>> APP_STORE_CONNECT_ISSUER_ID : ABSENT"
+            erreurs=1
+          else
+            echo "ISSUER_ID       : ${#APP_STORE_CONNECT_ISSUER_ID} caractères (attendu 36, format UUID)"
+          fi
+
+          if [ -z "$APP_STORE_CONNECT_KEY_IDENTIFIER" ]; then
+            echo ">>> APP_STORE_CONNECT_KEY_IDENTIFIER : ABSENT"
+            erreurs=1
+          else
+            echo "KEY_IDENTIFIER  : ${#APP_STORE_CONNECT_KEY_IDENTIFIER} caractères (attendu 10)"
+          fi
+
+          if [ -z "$APP_STORE_CONNECT_PRIVATE_KEY" ]; then
+            echo ">>> APP_STORE_CONNECT_PRIVATE_KEY : ABSENT"
+            erreurs=1
+          else
+            echo "PRIVATE_KEY     : ${#APP_STORE_CONNECT_PRIVATE_KEY} caractères"
+          fi
+
+          if [ "$erreurs" = "1" ]; then
+            echo ">>> Une ou plusieurs variables ne sont pas arrivées jusqu'ici."
+            echo ">>> Vérifier qu'elles sont bien dans le groupe 'appstore_credentials'."
+            exit 1
+          fi
+
+          # Clé privée du certificat iOS : la CLI Codemagic ne la génère pas,
+          # on la fournit plus loin via `--certificate-key`.
+          openssl genrsa -out /tmp/cert_key.pem 2048
+
+          # Le .p8 peut avoir été enregistré brut (PEM) ou encodé en base64
+          # selon la façon dont la variable a été collée. On normalise ici
+          # plutôt que d'imposer un format : les deux échouent de la même
+          # manière, avec un message qui n'indique pas lequel est en cause.
+          if printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" | grep -q "BEGIN PRIVATE KEY"; then
+            echo "Format .p8      : PEM (brut)"
+            printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" > /tmp/asc_key.p8
+          else
+            echo "Format .p8      : base64, décodage en cours"
+            printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" | base64 --decode > /tmp/asc_key.p8 2>/dev/null || true
+          fi
+
+          if ! grep -q "BEGIN PRIVATE KEY" /tmp/asc_key.p8; then
+            echo ">>> APP_STORE_CONNECT_PRIVATE_KEY ne contient pas une clé .p8"
+            echo ">>> valide, ni en PEM ni en base64. Recoller le CONTENU du"
+            echo ">>> fichier .p8, lignes -----BEGIN/END PRIVATE KEY----- comprises."
+            exit 1
+          fi
+
+          echo "Identifiants App Store Connect : OK"
+
       - name: Initialiser le keychain
         script: |
           # En cas d'échec, on affiche le système : `keychain` n'existe que
@@ -93,30 +152,6 @@ workflows:
             sw_vers || echo ">>> CE N'EST PAS UNE MACHINE macOS"
             exit 1
           }
-
-      - name: Préparer les identifiants App Store Connect
-        script: |
-          # Clé privée du certificat iOS : la CLI Codemagic ne la génère pas,
-          # on la fournit à l'étape suivante via `--certificate-key`.
-          openssl genrsa -out /tmp/cert_key.pem 2048
-
-          # Le .p8 peut avoir été enregistré brut (PEM) ou encodé en base64
-          # selon la façon dont la variable a été saisie. On normalise ici
-          # plutôt que d'imposer un format : les deux échouent de la même
-          # manière, avec un message qui n'indique pas lequel est en cause.
-          if printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" | grep -q "BEGIN PRIVATE KEY"; then
-            echo "Clé .p8 détectée au format PEM."
-            printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" > /tmp/asc_key.p8
-          else
-            echo "Clé .p8 détectée en base64, décodage."
-            printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" | base64 --decode > /tmp/asc_key.p8
-          fi
-
-          if ! grep -q "BEGIN PRIVATE KEY" /tmp/asc_key.p8; then
-            echo ">>> La variable APP_STORE_CONNECT_PRIVATE_KEY ne contient pas"
-            echo ">>> une clé .p8 valide, ni en PEM ni en base64."
-            exit 1
-          fi
 
       - name: Récupérer / générer le profil App Store + certificat
         script: |
