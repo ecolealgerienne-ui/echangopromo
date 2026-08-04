@@ -223,18 +223,29 @@ else
   pass "${#TOP[@]} mises en avant"
 fi
 
-step "6. Signalements — sous le seuil de masquage"
-# ⚠️ Deux signalements seulement : le seuil de masquage est à 3. On peuple la
-# file de modération SANS déclencher le masquage, pour que l'écran admin ait
-# quelque chose à montrer et que la promo reste visible côté client.
-if [ -n "$PREMIERE_PROMO" ]; then
-  for d in 1 2; do
-    out="$(ecrire POST /report "$(jq -n --arg p "$PREMIERE_PROMO" '{promoId:$p, reason:"perime"}')" \
-      '' "X-Device-Id: demo-appareil-$d")"
+step "6. Signalements — les DEUX états"
+# ⚠️ Le seuil de masquage est à 3, et la file de modération n'affiche que ce qui
+# l'a ATTEINT. Une première version posait deux signalements « pour peupler la
+# file » : elle laissait la file vide, exactement l'inverse de son intention.
+#
+# On peuple donc les deux états, parce que les deux existent en production :
+#   - une promo à 3 signalements → masquée, PRÉSENTE dans la file ;
+#   - une promo à 2 signalements → encore visible, invisible dans la file.
+mapfile -t A_SIGNALER < <(api GET "/promo?limit=2" | jq -r '.items[].id')
+if [ "${#A_SIGNALER[@]}" -ge 2 ]; then
+  for d in 1 2 3; do
+    out="$(ecrire POST /report "$(jq -n --arg p "${A_SIGNALER[0]}" \
+      '{promoId:$p, reason:"perime"}')" '' "X-Device-Id: demo-seuil-atteint-$d")"
     echo "$out" | est_erreur && info "signalement $d : $(echo "$out" | jq -r '.code')"
     sleep 1
   done
-  pass "2 signalements sur $PREMIERE_PROMO (seuil de masquage : 3)"
+  for d in 1 2; do
+    out="$(ecrire POST /report "$(jq -n --arg p "${A_SIGNALER[1]}" \
+      '{promoId:$p, reason:"arnaque"}')" '' "X-Device-Id: demo-sous-seuil-$d")"
+    echo "$out" | est_erreur && info "signalement $d : $(echo "$out" | jq -r '.code')"
+    sleep 1
+  done
+  pass "3 signalements sur ${A_SIGNALER[0]} (masquée) · 2 sur ${A_SIGNALER[1]} (visible)"
 fi
 
 echo
