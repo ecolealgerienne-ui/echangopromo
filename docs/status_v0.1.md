@@ -134,6 +134,57 @@ nombre. `CORS_ORIGINS` mérite d'être fixée aussi.
 > **imprime la valeur qu'il a effectivement utilisée**. Une borne lue depuis
 > l'environnement est une donnée d'entrée du banc, pas une constante.
 
+### P10 — Un numéro recyclé enferme son repreneur dehors 🔴 **défaut réel, ouvert**
+
+**Trouvé le 2026-08-04** par `test-cycle-commercant.sh`. Reproduit sur un numéro
+neuf, avec témoin positif :
+
+```
+1. Premier inscrit       → connexion OK          ← témoin
+2. Premier supprimé      → numéro libéré
+3. Second inscrit        → accepté
+4. Connexion du Second   → AUTH_INVALID_CREDENTIALS   ❌
+```
+
+**Cause, à la ligne près.** `CommercantService.login` (`commercant.service.ts:125`)
+cherche par téléphone **sans** filtrer les comptes supprimés :
+
+```ts
+const commercant = await this.commercants.findOne({ where: { telephone } });
+```
+
+alors que `assertPhoneAvailable` (`:59`), lui, applique bien le filtre :
+
+```ts
+where: { telephone, deletedAt: IsNull() }
+```
+
+La suppression étant **douce**, la ligne reste en base : un numéro recyclé a
+plusieurs lignes. `findOne` en attrape une supprimée, la ligne 130 voit son
+`deletedAt` et refuse. Le nouveau propriétaire du numéro **ne peut jamais se
+connecter**.
+
+**Portée.** Le défaut n'apparaît qu'après un cycle suppression → réinscription
+— c'est-à-dire exactement le cas que la libération du numéro (décision produit
+2026-07-13/14) existe pour permettre. La fonctionnalité est donc inutilisable
+dans les faits, sans que rien ne le signale : l'inscription réussit, seule la
+connexion suivante échoue, avec un message qui accuse les identifiants.
+
+**C'est la règle 5 de `CLAUDE.md` à la lettre** : deux endroits doivent
+appliquer le même filtre, un seul l'applique. Le commentaire
+d'`assertPhoneAvailable` dit même « même filtre que l'index partiel posé en
+base » — la phrase existe, elle ne tient rien.
+
+**Correctif proposé** — une ligne, non appliquée (code source non modifié) :
+
+```ts
+findOne({ where: { telephone, deletedAt: IsNull() } })
+```
+
+⚠️ À vérifier dans le même geste : les autres recherches par téléphone
+(`resetPin`, `findByPhone`…) appliquent-elles le filtre ? Une seule corrigée
+laisserait la règle 5 ouverte ailleurs.
+
 ### P9 — `S3_ENDPOINT` sert deux rôles incompatibles 🆕 *contourné en local*
 
 **Trouvé le 2026-08-04** en instrumentant le banc de concurrence : une création
@@ -703,6 +754,34 @@ commerçant, contre un plafond de 5 connexions par minute.
   que je l'écoute. Les deux états sont désormais posés, parce que les deux
   existent en production. **Un décor qui n'illustre pas ce qu'il prétend
   illustrer est un décor qui rassure.**
+
+### 2026-08-04 (très tard) — Cycle de vie : un défaut réel trouvé
+
+`test-cycle-commercant.sh` éprouve la distinction suspension ≠ suppression. Le
+vrai discriminant est le **numéro de téléphone** : c'est la seule différence
+observable de l'extérieur, et celle qui casse en silence.
+
+**7 contrôles au vert**, puis un huitième ajouté en cours de route qui a trouvé
+**P10** : un numéro libéré par une suppression est bien réattribuable, mais son
+repreneur **ne peut jamais se connecter**.
+
+**Prouvé par mutation** : suspension et suppression confondues (`suspend` posant
+aussi `deletedAt`) → le banc voit le numéro réattribué après une simple
+suspension, et la cascade qui suit (l'usurpateur ayant pris le numéro, la
+suppression n'a plus rien à libérer).
+
+**Trois défauts dans mes propres outils, tous de la même famille — et c'est
+cette répétition qui est l'enseignement du jour :**
+
+| ce que j'ai écrit | ce que ça a produit |
+|---|---|
+| `if jeton:` autour d'un contrôle | le contrôle disparaissait du rapport, total de 7 à 6 sans explication |
+| reproduction lisant `.id` sur une réponse qui rend `{accessToken}` | suppression d'un identifiant vide, puis **« ✅ pas de défaut »** sur un scénario qui n'avait pas eu lieu |
+| harnais de mutation jugeant sur le code de sortie | « ✅ » sur un `INTERNAL_ERROR` qui ne prouvait rien |
+
+Les trois **rassuraient**. Aucun ne levait. C'est exactement ce que la méthode
+reproche aux replis, appliqué cette fois à mes propres vérifications : **un
+contrôle qui ne peut pas dire non finit par dire oui à tort**.
 
 ---
 
