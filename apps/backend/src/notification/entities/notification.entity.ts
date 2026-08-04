@@ -3,15 +3,24 @@ import {
   CreateDateColumn,
   Entity,
   Index,
-  JoinColumn,
-  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
-import { Commercant } from '../../commercant/entities/commercant.entity';
-import { Agent } from '../../agent/entities/agent.entity';
-import { Admin } from '../../admin/entities/admin.entity';
+
+/**
+ * ⚠️ **Pas de `@ManyToOne` vers le destinataire, et c'est voulu.** Une
+ * notification vise indifféremment un commerçant, un agent ou un admin : le
+ * couple (`recipientType`, `recipientId`) est **polymorphe**, ce qu'une clé
+ * étrangère TypeORM ne sait pas exprimer sans trois colonnes nullables et
+ * trois relations dont deux seraient toujours vides.
+ *
+ * Les imports `ManyToOne`, `JoinColumn`, `Commercant`, `Agent` et `Admin`
+ * traînaient ici sans usage, restes d'une conception antérieure — retirés le
+ * 2026-08-05, au premier `npm run lint` de la session. Ne pas les remettre :
+ * l'index composite ci-dessous couvre l'accès, la contrainte référentielle
+ * n'existe pas et ne peut pas exister.
+ */
 
 export enum NotificationType {
   PROMO_WARNED = 'promo_warned', // Admin a averti sur une promo signalée

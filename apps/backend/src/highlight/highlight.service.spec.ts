@@ -73,6 +73,20 @@ async function errorCode(promise: Promise<unknown>): Promise<string | undefined>
   }
 }
 
+/**
+ * Le premier argument du premier appel à `save`, **typé**.
+ *
+ * ⚠️ `jest.Mock.mock.calls` est `any` : l'indexer directement déclenche
+ * `no-unsafe-member-access`, et c'est ce qui faisait échouer `npm run lint` sur
+ * trois assertions de ce fichier (trouvé le 2026-08-05, au premier lancement de
+ * la commande). Un accès typé une fois vaut mieux que trois `eslint-disable`,
+ * qui seraient trois occasions d'en oublier un.
+ */
+function premierSave(repo: Repo): Highlight {
+  const appels = repo.save.mock.calls as unknown as [Highlight][];
+  return appels[0][0];
+}
+
 describe('HighlightService', () => {
   let highlights: Repo;
   let promoService: {
@@ -114,7 +128,7 @@ describe('HighlightService', () => {
       const dto = Object.assign(new UpdateHighlightDto(), { active: false });
       await service.update('h1', dto);
 
-      const saved = highlights.save.mock.calls[0][0] as Highlight;
+      const saved = premierSave(highlights);
       expect(saved.active).toBe(false);
       expect(saved.promoId).toBe('p1');
       expect(saved.imageKey).toBe('highlight-images/a1/photo.jpg');
@@ -129,7 +143,7 @@ describe('HighlightService', () => {
       const dto = Object.assign(new UpdateHighlightDto(), { clearPromo: true });
       await service.update('h1', dto);
 
-      const saved = highlights.save.mock.calls[0][0] as Highlight;
+      const saved = premierSave(highlights);
       expect(saved.promoId).toBeNull();
       expect(saved.imageKey).toBe('highlight-images/a1/photo.jpg');
     });
@@ -151,7 +165,7 @@ describe('HighlightService', () => {
       const dto = Object.assign(new UpdateHighlightDto(), { titre: '   ' });
       await service.update('h1', dto);
 
-      expect((highlights.save.mock.calls[0][0] as Highlight).titre).toBeNull();
+      expect(premierSave(highlights).titre).toBeNull();
     });
 
     it('refuse une diapositive qui ne montrerait plus rien', async () => {
