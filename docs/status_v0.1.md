@@ -379,10 +379,21 @@ l'`AuditLogModule` devait tracer), l'**audit-log** lui-même, le **dashboard**
 5 routes, partagées par les 3 profils authentifiés, 1 écran. Zéro banc, zéro
 parcours. **Traité** par `test-notifications`.
 
-### T4 — `DELETE /commercant/me` n'est éprouvé par rien
+### T4 — `DELETE /commercant/me` n'est éprouvé par rien 🔶 *partiellement traité*
+
+⚠️ **Toujours ouvert.** `test-cycle-commercant.sh` éprouve la suppression **par
+l'admin** (`POST /admin/commercant/:id/delete`), pas l'**auto-suppression** par
+le commerçant lui-même. Le code dit que les deux ont le même effet
+(`deleteAccount` ≡ `deleteCommercant`) — mais c'est une lecture, pas une mesure,
+et la règle 5 dit précisément ce que valent deux implémentations censées
+s'accorder. Une sonde de plus dans le banc existant suffirait.
+
+<details><summary>Le constat d'origine</summary>
 
 Un commerçant peut supprimer son propre compte. Action **irréversible**, aucun
 test. **Traité** par `test-commercant-autosuppression`, en priorité 3.
+
+</details>
 
 ### T5 — La carte client n'était pas couverte
 
@@ -452,8 +463,8 @@ Le détail de chaque étape, avec son critère de sortie, est dans
 | — | Plan spécifique Promo | ✅ écrit |
 | **1** | Banc de refus (48 routes, par construction) | ✅ **PASSÉ** — 138 sondes, 0 échec, décor posé, **prouvé par mutation sur les deux phases** |
 | **2** | Vérificateurs de synchronisation | ✅ **CLOSE** — 3 vérificateurs, **10 couples sur 10**, **14 mutations sur 14 refusées**. Une commande : `dart run tool/check_all.dart` |
-| **3** | Décor + 4 parcours écran + onboarding | ⬜ non commencé |
-| **4** | Bancs, couverture d'usage complète (**27 bancs, 62/62 routes**) | ⬜ non commencé |
+| **3** | Décor + 4 parcours écran + onboarding | 🔶 **décor fait**, parcours écran non commencés |
+| **4** | Bancs, couverture d'usage complète (**27 bancs, 62/62 routes**) | 🔶 **4 bancs sur 27** écrits et éprouvés |
 
 **Couverture actuelle**, décomposée (`docs/TEST_PROMO.md` §4) — trois
 couvertures distinctes, trois cibles :
@@ -461,10 +472,54 @@ couvertures distinctes, trois cibles :
 | Couverture | État | Cible |
 |---|---|---|
 | **Accès** (qui a le droit d'appeler quoi) | ✅ **62 / 62** — 48 sondées, 14 ouvertes épinglées | **100 %** atteint |
-| **Usage** (chaque route appelée au moins une fois) | 0 / 62 | **100 %** — bornée à 62 routes |
-| **Comportement** (chaque règle fait ce qu'elle doit) | 0 / 8 règles chiffrées | **piloté par le risque** — non bornée, un pourcentage y serait inventé |
+| **Appartenance** (la ressource est-elle à vous) | ✅ **14 / 14** routes à identifiant | 14 |
+| **Usage** (chaque route appelée au moins une fois) | ~20 / 62 | **100 %** — bornée à 62 routes |
+| **Comportement** (chaque règle fait ce qu'elle doit) | **3 / 8** règles chiffrées | **piloté par le risque** — non bornée |
 | Couples serveur ↔ app | ✅ **10 / 10** — tous éprouvés par mutation | 10 |
 | Écrans | 0 / 34 | 33 (`dev_profile_switcher` exclu, outil de développement) |
+
+### Ce qui existe, et comment le rejouer
+
+Tout est dans `scripts/`. Chaque banc lance son auto-test avant de conclure, et
+**tous ont été prouvés par mutation** — le vert seul n'a jamais suffi.
+
+| Script | Ce qu'il fait | Verdict au 2026-08-04 |
+|---|---|---|
+| `provision-decor.sh` | pose admin, 2 agents (communes disjointes), commerçant, promo — et **imprime le bloc `export`** | — |
+| `seed-demo.sh` | peuple pour *regarder* l'app : 10 commerces, 44 promos, 3 mises en avant, modération à deux états | — |
+| `test-frontiere-http.sh` | 48 routes × 3 sondes de refus | ✅ 138 sondes, 0 échec |
+| `test-appartenance.sh` | 14 routes à identifiant, agent d'une autre commune | ✅ 14 sondes, 0 échec |
+| `test-plafond-promos.sh` | 5 actives sous course, plusieurs tours | ✅ 5/5 tours, 1 gagnant chacun |
+| `test-cycle-commercant.sh` | suspension ≠ suppression | 🔴 **7 ✅ / 1 ❌ — voir P10** |
+| `apps/mobile/tool/check_all.dart` | les 3 vérificateurs statiques | ✅ 3/3 |
+
+```bash
+# WSL, backend démarré
+./scripts/provision-decor.sh      # coller le bloc export imprimé
+./scripts/test-frontiere-http.sh  # ~3 min · --only=<motif> pour une seule route
+./scripts/test-appartenance.sh
+./scripts/test-plafond-promos.sh  # TOURS=5 SIMULTANEES=4
+./scripts/test-cycle-commercant.sh
+```
+
+⚠️ **Attendre une minute entre deux bancs** : connexions et inscriptions sont
+plafonnées à 5/min/IP, et un 429 se déguise en « identifiants incorrects ».
+
+⚠️ **`test-cycle-commercant.sh` sort en échec, légitimement**, sur P10. Il
+repassera au vert quand le filtre `deletedAt` sera ajouté à `login`.
+
+### Par où reprendre
+
+1. **Corriger P10** — une ligne, et vérifier les autres recherches par
+   téléphone dans le même geste.
+2. **Trancher P9** (séparation S3 dans `.env.example`), **P7** (les replis
+   silencieux des miroirs) et **P8** (les comparaisons littérales).
+3. **Étape 3** — les parcours écran. La base est désormais assez peuplée pour
+   qu'ils aient quelque chose à montrer, et `harness.dart` attend dans
+   `docs/methode-test/`.
+4. **Étape 4** — les 23 bancs restants, matrice complète en `TEST_PROMO.md` §6.
+   Les plus rentables d'abord : `test-admin-highlight` (livré fin juillet,
+   jamais éprouvé) et `test-notifications` (module entier sans couverture).
 
 ---
 
@@ -782,6 +837,39 @@ cette répétition qui est l'enseignement du jour :**
 Les trois **rassuraient**. Aucun ne levait. C'est exactement ce que la méthode
 reproche aux replis, appliqué cette fois à mes propres vérifications : **un
 contrôle qui ne peut pas dire non finit par dire oui à tort**.
+
+### 2026-08-04 — Clôture de la session, mise en pause du chantier de test
+
+**Ce qui existe** : 4 bancs écrits, éprouvés par mutation et rejouables ; 3
+vérificateurs statiques derrière une commande unique ; un décor et un
+peuplement. Le tableau « Ce qui existe, et comment le rejouer » ci-dessus donne
+les commandes.
+
+**Ce que ça a rapporté** — quatre points fermés (P1 revu, P4, P5, T1) et **trois
+défauts réels trouvés**, dont un critique :
+
+| | |
+|---|---|
+| **P10** 🔴 | un numéro recyclé enferme son repreneur dehors — correctif d'une ligne proposé, **non appliqué** |
+| **P9** | `S3_ENDPOINT` sert deux rôles ; création de promo à 300 s, contournée en local (→ 88 ms) |
+| `HIGHLIGHT_CAP_REACHED` | non traduit — **corrigé** |
+
+**Ce qui n'a pas été fait, et pourquoi c'est écrit** : les parcours écran
+(étape 3), 23 bancs sur 27 (étape 4), et la vérification de l'auto-suppression
+(T4). Aucun n'est bloqué — ils n'ont simplement pas été atteints.
+
+**Le fil rouge de la journée, pour qui reprendra** : la moitié des défauts
+trouvés étaient dans **mes propres outils**, et tous **rassuraient** au lieu de
+lever — un contrôle silencieusement sauté, une reproduction concluant « pas de
+défaut » sur un scénario qui n'avait pas eu lieu, un harnais jugeant sur un code
+de sortie, quatre replis `jq` avalant des erreurs. C'est la démonstration
+pratique de la règle qui fonde la méthode : **un contrôle qui ne peut pas dire
+non finit par dire oui à tort.** Prouver chaque banc par mutation n'est pas une
+formalité — c'est ce qui a rattrapé chacun de ces cas.
+
+⚠️ **Chantier mis en pause à la demande de l'utilisateur**, pour passer à autre
+chose. Rien n'est en cours : arbre propre, tout poussé, `test-cycle-commercant`
+rouge sur un vrai défaut et non sur un travail inachevé.
 
 ---
 
