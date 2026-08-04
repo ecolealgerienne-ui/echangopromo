@@ -8,6 +8,7 @@ import '../../../app/theme.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/models/highlight.dart';
+import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/utils/categorie_asset.dart';
@@ -19,6 +20,7 @@ import '../providers/favorites_provider.dart';
 import '../providers/promo_providers.dart';
 import '../widgets/promo_card.dart';
 import '../widgets/promo_filter_sheet.dart';
+import '../widgets/promo_grid_card.dart';
 
 const _listPadding = 12.0;
 const _listSpacing = 10.0;
@@ -60,6 +62,7 @@ class PromoListScreen extends ConsumerWidget {
     final favoritesOnly = ref.watch(favoritesOnlyFilterProvider);
     final search = ref.watch(searchQueryProvider);
     final expanded = ref.watch(listExpandedProvider);
+    final density = ref.watch(promoDensityProvider);
 
     // Liste en plein écran : soit le client a filtré (catégorie, recherche,
     // favoris) et cherche donc quelque chose de précis, soit il a simplement
@@ -96,18 +99,19 @@ class PromoListScreen extends ConsumerWidget {
                 PromoListStatus.error => Center(child: ApiErrorText(promoListState.error!)),
                 PromoListStatus.loaded => RefreshIndicator(
                     onRefresh: () => ref.read(promoListProvider.notifier).refresh(),
-                    child: ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(
-                          _listPadding, 0, _listPadding, _listPadding),
+                    // `CustomScrollView` plutôt qu'une `ListView` ou une
+                    // `GridView` selon la densité : le pied de liste (bouton
+                    // « charger plus ») et le message de liste vide sont
+                    // partagés par les trois dispositions, et seul un sliver
+                    // permet de changer la grille sans les dupliquer.
+                    child: CustomScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      itemCount:
-                          promos.isEmpty ? 1 : promos.length + (promoListState.hasMore ? 1 : 0),
-                      separatorBuilder: (context, index) => const SizedBox(height: _listSpacing),
-                      itemBuilder: (context, index) {
-                        if (promos.isEmpty) {
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 80),
-                            child: Center(
+                      slivers: [
+                        if (promos.isEmpty)
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 80),
                               child: Text(
                                 search.isEmpty
                                     ? l10n.noActivePromos
@@ -115,34 +119,36 @@ class PromoListScreen extends ConsumerWidget {
                                 textAlign: TextAlign.center,
                               ),
                             ),
-                          );
-                        }
-                        if (index == promos.length) {
-                          return Center(
-                            child: promoListState.loadingMore
-                                ? const Padding(
-                                    padding: EdgeInsets.all(12),
-                                    child: SizedBox(
-                                      height: 24,
-                                      width: 24,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    ),
-                                  )
-                                : OutlinedButton(
-                                    onPressed: () => _loadMore(context, ref),
-                                    child: Text(l10n.loadMoreButtonLabel),
-                                  ),
-                          );
-                        }
-                        final promo = promos[index];
-                        return PromoCard(
-                          promo: promo,
-                          isFavorite: favorites.contains(promo.id),
-                          onTap: () => context.push('/promo/${promo.id}'),
-                          onToggleFavorite: () =>
-                              ref.read(favoritesProvider.notifier).toggle(promo.id),
-                        );
-                      },
+                          )
+                        else
+                          SliverPadding(
+                            padding: const EdgeInsets.symmetric(horizontal: _listPadding),
+                            sliver: _PromoSliver(
+                              density: density,
+                              promos: promos,
+                              favorites: favorites,
+                            ),
+                          ),
+                        if (promos.isNotEmpty && promoListState.hasMore)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: _listSpacing),
+                              child: Center(
+                                child: promoListState.loadingMore
+                                    ? const SizedBox(
+                                        height: 24,
+                                        width: 24,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : OutlinedButton(
+                                        onPressed: () => _loadMore(context, ref),
+                                        child: Text(l10n.loadMoreButtonLabel),
+                                      ),
+                              ),
+                            ),
+                          ),
+                        const SliverToBoxAdapter(child: SizedBox(height: _listPadding)),
+                      ],
                     ),
                   ),
               },
@@ -151,6 +157,83 @@ class PromoListScreen extends ConsumerWidget {
         ),
       ),
       bottomNavigationBar: const _ClientTabBar(),
+    );
+  }
+}
+
+/// Le fil lui-même, dans la disposition choisie. Trois sorties possibles
+/// depuis la même liste de promos — c'est le seul endroit qui connaît le
+/// rapport entre une densité et son widget de carte.
+class _PromoSliver extends ConsumerWidget {
+  const _PromoSliver({
+    required this.density,
+    required this.promos,
+    required this.favorites,
+  });
+
+  final PromoDensity density;
+  final List<Promo> promos;
+  final Set<String> favorites;
+
+  /// Hauteur / largeur d'une tuile. En 2 colonnes la carte doit loger la
+  /// photo, deux lignes de description et la ligne de prix, d'où un format
+  /// nettement plus haut que large ; la mosaïque, elle, n'a qu'une photo.
+  double get _aspectRatio => switch (density) {
+        PromoDensity.list => 1,
+        PromoDensity.grid => 0.72,
+        PromoDensity.mosaic => 1,
+      };
+
+  double get _spacing => density == PromoDensity.mosaic ? 4 : _listSpacing;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    void open(Promo promo) => context.push('/promo/${promo.id}');
+    void toggle(Promo promo) => ref.read(favoritesProvider.notifier).toggle(promo.id);
+
+    // La ligne détaillée n'a pas de hauteur fixe — le badge « expire
+    // bientôt » et une description sur deux lignes la font varier. Une
+    // grille l'enfermerait dans un ratio unique, d'où une vraie liste ici.
+    if (density == PromoDensity.list) {
+      return SliverList.separated(
+        itemCount: promos.length,
+        separatorBuilder: (context, index) => const SizedBox(height: _listSpacing),
+        itemBuilder: (context, index) {
+          final promo = promos[index];
+          return PromoCard(
+            promo: promo,
+            isFavorite: favorites.contains(promo.id),
+            onTap: () => open(promo),
+            onToggleFavorite: () => toggle(promo),
+          );
+        },
+      );
+    }
+
+    return SliverGrid.builder(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: density.columns,
+        mainAxisSpacing: _spacing,
+        crossAxisSpacing: _spacing,
+        childAspectRatio: _aspectRatio,
+      ),
+      itemCount: promos.length,
+      itemBuilder: (context, index) {
+        final promo = promos[index];
+        final isFavorite = favorites.contains(promo.id);
+        return density == PromoDensity.mosaic
+            ? PromoPhotoTile(
+                promo: promo,
+                isFavorite: isFavorite,
+                onTap: () => open(promo),
+              )
+            : PromoGridCard(
+                promo: promo,
+                isFavorite: isFavorite,
+                onTap: () => open(promo),
+                onToggleFavorite: () => toggle(promo),
+              );
+      },
     );
   }
 }
@@ -422,9 +505,15 @@ class _TopPromoCard extends StatelessWidget {
   }
 }
 
-/// Catégories en ronds. En mode filtré les ronds rétrécissent et le libellé
-/// disparaît : la bande passe de vitrine à barre de filtre, sans changer de
-/// place ni de nature.
+/// Catégories en ronds. En mode filtré les ronds rétrécissent, mais le
+/// libellé reste : la bande passe de vitrine à barre de filtre sans changer
+/// de place ni de nature.
+///
+/// Le libellé était masqué en mode filtré jusqu'au 2026-08-04. Une image
+/// seule n'identifie pas sa catégorie de façon fiable — pour savoir laquelle
+/// était « beauté / hygiène », il fallait replier la liste, lire, puis
+/// recliquer. La bande sert précisément à changer de catégorie sans revenir
+/// en arrière : sans libellé elle ne remplit plus ce rôle.
 class _CategoryCircles extends ConsumerWidget {
   const _CategoryCircles({required this.selected, required this.compact});
 
@@ -433,10 +522,12 @@ class _CategoryCircles extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return AnimatedContainer(
-      duration: kAppTransitionDuration,
-      curve: Curves.easeOut,
-      height: compact ? 58 : 92,
+    // Hauteur fixe dans les deux états : le libellé tient sur deux lignes
+    // partout — en arabe comme en français, les noms composés
+    // (« التجميل / النظافة », « maison / ameublement ») ne tiennent pas sur
+    // une seule. Seul le diamètre du rond s'anime, à l'intérieur.
+    return Container(
+      height: 92,
       padding: const EdgeInsets.only(top: 4),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
@@ -449,7 +540,6 @@ class _CategoryCircles extends ConsumerWidget {
             categorie: categorie,
             isSelected: selected == categorie,
             diameter: compact ? 42 : 56,
-            showLabel: !compact,
             // Recliquer la catégorie active la désélectionne : c'est le
             // second moyen de revenir à l'accueil, avec le glissement.
             onTap: () => ref.read(categoryFilterProvider.notifier).state =
@@ -466,14 +556,12 @@ class _CategoryCircle extends StatelessWidget {
     required this.categorie,
     required this.isSelected,
     required this.diameter,
-    required this.showLabel,
     required this.onTap,
   });
 
   final Categorie categorie;
   final bool isSelected;
   final double diameter;
-  final bool showLabel;
   final VoidCallback onTap;
 
   static const _icons = <Categorie, IconData>{
@@ -494,7 +582,9 @@ class _CategoryCircle extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return SizedBox(
-      width: showLabel ? 64 : 46,
+      // Largeur dictée par le libellé, pas par le rond : même en mode filtré
+      // il faut la place d'écrire « électroménager ».
+      width: 64,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadii.pill),
@@ -536,26 +626,36 @@ class _CategoryCircle extends StatelessWidget {
                 ),
               ),
             ),
-            if (showLabel) ...[
-              const SizedBox(height: 4),
-              Flexible(
-                child: Text(
-                  categorieLabel(context, categorie),
-                  maxLines: 2,
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.labelSmall?.copyWith(
-                    color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant,
-                    fontWeight: isSelected ? FontWeight.w600 : null,
-                  ),
+            const SizedBox(height: 4),
+            Flexible(
+              child: Text(
+                categorieLabel(context, categorie),
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.labelSmall?.copyWith(
+                  color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                  fontWeight: isSelected ? FontWeight.w600 : null,
                 ),
               ),
-            ],
+            ),
           ],
         ),
       ),
     );
   }
+}
+
+/// Ramène l'accueil : la liste se replie et tous les filtres retombent.
+///
+/// Au niveau du fichier plutôt que dans `_ListHeader` : l'onglet « Accueil »
+/// de la barre du bas doit produire exactement le même effet, et deux copies
+/// de cette liste de providers divergeraient au premier filtre ajouté.
+void _resetToHome(WidgetRef ref) {
+  ref.read(listExpandedProvider.notifier).state = false;
+  ref.read(categoryFilterProvider.notifier).state = null;
+  ref.read(favoritesOnlyFilterProvider.notifier).state = false;
+  ref.read(searchQueryProvider.notifier).state = '';
 }
 
 /// Titre de la liste, plus une poignée de glissement en mode filtré : tirer
@@ -572,14 +672,6 @@ class _ListHeader extends ConsumerWidget {
   final Categorie? categorie;
   final bool favoritesOnly;
   final int count;
-
-  /// Ramène l'accueil : la liste se replie et tous les filtres retombent.
-  void _reset(WidgetRef ref) {
-    ref.read(listExpandedProvider.notifier).state = false;
-    ref.read(categoryFilterProvider.notifier).state = null;
-    ref.read(favoritesOnlyFilterProvider.notifier).state = false;
-    ref.read(searchQueryProvider.notifier).state = '';
-  }
 
   /// Vitesse minimale, en pixels par seconde, pour qu'un glissement compte.
   /// En dessous, c'est un frôlement en tentant de faire défiler la liste, pas
@@ -604,7 +696,7 @@ class _ListHeader extends ConsumerWidget {
       onVerticalDragEnd: (details) {
         final velocity = details.primaryVelocity ?? 0;
         if (velocity > _dragVelocityThreshold) {
-          if (focused) _reset(ref);
+          if (focused) _resetToHome(ref);
         } else if (velocity < -_dragVelocityThreshold) {
           if (!focused) ref.read(listExpandedProvider.notifier).state = true;
         }
@@ -634,11 +726,12 @@ class _ListHeader extends ConsumerWidget {
                   l10n.promoCount(count),
                   style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
                 ),
+                const _DensityButton(),
                 if (focused)
                   Padding(
                     padding: const EdgeInsetsDirectional.only(start: 4),
                     child: InkWell(
-                      onTap: () => _reset(ref),
+                      onTap: () => _resetToHome(ref),
                       borderRadius: BorderRadius.circular(AppRadii.pill),
                       child: Padding(
                         padding: const EdgeInsets.all(4),
@@ -649,6 +742,43 @@ class _ListHeader extends ConsumerWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bouton unique qui fait tourner les densités d'affichage : 1 → 2 → 6 → 1
+/// (demande 2026-08-04). Un seul bouton plutôt qu'un menu ou trois boutons —
+/// le réglage n'a que trois valeurs et l'icône montre déjà celle en cours,
+/// donc une pression suffit à comprendre et à revenir en arrière.
+class _DensityButton extends ConsumerWidget {
+  const _DensityButton();
+
+  static const _icons = <PromoDensity, IconData>{
+    PromoDensity.list: Icons.view_agenda_outlined,
+    PromoDensity.grid: Icons.grid_view_outlined,
+    PromoDensity.mosaic: Icons.apps_outlined,
+  };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final density = ref.watch(promoDensityProvider);
+
+    return Tooltip(
+      message: l10n.promoDensityTooltip,
+      child: InkWell(
+        onTap: () => ref.read(promoDensityProvider.notifier).state = density.next,
+        borderRadius: BorderRadius.circular(AppRadii.pill),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Icon(
+            _icons[density],
+            size: 20,
+            color: colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
     );
@@ -672,7 +802,13 @@ class _ClientTabBar extends ConsumerWidget {
       onDestinationSelected: (index) {
         switch (index) {
           case 0:
-            ref.read(favoritesOnlyFilterProvider.notifier).state = false;
+            // Retour à l'accueil complet, pas seulement sortie des favoris :
+            // une fois la liste déployée en « Toutes les promos », le seul
+            // moyen de revenir était de tirer l'en-tête vers le bas ou de
+            // trouver la croix — deux gestes que personne ne devine. Le
+            // bouton Accueil est l'endroit où on va instinctivement
+            // (retour terrain, 2026-08-04).
+            _resetToHome(ref);
           case 1:
             context.push('/carte');
           case 2:

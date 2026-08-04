@@ -33,32 +33,40 @@ class EchangoWordmark extends StatelessWidget {
     // sinon il devient disproportionné dès que `fontSize` change.
     final underlineHeight = (style?.fontSize ?? 30) * 0.36;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Text('echango', style: style),
-        const SizedBox(width: 6),
-        Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.bottomCenter,
-          children: [
-            Text('promo', style: style?.copyWith(color: colorScheme.primary)),
-            Positioned(
-              left: -2,
-              right: -2,
-              bottom: -underlineHeight * 0.62,
-              height: underlineHeight,
-              child: CustomPaint(
-                painter: _SquigglePainter(
-                  progress: underlineProgress,
-                  color: colorScheme.secondary,
+    // `Row` suit la Directionality ambiante : en arabe elle s'inversait et
+    // affichait « promo echango ». La marque est un nom propre, son ordre ne
+    // dépend pas de la langue de l'interface — on force donc le sens LTR ici
+    // plutôt qu'à chaque point d'appel (trouvé en test TestFlight,
+    // 2026-08-04).
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text('echango', style: style),
+          const SizedBox(width: 6),
+          Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.bottomCenter,
+            children: [
+              Text('promo', style: style?.copyWith(color: colorScheme.primary)),
+              Positioned(
+                left: -2,
+                right: -2,
+                bottom: -underlineHeight * 0.62,
+                height: underlineHeight,
+                child: CustomPaint(
+                  painter: _SquigglePainter(
+                    progress: underlineProgress,
+                    color: colorScheme.secondary,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-      ],
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
