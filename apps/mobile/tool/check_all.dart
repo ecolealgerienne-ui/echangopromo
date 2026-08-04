@@ -28,6 +28,7 @@ const _verificateurs = <String, String>{
   'codes d\'erreur': 'tool/check_error_codes.dart',
   'enums miroirs': 'tool/check_enums.dart',
   'bornes de validation': 'tool/check_server_rules.dart',
+  'thème et couleurs': 'tool/check_theme.dart',
 };
 
 Future<int> _lancer(String script, List<String> args) async {

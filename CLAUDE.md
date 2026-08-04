@@ -368,6 +368,44 @@ permet de reconnaître un cas nouveau relevant de la même règle.
     perdrait), et laisser passer les `HttpException` dans les `catch`
     génériques.
 
+35. **Une couleur sémantique vient du thème ; les espacements sont recensés,
+    pas encore normés.** L'app bascule clair/sombre depuis fin juillet 2026 —
+    une couleur écrite en dur **ne suit pas le basculement**, et l'écran est
+    simplement faux dans un des deux thèmes, sans erreur ni journal.
+
+    ⚠️ **Un interdit général sur `Colors.*` serait une règle fausse ici**, et la
+    mesure le montre : sur 12 occurrences au 2026-08-04, la plupart sont des
+    blancs et des noirs posés **au-dessus d'une photo ou d'une tuile de carte**,
+    où le contraste se joue contre un contenu arbitraire et non contre une
+    surface de thème. Les faire passer par `colorScheme` les rendrait
+    illisibles sur une image claire.
+
+    **En pratique** — tenu par `tool/check_theme.dart` :
+    - une couleur **sémantique** (`red`, `amber`, `green`, `grey`…) est refusée
+      partout : elle a un équivalent dans `colorScheme` ou dans l'extension
+      `AppSemanticColors` ;
+    - `white`, `black`, `transparent` et les valeurs hexadécimales sont admis
+      **dans les fichiers épinglés**, chacun avec sa raison — cinq à ce jour,
+      tous des superpositions sur photo ou sur carte ;
+    - un nom de couleur **non examiné** passe : refuser par défaut sur un nom
+      qu'on n'a pas regardé accuserait à l'aveugle.
+
+    *Trouvé : `promo_card.dart:97` pose `Colors.redAccent` pour le cœur d'un
+    favori — sur la même ligne que `colorScheme.onSurfaceVariant` pour l'autre
+    branche. Une moitié suit le thème, l'autre non.*
+
+    **Ce que cette règle ne fait PAS**, et pourquoi. Les espacements littéraux
+    (339 au 2026-08-04) sont **recensés sans échouer** : il n'existe pas de
+    barème `AppSpacing`, et refuser sans barème demanderait de converger vers
+    rien. Faire converger 339 valeurs déplace des pixels — c'est une décision
+    de design, pas un défaut.
+
+    ⚠️ **Rien à extraire côté thèmes**, contrairement au projet voisin :
+    `AppTheme.light` et `AppTheme.dark` sont **dérivés d'une seule fonction**
+    `_build(brightness:)`, et les couleurs sémantiques vivent dans une
+    `ThemeExtension` à deux variantes. Le défaut « deux thèmes sont deux copies
+    que personne ne compare » n'existe pas ici.
+
 ### Règles de `echango-delivery` volontairement **non** reprises
 
 Une exclusion non écrite est indiscernable d'un oubli.
