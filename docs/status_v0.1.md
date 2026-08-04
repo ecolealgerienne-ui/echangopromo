@@ -143,7 +143,13 @@ passage au vert ne prouve rien, il en faut plusieurs tours.
 
 **Débloqué par** : étape 4 de `docs/TEST_PROMO.md`, banc `test-plafond-promos`.
 
-### P5 — L'IDOR agent → promo n'a jamais été rejoué
+### P5 — L'IDOR agent → promo ✅ *fermé le 2026-08-04*
+
+**Fermé** : rejoué et prouvé par mutation — voir T1 et le journal. Le périmètre
+couvert va bien au-delà de la promo d'origine : les **14 routes** à identifiant
+accessibles à un agent.
+
+<details><summary>Le constat d'origine</summary>
 
 La faille critique de l'audit V0 (un agent authentifié pouvait modifier les
 promos de n'importe quel commerçant) a été corrigée par
@@ -152,6 +158,8 @@ n'est pas revenue — et la polarité de protection du projet (garde posé **rou
 par route**) fait que **la route qu'on oublie est ouverte**.
 
 **Débloqué par** : étape 1 de `docs/TEST_PROMO.md`, banc d'appartenance.
+
+</details>
 
 ### P7 — Cinq miroirs d'enum avalent une valeur inconnue 🆕
 
@@ -221,7 +229,21 @@ d'alors prévoyait 8 bancs choisis par défaut historique : ils couvraient
 
 *(les routes partagées comptent par profil, d'où un total supérieur à 62)*
 
-### T1 — L'agent cumule le plus de pouvoir et la plus faible couverture ⚠️
+### T1 — L'agent cumule le plus de pouvoir et la plus faible couverture ✅ *fermé le 2026-08-04*
+
+**Fermé** par `scripts/test-appartenance.sh` : **14 sondes, 0 échec**. Les 14
+routes à identifiant accessibles à un agent — dont suspendre, **supprimer**,
+valider un registre, réinitialiser un PIN et modérer — rendent toutes
+`403 COMMERCANT_NOT_IN_AGENT_COMMUNES` face à un agent d'une autre commune.
+
+**Prouvé par mutation** : condition de `assertAgentOwnsCommercant`
+(`commercant.service.ts:529`) neutralisée → l'agent intrus obtenait **201** sur
+une action de modération. Le banc l'a vu.
+
+Avec témoin positif restauré (l'agent légitime suspend puis réactive) et
+contrôle de projection (la liste est filtrée par commune).
+
+<details><summary>Le constat d'origine</summary>
 
 **14 des 26 routes de l'agent sont sous `/admin/*`** : il suspend un commerçant,
 le **supprime**, valide ou rejette son registre, réinitialise son PIN, modère
@@ -234,6 +256,8 @@ V0, sur une surface **sept fois plus grande** que celle qui avait été corrigé
 
 **Traité dans le plan** par `test-agent-appartenance`, étendu aux 16 routes
 concernées et remonté en priorité 4 du §9.
+
+</details>
 
 ### T2 — L'admin : plus grande surface, trois bancs partiels
 
@@ -548,6 +572,44 @@ désormais sur `--untracked-files=no`. Un garde-fou trop large devient pénible,
 donc contourné.
 
 ⚠️ **Ce fichier d'échange vim traîne toujours** dans le clone WSL (voir P6).
+
+### 2026-08-04 (fin de nuit) — Appartenance : T1 fermé, P5 fermé
+
+`scripts/test-appartenance.sh` — **14 sondes, 0 échec, 0 non concluante**. Les
+14 routes à identifiant accessibles à un agent rendent toutes
+`403 COMMERCANT_NOT_IN_AGENT_COMMUNES` face à un agent d'une autre commune.
+La faille critique de l'audit V0 est enfin rejouée, sur une surface sept fois
+plus large que celle qui avait été corrigée.
+
+**Le piège central, mesuré avant d'écrire les assertions.** Avec un corps vide,
+deux routes rendent `400 VALIDATION_ERROR` : la requête meurt à la validation,
+**avant** le contrôle d'appartenance. Compter ce 400 comme un refus aurait fait
+conclure juste **par accident** — et resterait vert le jour où l'appartenance
+disparaît. Les sondes envoient donc un corps valide, et un `VALIDATION_ERROR`
+est déclaré **non concluant**, jamais réussi.
+
+**Prouvé par mutation** : condition de `assertAgentOwnsCommercant`
+(`commercant.service.ts:529`, passage unique des 14 routes) neutralisée →
+l'agent intrus obtenait **201** sur une action de modération. Retour au vert
+après restauration.
+
+⚠️ **Sous mutation, le filtre de liste tenait toujours.** Le contrôle par route
+et le filtrage de liste sont **deux mécanismes indépendants** : un banc qui ne
+testerait que la liste conclurait à tort. Les deux sont désormais couverts.
+
+**Quatre défauts trouvés dans le décor, tous du même repli complaisant** — et
+c'est la répétition qui est instructive :
+
+| ce que j'avais écrit | ce que ça a produit |
+|---|---|
+| `\|\| true` sur la validation du registre | « registre validé » annoncé sur un refus, échec 3 étapes plus loin |
+| un argument en trop dans l'appel | `AUTH_TOKEN_MISSING` sur une requête authentifiée dans l'intention |
+| `limit=200` au-delà du plafond | 400 avalé par `(.items // .)`, jq plantant loin de la cause |
+| `dateFin` à +20 jours | `PROMO_DATE_FIN_EXCEEDS_MAX` (plafond réel : 7 jours) |
+
+Aucun n'a levé au bon endroit. C'est exactement ce que la méthode reproche aux
+valeurs par défaut, appliqué à des expressions `jq` et à des arguments de
+fonction — **le pire endroit pour un repli reste un script de décor**.
 
 ---
 

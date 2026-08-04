@@ -354,6 +354,52 @@ commerçant hors de ses communes est le scénario d'attaque réaliste — pas
 l'appel sans jeton. Prévoir deux comptes agent rattachés à des communes
 disjointes.
 
+#### Banc d'appartenance — ✅ **passé et prouvé** (2026-08-04)
+
+`scripts/test-appartenance.sh` + `scripts/lib/appartenance.py`.
+Auto-test **13 cas dont 8 refus**.
+
+```
+14 sondes, 0 échec, 0 non concluante
+→ les 14 routes à identifiant rendent 403 COMMERCANT_NOT_IN_AGENT_COMMUNES
+```
+
+Les 14 : suspend, reactivate, **delete**, registre/valider, registre/rejeter,
+profile/valider, reset-pin, les 3 actions de modération, `PATCH /promo/:id`,
+publish, stop, et `POST /promo/agent/:commercantId`.
+
+**Le piège central, mesuré avant d'écrire les assertions.** Sondées avec un
+corps vide, deux routes rendent **`400 VALIDATION_ERROR`** : la requête meurt à
+la validation, **avant** le contrôle d'appartenance. Un banc qui compterait ce
+400 comme un refus conclurait juste **par accident**, et resterait vert le jour
+où l'appartenance disparaît. Chaque sonde envoie donc un corps valide, et un
+`VALIDATION_ERROR` est déclaré **non concluant** — jamais réussi.
+
+**Deux contrôles complémentaires** :
+
+- *témoin positif, restauré* — l'agent A suspend puis réactive. Sans lui, un
+  banc qui n'observe que des refus passe au vert si **tout** est refusé, y
+  compris pour l'agent légitime ;
+- *projection de liste* — `GET /admin/commercant` : A voit le commerçant, B ne
+  le voit pas.
+
+**Prouvé par mutation** — condition de `assertAgentOwnsCommercant`
+(`commercant.service.ts:529`, passage unique des 14 routes) neutralisée :
+
+```
+❌ POST /admin/moderation/{pid}/verifier-ok — statut 201 — accès NON refusé
+```
+
+L'agent B obtenait **201** sur une action de modération visant une autre
+commune. Retour au vert après restauration, fichiers suivis intacts.
+
+⚠️ Détail instructif : sous mutation, **le filtre de liste tenait toujours**.
+Le contrôle par route et le filtrage de liste sont **deux mécanismes
+indépendants** — un banc qui ne testerait que la liste conclurait à tort.
+
+⚠️ La sonde a été limitée par `--only` pendant la mutation : garde neutralisé,
+`delete` aurait réellement supprimé le commerçant du décor.
+
 **Critère de sortie** : prouvé par mutation — retirer un `@UseGuards` fait passer
 le banc au rouge, et retirer un `assertZoneMatches` aussi.
 
