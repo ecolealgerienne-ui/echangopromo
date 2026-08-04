@@ -193,6 +193,16 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
     (contrairement à l'intuition venue de MySQL/InnoDB). Ajouter un
     `@Index()` explicite dès qu'une clé étrangère sert de filtre ou de
     jointure fréquente, pas seulement de contrainte référentielle.
+    **Et un `@Index()` d'entité ne crée rien par lui-même :** `synchronize`
+    est coupé (schéma tenu par les seules migrations versionnées, voir
+    `data-source.ts`), donc un décorateur non repris dans une migration
+    `CREATE INDEX` est un commentaire, pas un index — la base tourne sans lui
+    et le prochain `migration:generate` l'émettra dans une migration qu'on
+    croira additive. Toute pose d'`@Index()` doit s'accompagner de sa
+    migration ; vérifier l'écart entité↔base plutôt que de faire confiance au
+    décorateur. *Trouvé : `Notification` déclare des `@Index()` sur
+    `recipientId` et `promoId` que `1783680000000-CreateNotificationEntity`
+    ne crée pas (seul l'index composite l'est).*
 
 13. **Toute opération "vérifier puis insérer" sur une contrainte métier
     (plafond, unicité) doit être protégée par une transaction ou un
