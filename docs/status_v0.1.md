@@ -322,7 +322,7 @@ Le détail de chaque étape, avec son critère de sortie, est dans
 |---|---|---|
 | — | Méthode générique + 5 squelettes | ✅ écrits, auto-tests au vert (16/16 et 13/13) |
 | — | Plan spécifique Promo | ✅ écrit |
-| **1** | Banc de refus (48 routes, par construction) | ⬜ non commencé |
+| **1** | Banc de refus (48 routes, par construction) | 🔶 **écrit, épinglage prouvé** (auto-test 14/14 dont 6 refus ; **4/4 mutations**, sans identifiants car la phase d'épinglage précède le réseau). Phase réseau en attente du décor — **0 agent en base** |
 | **2** | Vérificateurs de synchronisation | ✅ **CLOSE** — 3 vérificateurs, **10 couples sur 10**, **14 mutations sur 14 refusées**. Une commande : `dart run tool/check_all.dart` |
 | **3** | Décor + 4 parcours écran + onboarding | ⬜ non commencé |
 | **4** | Bancs, couverture d'usage complète (**27 bancs, 62/62 routes**) | ⬜ non commencé |
@@ -478,6 +478,40 @@ sans base ni émulateur.
 **Bilan de l'étape 2** : 3 vérificateurs, **10 couples sur 10** tenus par un
 contrôle exécuté (contre 0 le matin même), et **14 mutations des vrais fichiers,
 14 refus**.
+
+### 2026-08-04 (soir) — Étape 1, le banc de refus est écrit
+
+`scripts/lib/frontiere_http.py` + son lanceur. 62 routes énumérées depuis la
+source, 14 ouvertes épinglées avec leur justification, 48 protégées.
+
+**Ce qui est déjà prouvé, et sans un seul identifiant.** La vérification de
+l'épinglage s'exécute **avant le premier appel réseau** — c'est elle qui
+attrape un garde oublié, donc la propriété la plus importante du banc dans un
+projet où la protection est posée route par route. Quatre mutations, quatre
+comportements attendus : garde retiré d'un contrôleur → refus immédiat avec les
+5 routes nommées ; route ouverte devenue protégée → avertissement ; source
+introuvable → sortie 2 sans verdict ; arbre propre → passe l'épinglage et
+s'arrête faute d'identifiants.
+
+**Ce qui bloque la phase réseau, et ce n'est pas du code** : la base locale a
+1 admin, 1 commerçant et **0 agent**. Les ~140 sondes attendent que l'étape 3
+pose ces comptes. Le banc le dit et s'arrête plutôt que de conclure sur ce
+qu'il a pu lire.
+
+**Trois pièges d'analyse rencontrés**, tous devenus des cas d'auto-test : les
+décorateurs forment un bloc contigu **autour** de la méthode (`@Roles` peut
+suivre `@Get`, et ne lire que ce qui précède décale les rôles d'une route) ;
+l'en-tête de classe ne commence pas au `@Controller` ; les paramètres d'URL
+doivent être remplacés par un identifiant **bien formé**, sinon on mesure la
+validation du format et un 400 passe pour un refus.
+
+**Deux limites nommées plutôt que tues** : la sonde « mauvais rôle » est
+impossible sur les routes ouvertes aux 3 rôles (notifications) — comptée non
+applicable ; les 3 routes App Links sont host-scopées et répondent 404 sur
+localhost par conception.
+
+Aucune modification du code source : les mutations sont transitoires et
+restaurées dans la seconde, `git status` vide après coup.
 
 ---
 

@@ -357,6 +357,38 @@ disjointes.
 **Critère de sortie** : prouvé par mutation — retirer un `@UseGuards` fait passer
 le banc au rouge, et retirer un `assertZoneMatches` aussi.
 
+#### État au 2026-08-04 — écrit, épinglage prouvé, phase réseau en attente
+
+`scripts/test-frontiere-http.sh` + `scripts/lib/frontiere_http.py`.
+Auto-test **14 cas dont 6 refus**. 62 routes vues, 14 ouvertes épinglées avec
+leur justification, 48 protégées, **aucune route protégée sans `@Roles`**.
+
+**La phase d'épinglage est prouvée par mutation sans aucun identifiant** —
+parce qu'elle s'exécute **avant le premier appel réseau**. C'est elle qui
+attrape un garde oublié, donc la propriété la plus importante du banc :
+
+| Mutation | Attendu | |
+|---|---|---|
+| référence, arbre propre | passe l'épinglage, s'arrête faute d'identifiants | ✅ |
+| `@UseGuards` retiré d'un contrôleur | refus **avant tout appel**, 5 routes nommées | ✅ |
+| route ouverte épinglée devenue protégée | avertissement, liste à nettoyer | ✅ |
+| `SRC_DIR` introuvable | sortie 2, **aucun verdict rendu** | ✅ |
+
+**Ce qui manque pour la phase réseau — du décor, pas du code** :
+
+```bash
+export ADMIN_EMAIL=…      ADMIN_PASSWORD=…
+export AGENT_EMAIL=…      AGENT_PASSWORD=…     # ⚠️ 0 agent en base locale
+export COMMERCANT_TEL=…   COMMERCANT_PIN=…
+```
+
+La base locale contient 1 admin, 1 commerçant, **0 agent**. Les ~140 sondes ne
+peuvent donc pas tourner tant que l'étape 3 n'a pas posé ces comptes. Le banc le
+dit et s'arrête — **il ne conclut pas**.
+
+⚠️ **Le banc révoque le jeton admin au démarrage** : c'est ce qui lui donne son
+troisième échantillon. Une session admin ouverte ailleurs sera déconnectée.
+
 ### Étape 2 — Les vérificateurs de synchronisation ✅ **close (2026-08-04)**
 
 **Une seule commande**, qui lance les trois avec leur auto-test :
