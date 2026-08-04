@@ -15,10 +15,17 @@ ce fichier-ci en est la synthèse actionnable.
 - **Optimiser l'usage des tokens** : éviter les tâches/vérifications
   inutiles (builds, greps de relecture, allers-retours de confirmation
   superflus), rester concis dans les réponses.
-- **Ne jamais lancer les tests/builds/l'app** dans cet environnement
-  (pas de `npm install`/`flutter pub get` ici, l'utilisateur développe sur
-  sa propre machine WSL/Windows) — donner les commandes exactes à exécuter
-  chez lui et attendre ses retours, plutôt que d'essayer de vérifier soi-même.
+- ~~**Ne jamais lancer les tests/builds/l'app** dans cet environnement.~~
+  ⚠️ **Faux depuis le 2026-08-04.** Le backend démarre, les migrations
+  tournent, `flutter analyze` et un build Android aboutissent, l'app tourne
+  sur émulateur, et cinq bancs de test s'exécutent — le tout depuis cette
+  session. La consigne d'origine décrivait un environnement qui n'existe
+  plus ; la garder ferait refuser un travail désormais possible.
+  **Un état périmé est pire qu'aucun état : il fait conclure.**
+- **Ce qui reste vrai** : ne pas lancer un build long ou une suite complète
+  sans raison — les plafonds de requêtes (voir § Environnement) rendent les
+  rejeux coûteux, et un banc lancé au mauvais moment rend un 429 déguisé en
+  échec métier.
 
 ## Projet en un coup d'œil
 
@@ -48,12 +55,18 @@ Commandes utiles :
   (`synchronize: false` toujours, plus de bascule sur `NODE_ENV`) —
   lancer `npm run migration:run` avant le premier `start:dev` sur une
   base neuve, et avant les scripts seed.
-- Mobile : `cd apps/mobile && flutter pub get && flutter analyze` — **le
-  SDK Flutter n'a jamais pu être installé dans l'environnement de dev
-  utilisé jusqu'ici** (proxy réseau bloquant `storage.googleapis.com`),
-  donc tout le code mobile actuel a été relu statiquement mais **jamais
-  compilé**. `flutter analyze` est la toute première chose à lancer en
-  reprenant ce projet en local, avant tout autre travail.
+- Mobile : `cd apps/mobile && flutter pub get && flutter analyze`.
+  ⚠️ **Le paragraphe qui suivait ici est faux depuis le 2026-08-04.** Il
+  affirmait que le SDK Flutter n'avait jamais pu être installé et que le code
+  mobile n'avait **jamais été compilé**. Flutter 3.35.7 compile désormais,
+  `flutter analyze` rend **1 avertissement** sur tout le projet, et l'app
+  tourne sur émulateur. Le « proxy bloquant » était en réalité l'analyse
+  HTTPS d'un antivirus (voir § Environnement).
+- Vérificateurs de synchronisation : `cd apps/mobile && dart run tool/check_all.dart`
+  — statiques, instantanés, sans base ni émulateur. Le seul lot qui peut
+  tourner à chaque commit.
+- Bancs de test : `./scripts/provision-decor.sh` puis les `./scripts/test-*.sh`.
+  Détail, verdicts et ordre de reprise dans `docs/status_v0.1.md`.
 
 ---
 
@@ -269,14 +282,159 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
     une fonction localisée (`features/shared/l10n/enum_labels.dart`), pas
     via un champ figé sur l'enum.
 
+### Depuis la reprise des tests (2026-08-04)
+
+Sept règles adaptées de [`echango-delivery`](https://github.com/ecolealgerienne-ui/echango-delivery),
+produit voisin de la suite. **Aucune n'est importée parce qu'elle existe
+ailleurs** : chacune référence un défaut trouvé dans *ce* dépôt — c'est ce qui
+permet de reconnaître un cas nouveau relevant de la même règle.
+
+28. **Un contrôle doit prouver qu'il sait refuser.** Un vérificateur au vert
+    n'a montré qu'une chose : sa capacité à dire oui. Tant qu'on ne l'a pas vu
+    **refuser**, on ne sait pas s'il regarde. En pratique : un `--self-test`
+    bloquant, avec autant de cas qui doivent échouer que de cas qui passent,
+    **plus** une mutation du vrai fichier. *Trouvé : sur les cinq bancs écrits
+    le 2026-08-04, la moitié des défauts découverts étaient dans les outils de
+    vérification eux-mêmes — un contrôle silencieusement sauté, une
+    reproduction concluant « pas de défaut » sur un scénario qui n'avait pas
+    eu lieu, un harnais jugeant sur un code de sortie. Tous **rassuraient**,
+    aucun ne levait.* Corollaire : une mutation qui **casse** au lieu de
+    **dégrader** ne prouve rien — un `INTERNAL_ERROR` n'est pas un refus.
+
+29. **Un défaut n'a pas de valeur par défaut.** Une valeur de repli détruit
+    l'information d'absence, et l'absence est presque toujours l'information
+    qui compte. Le critère : *si cette valeur est fausse, est-ce que quelque
+    chose le dira ?* Si non, il ne faut pas de valeur — `null` plutôt qu'un
+    zéro, deux messages distincts pour « vide » et « illisible ».
+    *Trouvé : `CommercantService.login` retombe sur une ligne supprimée au
+    lieu de ne rien trouver (P10) ; et côté outillage, quatre `(.items // .)`
+    avalant un objet d'erreur, un `|| true` masquant un refus de registre.*
+    ⚠️ **Le pire endroit pour un repli est un script de test ou de décor** : il
+    y produit un contrôle qui rassure.
+
+30. **Un invariant s'applique, il ne se documente pas.** Dès qu'un commentaire
+    dit « même règle que X », « même filtre que X », « doit rester identique à
+    X » — c'est l'aveu que **rien ne tient l'invariant à notre place**, et
+    **un commentaire ne peut pas échouer**. Le critère n'est pas « ces deux
+    bouts se ressemblent-ils » mais **« si l'un change, l'autre doit-il
+    changer ? »** — oui ⇒ un seul endroit ; non ⇒ deux endroits et un
+    commentaire qui dit pourquoi ; fusion trop coûteuse ⇒ **un contrôle
+    exécuté**, jamais une phrase.
+    *Trouvé, et c'est cinglant : `assertPhoneAvailable` porte le commentaire
+    « même filtre que l'index partiel posé en base » ; `login` n'applique pas
+    ce filtre. La phrase existait, elle ne tenait rien — un numéro recyclé
+    enferme son repreneur dehors (P10).*
+
+31. **Ce que le serveur sert doit avoir un appelant.** Une capacité écrite,
+    testée, documentée et appelée nulle part ne produit aucune erreur : elle
+    produit une fonctionnalité absente que personne ne cherche, puisque le
+    code existe. Une route neuve n'est pas finie tant qu'un écran ne l'appelle
+    pas ; une réponse serveur se lit **en entier** ; et ce qui n'a plus
+    d'appelant se supprime. *Généralise la règle 11 (module non branché), dont
+    `AuditLogModule` fut le cas fondateur.*
+
+32. **Une valeur qui porte une décision se nomme.** Le critère n'est pas « est-ce
+    un littéral » — `maxLines: 1` décrit la nature d'un widget. Le critère est :
+    **quelqu'un pourrait-il vouloir en changer, et faudrait-il alors le changer
+    ailleurs aussi ?** Distinguer deux familles qui n'appellent pas le même
+    remède : les valeurs **d'apparence** (incohérence visuelle, cosmétique) et
+    les valeurs **métier**, qui recopient en silence une règle vivant ailleurs.
+    *Mesuré au 2026-08-04 : 225 `EdgeInsets`/`SizedBox` littéraux et 25
+    `Colors.*`/`Color(0x)` dans les écrans.* Une borne serveur recopiée côté
+    app nomme sa source **et** est tenue par `tool/check_server_rules.dart` —
+    ou n'est pas recopiée du tout : `HIGHLIGHT_CAP_REACHED` est traduit sans
+    reprendre le plafond, la phrase portant le geste à faire.
+
+33. **La polarité de protection est une décision, pas un détail.** Ici, chaque
+    route pose son propre `@UseGuards` ; le seul garde global est le
+    `ThrottlerGuard`. **La route qu'on oublie est donc OUVERTE**, et l'oubli ne
+    se voit ni à la compilation, ni à l'exécution, ni dans les journaux — à
+    l'inverse d'un garde global dont on se retire explicitement.
+    **Conséquence directe** : toute route ouverte doit être **épinglée
+    nommément** avec sa justification (les 14 actuelles le sont, dans
+    `scripts/lib/frontiere_http.py`), et c'est le banc, et lui seul, qui peut
+    affirmer qu'aucun garde ne manque. ⚠️ Ne jamais énumérer « les routes
+    protégées » depuis leur garde : l'ensemble contrôlé rétrécirait avec ce
+    qu'il contrôle.
+
+34. **Toute entrée traverse un DTO décoré.** Le `ValidationPipe` ne valide que
+    les classes décorées : un `@Body() dto: { reason?: string }` typé en ligne
+    n'est **pas validé du tout** — le type disparaît à la compilation, la
+    validation est à l'exécution. *Mesuré au 2026-08-04 : 29 DTO, **0** `@Body`
+    typé en ligne, **0** `throw new BadRequestException(...)` brut. La
+    discipline est acquise ; cette règle existe pour qu'elle ne se relâche
+    pas.* Complète la règle 25 par ses deux pièges : ne jamais lever un refus
+    métier à l'intérieur d'un `try` dont le `catch` réemballe (le code se
+    perdrait), et laisser passer les `HttpException` dans les `catch`
+    génériques.
+
+### Règles de `echango-delivery` volontairement **non** reprises
+
+Une exclusion non écrite est indiscernable d'un oubli.
+
+| Règle | Pourquoi pas ici |
+|---|---|
+| *Aucune transaction entre systèmes — compenser explicitement* | Delivery joint Fleetbase en HTTP avec sa propre base ; **nous possédons notre Postgres**. Importer ça ferait écrire des compensations là où un `ROLLBACK` suffit — et le verrou consultatif couvre déjà le cas éprouvé |
+| *Le statut Fleetbase fait foi — aucun état parallèle* | Pas de Fleetbase. Le seul grain transférable (ne pas dériver un état métier de plusieurs champs amont) **est déjà la règle 8** |
+| *Poser les questions de structure au graphe, pas au `grep`* | Suppose Graphify installé — et delivery **mesure lui-même** que le graphe est faux sur du Dart (fonction à 3 appelants vue avec un degré de 1, 64 nœuds fantômes). Notre dépôt est à moitié Dart |
+
+---
+
+## L'environnement, tel qu'il est sur ce poste (2026-08-04)
+
+⚠️ **Il y a DEUX clones, et c'est structurant.**
+`C:\…\Desktop\shope\echangopromo\echangopromo` — où l'on édite, commite, et où
+tourne Flutter — et **`~/projects/echangopromo` dans WSL**, d'où tournent
+réellement le backend et les bancs, et **la seule qui porte
+`apps/backend/.env`**. Les deux divergent dès qu'on commite d'un côté sans
+tirer de l'autre.
+
+| | |
+|---|---|
+| Backend | WSL, `npm run start:dev`, **port 3000** |
+| Postgres | conteneur `echangopromo-postgres-1`, **port hôte 5433** |
+| MinIO | conteneur `echangopromo-minio-1`, **port 9000** |
+| Mobile | Windows, Flutter 3.35.7, émulateur Android |
+| Depuis l'émulateur | l'hôte est **`10.0.2.2`**, jamais `localhost` |
+
+**Les plafonds, qui dimensionnent tout banc et tout script :**
+
+| Plafond | Valeur | Portée |
+|---|---|---|
+| global | 60 / min / IP | toutes les routes |
+| `STRICT_THROTTLE` | **5 / min / IP** | les 3 logins, `register`, `report` |
+| `SENSITIVE_ACTION_THROTTLE` | 20 / min / IP | les écritures — **seau partagé** |
+| `MAP_THROTTLE` | 180 / min / IP | `/promo/map` |
+| créations de promo | 5 / 24 h / commerçant | agent et admin **exemptés** |
+| promos actives | 5 / commerçant | **personne n'est exempté** |
+
+⚠️ **Un 429 se déguise en « identifiants incorrects »** : attendre une minute
+entre deux bancs plutôt que chercher un bug d'authentification.
+
+**Trois pièges d'environnement, tous rencontrés le 2026-08-04 :**
+
+- **`--dart-define` se perd** si `flutter` est lancé via un intermédiaire qui
+  reconstruit la ligne de commande (`Start-Process` en PowerShell). Le build
+  part alors sur la valeur par défaut — la **production** — sans un mot.
+  Vérifier en cherchant la chaîne attendue dans `build/…/kernel_blob.bin`.
+- **L'analyse HTTPS d'un antivirus casse Gradle** en `PKIX path building
+  failed` : la racine de l'antivirus est dans le magasin Windows, pas dans le
+  truststore Java. Symptôme reconnaissable — PowerShell télécharge, Java non.
+- **`S3_ENDPOINT` sert deux rôles** : point d'accès du client S3 *du serveur*
+  **et** base de l'URL publique servie au mobile. Le régler sur `10.0.2.2:9000`
+  pour l'émulateur rend chaque création de promo dépendante d'un timeout TCP
+  (mesuré : 300 s → 88 ms une fois les rôles séparés via `S3_CDN_BASE_URL`).
+
 ---
 
 ## Dette connue, non bloquante pour le pilote mais à traiter avant extension
 
-- Couverture de tests backend encore partielle (2 fichiers :
-  `jwt-auth.guard.spec.ts`, `image-signature.spec.ts`) — largement
-  suffisant pour dépasser 0%, mais pas une vraie couverture des règles
-  métier (plafond de 5 promos, fenêtre d'ignore de 30 jours, etc.).
+- ~~Couverture de tests backend encore partielle (2 fichiers)~~ — **révisé le
+  2026-08-04** : 5 fichiers `.spec.ts`, 5 tests unitaires Dart, **3
+  vérificateurs de synchronisation** et **5 bancs de bout en bout**, tous
+  prouvés par mutation. Le plafond de 5 promos est désormais éprouvé **sous
+  course**, et la fenêtre d'ignore de 30 jours ne l'est toujours pas. **État
+  réel, verdicts et ordre de reprise : `docs/status_v0.1.md`.**
 - `Admin` reste un compte unique en V0 (pas de gestion multi-admin) —
   `POST /admin/me/revoke-token` couvre l'auto-révocation, mais aucun
   mécanisme pour qu'un admin révoque un *autre* admin n'a de sens tant que
@@ -284,3 +442,22 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
 
 Détail complet, fichier:ligne, sévérités : `docs/AUDIT_V0.md` et
 `docs/AUDIT_V1.md`.
+
+---
+
+## Où vit quoi
+
+⚠️ **Ce fichier porte des RÈGLES, pas un état d'avancement.** Les deux n'ont ni
+la même durée de vie ni le même lecteur : une règle se lit *avant d'écrire du
+code*, un avancement *avant de choisir quoi faire*. Les mélanger fait relire
+des centaines de lignes pour trouver ce qui reste, et fait passer une case
+cochée pour une règle. **N'en recopier aucun extrait ici** — ce serait créer
+deux sources qui divergent, le défaut que ce fichier dénonce à chaque page.
+
+| Document | Ce qu'on y trouve |
+|---|---|
+| **`docs/status_v0.1.md`** | **le suivi vivant** — état mesuré, points ouverts, arbitrages, journal daté, et « par où reprendre ». `status_v0.md` est figé au 2026-07-12 |
+| `docs/METHODE_TEST.md` | la méthode de test générique à la stack Echango — 11 modes de défaillance, lexique, ordre d'adoption, squelettes |
+| `docs/TEST_PROMO.md` | son instanciation ici — surface par persona, matrice de 27 bancs, registre de couverture |
+| `docs/SPECS_ECHANGO_PROMO_V0.md` | la source de vérité produit |
+| `docs/AUDIT_V0.md` · `AUDIT_V1.md` | les findings historiques, fichier:ligne |
