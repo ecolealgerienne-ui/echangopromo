@@ -323,7 +323,7 @@ Le détail de chaque étape, avec son critère de sortie, est dans
 | — | Méthode générique + 5 squelettes | ✅ écrits, auto-tests au vert (16/16 et 13/13) |
 | — | Plan spécifique Promo | ✅ écrit |
 | **1** | Banc de refus (48 routes, par construction) | ⬜ non commencé |
-| **2** | Vérificateurs de synchronisation | 🔶 **quasi close** — `check_error_codes.dart` (14 cas dont 7 refus, **5/5 mutations**) et `check_enums.dart` (11 cas dont 6 refus, **4/4 mutations**). Reste les **bornes de validation** des DTO |
+| **2** | Vérificateurs de synchronisation | ✅ **CLOSE** — 3 vérificateurs, **10 couples sur 10**, **14 mutations sur 14 refusées**. Une commande : `dart run tool/check_all.dart` |
 | **3** | Décor + 4 parcours écran + onboarding | ⬜ non commencé |
 | **4** | Bancs, couverture d'usage complète (**27 bancs, 62/62 routes**) | ⬜ non commencé |
 
@@ -335,7 +335,7 @@ couvertures distinctes, trois cibles :
 | **Accès** (qui a le droit d'appeler quoi) | 0 / 62 | **100 %** — atteinte par construction, le banc énumère depuis la source |
 | **Usage** (chaque route appelée au moins une fois) | 0 / 62 | **100 %** — bornée à 62 routes |
 | **Comportement** (chaque règle fait ce qu'elle doit) | 0 / 8 règles chiffrées | **piloté par le risque** — non bornée, un pourcentage y serait inventé |
-| Couples serveur ↔ app | **9 / 10** — codes d'erreur + 8 enums miroirs, tous éprouvés par mutation | 10 (reste les bornes de DTO) |
+| Couples serveur ↔ app | ✅ **10 / 10** — tous éprouvés par mutation | 10 |
 | Écrans | 0 / 34 | 33 (`dev_profile_switcher` exclu, outil de développement) |
 
 ---
@@ -451,6 +451,33 @@ Deux constats sont sortis du contrôle sans qu'on les cherche : **P7** (cinq
 miroirs avalent une valeur inconnue) et **P8** (la règle 19 est contournée dans
 les écrans). Aucun des deux n'est traité : ce sont des décisions, pas des
 corrections évidentes.
+
+### 2026-08-04 (clôture) — Étape 2 terminée
+
+`tool/check_server_rules.dart` tient les **6 bornes numériques** et **2 motifs
+réguliers** que l'application recopie du serveur : description de promo (140),
+titre et sous-titre de mise en avant (60/100), mot de passe agent (8, dans
+3 écrans), et les deux motifs de PIN (`^\d{6,12}$` pour le fixer,
+`^\d{4,12}$` pour le vérifier). Tous d'accord.
+
+**Choix de conception** : il lit les **vrais** fichiers des deux côtés, sans
+fichier de constantes intermédiaire. Un tel fichier, que les écrans
+n'utiliseraient pas, aurait donné une fausse impression de couverture — c'est
+le défaut « le serveur savait, l'app ignorait » appliqué à nos propres outils.
+
+**Il a refusé de conclure au premier essai**, sur un chemin de DTO erroné de ma
+part (`admin/dto` au lieu de `agent/dto`) : il a dit « introuvable » plutôt
+qu'annoncer l'accord sur les bornes qu'il avait pu lire. C'est exactement le
+comportement voulu, obtenu sans l'avoir cherché.
+
+`tool/check_all.dart` donne le point d'entrée unique qui manquait : les trois
+vérificateurs, auto-test d'abord, sans arrêt au premier échec. L'étage 1 est
+donc le seul lot qui pourrait tourner à chaque commit — statique, instantané,
+sans base ni émulateur.
+
+**Bilan de l'étape 2** : 3 vérificateurs, **10 couples sur 10** tenus par un
+contrôle exécuté (contre 0 le matin même), et **14 mutations des vrais fichiers,
+14 refus**.
 
 ---
 

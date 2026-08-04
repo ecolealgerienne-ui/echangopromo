@@ -270,10 +270,11 @@ Couverture COMPORTEMENTALE            0 / 8 règles chiffrées   ← étape 4
   (le plafond de 5 est protégé par un verrou consultatif
    Postgres, jamais éprouvé en concurrence)
 
-Couples serveur ↔ app                 9 / 10 tenus       ← étape 2, quasi close
+Couples serveur ↔ app                10 / 10 tenus       ← étape 2 CLOSE
   codes d'erreur .............   ✅ éprouvé par 5 mutations
   8 enums miroirs ............   ✅ éprouvé par 4 mutations
-  bornes de validation .......   ⬜ reste à faire
+  bornes de validation .......   ✅ éprouvé par 5 mutations
+  (une seule commande : dart run tool/check_all.dart)
 
 Écrans (*_screen.dart)                0 / 34 ouverts     ← étape 3
   admin 13 · commercant 7 · client 4 · onboarding 4
@@ -356,34 +357,42 @@ disjointes.
 **Critère de sortie** : prouvé par mutation — retirer un `@UseGuards` fait passer
 le banc au rouge, et retirer un `assertZoneMatches` aussi.
 
-### Étape 2 — Les vérificateurs de synchronisation ✅ *quasi close*
+### Étape 2 — Les vérificateurs de synchronisation ✅ **close (2026-08-04)**
 
-**Où** : `apps/mobile/tool/`, lancés depuis `apps/mobile` (ils résolvent la
-racine du dépôt eux-mêmes, donc le dossier courant n'a pas d'importance).
+**Une seule commande**, qui lance les trois avec leur auto-test :
 
 ```bash
-dart run tool/check_error_codes.dart --self-test && dart run tool/check_error_codes.dart
-dart run tool/check_enums.dart       --self-test && dart run tool/check_enums.dart
+cd apps/mobile && dart run tool/check_all.dart
 ```
+
+Elle ne s'arrête pas au premier échec — sortir tôt masquerait l'état des
+suivants, or c'est ce qu'on veut savoir en rejouant une suite. Et si l'auto-test
+d'un vérificateur échoue, **son contrôle réel n'est pas exécuté** : son verdict
+ne vaudrait rien.
 
 | Vérificateur | Ce qu'il tient | Auto-test | Mutations |
 |---|---|---|---|
 | `check_error_codes.dart` | 42 codes serveur ↔ 3 tables (38 clés) | 14 cas, **7 refus** | **5/5** |
 | `check_enums.dart` | 8 enums miroirs, 29 valeurs | 11 cas, **6 refus** | **4/4** |
+| `check_server_rules.dart` | 6 bornes + 2 motifs réguliers | 13 cas, **6 refus** | **5/5** |
 
-**Ce que les mutations ont prouvé** — c'est ça, le critère de sortie, pas le
-vert : membre bidon ajouté, clé retirée d'une seule table, doublon, clé
-inconnue, valeur changée d'un seul côté, et surtout **fichier de source
-renommé** → le contrôle échoue sur source introuvable au lieu de conclure à
-l'accord. C'est le mode de panne le plus dangereux de cette famille.
+**Ce que les mutations ont prouvé** — c'est ça le critère de sortie, pas le
+vert. Quatorze mutations des **vrais** fichiers, quatorze refus : membre bidon
+ajouté, clé retirée d'une seule table, doublon, clé inconnue, valeur d'enum
+changée d'un seul côté, borne serveur relevée, copie app modifiée, motif de PIN
+divergent, champ de DTO renommé, et surtout **fichier de source renommé** → le
+contrôle échoue sur source introuvable au lieu de conclure à l'accord. C'est le
+mode de panne le plus dangereux de cette famille.
 
-**Reste à faire pour clore l'étape** : les **bornes de validation** (décorateurs
-`@MinLength`/`@Min`/`@Max` des DTO ↔ constantes de formulaire). Aucun contrôle
-ne les tient aujourd'hui.
+**Ce que l'étape a rapporté** : un vrai défaut corrigé (`HIGHLIGHT_CAP_REACHED`
+non traduit), un faux diagnostic évité de justesse (les quatre exclusions
+volontaires, voir D1), et deux observations de conception qui n'étaient
+demandées à personne — les replis silencieux (P7) et les comparaisons
+littérales qui contournent les miroirs (P8).
 
-**C'est l'étape la plus rentable** : statique, instantanée, sans base ni
-émulateur — et elle a trouvé un vrai défaut (`HIGHLIGHT_CAP_REACHED`) plus deux
-observations de conception (les replis silencieux, les comparaisons littérales).
+**Ce qui n'est délibérément pas couvert** : les bornes serveur **sans copie côté
+app**. L'absence ne ment pas, contrairement à une copie divergente — le serveur
+refuse, l'app affiche le refus. Les épingler serait inventer une dette.
 
 ### Étape 3 — Le décor et les parcours écran (un par profil, au minimum)
 
