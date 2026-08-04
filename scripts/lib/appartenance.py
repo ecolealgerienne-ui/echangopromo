@@ -213,9 +213,22 @@ def main():
         ("POST", "/promo/agent/%s" % cid, PROMO_CORPS),
     ]
 
+    # ⚠️ `--only=<motif>` restreint les sondes. Indispensable pour l'épreuve par
+    # mutation : garde neutralisé, la sonde `delete` supprimerait réellement le
+    # commerçant du décor, et les sondes suivantes ne prouveraient plus rien.
+    # Sur une route inoffensive, la mutation se juge sans rien casser.
+    only = next((a_.split("=", 1)[1] for a_ in sys.argv if a_.startswith("--only=")), None)
+    if only:
+        sondes = [s for s in sondes if only in s[1]]
+        if not sondes:
+            print("❌ --only=%s ne correspond à aucune sonde." % only)
+            sys.exit(2)
+
     print("════════════════════════════════════════════════════════════════")
     print("  Appartenance — l'agent B (autre commune) sur les ressources de A")
     print("════════════════════════════════════════════════════════════════")
+    if only:
+        print("  ⚠️  filtre --only=%s : %d sonde(s) sur 14" % (only, len(sondes)))
     print("  commerçant %s\n  promo      %s\n  %d sondes, cadence %.1fs\n"
           % (cid, pid, len(sondes), PACE))
 
