@@ -276,6 +276,23 @@ def main():
         "telephone": TEL, "nom": "Repreneur du local", "categorie": "autre",
         "communeId": commune, "pin": PIN, "acceptedTerms": True})
     noter("numéro LIBÉRÉ par la suppression", *verdict_numero_libre(st, d.get("code")))
+    time.sleep(PACE)
+
+    # ⚠️ **Libérer un numéro ne sert à rien si son repreneur ne peut pas s'en
+    # servir.** C'est le contrôle que la première version du banc n'avait pas,
+    # et il révèle un défaut réel : `login` cherche par téléphone SANS filtrer
+    # `deletedAt`, contrairement à `assertPhoneAvailable`. Sur un numéro
+    # recyclé, il attrape la ligne supprimée et refuse — le nouveau
+    # propriétaire est enfermé dehors, définitivement.
+    st, d = appeler("POST", "/commercant/login", corps={"telephone": TEL, "pin": PIN})
+    if d.get("accessToken"):
+        noter("le repreneur peut se connecter", "ok", "connexion réussie")
+    elif d.get("code") == "AUTH_INVALID_CREDENTIALS":
+        noter("le repreneur peut se connecter", "echec",
+              "AUTH_INVALID_CREDENTIALS — le numéro est libéré mais inutilisable")
+    else:
+        noter("le repreneur peut se connecter", "non_concluant",
+              "refus pour une autre raison : %s (HTTP %s)" % (d.get("code"), st))
 
     # ── Bilan ────────────────────────────────────────────────────────────────
     echecs = [r for r in resultats if r[1] == "echec"]
