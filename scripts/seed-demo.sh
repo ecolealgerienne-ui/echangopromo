@@ -39,7 +39,12 @@ set -uo pipefail
 API_URL="${API_URL:-http://localhost:3000}"
 COMMERCES="${COMMERCES:-8}"
 PROMOS_PAR_COMMERCE="${PROMOS_PAR_COMMERCE:-3}"
-PACE="${PACE_SECONDS:-0.3}"
+# ⚠️ **Toutes les écritures partagent un même seau** (`SENSITIVE_ACTION_THROTTLE`,
+# 20/min/IP) : créations de commerçant, de promo et de mise en avant y puisent
+# ensemble. 3,2 s les espacent juste assez. Plus bas, des `RATE_LIMITED`
+# apparaissent au milieu du peuplement — `ecrire` les nomme et patiente, plutôt
+# que de les compter comme un refus métier.
+PACE="${PACE_SECONDS:-3.2}"
 
 ADMIN_EMAIL="${ADMIN_EMAIL:-decor-admin@echango.local}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-decor-admin-2026}"
@@ -61,6 +66,22 @@ api() { # METHODE CHEMIN [CORPS] [JETON] [ENTETE_SUP]
   [ -n "$tok" ] && args+=(-H "Authorization: Bearer $tok")
   [ -n "$sup" ] && args+=(-H "$sup")
   curl "${args[@]}"
+}
+
+# Écriture avec une reprise unique sur plafond de requêtes.
+#
+# ⚠️ Un 429 n'est pas un refus métier : le confondre avec un refus enverrait
+# chercher un bug là où il suffit d'attendre. On le nomme, on patiente une
+# fenêtre, on rejoue une fois — et si ça recommence, l'appelant le verra.
+ecrire() { # METHODE CHEMIN CORPS JETON [ENTETE_SUP]
+  local out
+  out="$(api "$1" "$2" "${3:-}" "${4:-}" "${5:-}")"
+  if [ "$(echo "$out" | jq -r '.code // empty' 2>/dev/null)" = "RATE_LIMITED" ]; then
+    echo "   ⏳ plafond de requêtes atteint — pause de 60 s puis reprise" >&2
+    sleep 60
+    out="$(api "$1" "$2" "${3:-}" "${4:-}" "${5:-}")"
+  fi
+  printf '%s' "$out"
 }
 
 # ── Le catalogue de démonstration ───────────────────────────────────────────
@@ -137,7 +158,7 @@ for i in $(seq 0 $((COMMERCES - 1))); do
   lat="$(awk -v i="$i" 'BEGIN{printf "%.5f", 34.6714 + (i%4)*0.012 - 0.018}')"
   lng="$(awk -v i="$i" 'BEGIN{printf "%.5f", 3.2630 + (i%3)*0.015 - 0.015}')"
 
-  out="$(api POST /agent/commercant "$(jq -n --arg t "$tel" --arg n "$nom" --arg a "$adresse" \
+  out="$(ecrire POST /agent/commercant "$(jq -n --arg t "$tel" --arg n "$nom" --arg a "$adresse" \
     --arg c "$cat" --arg u "$cid_commune" --argjson la "$lat" --argjson lo "$lng" \
     '{telephone:$t, nom:$n, pin:"246810", adresse:$a, categorie:$c, communeId:$u,
       latitude:$la, longitude:$lo}')" "$AGENT_TOKEN")"
@@ -172,7 +193,7 @@ for idx in "${!IDS[@]}"; do
   for p in $(seq 1 "$PROMOS_PAR_COMMERCE"); do
     avant=$(( (RANDOM % 40 + 10) * 100 ))
     apres=$(( avant - (avant * (RANDOM % 30 + 15) / 100) ))
-    out="$(api POST "/promo/agent/$cid" "$(jq -n --arg d "$base" --argjson a "$avant" \
+    out="$(ecrire POST "/promo/agent/$cid" "$(jq -n --arg d "$base" --argjson a "$avant" \
       --argjson b "$apres" --arg c "$cat" --arg f "$FIN" \
       '{description:$d, prixAvant:$a, prixApres:$b, categorie:$c,
         photoKeys:["promo-photos/demo/photo.jpg"], dateFin:$f}')" "$AGENT_TOKEN")"
@@ -195,7 +216,7 @@ if [ "${DEJA:-0}" -gt 0 ]; then
 else
   mapfile -t TOP < <(api GET "/promo?limit=3" | jq -r '.items[].id')
   for pid in "${TOP[@]}"; do
-    out="$(api POST /admin/highlight "$(jq -n --arg p "$pid" '{promoId:$p}')" "$ADMIN_TOKEN")"
+    out="$(ecrire POST /admin/highlight "$(jq -n --arg p "$pid" '{promoId:$p}')" "$ADMIN_TOKEN")"
     echo "$out" | est_erreur && info "mise en avant refusée : $(echo "$out" | jq -r '.code')"
     sleep "$PACE"
   done
@@ -208,7 +229,7 @@ step "6. Signalements — sous le seuil de masquage"
 # quelque chose à montrer et que la promo reste visible côté client.
 if [ -n "$PREMIERE_PROMO" ]; then
   for d in 1 2; do
-    out="$(api POST /report "$(jq -n --arg p "$PREMIERE_PROMO" '{promoId:$p, reason:"perime"}')" \
+    out="$(ecrire POST /report "$(jq -n --arg p "$PREMIERE_PROMO" '{promoId:$p, reason:"perime"}')" \
       '' "X-Device-Id: demo-appareil-$d")"
     echo "$out" | est_erreur && info "signalement $d : $(echo "$out" | jq -r '.code')"
     sleep 1
