@@ -139,9 +139,10 @@ par route**) fait que **la route qu'on oublie est ouverte**.
 
 - `apps/mobile/lib/features/commercant/screens/commercant_login_screen.dart:4` —
   import inutilisé, seul avertissement de `flutter analyze`.
-- `apps/mobile/pubspec.lock` **non versionné** (ni suivi, ni ignoré). Pour une
-  app qui part en store et se construit sur Codemagic, le committer garantirait
-  des builds reproductibles.
+- ~~`apps/mobile/pubspec.lock` non versionné~~ — **fermé le 2026-08-04**
+  (`1c1bf1d`). Il n'était ignoré nulle part, il n'avait jamais été ajouté.
+  Versionné pour que la machine de développement et Codemagic résolvent le même
+  graphe de dépendances.
 - `npm install` backend signale **4 vulnérabilités** (1 modérée, 3 hautes), non
   examinées.
 - Upload S3/MinIO **jamais éprouvé de bout en bout** contre un vrai bucket —
