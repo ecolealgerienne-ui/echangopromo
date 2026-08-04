@@ -9,10 +9,13 @@ import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/api_error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
+import '../../../app/theme.dart';
 import '../../shared/widgets/status_chip.dart';
+import '../providers/commercant_providers.dart';
 
-final myPromosProvider = FutureProvider.autoDispose((ref) => ref.watch(promoApiProvider).listMine());
+// `myPromosProvider` vit désormais dans `providers/commercant_providers.dart` :
+// le tableau de bord l'utilise aussi (règle d'audit #21).
 
 /// Jusqu'à 5 promos actives simultanément (specs §3.2/§5.3). Workflow
 /// brouillon → publiée → arrêtée, édition toujours possible quel que soit
@@ -73,12 +76,12 @@ class MyPromosScreen extends ConsumerWidget {
     final promosAsync = ref.watch(myPromosProvider);
     final dateFormat = DateFormat('dd/MM/yyyy');
     final activeCount = promosAsync.valueOrNull?.where((p) => p.isPublished).length ?? 0;
-    final atCap = activeCount >= 5;
+    final atCap = activeCount >= kMaxPromosActives;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.myPromosTitle),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add),
@@ -102,68 +105,154 @@ class MyPromosScreen extends ConsumerWidget {
           }
           return Column(
             children: [
+              // Le plafond rappelé en tête, comme sur le tableau de bord :
+              // c'est ici qu'on décide d'arrêter une promo pour en publier
+              // une autre, la contrainte doit être sous les yeux.
               Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(l10n.activeCountLabel(activeCount)),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        l10n.activeCountLabel(activeCount),
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                    for (var i = 0; i < kMaxPromosActives; i++)
+                      Padding(
+                        padding: const EdgeInsetsDirectional.only(start: 4),
+                        child: Container(
+                          width: 14,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: i < activeCount
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(AppRadii.pill),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
               Expanded(
-                child: ListView.builder(
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
                   itemCount: promos.length,
+                  separatorBuilder: (context, index) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final promo = promos[index];
                     final dateLabel = promo.dateFin != null
                         ? l10n.untilDate(dateFormat.format(promo.dateFin!))
                         : l10n.notPublishedYet;
-                    final statusColor = promoLifecycleColor(
-                      context,
-                      promo.lifecycleStatus,
-                      isExpired: promo.isExpired,
-                    );
-                    // CircleAvatar par défaut : 40dp de diamètre — décodage
-                    // limité à cette taille plutôt qu'à la résolution
-                    // source de l'image.
-                    final avatarCachePx =
-                        (40 * MediaQuery.of(context).devicePixelRatio).round();
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage: (promo.thumbnailUrl ?? promo.photoUrl) != null
-                            ? ResizeImage(
-                                CachedNetworkImageProvider((promo.thumbnailUrl ?? promo.photoUrl)!),
-                                width: avatarCachePx,
-                              )
-                            : null,
+                    final photo = promo.thumbnailUrl ?? promo.photoUrl;
+                    // Décodage limité à la taille réellement affichée plutôt
+                    // qu'à la résolution source de l'image.
+                    final thumbCachePx =
+                        (56 * MediaQuery.of(context).devicePixelRatio).round();
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                          width: 1.5,
+                        ),
+                        borderRadius: BorderRadius.circular(AppRadii.lg),
                       ),
-                      title: Row(
+                      padding: const EdgeInsets.all(10),
+                      child: Row(
                         children: [
-                          Expanded(child: Text(promo.description, overflow: TextOverflow.ellipsis)),
-                          const SizedBox(width: 8),
-                          StatusChip(
-                            label: promoLifecycleLabel(context, promo.lifecycleStatus,
-                                isExpired: promo.isExpired),
-                            color: statusColor,
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(AppRadii.sm),
+                            child: SizedBox(
+                              width: 56,
+                              height: 56,
+                              child: photo == null
+                                  ? Container(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .surfaceContainerHighest,
+                                    )
+                                  : CachedNetworkImage(
+                                      imageUrl: photo,
+                                      fit: BoxFit.cover,
+                                      memCacheWidth: thumbCachePx,
+                                      errorWidget: (context, url, error) => Container(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .surfaceContainerHighest,
+                                      ),
+                                    ),
+                            ),
                           ),
-                        ],
-                      ),
-                      subtitle: Text(
-                        '$dateLabel · ${l10n.myPromosViewsCount(promo.viewCount ?? 0)}',
-                      ),
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (action) {
-                          switch (action) {
-                            case 'edit':
-                              _editPromo(context, ref, promo);
-                            case 'publish':
-                              _publish(context, ref, promo);
-                            case 'stop':
-                              _stop(context, ref, promo);
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          PopupMenuItem(value: 'edit', child: Text(l10n.editItem)),
-                          if (promo.isPublished)
-                            PopupMenuItem(value: 'stop', child: Text(l10n.stopItem))
-                          else
-                            PopupMenuItem(value: 'publish', child: Text(l10n.publishLabel)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  promo.description,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                ),
+                                const SizedBox(height: 6),
+                                // Statut et échéance sur une ligne à part :
+                                // en `title` d'un ListTile, la puce de statut
+                                // rognait la description dès qu'elle
+                                // dépassait quelques mots.
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    StatusChip(
+                                      label: promoLifecycleLabel(
+                                        context,
+                                        promo.lifecycleStatus,
+                                        isExpired: promo.isExpired,
+                                      ),
+                                      color: promoLifecycleColor(
+                                        context,
+                                        promo.lifecycleStatus,
+                                        isExpired: promo.isExpired,
+                                      ),
+                                    ),
+                                    Text(
+                                      '$dateLabel · ${l10n.myPromosViewsCount(promo.viewCount ?? 0)}',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          PopupMenuButton<String>(
+                            onSelected: (action) {
+                              switch (action) {
+                                case 'edit':
+                                  _editPromo(context, ref, promo);
+                                case 'publish':
+                                  _publish(context, ref, promo);
+                                case 'stop':
+                                  _stop(context, ref, promo);
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              PopupMenuItem(value: 'edit', child: Text(l10n.editItem)),
+                              if (promo.isPublished)
+                                PopupMenuItem(value: 'stop', child: Text(l10n.stopItem))
+                              else
+                                PopupMenuItem(value: 'publish', child: Text(l10n.publishLabel)),
+                            ],
+                          ),
                         ],
                       ),
                     );

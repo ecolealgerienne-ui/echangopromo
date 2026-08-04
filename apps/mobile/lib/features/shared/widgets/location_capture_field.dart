@@ -31,9 +31,14 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
       _error = null;
     });
 
+    // Message localisé posé directement, jamais `'$error'` : une exception
+    // brute s'affichait telle quelle au commerçant — préfixe « Exception: »
+    // pour nos propres messages, et texte anglais du framework pour les
+    // autres (`TimeoutException after 0:00:12...`).
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
-        throw Exception(l10n.locationEnableService);
+        _fail(l10n.locationEnableService);
+        return;
       }
 
       var permission = await Geolocator.checkPermission();
@@ -42,18 +47,44 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        throw Exception(l10n.locationPermissionDenied);
+        _fail(l10n.locationPermissionDenied);
+        return;
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      );
+      // `medium` (~100-500 m) et une limite explicite : `high` force un
+      // verrou GPS satellite qui peut dépasser 30 s en intérieur — or un
+      // commerce se trouve précisément à l'intérieur. Retour terrain
+      // 2026-07-30 : le bouton restait bloqué, le commerçant enregistrait
+      // avant que la position n'arrive, et la fiche partait sans
+      // coordonnées (donc absente de la carte, sans le moindre message).
+      Position? position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 12),
+          ),
+        );
+      } on Exception {
+        // Repli sur la dernière position connue de l'appareil : à l'échelle
+        // d'un commerce de quartier elle reste exploitable, et vaut
+        // infiniment mieux qu'une fiche sans position.
+        position = await Geolocator.getLastKnownPosition();
+      }
+      if (position == null) {
+        _fail(l10n.locationUnavailable);
+        return;
+      }
       widget.onChanged(position.latitude, position.longitude);
-    } catch (error) {
-      setState(() => _error = '$error');
+    } catch (_) {
+      _fail(l10n.locationUnavailable);
     } finally {
       if (mounted) setState(() => _locating = false);
     }
+  }
+
+  void _fail(String message) {
+    if (mounted) setState(() => _error = message);
   }
 
   @override
@@ -71,6 +102,20 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
         ),
         if (_locating)
           const Padding(padding: EdgeInsets.only(top: 8), child: LinearProgressIndicator()),
+        // Coordonnées affichées en clair : le commerçant voit que quelque
+        // chose a réellement été capté, plutôt qu'un libellé de bouton qui
+        // change. Sert aussi au support — une position aberrante se repère
+        // à l'œil.
+        if (located && !_locating)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              '${widget.latitude!.toStringAsFixed(5)}, ${widget.longitude!.toStringAsFixed(5)}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),

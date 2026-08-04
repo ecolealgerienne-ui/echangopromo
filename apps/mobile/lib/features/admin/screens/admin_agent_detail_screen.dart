@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../domain/models/agent.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 
 /// Fiche agent côté admin — la liste (`AgentListScreen`) tassait email et
 /// communes dans un sous-titre tronqué, sans vue détail dédiée. Les actions
@@ -20,7 +20,7 @@ class AdminAgentDetailScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(agent.nom),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

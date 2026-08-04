@@ -4,7 +4,7 @@ import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../shared/widgets/error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/loading_button.dart';
 import '../../shared/widgets/multi_photo_picker_field.dart';
 import '../../shared/widgets/promo_form_fields.dart';
@@ -115,7 +115,7 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.newPromoTitle),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),

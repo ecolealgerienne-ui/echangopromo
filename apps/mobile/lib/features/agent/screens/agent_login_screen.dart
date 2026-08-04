@@ -7,7 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/loading_button.dart';
 
 /// Authentification email + mot de passe — compte créé exclusivement par
@@ -70,7 +70,7 @@ class _AgentLoginScreenState extends ConsumerState<AgentLoginScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.agentSpaceTitle),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),

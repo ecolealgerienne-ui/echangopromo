@@ -6,6 +6,7 @@ import '../data/api/agent_api.dart';
 import '../data/api/api_client.dart';
 import '../data/api/commercant_api.dart';
 import '../data/api/commune_api.dart';
+import '../data/api/highlight_api.dart';
 import '../data/api/promo_api.dart';
 import '../data/api/report_api.dart';
 import '../data/api/storage_api.dart';
@@ -13,6 +14,7 @@ import '../data/api/notification_api.dart';
 import '../data/local/auth_session_store.dart';
 import '../data/local/device_id_store.dart';
 import '../data/local/favorites_store.dart';
+import '../data/local/onboarding_store.dart';
 import '../data/local/selected_commune_store.dart';
 import 'auth_provider.dart';
 
@@ -33,6 +35,9 @@ final selectedCommuneStoreProvider =
 
 final favoritesStoreProvider =
     Provider((ref) => FavoritesStore(ref.watch(sharedPreferencesProvider)));
+
+final onboardingStoreProvider =
+    Provider((ref) => OnboardingStore(ref.watch(sharedPreferencesProvider)));
 
 final authSessionStoreProvider =
     Provider((ref) => AuthSessionStore(ref.watch(secureStorageProvider)));
@@ -57,4 +62,5 @@ final agentApiProvider = Provider((ref) => AgentApi(ref.watch(apiClientProvider)
 final reportApiProvider = Provider((ref) => ReportApi(ref.watch(apiClientProvider).dio));
 final storageApiProvider = Provider((ref) => StorageApi(ref.watch(apiClientProvider).dio));
 final adminApiProvider = Provider((ref) => AdminApi(ref.watch(apiClientProvider).dio));
+final highlightApiProvider = Provider((ref) => HighlightApi(ref.watch(apiClientProvider).dio));
 final notificationApiProvider = Provider((ref) => NotificationApi(ref.watch(apiClientProvider).dio));

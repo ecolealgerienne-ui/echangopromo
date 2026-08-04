@@ -50,36 +50,60 @@ détaillé ci-dessous, dans l'ordre.
 
 ---
 
-## 0. Préalable bloquant : fixer l'identité de l'app
+## 0. Identité de l'app — fixée le 2026-07-30
 
-L'`applicationId` Android est encore `com.example.echango_promo` — **la
-valeur par défaut générée par Flutter, jamais changée**. Google refuse de
-publier sous `com.example.*`. Il faut choisir l'identifiant définitif
-**avant** de générer un certificat de signature ou de créer une fiche
-App Store, parce que le changer après publication casse la mise à jour
-de l'app pour les utilisateurs existants (Android/iOS traitent un
-changement d'id comme une app différente).
+**`com.echango.promo`**, identique côté Android et iOS, aligné sur le
+domaine `promo.echango.com` déjà utilisé par les App Links.
 
-Suggestion cohérente avec le domaine déjà choisi : `com.echango.promo`
-(Android) et le même en bundle identifier iOS.
+Appliqué partout :
 
-Recommandé plutôt qu'un renommage manuel (fastidieux : il faut renommer
-le dossier de package Kotlin/Java, `build.gradle`, `AndroidManifest.xml`,
-le bundle id Xcode...) : le package pub
-[`rename`](https://pub.dev/packages/rename) :
+| Endroit | Valeur |
+|---|---|
+| `android/app/build.gradle.kts` | `applicationId` et `namespace` |
+| `android/app/src/main/kotlin/com/echango/promo/MainActivity.kt` | déclaration `package` |
+| `ios/Runner.xcodeproj/project.pbxproj` | `PRODUCT_BUNDLE_IDENTIFIER` (6 configurations) |
+| `apps/backend/.env.example` | `ANDROID_PACKAGE_NAME`, `IOS_BUNDLE_ID` |
+
+**Ne plus jamais le changer.** Android comme iOS traitent un identifiant
+différent comme une application distincte : après publication, le modifier
+couperait la mise à jour pour tous les utilisateurs déjà installés, qui
+resteraient bloqués sur l'ancienne version sans aucun message.
+
+Les valeurs backend doivent rester strictement identiques à celles
+compilées dans l'app — un écart fait échouer la vérification App
+Links/Universal Links **en silence** : le lien s'ouvre alors dans le
+navigateur au lieu de l'app, sans erreur nulle part.
+
+### Signature de release (Android)
+
+`android/app/build.gradle.kts` lit `android/key.properties`, volontairement
+absent du dépôt (`.gitignore`, avec `*.jks`/`*.keystore`) — Google
+n'accepte **qu'une seule clé de signature par application, à vie** : la
+publier dans le dépôt reviendrait à la perdre.
+
+Créer le keystore, puis le fichier de configuration :
 
 ```bash
-cd apps/mobile
-dart pub global activate rename
-dart pub global run rename setAppId --targets android,ios --value "com.echango.promo"
-dart pub global run rename setBundleId --targets ios --value "com.echango.promo"
+keytool -genkey -v -keystore ~/echango-upload.jks -keyalg RSA \
+  -keysize 2048 -validity 10000 -alias upload
 ```
 
-Vérifier ensuite `android/app/build.gradle` (`applicationId`) et, sous
-Xcode (Mac requis), l'onglet *Signing & Capabilities* du target Runner
-pour le bundle identifier iOS.
+`apps/mobile/android/key.properties` :
 
----
+```properties
+storePassword=<mot de passe du keystore>
+keyPassword=<mot de passe de la clé>
+keyAlias=upload
+storeFile=C:/chemin/absolu/vers/echango-upload.jks
+```
+
+Sans ce fichier, la release retombe sur la clé de **debug** : pratique pour
+un `flutter run --release` local, mais l'artefact est refusé par Google
+Play. C'est délibéré — l'oubli devient impossible à ignorer.
+
+Sauvegarder le keystore ailleurs que sur la machine de développement.
+Perdu, il n'existe aucun recours : l'application doit être republiée sous
+un nouvel identifiant, en repartant de zéro côté installations et avis.
 
 ## 1. Google Play
 
@@ -192,13 +216,15 @@ Deux points à vérifier côté infra, quel que soit l'hébergeur choisi :
 | `IOS_TEAM_ID` | `apps/backend/.env` | developer.apple.com → Membership details |
 | `IOS_BUNDLE_ID` | `apps/backend/.env` | Le bundle id choisi à l'étape 0 |
 | `PLAY_STORE_URL` / `APP_STORE_URL` (mobile) | build mobile | `--dart-define=PLAY_STORE_URL=...` (voir `env.dart`) — un nouveau build est nécessaire, ces valeurs sont figées à la compilation |
-| `API_BASE_URL` (mobile) | build mobile | `--dart-define=API_BASE_URL=https://promo.echango.com` — **obligatoire** pour tout build de release, sans quoi l'app garde le défaut `http://localhost:3000` (`env.dart`) et ne fonctionne pour personne |
+| `API_BASE_URL` (mobile) | build mobile | Plus rien à passer : `env.dart` vaut `https://promo.echango.com` par défaut depuis le 2026-07-29. C'est désormais le **développement local** qui exige `--dart-define=API_BASE_URL=http://<ip-locale>:3000` |
 
 Aucune des variables backend n'est requise pour démarrer le backend
 aujourd'hui (contrairement à `JWT_SECRET`, validé au boot) — les
 renseigner active la fonctionnalité, ne pas les renseigner ne casse rien.
-`API_BASE_URL` côté mobile fait exception : sans elle, le build de
-release pointe vers `localhost` et l'app est inutilisable.
+`API_BASE_URL` côté mobile n'est plus un piège de publication : son défaut
+est la production. Le risque s'est déplacé sur le développement local, où
+oublier le flag fait taper sur la prod — mais ça se constate tout de suite,
+contrairement à un release cassé découvert après validation du store.
 
 ---
 
@@ -215,5 +241,5 @@ release pointe vers `localhost` et l'app est inutilisable.
 - [ ] DNS `promo.echango.com` configuré, reverse proxy transmet le header `Host`
 - [ ] Les 6 variables backend renseignées dans `.env` de prod
 - [ ] Mobile rebuild avec `--dart-define=PLAY_STORE_URL=...`/`APP_STORE_URL=...`
-- [ ] Mobile rebuild avec `--dart-define=API_BASE_URL=https://promo.echango.com` (sinon l'app pointe vers `localhost`)
+- [ ] Vérifier que le build de release **ne** passe **pas** de `--dart-define=API_BASE_URL` (le défaut `env.dart` est déjà la production)
 - [ ] Test réel : lien partagé → app installée → ouvre la fiche promo ; app absente → redirige vers le store

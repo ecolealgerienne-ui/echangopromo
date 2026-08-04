@@ -5,7 +5,7 @@ import '../../../domain/enums/categorie.dart';
 import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../shared/widgets/error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/loading_button.dart';
 import '../../shared/widgets/multi_photo_picker_field.dart';
 import '../../shared/widgets/promo_form_fields.dart';
@@ -156,51 +156,74 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
       });
     }
 
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? l10n.editPromoTitle : l10n.newPromoTitle),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              PromoFormFields(
-                photoItems: _photoItems,
-                onPhotoItemsChanged: (items) => setState(() => _photoItems = items),
-                descriptionController: _descriptionController,
-                prixAvantController: _prixAvantController,
-                prixApresController: _prixApresController,
-                prixApresValidator: _validatePrixApres,
-                categorie: _categorie,
-                onCategorieChanged: (v) => setState(() => _categorie = v),
-                dureeJours: _isEditing ? null : _dureeJours,
-                maxDureeJours: _maxDureeJours,
-                onDureeJoursChanged: (v) => setState(() => _dureeJours = v ?? _defaultDureeJours),
-              ),
-              ErrorText(_error),
-              const SizedBox(height: 16),
-              if (_isEditing)
-                LoadingButton(
-                  loading: _loading,
-                  onPressed: () => _submit(asDraft: false),
-                  label: l10n.saveLabel,
-                )
-              else ...[
-                LoadingButton(
-                  loading: _loading,
-                  onPressed: () => _submit(asDraft: false),
-                  label: l10n.publishLabel,
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton(
-                  onPressed: _loading ? null : () => _submit(asDraft: true),
-                  child: Text(l10n.saveDraftLabel),
-                ),
-              ],
-            ],
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            PromoFormFields(
+              photoItems: _photoItems,
+              onPhotoItemsChanged: (items) => setState(() => _photoItems = items),
+              descriptionController: _descriptionController,
+              prixAvantController: _prixAvantController,
+              prixApresController: _prixApresController,
+              prixApresValidator: _validatePrixApres,
+              categorie: _categorie,
+              onCategorieChanged: (v) => setState(() => _categorie = v),
+              dureeJours: _isEditing ? null : _dureeJours,
+              maxDureeJours: _maxDureeJours,
+              onDureeJoursChanged: (v) => setState(() => _dureeJours = v ?? _defaultDureeJours),
+            ),
+            ErrorText(_error),
+          ],
+        ),
+      ),
+      // Actions fixées en bas plutôt qu'au bout du défilement : le
+      // formulaire fait maintenant plus d'un écran de haut, et il fallait
+      // remonter jusqu'en bas pour publier. Elles restent visibles pendant
+      // la saisie, y compris clavier ouvert.
+      bottomNavigationBar: Material(
+        color: colorScheme.surface,
+        elevation: 3,
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+            child: _isEditing
+                ? LoadingButton(
+                    loading: _loading,
+                    onPressed: () => _submit(asDraft: false),
+                    label: l10n.saveLabel,
+                  )
+                : Row(
+                    children: [
+                      // Brouillon en second et en secondaire : publier est
+                      // l'intention par défaut, enregistrer sans publier
+                      // l'exception.
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _loading ? null : () => _submit(asDraft: true),
+                          child: Text(l10n.saveDraftLabel),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 2,
+                        child: LoadingButton(
+                          loading: _loading,
+                          onPressed: () => _submit(asDraft: false),
+                          label: l10n.publishLabel,
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ),
       ),

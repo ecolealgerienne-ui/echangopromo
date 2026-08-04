@@ -16,7 +16,7 @@ import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/utils/maps_launcher.dart';
 import '../../shared/validators/pin_validator.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/status_chip.dart';
 
 final _communesProvider = FutureProvider.autoDispose((ref) => ref.watch(communeApiProvider).list());
@@ -159,7 +159,7 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(item.nom),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
       body: ListView(
         children: [

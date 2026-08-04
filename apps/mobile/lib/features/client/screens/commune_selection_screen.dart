@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/commune_multi_select_field.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../providers/commune_providers.dart';
 
 /// Demandée au premier lancement, modifiable à tout moment (specs §3.1).
@@ -40,43 +40,75 @@ class _CommuneSelectionScreenState extends ConsumerState<CommuneSelectionScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     final communesAsync = ref.watch(communeListProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.chooseCommuneTitle),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: communesAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: ApiErrorText(error)),
-          data: (communes) => Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                l10n.maxCommunesHint(kMaxSelectedCommunes),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: CommuneMultiSelectField(
-                    communes: communes,
-                    selectedCommuneIds: _selectedCommuneIds,
-                    maxSelection: kMaxSelectedCommunes,
-                    constrainListHeight: false,
-                    onChanged: (ids) => setState(() => _selectedCommuneIds = ids),
+      body: communesAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(child: ApiErrorText(error)),
+        data: (communes) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l10n.maxCommunesHint(kMaxSelectedCommunes), style: textTheme.bodyMedium),
+                  const SizedBox(height: 8),
+                  // Compteur vivant plutôt qu'une consigne figée : le client
+                  // voit combien il lui reste de choix au lieu de découvrir
+                  // le plafond en butant dessus.
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 15, color: colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          l10n.communesSelectedCount(_selectedCommuneIds.length),
+                          style: textTheme.bodySmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                    ],
                   ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: CommuneMultiSelectField(
+                  communes: communes,
+                  selectedCommuneIds: _selectedCommuneIds,
+                  maxSelection: kMaxSelectedCommunes,
+                  constrainListHeight: false,
+                  onChanged: (ids) => setState(() => _selectedCommuneIds = ids),
                 ),
               ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _selectedCommuneIds.isEmpty ? null : _confirm,
-                child: Text(l10n.commonConfirm),
-              ),
-            ],
+            ),
+          ],
+        ),
+      ),
+      // Confirmation fixée en bas : la liste des communes défile sur
+      // plusieurs écrans, le bouton disparaissait dès qu'on cherchait.
+      bottomNavigationBar: Material(
+        color: colorScheme.surface,
+        elevation: 3,
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+            child: FilledButton(
+              onPressed: _selectedCommuneIds.isEmpty ? null : _confirm,
+              child: Text(l10n.commonConfirm),
+            ),
           ),
         ),
       ),

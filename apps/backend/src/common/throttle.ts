@@ -16,3 +16,21 @@ export const STRICT_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
  * compte compromis ne puisse pas spammer ces routes (audit V1 §2).
  */
 export const SENSITIVE_ACTION_THROTTLE = { default: { limit: 20, ttl: 60_000 } };
+
+/**
+ * Lecture publique intrinsèquement bavarde : explorer une carte produit
+ * légitimement plusieurs requêtes par minute, là où le reste de l'API en
+ * produit une par action. La limite globale (60/min) était atteinte en
+ * quelques gestes — retour terrain 2026-07-30, où le client se voyait
+ * refuser sa propre carte après quelques dézooms.
+ *
+ * Reste bornée plutôt qu'illimitée : l'endpoint est non authentifié. Le
+ * coût unitaire d'une requête est faible et son résultat plafonné
+ * (`MAX_MAP_COMMERCANTS`), ce qui justifie d'être plus permissif ici sans
+ * ouvrir la porte à un abus.
+ *
+ * La vraie économie est côté client : la carte n'émet plus qu'une requête
+ * par geste (temporisation) et ne redemande que le terrain qu'elle n'a pas
+ * déjà (zone chargée élargie) — sans quoi aucune limite ne suffirait.
+ */
+export const MAP_THROTTLE = { default: { limit: 180, ttl: 60_000 } };

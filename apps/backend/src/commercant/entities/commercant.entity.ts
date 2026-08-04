@@ -43,6 +43,15 @@ export enum RegistreStatus {
   REJETE = 'rejete',
 }
 
+/**
+ * Index de la zone visible de la carte (`PromoService.findActiveForMap`).
+ * Déclaré ici en plus de la migration `AddCommercantPositionIndex` : sans
+ * cette déclaration, un futur `migration:generate` verrait un index présent
+ * en base mais absent des entités et proposerait de le supprimer.
+ */
+@Index('IDX_commercant_position', ['latitude', 'longitude'], {
+  where: '"latitude" IS NOT NULL AND "longitude" IS NOT NULL',
+})
 @Entity()
 export class Commercant {
   @PrimaryGeneratedColumn('uuid')

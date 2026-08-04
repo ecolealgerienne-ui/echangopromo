@@ -34,7 +34,7 @@ import { MAX_UPLOAD_BYTES, StorageService } from './storage.service';
  * qu'une erreur Multer brute.
  */
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('commercant', 'agent')
+@Roles('commercant', 'agent', 'admin')
 @Controller('storage')
 export class StorageController {
   constructor(private readonly storageService: StorageService) {}
@@ -66,12 +66,24 @@ export class StorageController {
         "Ce type d'upload est réservé au commerçant.",
       );
     }
+    // Le visuel du bandeau d'accueil n'est composé que par l'admin
+    // (`AdminHighlightController`) — restreint ici explicitement plutôt que
+    // de laisser un commerçant écrire dans ce préfixe, même sans endpoint
+    // pour l'exploiter (même raisonnement que `registre` ci-dessus).
+    if (dto.purpose === 'highlight' && user.role !== 'admin') {
+      throw new BadRequestAppException(
+        ErrorCode.STORAGE_PURPOSE_NOT_ALLOWED,
+        "Ce type d'upload est réservé à l'administrateur.",
+      );
+    }
     const folder =
       dto.purpose === 'commercant'
         ? 'commercant-photos'
         : dto.purpose === 'registre'
           ? 'registre-documents'
-          : 'promo-photos';
+          : dto.purpose === 'highlight'
+            ? 'highlight-images'
+            : 'promo-photos';
     const key = await this.storageService.uploadPhoto(user.sub, file.buffer, folder);
     return { key };
   }

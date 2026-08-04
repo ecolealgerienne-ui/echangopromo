@@ -25,6 +25,12 @@ const Map<String, String> errorMessagesEn = {
   'STORAGE_FILE_TOO_LARGE': 'The photo is too large. Try again with another photo.',
   'STORAGE_PURPOSE_NOT_ALLOWED': 'This upload type is not allowed for this account.',
 
+  'HIGHLIGHT_NOT_FOUND': 'Featured card not found.',
+  'HIGHLIGHT_EMPTY_CONTENT':
+      'A featured card must target a promo or carry an uploaded image.',
+  'HIGHLIGHT_REORDER_MISMATCH':
+      'The submitted order no longer matches the existing featured cards. Reload the list.',
+
   'PROMO_NOT_FOUND': 'Promo not found.',
   'PROMO_NOT_OWNED_BY_COMMERCANT': 'This promo does not belong to this merchant.',
   'PROMO_DATE_FIN_NOT_FUTURE': 'The end date must be in the future.',

@@ -43,9 +43,16 @@ flutter run --dart-define=API_BASE_URL=http://<ip-locale>:3000
 `flutter create .` complète le dossier avec `android/`, `ios/` et les
 fichiers de plateforme sans toucher à `lib/` ni `pubspec.yaml` déjà en place.
 
-`API_BASE_URL` par défaut vaut `http://localhost:3000`, ce qui ne fonctionne
-pas depuis un appareil/émulateur (localhost y désigne l'appareil lui-même) —
-passer l'IP locale de la machine qui fait tourner le backend.
+`API_BASE_URL` vaut par défaut `https://promo.echango.com` (la production,
+depuis 2026-07-29). Pour développer contre un backend local, passer l'IP de
+la machine qui le fait tourner — `localhost` désigne l'appareil lui-même
+depuis un émulateur ou un téléphone, et ne fonctionne donc jamais :
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://<ip-locale>:3000
+```
+
+Sans ce flag, l'app tape sur la production.
 
 ### Backend sous WSL2 + émulateur/téléphone physique
 

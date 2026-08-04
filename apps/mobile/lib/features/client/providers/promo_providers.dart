@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/promo_api.dart';
 import '../../../domain/enums/categorie.dart';
+import '../../../domain/models/commercant.dart';
+import '../../../domain/models/highlight.dart';
 import '../../../domain/models/promo.dart';
 import '../../../providers/core_providers.dart';
 import 'commune_providers.dart';
@@ -14,6 +16,19 @@ final categoryFilterProvider = StateProvider<Categorie?>((ref) => null);
 /// tri" (proposition 2026-07-11 : liste plutôt que grille, filtre par
 /// favoris/date).
 final favoritesOnlyFilterProvider = StateProvider.autoDispose<bool>((ref) => false);
+
+/// Texte saisi dans la barre de recherche de l'accueil (nom de promo ou de
+/// magasin). Envoyé au backend (`search`), pas filtré localement : filtrer
+/// côté client ne chercherait que dans les promos déjà chargées.
+final searchQueryProvider = StateProvider.autoDispose<String>((ref) => '');
+
+/// Liste déployée par glissement, sans qu'aucun filtre ne soit actif
+/// (demande 2026-07-29). Distinct de la catégorie et de la recherche : le
+/// client peut vouloir voir « toutes les promos » en plein écran sans
+/// restreindre quoi que ce soit. Les trois états produisent la même
+/// disposition, d'où un booléen à part plutôt qu'un détournement des
+/// filtres existants.
+final listExpandedProvider = StateProvider.autoDispose<bool>((ref) => false);
 
 enum PromoSort { expireBientot, plusGrosseReduction, nouveautes }
 
@@ -74,10 +89,12 @@ class PromoListController extends StateNotifier<PromoListState> {
     required List<String> communeIds,
     required Categorie? categorie,
     required List<String> favoriteIds,
+    required String search,
   })  : _api = api,
         _communeIds = communeIds,
         _categorie = categorie,
         _favoriteIds = favoriteIds,
+        _search = search,
         super(const PromoListState(status: PromoListStatus.loading)) {
     _load();
   }
@@ -86,6 +103,7 @@ class PromoListController extends StateNotifier<PromoListState> {
   final List<String> _communeIds;
   final Categorie? _categorie;
   final List<String> _favoriteIds;
+  final String _search;
 
   Future<void> _load() async {
     state = const PromoListState(status: PromoListStatus.loading);
@@ -130,6 +148,7 @@ class PromoListController extends StateNotifier<PromoListState> {
         communeIds: _communeIds,
         categorie: _categorie,
         favoriteIds: _favoriteIds,
+        search: _search,
         page: page,
       );
 }
@@ -144,11 +163,13 @@ final promoListProvider = StateNotifierProvider.autoDispose<PromoListController,
   final communeIds = ref.watch(selectedCommunesProvider);
   final categorie = ref.watch(categoryFilterProvider);
   final favorites = ref.watch(favoritesProvider);
+  final search = ref.watch(searchQueryProvider);
   return PromoListController(
     api: api,
     communeIds: communeIds,
     categorie: categorie,
     favoriteIds: favorites.toList(),
+    search: search,
   );
 });
 
@@ -160,8 +181,29 @@ final visiblePromosProvider = Provider.autoDispose<List<Promo>>((ref) {
   final favoritesOnly = ref.watch(favoritesOnlyFilterProvider);
   final sort = ref.watch(promoSortProvider);
 
-  final filtered =
+  final search = ref.watch(searchQueryProvider).trim().toLowerCase();
+
+  var filtered =
       favoritesOnly ? state.items.where((p) => favorites.contains(p.id)).toList() : [...state.items];
+
+  // Le backend filtre déjà via `search`, mais on refiltre ici. Deux raisons :
+  // le résultat est immédiat pendant que la requête part (pas d'attente de
+  // l'aller-retour), et surtout la liste reste juste même si le serveur
+  // ignore le paramètre — c'est exactement ce qui s'est produit avec un
+  // backend pas encore déployé : `ValidationPipe({whitelist: true})` retire
+  // silencieusement tout paramètre qu'il ne connaît pas, et la recherche
+  // renvoyait alors la totalité des promos.
+  if (search.isNotEmpty) {
+    final terms = search.split(RegExp(r'\s+')).where((t) => t.isNotEmpty);
+    filtered = filtered.where((promo) {
+      final haystack =
+          '${promo.description} ${promo.commercantNom ?? ''}'.toLowerCase();
+      // Tous les mots doivent apparaître, dans n'importe quel ordre :
+      // « brosse dents » trouve « brosse à dents » sans exiger la formulation
+      // exacte, mais « brosse » seul ne remonte plus tout le catalogue.
+      return terms.every(haystack.contains);
+    }).toList();
+  }
 
   switch (sort) {
     case PromoSort.expireBientot:
@@ -186,4 +228,43 @@ final visiblePromosProvider = Provider.autoDispose<List<Promo>>((ref) {
 final promoDetailProvider =
     FutureProvider.autoDispose.family<Promo, String>((ref, promoId) {
   return ref.watch(promoApiProvider).detail(promoId);
+});
+
+/// Bandeau "Top promos" de l'accueil.
+///
+/// Depuis 2026-07-30 il est **curé par l'admin** (`GET /highlight`) : c'est
+/// lui qui choisit les diapositives, leur ordre, et peut y importer une
+/// image dédiée. Sans curation active exploitable, le backend retombe de
+/// lui-même sur le classement calculé d'avant (les plus fortes réductions,
+/// `sort=discount`) — l'app n'a donc qu'un seul appel et le bandeau ne se
+/// vide jamais faute de configuration.
+///
+/// Volontairement indépendant de `promoListProvider` : ce bandeau ne suit ni
+/// la recherche ni la catégorie, il reste une vitrine stable. La commune
+/// n'est transmise que pour le repli calculé, une sélection éditoriale étant
+/// globale par nature.
+final topPromosProvider = FutureProvider.autoDispose<List<Highlight>>((ref) {
+  final communeIds = ref.watch(selectedCommunesProvider);
+  return ref.watch(highlightApiProvider).list(communeIds: communeIds);
+});
+
+/// "Autres promos du magasin" sur la fiche promo. La promo consultée est
+/// retirée de la liste côté client : le backend n'a pas à connaître le
+/// contexte d'affichage pour ça.
+final shopPromosProvider =
+    FutureProvider.autoDispose.family<List<Promo>, ({String commercantId, String excludePromoId})>(
+        (ref, args) async {
+  final result = await ref.watch(promoApiProvider).listActive(
+        commercantId: args.commercantId,
+        limit: 10,
+      );
+  return result.items.where((promo) => promo.id != args.excludePromoId).toList();
+});
+
+/// Fiche publique du commerçant. Partagée entre la fiche promo et tout écran
+/// qui a besoin du téléphone ou de la position — évite qu'un second écran
+/// redéclare le même appel dans son propre fichier (règle d'audit #21).
+final commercantPublicProfileProvider =
+    FutureProvider.autoDispose.family<Commercant, String>((ref, commercantId) {
+  return ref.watch(commercantApiProvider).publicProfile(commercantId);
 });

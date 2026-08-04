@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../domain/enums/categorie.dart';
+import '../../domain/models/map_shop.dart';
 import '../../domain/models/promo.dart';
 
 /// Le backend pagine `/promo` et `/promo/me/all` (`{items, total, page,
@@ -33,6 +34,20 @@ class PaginatedPromos {
   bool get hasMore => page * limit < total;
 }
 
+/// Miroir Dart de `PromoSortOrder` (backend, `list-promo-query.dto.ts`) —
+/// une chaîne brute côté mobile ne serait pas vérifiée à la compilation en
+/// cas de renommage backend (règle d'audit #19). Distinct de `PromoSort`
+/// (`promo_providers.dart`), qui lui est un tri appliqué localement sur les
+/// promos déjà chargées.
+enum PromoServerSort {
+  recent('recent'),
+  discount('discount');
+
+  const PromoServerSort(this.value);
+
+  final String value;
+}
+
 class PromoApi {
   PromoApi(this._dio);
 
@@ -46,16 +61,46 @@ class PromoApi {
     Categorie? categorie,
     List<String> favoriteIds = const [],
     int page = 1,
+    String? search,
+    String? commercantId,
+    PromoServerSort? sort,
+    int? limit,
   }) async {
     final query = <String, dynamic>{
       if (communeIds.isNotEmpty) 'communeIds': communeIds.join(','),
       if (categorie != null) 'categorie': categorie.value,
       if (favoriteIds.isNotEmpty) 'favoriteIds': favoriteIds.join(','),
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      if (commercantId != null) 'commercantId': commercantId,
+      if (sort != null) 'sort': sort.value,
       'page': page,
-      'limit': _activePageSize,
+      'limit': limit ?? _activePageSize,
     };
     final response = await _dio.get<Map<String, dynamic>>('/promo', queryParameters: query);
     return PaginatedPromos.fromJson(response.data!);
+  }
+
+  /// Commerçants géolocalisés de la zone visible de la carte, avec leurs
+  /// promos actives. Pas de pagination : on ne peut pas afficher "la page 2"
+  /// d'une carte — le backend plafonne et renvoie `truncated`.
+  Future<MapShopsResult> listForMap({
+    required double north,
+    required double south,
+    required double east,
+    required double west,
+    Categorie? categorie,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/promo/map',
+      queryParameters: <String, dynamic>{
+        'north': north,
+        'south': south,
+        'east': east,
+        'west': west,
+        if (categorie != null) 'categorie': categorie.value,
+      },
+    );
+    return MapShopsResult.fromJson(response.data!);
   }
 
   Future<Promo> detail(String id) async {

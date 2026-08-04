@@ -6,7 +6,7 @@ import '../../../domain/models/moderation_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/promo_photo_hero.dart';
 import '../../shared/widgets/promo_price_row.dart';
 import '../../shared/widgets/status_chip.dart';
@@ -51,7 +51,7 @@ class AdminPromoDetailScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.promoDetailTitle),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
       body: ListView(
         children: [

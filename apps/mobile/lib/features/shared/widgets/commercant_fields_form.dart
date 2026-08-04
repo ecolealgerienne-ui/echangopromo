@@ -6,6 +6,7 @@ import '../../../domain/enums/categorie.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../client/providers/commune_providers.dart';
 import 'category_dropdown.dart';
+import 'form_section.dart';
 import 'commune_cascade_field.dart';
 import 'location_capture_field.dart';
 import 'photo_picker_field.dart';
@@ -31,6 +32,7 @@ class CommercantFieldsForm extends ConsumerWidget {
     required this.onCategorieChanged,
     required this.communeId,
     required this.onCommuneChanged,
+    this.startIndex,
   });
 
   final File? photo;
@@ -46,6 +48,10 @@ class CommercantFieldsForm extends ConsumerWidget {
   final String? communeId;
   final ValueChanged<String?> onCommuneChanged;
 
+  /// Numéro de la première section. `null` pour un formulaire sans étapes
+  /// numérotées (création par un agent, qui n'est pas un parcours guidé).
+  final int? startIndex;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
@@ -54,38 +60,60 @@ class CommercantFieldsForm extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        PhotoPickerField(file: photo, onChanged: onPhotoChanged),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: telephoneController,
-          decoration: InputDecoration(labelText: l10n.telephoneLabel, hintText: l10n.telephoneHint),
-          keyboardType: TextInputType.phone,
-          validator: (v) => (v == null || v.isEmpty) ? l10n.telephoneRequired : null,
+        FormSection(
+          index: startIndex,
+          title: l10n.commercantSectionShop,
+          subtitle: l10n.commercantSectionShopHint,
+          children: [
+            PhotoPickerField(file: photo, onChanged: onPhotoChanged),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: nomController,
+              decoration: InputDecoration(labelText: l10n.nomCommerceLabel),
+              validator: (v) => (v == null || v.isEmpty) ? l10n.nomRequired : null,
+            ),
+            const SizedBox(height: 12),
+            CategoryDropdown(value: categorie, onChanged: onCategorieChanged),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: telephoneController,
+              decoration: InputDecoration(
+                labelText: l10n.telephoneLabel,
+                hintText: l10n.telephoneHint,
+                prefixIcon: const Icon(Icons.phone_outlined),
+              ),
+              keyboardType: TextInputType.phone,
+              validator: (v) => (v == null || v.isEmpty) ? l10n.telephoneRequired : null,
+            ),
+          ],
         ),
         const SizedBox(height: 12),
-        TextFormField(
-          controller: nomController,
-          decoration: InputDecoration(labelText: l10n.nomCommerceLabel),
-          validator: (v) => (v == null || v.isEmpty) ? l10n.nomRequired : null,
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          controller: adresseController,
-          decoration: InputDecoration(labelText: l10n.adresseLabel),
-        ),
-        const SizedBox(height: 12),
-        LocationCaptureField(latitude: latitude, longitude: longitude, onChanged: onLocationChanged),
-        const SizedBox(height: 12),
-        CategoryDropdown(value: categorie, onChanged: onCategorieChanged),
-        const SizedBox(height: 12),
-        communesAsync.when(
-          loading: () => const LinearProgressIndicator(),
-          error: (error, _) => Text(l10n.communesError(error.toString())),
-          data: (communes) => CommuneCascadeField(
-            communes: communes,
-            selectedCommuneId: communeId,
-            onChanged: onCommuneChanged,
-          ),
+        FormSection(
+          index: startIndex == null ? null : startIndex! + 1,
+          title: l10n.commercantSectionWhere,
+          subtitle: l10n.commercantSectionWhereHint,
+          children: [
+            TextFormField(
+              controller: adresseController,
+              decoration: InputDecoration(labelText: l10n.adresseLabel),
+            ),
+            const SizedBox(height: 12),
+            communesAsync.when(
+              loading: () => const LinearProgressIndicator(),
+              error: (error, _) => Text(l10n.communesError(error.toString())),
+              data: (communes) => CommuneCascadeField(
+                communes: communes,
+                selectedCommuneId: communeId,
+                onChanged: onCommuneChanged,
+              ),
+            ),
+            const SizedBox(height: 12),
+            LocationCaptureField(
+              latitude: latitude,
+              longitude: longitude,
+              onChanged: onLocationChanged,
+            ),
+          ],
         ),
       ],
     );

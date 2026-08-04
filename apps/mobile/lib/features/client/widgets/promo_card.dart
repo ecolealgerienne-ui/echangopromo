@@ -24,11 +24,18 @@ class PromoCard extends StatelessWidget {
     required this.promo,
     required this.isFavorite,
     required this.onTap,
+    this.onToggleFavorite,
   });
 
   final Promo promo;
   final bool isFavorite;
   final VoidCallback onTap;
+
+  /// Facultatif : sans lui, le cœur reste un simple indicateur (comportement
+  /// d'origine, conservé pour les écrans qui affichent une promo sans
+  /// permettre de la mettre en favori). Avec, il devient un bouton — mettre
+  /// en favori depuis le fil évitait d'ouvrir la fiche uniquement pour ça.
+  final VoidCallback? onToggleFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -66,17 +73,32 @@ class PromoCard extends StatelessWidget {
                           : Container(color: colorScheme.surfaceContainerHighest),
                     ),
                   ),
-                  if (isFavorite)
+                  // Affiché en permanence quand il est cliquable : un cœur
+                  // qui n'apparaît qu'une fois activé ne se laisse pas
+                  // découvrir.
+                  if (isFavorite || onToggleFavorite != null)
                     PositionedDirectional(
-                      top: 4,
-                      start: 4,
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surface.withValues(alpha: 0.85),
-                          shape: BoxShape.circle,
+                      top: 2,
+                      start: 2,
+                      child: Material(
+                        color: colorScheme.surface.withValues(alpha: 0.88),
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          onTap: onToggleFavorite,
+                          customBorder: const CircleBorder(),
+                          child: Padding(
+                            // Zone tactile plus large que l'icône : 14dp seuls
+                            // seraient sous le minimum atteignable au pouce.
+                            padding: const EdgeInsets.all(6),
+                            child: Icon(
+                              isFavorite ? Icons.favorite : Icons.favorite_border,
+                              size: 16,
+                              color: isFavorite
+                                  ? Colors.redAccent
+                                  : colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                         ),
-                        child: const Icon(Icons.favorite, size: 14, color: Colors.redAccent),
                       ),
                     ),
                 ],

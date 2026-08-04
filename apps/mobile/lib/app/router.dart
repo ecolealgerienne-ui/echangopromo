@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../domain/enums/categorie.dart';
 import '../domain/models/auth_session.dart';
 import '../domain/models/admin_commercant_item.dart';
+import '../domain/models/highlight.dart';
 import '../domain/models/agent.dart';
 import '../domain/models/moderation_item.dart';
 import '../domain/models/promo.dart';
@@ -12,6 +13,8 @@ import '../features/admin/screens/admin_audit_log_screen.dart';
 import '../features/admin/screens/admin_commercant_detail_screen.dart';
 import '../features/admin/screens/admin_commercants_screen.dart';
 import '../features/admin/screens/admin_dashboard_screen.dart';
+import '../features/admin/screens/admin_highlight_form_screen.dart';
+import '../features/admin/screens/admin_highlights_screen.dart';
 import '../features/admin/screens/admin_login_screen.dart';
 import '../features/admin/screens/admin_promo_detail_screen.dart';
 import '../features/admin/screens/admin_promos_screen.dart';
@@ -22,8 +25,13 @@ import '../features/agent/screens/agent_login_screen.dart';
 import '../features/agent/screens/agent_promo_form_screen.dart';
 import '../features/agent/screens/create_commercant_screen.dart';
 import '../features/client/screens/commune_selection_screen.dart';
+import '../features/client/screens/map_screen.dart';
 import '../features/client/screens/promo_detail_screen.dart';
 import '../features/client/screens/promo_list_screen.dart';
+// Conservé volontairement : n'est plus référencé que par la redirection de
+// sélection de commune, désactivée temporairement plus bas. Le retirer
+// obligerait à le remettre au moment de réactiver.
+// ignore: unused_import
 import '../features/client/providers/commune_providers.dart';
 import '../features/commercant/screens/commercant_dashboard_screen.dart';
 import '../features/commercant/screens/commercant_login_screen.dart';
@@ -33,9 +41,14 @@ import '../features/commercant/screens/my_promos_screen.dart';
 import '../features/commercant/screens/promo_form_screen.dart';
 import '../features/commercant/screens/registre_resend_screen.dart';
 import '../features/dev/screens/dev_profile_switcher_screen.dart';
+import '../features/onboarding/screens/location_permission_screen.dart';
+import '../features/onboarding/screens/location_second_chance_screen.dart';
+import '../features/onboarding/screens/role_choice_screen.dart';
+import '../features/onboarding/screens/splash_screen.dart';
 import '../features/shared/screens/legal_document_screen.dart';
 import '../features/shared/screens/notifications_screen.dart';
 import '../providers/auth_provider.dart';
+import 'launch_state.dart';
 
 /// Associe le rôle requis directement à la déclaration de route plutôt qu'à
 /// une liste de chemins protégés maintenue à part (audit règle #22) — un
@@ -62,6 +75,17 @@ Widget _unusedBuilder(BuildContext context, GoRouterState state) => const SizedB
 final _appRoutes = <_AppRoute>[
   _AppRoute('/', (context, state) => const PromoListScreen()),
   _AppRoute('/select-commune', (context, state) => const CommuneSelectionScreen()),
+  // Carte "autour de moi" — publique comme la liste : pas de compte client.
+  _AppRoute('/carte', (context, state) => const MapScreen()),
+  // Premier lancement (splash → rôle → localisation). Publics : ces écrans
+  // précèdent par nature toute authentification.
+  _AppRoute('/onboarding', (context, state) => const SplashScreen()),
+  _AppRoute('/onboarding/role', (context, state) => const RoleChoiceScreen()),
+  _AppRoute('/onboarding/location', (context, state) => const LocationPermissionScreen()),
+  _AppRoute(
+    '/onboarding/location/second-chance',
+    (context, state) => const LocationSecondChanceScreen(),
+  ),
   // Publics, sans rôle requis — accessibles depuis l'inscription commerçant
   // et un lien général (plan de correction, Phase 4).
   _AppRoute('/legal/cgu', (context, state) => const LegalDocumentScreen.cgu()),
@@ -209,6 +233,23 @@ final _appRoutes = <_AppRoute>[
     (context, state) => AdminCommercantDetailScreen(item: state.extra as AdminCommercantItem),
     requiredRole: AppRole.admin,
   ),
+  // Curation du bandeau « Top promos » de l'accueil client — admin seul
+  // (voir AdminDashboardScreen).
+  _AppRoute(
+    '/admin/highlights',
+    (context, state) => const AdminHighlightsScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/highlights/new',
+    (context, state) => const AdminHighlightFormScreen(),
+    requiredRole: AppRole.admin,
+  ),
+  _AppRoute(
+    '/admin/highlights/edit',
+    (context, state) => AdminHighlightFormScreen(existing: state.extra as Highlight),
+    requiredRole: AppRole.admin,
+  ),
   _AppRoute(
     '/admin/audit-log',
     (context, state) => const AdminAuditLogScreen(),
@@ -255,7 +296,13 @@ String _loginPathFor(AppRole role) {
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: '/',
+    // Le splash, pas l'accueil (retour terrain 2026-07-29) : avec
+    // `initialLocation: '/'`, `PromoListScreen` était construit puis remplacé
+    // par la redirection, ce qui laissait voir l'accueil une fraction de
+    // seconde avant le splash. Démarrer directement sur le splash supprime ce
+    // clignotement — et un lien profond entrant ignore de toute façon
+    // `initialLocation`, la plateforme fournissant sa propre route.
+    initialLocation: '/onboarding',
     refreshListenable: ref.watch(routerRefreshProvider),
     redirect: (context, state) {
       final authState = ref.read(authControllerProvider);
@@ -263,9 +310,36 @@ final routerProvider = Provider<GoRouter>((ref) {
       final session = authState.value;
       final path = state.matchedLocation;
 
-      if (path == '/' && ref.read(selectedCommunesProvider).isEmpty) {
-        return '/select-commune';
+      // Splash au lancement, puis onboarding s'il n'a jamais été fait.
+      // N'intercepte que '/' : un lien profond (`/p/:id` partagé sur
+      // WhatsApp) ou un point d'entrée pro reste atteignable directement,
+      // sans détour par le splash.
+      //
+      // L'état de l'onboarding n'est plus consulté ici mais dans le splash
+      // lui-même, qui décide de la suite (accueil ou choix du rôle) : c'est
+      // le seul endroit où l'animation est terminée.
+      if (path == '/' && !splashShownThisLaunch) {
+        return '/onboarding';
       }
+
+      // DÉSACTIVÉ TEMPORAIREMENT (2026-07-29, demande utilisateur) : la
+      // sélection de commune bloquait l'accès à l'accueil au premier
+      // lancement, juste après l'onboarding. L'écran et la route
+      // `/select-commune` restent en place et accessibles (le sélecteur de
+      // commune en tête de l'accueil y mène) — seule la redirection
+      // obligatoire est suspendue.
+      //
+      // Effet de bord à connaître : sans commune sélectionnée,
+      // `selectedCommunesProvider` est vide, donc `communeIds` n'est pas
+      // envoyé et le backend ne filtre pas — l'accueil affiche les promos
+      // de toutes les communes. Acceptable au volume du pilote, à
+      // réactiver avant l'extension multi-wilaya.
+      //
+      // Pour rétablir : décommenter le bloc ci-dessous.
+      //
+      // if (path == '/' && ref.read(selectedCommunesProvider).isEmpty) {
+      //   return '/select-commune';
+      // }
 
       // Points d'entrée par rôle : redirigent vers le dashboard si déjà
       // connecté avec ce rôle, sinon vers l'écran de connexion — distinct

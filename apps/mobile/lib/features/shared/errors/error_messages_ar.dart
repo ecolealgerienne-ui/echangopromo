@@ -24,6 +24,11 @@ const Map<String, String> errorMessagesAr = {
   'STORAGE_FILE_TOO_LARGE': 'الصورة كبيرة جدًا. أعد المحاولة بصورة أخرى.',
   'STORAGE_PURPOSE_NOT_ALLOWED': 'نوع الرفع هذا غير مسموح لهذا الحساب.',
 
+  'HIGHLIGHT_NOT_FOUND': 'الإبراز غير موجود.',
+  'HIGHLIGHT_EMPTY_CONTENT': 'يجب أن يستهدف الإبراز عرضًا أو أن يحمل صورة مستوردة.',
+  'HIGHLIGHT_REORDER_MISMATCH':
+      'الترتيب المُرسَل لم يعد مطابقًا للإبرازات الموجودة. أعد تحميل القائمة.',
+
   'PROMO_NOT_FOUND': 'العرض غير موجود.',
   'PROMO_NOT_OWNED_BY_COMMERCANT': 'هذا العرض لا ينتمي إلى هذا التاجر.',
   'PROMO_DATE_FIN_NOT_FUTURE': 'يجب أن يكون تاريخ الانتهاء في المستقبل.',

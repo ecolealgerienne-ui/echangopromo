@@ -11,7 +11,8 @@ import '../../../providers/auth_provider.dart';
 import '../../shared/validators/pin_validator.dart';
 import '../../shared/widgets/commercant_fields_form.dart';
 import '../../shared/widgets/error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/form_section.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/loading_button.dart';
 import '../../shared/widgets/photo_picker_field.dart';
 import '../../../providers/core_providers.dart';
@@ -137,90 +138,126 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.registerTitle),
-        actions: const [LanguageSwitcherButton()],
+        actions: const [AppSettingsActions()],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              CommercantFieldsForm(
-                photo: _photo,
-                onPhotoChanged: (file) => setState(() => _photo = file),
-                telephoneController: _telephoneController,
-                nomController: _nomController,
-                adresseController: _adresseController,
-                latitude: _latitude,
-                longitude: _longitude,
-                onLocationChanged: (lat, lng) => setState(() {
-                  _latitude = lat;
-                  _longitude = lng;
-                }),
-                categorie: _categorie,
-                onCategorieChanged: (v) => setState(() => _categorie = v),
-                communeId: _communeId,
-                onCommuneChanged: (v) => setState(() => _communeId = v),
-              ),
-              const SizedBox(height: 16),
-              Text(l10n.registrePhotoLabel, style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 4),
-              Text(
-                l10n.registrePhotoHelperText,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-              ),
-              const SizedBox(height: 8),
-              PhotoPickerField(
-                file: _registrePhoto,
-                onChanged: (file) => setState(() => _registrePhoto = file),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _pinController,
-                decoration: InputDecoration(labelText: l10n.choosePinLabel),
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                maxLength: 12,
-                validator: validatePin(context),
-              ),
-              TextFormField(
-                controller: _pinConfirmController,
-                decoration: InputDecoration(labelText: l10n.confirmPinLabel),
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                maxLength: 12,
-                validator: (v) => (v != _pinController.text) ? l10n.pinMismatch : null,
-              ),
-              const SizedBox(height: 12),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                value: _acceptedTerms,
-                onChanged: (v) => setState(() => _acceptedTerms = v ?? false),
-                title: Text(l10n.acceptTermsLabel),
-              ),
-              Wrap(
-                children: [
-                  TextButton(
-                    onPressed: () => context.push('/legal/cgu'),
-                    child: Text(l10n.legalCguLinkLabel),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            // Sections numérotées : contrairement aux autres formulaires,
+            // l'inscription se remplit réellement de haut en bas et un
+            // commerçant a besoin de savoir combien d'étapes l'attendent.
+            CommercantFieldsForm(
+              startIndex: 1,
+              photo: _photo,
+              onPhotoChanged: (file) => setState(() => _photo = file),
+              telephoneController: _telephoneController,
+              nomController: _nomController,
+              adresseController: _adresseController,
+              latitude: _latitude,
+              longitude: _longitude,
+              onLocationChanged: (lat, lng) => setState(() {
+                _latitude = lat;
+                _longitude = lng;
+              }),
+              categorie: _categorie,
+              onCategorieChanged: (v) => setState(() => _categorie = v),
+              communeId: _communeId,
+              onCommuneChanged: (v) => setState(() => _communeId = v),
+            ),
+            const SizedBox(height: 12),
+            FormSection(
+              index: 3,
+              title: l10n.registerSectionPin,
+              subtitle: l10n.registerSectionPinHint,
+              children: [
+                TextFormField(
+                  controller: _pinController,
+                  decoration: InputDecoration(
+                    labelText: l10n.choosePinLabel,
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    counterText: '',
                   ),
-                  TextButton(
-                    onPressed: () => context.push('/legal/confidentialite'),
-                    child: Text(l10n.legalPrivacyLinkLabel),
+                  keyboardType: TextInputType.number,
+                  obscureText: true,
+                  maxLength: 12,
+                  validator: validatePin(context),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _pinConfirmController,
+                  decoration: InputDecoration(
+                    labelText: l10n.confirmPinLabel,
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    counterText: '',
                   ),
-                ],
-              ),
-              ErrorText(_error),
-              const SizedBox(height: 16),
-              LoadingButton(loading: _loading, onPressed: _submit, label: l10n.registerSubmit),
-            ],
+                  keyboardType: TextInputType.number,
+                  obscureText: true,
+                  maxLength: 12,
+                  validator: (v) => (v != _pinController.text) ? l10n.pinMismatch : null,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            FormSection(
+              index: 4,
+              title: l10n.registrePhotoLabel,
+              subtitle: l10n.registrePhotoHelperText,
+              children: [
+                PhotoPickerField(
+                  file: _registrePhoto,
+                  onChanged: (file) => setState(() => _registrePhoto = file),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Case à cocher et liens légaux sortis des sections : ils portent
+            // sur l'inscription entière, pas sur une étape.
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: _acceptedTerms,
+              onChanged: (v) => setState(() => _acceptedTerms = v ?? false),
+              title: Text(l10n.acceptTermsLabel, style: textTheme.bodyMedium),
+            ),
+            Wrap(
+              alignment: WrapAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: () => context.push('/legal/cgu'),
+                  child: Text(l10n.legalCguLinkLabel),
+                ),
+                TextButton(
+                  onPressed: () => context.push('/legal/confidentialite'),
+                  child: Text(l10n.legalPrivacyLinkLabel),
+                ),
+              ],
+            ),
+            ErrorText(_error),
+          ],
+        ),
+      ),
+      // Bouton fixe : le formulaire fait trois écrans de haut, valider
+      // imposait de redescendre jusqu'au bout à chaque correction.
+      bottomNavigationBar: Material(
+        color: colorScheme.surface,
+        elevation: 3,
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+            child: LoadingButton(
+              loading: _loading,
+              onPressed: _submit,
+              label: l10n.registerSubmit,
+            ),
           ),
         ),
       ),

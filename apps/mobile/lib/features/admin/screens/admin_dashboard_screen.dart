@@ -6,7 +6,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/api_error_text.dart';
-import '../../shared/widgets/language_switcher_button.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 
 final _dashboardProvider = FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).dashboard());
 
@@ -37,7 +37,7 @@ class AdminDashboardScreen extends ConsumerWidget {
         automaticallyImplyLeading: false,
         title: Text(isAdmin ? l10n.adminSpaceTitle : l10n.agentSpaceTitle),
         actions: [
-          const LanguageSwitcherButton(),
+          const AppSettingsActions(),
           PopupMenuButton<String>(
             icon: const Icon(Icons.account_circle_outlined),
             onSelected: (action) async {
@@ -115,6 +115,15 @@ class AdminDashboardScreen extends ConsumerWidget {
             ),
             if (isAdmin) ...[
               const SizedBox(height: 24),
+              // Admin uniquement : le bandeau d'accueil est une vitrine
+              // globale, pas un outil de terrain scopé à des communes
+              // (le backend refuse d'ailleurs le rôle agent sur ces routes).
+              OutlinedButton.icon(
+                icon: const Icon(Icons.view_carousel_outlined),
+                label: Text(l10n.highlightsTitle),
+                onPressed: () => context.push('/admin/highlights'),
+              ),
+              const SizedBox(height: 8),
               OutlinedButton.icon(
                 icon: const Icon(Icons.badge_outlined),
                 label: Text(l10n.agentsLabel),

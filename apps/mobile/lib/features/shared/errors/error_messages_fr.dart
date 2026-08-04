@@ -39,6 +39,12 @@ const Map<String, String> errorMessagesFr = {
   'STORAGE_FILE_TOO_LARGE': 'La photo est trop volumineuse. Réessayez avec une autre photo.',
   'STORAGE_PURPOSE_NOT_ALLOWED': "Ce type d'upload n'est pas autorisé pour ce compte.",
 
+  'HIGHLIGHT_NOT_FOUND': 'Mise en avant introuvable.',
+  'HIGHLIGHT_EMPTY_CONTENT':
+      'Une mise en avant doit cibler une promo ou porter une image importée.',
+  'HIGHLIGHT_REORDER_MISMATCH':
+      "L'ordre envoyé ne correspond plus aux mises en avant existantes. Rechargez la liste.",
+
   'PROMO_NOT_FOUND': 'Promotion introuvable.',
   'PROMO_NOT_OWNED_BY_COMMERCANT': "Cette promotion n'appartient pas à ce commerçant.",
   'PROMO_DATE_FIN_NOT_FUTURE': 'La date de fin doit être dans le futur.',

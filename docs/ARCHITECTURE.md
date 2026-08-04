@@ -43,12 +43,13 @@ Modules NestJS calqués sur les entités des specs (§4) :
 
 - `commune` — référentiel administratif (wilaya → commune), lecture seule côté client, et utilisé aussi pour rattacher un agent à son territoire (le concept de Zone opérationnelle séparée a été abandonné le 2026-07-09).
 - `commercant` — fiche, cycle de vie du compte, niveau de vérification, auth téléphone+PIN (pas d'OTP — décision produit, §3.2 des specs).
-- `promo` — CRUD promo, plafond de 5 actives (§5.3), job d'expiration (§5.1).
+- `promo` — CRUD promo, plafond de 5 actives (§5.3), job d'expiration (§5.1). Détient la définition unique de « promo visible » (`findVisibleByIds`, `findActiveForClient`), réutilisée par les autres modules plutôt que réécrite.
+- `highlight` — bandeau « Top promos » de l'accueil, curé par l'admin (ordre, image importée, titres) avec repli automatique sur le classement calculé par plus forte réduction quand aucune mise en avant n'est exploitable. Lecture publique (`GET /highlight`), gestion admin (`/admin/highlight`, agent exclu : vitrine globale, pas outil de terrain).
 - `agent` — compte agent, auth email+mot de passe, rattaché à zéro, une ou plusieurs `Commune` (many-to-many) — "assigner toute la wilaya" est une commodité d'UI qui sélectionne en masse les communes de cette wilaya, pas un champ distinct.
 - `admin` — auth email+mot de passe, modération, gestion agents/communes.
 - `report` — signalements anti-fraude par device_id (§5.4).
 - `audit-log` — traçabilité des actions agent/admin.
-- `storage` — intégration S3 OVH, compression déléguée au client, cron de purge à 1 mois (§5.8). Préfixe de clé selon l'usage (`promo-photos/` purgé, `commercant-photos/` permanent — photo de commerce optionnelle).
+- `storage` — intégration S3 OVH, compression déléguée au client, cron de purge à 1 mois (§5.8). Préfixe de clé selon l'usage (`promo-photos/` purgé, `commercant-photos/`, `registre-documents/` et `highlight-images/` permanents).
 - `auth` — hash/compare PIN, JWT (pas d'OTP SMS, supprimé du projet).
 
 Tâches planifiées (`@nestjs/schedule`) : expiration des promos (J+fin de validité) et purge des images S3 à 1 mois — deux jobs indépendants (§5.1 et §5.8).

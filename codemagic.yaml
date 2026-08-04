@@ -1,0 +1,186 @@
+workflows:
+  # ============================================================
+  # 1) Build IPA non-signé — pour sideload (sans compte Developer)
+  # ============================================================
+  ios-unsigned-build:
+    name: iOS - Build IPA sans compte Developer
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      vars:
+        APP_DIR: "apps/mobile"
+
+    # PAS de `working_directory` : il s'applique à TOUS les scripts, y
+    # compris ceux qui n'ont rien à voir avec le projet Flutter (keychain,
+    # signature). Les workflows qui compilent déjà (TikMeal, echango POS,
+    # echango Vendeur) n'en ont aucun alors que leur app est elle aussi
+    # dans un sous-dossier (`mobile/`) : ce sont leurs scripts qui font le
+    # `cd`. Même principe ici, via `$APP_DIR` — une seule valeur à changer
+    # si le dépôt construit par Codemagic n'a pas cette arborescence
+    # (surchargeable depuis les variables d'environnement Codemagic, sans
+    # toucher au fichier).
+
+    scripts:
+      - name: Récupérer les dépendances Flutter
+        script: |
+          if [ ! -f "$APP_DIR/pubspec.yaml" ]; then
+            echo ">>> Aucun pubspec.yaml dans '$APP_DIR' — arborescence du dépôt :"
+            ls -la
+            find . -maxdepth 3 -name pubspec.yaml -not -path '*/build/*'
+            echo ">>> Corriger la variable APP_DIR en conséquence."
+            exit 1
+          fi
+          cd "$APP_DIR"
+          flutter pub get
+
+      - name: Build iOS sans signature de code
+        script: |
+          cd "$APP_DIR"
+          flutter build ios \
+            --release \
+            --no-codesign \
+            --build-name=1.0.0 \
+            --build-number=$(($BUILD_NUMBER))
+
+      - name: Créer l'IPA non-signé
+        script: |
+          cd "$APP_DIR"
+          APP_PATH="build/ios/iphoneos/Runner.app"
+
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Erreur : $APP_PATH introuvable"
+            ls build/ios/iphoneos/ || true
+            exit 1
+          fi
+
+          mkdir -p Payload
+          cp -r "$APP_PATH" Payload/
+
+          zip -r "$CM_BUILD_DIR/EchangoPromo-unsigned.ipa" Payload/
+
+          echo "IPA créé : $CM_BUILD_DIR/EchangoPromo-unsigned.ipa"
+          ls -lh "$CM_BUILD_DIR/EchangoPromo-unsigned.ipa"
+
+    artifacts:
+      - EchangoPromo-unsigned.ipa
+
+  # ============================================================
+  # 2) Build signé + upload TestFlight
+  # ----------------------------------------------------------
+  # Structure calquée à l'identique sur les workflows echango POS /
+  # echango Vendeur, qui compilent et publient déjà : keychain en toute
+  # première étape, `fetch-signing-files` SANS identifiants explicites
+  # (Codemagic injecte lui-même APP_STORE_CONNECT_* du groupe de variables
+  # dans l'environnement de la CLI — les repasser en `--issuer-id`/
+  # `--key-id`/`--private-key` était inutile).
+  #
+  # Pré-requis :
+  #   - Groupe `appstore_credentials` contenant :
+  #       APP_STORE_CONNECT_ISSUER_ID
+  #       APP_STORE_CONNECT_KEY_IDENTIFIER
+  #       APP_STORE_CONNECT_PRIVATE_KEY   (contenu brut du .p8)
+  #   - App ID `com.echango.promo` enregistré sur developer.apple.com
+  #   - App créée dans App Store Connect (nécessaire seulement pour l'envoi
+  #     TestFlight, pas pour la signature)
+  # ============================================================
+  ios-testflight-build:
+    name: iOS - Build signé + TestFlight
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      groups:
+        - appstore_credentials
+      vars:
+        BUNDLE_ID: "com.echango.promo"
+        APP_DIR: "apps/mobile"
+
+    scripts:
+      - name: Initialiser le keychain
+        script: |
+          keychain initialize
+
+      - name: Récupérer / générer le profil App Store + certificat
+        script: |
+          # Clé privée du certificat iOS Distribution. Si la variable
+          # CERTIFICATE_PRIVATE_KEY est définie dans Codemagic, on la
+          # réutilise — sinon on en génère une. Attention : une nouvelle clé
+          # à chaque build fait créer un NOUVEAU certificat de distribution
+          # côté Apple, et le compte est plafonné (3 max). Après le premier
+          # build réussi, enregistrer le contenu de /tmp/cert_key.pem dans
+          # CERTIFICATE_PRIVATE_KEY pour réutiliser toujours le même.
+          if [ -n "$CERTIFICATE_PRIVATE_KEY" ]; then
+            printf '%s' "$CERTIFICATE_PRIVATE_KEY" > /tmp/cert_key.pem
+          else
+            openssl genrsa -out /tmp/cert_key.pem 2048
+          fi
+
+          # `--create` crée le certificat iOS Distribution ET le profil App
+          # Store pour ce bundle id si l'un ou l'autre manque.
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --certificate-key=@file:/tmp/cert_key.pem \
+            --create
+
+      - name: Ajouter le certificat au keychain
+        script: |
+          keychain add-certificates
+
+      - name: Configurer Xcode pour utiliser les profils
+        script: |
+          if [ ! -f "$APP_DIR/pubspec.yaml" ]; then
+            echo ">>> Aucun pubspec.yaml dans '$APP_DIR' — arborescence du dépôt :"
+            ls -la
+            find . -maxdepth 3 -name pubspec.yaml -not -path '*/build/*'
+            echo ">>> Corriger la variable APP_DIR en conséquence."
+            exit 1
+          fi
+          cd "$APP_DIR/ios"
+          xcode-project use-profiles
+
+      - name: Récupérer les dépendances Flutter
+        script: |
+          cd "$APP_DIR"
+          flutter pub get
+
+      - name: Installer les pods iOS
+        script: |
+          cd "$APP_DIR/ios"
+          pod install --repo-update
+
+      - name: Build IPA signé
+        script: |
+          cd "$APP_DIR"
+          # `$BUILD_NUMBER` est le compteur de Codemagic : il augmente à
+          # chaque build et ne collisionne jamais. Évite d'interroger
+          # TestFlight, qui échoue tant qu'aucune build n'existe —
+          # c'est-à-dire au tout premier envoi.
+          flutter build ipa \
+            --release \
+            --build-name=1.0.0 \
+            --build-number=$(($BUILD_NUMBER)) \
+            --export-options-plist=/Users/builder/export_options.plist
+
+    artifacts:
+      # Motif large : `artifacts` n'interpole pas $APP_DIR, et le chemin
+      # dépend de l'arborescence du dépôt construit.
+      - "**/build/ios/ipa/*.ipa"
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        # submit_to_testflight: true → la build est dispo dans TestFlight automatiquement
+        submit_to_testflight: true
+        # beta_groups: liste des groupes TestFlight qui reçoivent la build
+        # beta_groups:
+        #   - "Beta interne Echango Promo"

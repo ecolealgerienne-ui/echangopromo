@@ -2,8 +2,19 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, EntityManager, In, IsNull, LessThan, MoreThan, Not, Repository } from 'typeorm';
+import {
+  Between,
+  EntityManager,
+  In,
+  IsNull,
+  LessThan,
+  MoreThan,
+  Not,
+  Repository,
+  SelectQueryBuilder,
+} from 'typeorm';
 import { CommercantService } from '../commercant/commercant.service';
+import { Commercant } from '../commercant/entities/commercant.entity';
 import {
   BadRequestAppException,
   NotFoundAppException,
@@ -18,7 +29,8 @@ import { NotificationService } from '../notification/notification.service';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
 import { ListPromoAdminQueryDto } from './dto/list-promo-admin-query.dto';
-import { ListPromoQueryDto } from './dto/list-promo-query.dto';
+import { ListPromoMapQueryDto } from './dto/list-promo-map-query.dto';
+import { ListPromoQueryDto, PromoSortOrder } from './dto/list-promo-query.dto';
 import { UpdatePromoDto } from './dto/update-promo.dto';
 import { PromoView } from './entities/promo-view.entity';
 import {
@@ -29,6 +41,14 @@ import {
 } from './entities/promo.entity';
 
 const MAX_PROMOS_ACTIVES = 5;
+
+/**
+ * Plafond de commerçants renvoyés pour une zone de carte. Au-delà, la carte
+ * serait de toute façon illisible et la réponse inutilement lourde : le
+ * client reçoit `truncated: true` et invite à zoomer, plutôt que de perdre
+ * silencieusement des commerces (règle d'audit #15).
+ */
+const MAX_MAP_COMMERCANTS = 300;
 
 @Injectable()
 export class PromoService {
@@ -343,6 +363,38 @@ export class PromoService {
         categorie: query.categorie,
       });
     }
+    if (query.commercantId) {
+      qb.andWhere('promo.commercantId = :commercantId', {
+        commercantId: query.commercantId,
+      });
+    }
+    if (query.search) {
+      // Même formulation que la recherche admin (`findAllForAdmin`) : la
+      // description de la promo ou le nom du commerce. Non indexé (ILIKE
+      // '%…%'), acceptable au volume du pilote — à revoir en trigrammes
+      // (pg_trgm) avant l'extension multi-wilaya.
+      qb.andWhere(
+        '(promo.description ILIKE :search OR commercant.nom ILIKE :search)',
+        { search: `%${query.search}%` },
+      );
+    }
+
+    // Tri "meilleures réductions" (bandeau Top promos de l'accueil) : la
+    // remise est recalculée en SQL, aucune colonne dérivée n'existe. Le
+    // garde-fou sur `prixAvant > 0` évite une division par zéro sur une
+    // ligne aberrante.
+    if (query.sort === PromoSortOrder.DISCOUNT) {
+      qb.addSelect(
+        `CASE WHEN promo."prixAvant" > 0
+              THEN (promo."prixAvant" - promo."prixApres") / promo."prixAvant"
+              ELSE 0 END`,
+        'discount_ratio',
+      ).orderBy('discount_ratio', 'DESC');
+      qb.addOrderBy('promo.publishedAt', 'DESC', 'NULLS LAST');
+      qb.skip((query.page - 1) * query.limit).take(query.limit);
+      const [items, total] = await qb.getManyAndCount();
+      return toPaginatedResult(items, total, query.page, query.limit);
+    }
 
     if (query.favoriteIds?.length) {
       // Favori par promo (id de la promo elle-même), pas par commerçant —
@@ -365,6 +417,94 @@ export class PromoService {
 
     const [items, total] = await qb.getManyAndCount();
     return toPaginatedResult(items, total, query.page, query.limit);
+  }
+
+  /**
+   * Commerçants géolocalisés de la zone visible, avec leurs promos actives
+   * (écran carte "autour de moi"). Volontairement dans `PromoService` et non
+   * dans `CommercantService` : la définition de "promo visible" vit ici et
+   * ne doit pas être réécrite ailleurs (règle d'audit #9, deux services
+   * ayant déjà divergé sur cette règle par le passé).
+   *
+   * Deux requêtes fixes, jamais une par commerçant (règle d'audit #14) : la
+   * première sélectionne les commerçants de la zone ayant au moins une promo
+   * visible, la seconde charge leurs promos d'un coup.
+   */
+  async findActiveForMap(query: ListPromoMapQueryDto): Promise<{
+    commercants: { commercant: Commercant; promos: Promo[] }[];
+    truncated: boolean;
+  }> {
+    const visiblePromoConditions = (qb: SelectQueryBuilder<Promo>) =>
+      qb
+        .where('promo.lifecycleStatus = :lifecycleStatus', {
+          lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
+        })
+        .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
+          moderationStatuses: VISIBLE_MODERATION_STATUSES,
+        })
+        .andWhere('promo.dateFin > NOW()')
+        .andWhere('commercant.deletedAt IS NULL')
+        .andWhere('commercant.suspendedAt IS NULL');
+
+    const commercantsQb = visiblePromoConditions(
+      this.promos.createQueryBuilder('promo').innerJoin('promo.commercant', 'commercant'),
+    )
+      .andWhere('commercant.latitude IS NOT NULL')
+      .andWhere('commercant.longitude IS NOT NULL')
+      .andWhere('commercant.latitude BETWEEN :south AND :north', {
+        south: query.south,
+        north: query.north,
+      })
+      .andWhere('commercant.longitude BETWEEN :west AND :east', {
+        west: query.west,
+        east: query.east,
+      })
+      .select('commercant.id', 'id')
+      .distinct(true)
+      // +1 pour détecter le dépassement sans seconde requête de comptage.
+      .limit(MAX_MAP_COMMERCANTS + 1);
+
+    if (query.categorie) {
+      commercantsQb.andWhere('promo.categorie = :categorie', {
+        categorie: query.categorie,
+      });
+    }
+
+    const rows = await commercantsQb.getRawMany<{ id: string }>();
+    const truncated = rows.length > MAX_MAP_COMMERCANTS;
+    const commercantIds = rows.slice(0, MAX_MAP_COMMERCANTS).map((row) => row.id);
+    if (commercantIds.length === 0) return { commercants: [], truncated: false };
+
+    const promosQb = visiblePromoConditions(
+      this.promos
+        .createQueryBuilder('promo')
+        .innerJoinAndSelect('promo.commercant', 'commercant'),
+    )
+      .andWhere('promo.commercantId IN (:...commercantIds)', { commercantIds })
+      .addOrderBy('promo.publishedAt', 'DESC', 'NULLS LAST');
+
+    if (query.categorie) {
+      promosQb.andWhere('promo.categorie = :categorie', {
+        categorie: query.categorie,
+      });
+    }
+
+    const promos = await promosQb.getMany();
+
+    const grouped = new Map<string, { commercant: Commercant; promos: Promo[] }>();
+    for (const promo of promos) {
+      const entry = grouped.get(promo.commercantId);
+      if (entry) {
+        entry.promos.push(promo);
+      } else {
+        grouped.set(promo.commercantId, {
+          commercant: promo.commercant,
+          promos: [promo],
+        });
+      }
+    }
+
+    return { commercants: [...grouped.values()], truncated };
   }
 
   /**
@@ -446,6 +586,35 @@ export class PromoService {
       where: { id: In(ids) },
       relations: { commercant: true },
     });
+  }
+
+  /**
+   * Sous-ensemble de [ids] réellement visible par un client — même règle que
+   * `findActiveForClient` (publiée, modération non bloquante, non expirée,
+   * commerçant ni supprimé ni suspendu), appliquée ici plutôt que réécrite
+   * par l'appelant (CLAUDE.md règle #9 : la définition de « promo visible »
+   * ne vit qu'ici).
+   *
+   * Utilisé par le bandeau d'accueil curé (`HighlightService`) : une
+   * diapositive pointant vers une promo devenue invisible doit disparaître,
+   * pas afficher un lien mort.
+   */
+  async findVisibleByIds(ids: string[]): Promise<Promo[]> {
+    if (ids.length === 0) return [];
+    return this.promos
+      .createQueryBuilder('promo')
+      .innerJoinAndSelect('promo.commercant', 'commercant')
+      .where('promo.id IN (:...ids)', { ids })
+      .andWhere('promo.lifecycleStatus = :lifecycleStatus', {
+        lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
+      })
+      .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
+        moderationStatuses: VISIBLE_MODERATION_STATUSES,
+      })
+      .andWhere('promo.dateFin > NOW()')
+      .andWhere('commercant.deletedAt IS NULL')
+      .andWhere('commercant.suspendedAt IS NULL')
+      .getMany();
   }
 
   async listByCommercant(
