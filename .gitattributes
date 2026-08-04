@@ -1,0 +1,15 @@
+# Fins de ligne des fichiers GÉNÉRÉS par le SDK Flutter.
+#
+# ⚠️ Pourquoi ce fichier existe. `flutter pub get` réécrit ces registres de
+# plugins natifs en LF ; sous Windows, la conversion automatique de Git les
+# marquait modifiés à chaque exécution alors que **leur contenu est
+# identique** — `git diff` ne rendait rien, seulement des avertissements de
+# conversion. Cinq fichiers apparaissaient donc en permanence dans
+# `git status`, du bruit qui finit par faire committer sans regarder.
+#
+# Portée volontairement ÉTROITE : on ne normalise pas tout le dépôt, ce qui
+# réécrirait des centaines de fichiers pour un problème qui n'en concerne que
+# cinq.
+apps/mobile/linux/flutter/**     eol=lf
+apps/mobile/macos/Flutter/**     eol=lf
+apps/mobile/windows/flutter/**   eol=lf

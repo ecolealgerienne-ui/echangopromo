@@ -17,3 +17,7 @@ apps/mobile/build/
 .DS_Store
 .vscode/
 .idea/
+
+# Caches Python des scripts de test
+__pycache__/
+*.pyc
