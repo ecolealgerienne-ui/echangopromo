@@ -36,6 +36,8 @@ D_ADMIN_EMAIL="${D_ADMIN_EMAIL:-decor-admin@echango.local}"
 D_ADMIN_PASSWORD="${D_ADMIN_PASSWORD:-decor-admin-2026}"
 D_AGENT_EMAIL="${D_AGENT_EMAIL:-decor-agent@echango.local}"
 D_AGENT_PASSWORD="${D_AGENT_PASSWORD:-decor-agent-2026}"
+D_AGENT_B_EMAIL="${D_AGENT_B_EMAIL:-decor-agent-b@echango.local}"
+D_AGENT_B_PASSWORD="${D_AGENT_B_PASSWORD:-decor-agent-b-2026}"
 D_COMMERCANT_TEL="${D_COMMERCANT_TEL:-+213555000101}"
 D_COMMERCANT_PIN="${D_COMMERCANT_PIN:-654321}"
 
@@ -88,13 +90,19 @@ fi
 pass "Admin connecté ($D_ADMIN_EMAIL)"
 
 # ─────────────────────────────────────────────────────────────────────────────
-step "2. Commune de travail"
+step "2. Deux communes DISJOINTES"
 
+# ⚠️ Deux communes, et c'est le cœur du banc d'appartenance : sans une seconde
+# commune, l'agent intrus serait un agent sans commune — un cas dégénéré qui ne
+# prouve rien du filtre réel.
 COMMUNE_JSON="$(api GET /commune)"
 COMMUNE_ID="$(echo "$COMMUNE_JSON" | jq -r '(.items // .)[0].id // empty')"
 COMMUNE_NOM="$(echo "$COMMUNE_JSON" | jq -r '(.items // .)[0].nom // empty')"
+COMMUNE_B_ID="$(echo "$COMMUNE_JSON" | jq -r '(.items // .)[1].id // empty')"
+COMMUNE_B_NOM="$(echo "$COMMUNE_JSON" | jq -r '(.items // .)[1].nom // empty')"
 [ -n "$COMMUNE_ID" ] || fail "Aucune commune en base" "lancer npm run seed:communes"
-pass "Commune « $COMMUNE_NOM »"
+[ -n "$COMMUNE_B_ID" ] || fail "Une seule commune en base — le banc d'appartenance en exige deux"
+pass "Commune A « $COMMUNE_NOM » · Commune B « $COMMUNE_B_NOM »"
 
 # ─────────────────────────────────────────────────────────────────────────────
 step "3. Agent rattaché à cette commune"
@@ -116,7 +124,27 @@ if [ -z "$AGENT_TOKEN" ]; then
   AGENT_TOKEN="$(agent_login)"
   [ -n "$AGENT_TOKEN" ] || fail "Connexion agent impossible après création"
 fi
-pass "Agent connecté ($D_AGENT_EMAIL)"
+pass "Agent A connecté ($D_AGENT_EMAIL) — commune « $COMMUNE_NOM »"
+
+# ── Agent B : l'intrus du banc d'appartenance ────────────────────────────────
+agent_b_login() {
+  api POST /agent/login "$(jq -n --arg e "$D_AGENT_B_EMAIL" --arg p "$D_AGENT_B_PASSWORD" \
+    '{email:$e, password:$p}')" | jq -r '.accessToken // empty'
+}
+
+sleep "$PACE"
+AGENT_B_TOKEN="$(agent_b_login)"
+if [ -z "$AGENT_B_TOKEN" ]; then
+  info "Absent — création via POST /admin/agent, sur la commune B"
+  out="$(api POST /admin/agent "$(jq -n --arg e "$D_AGENT_B_EMAIL" --arg p "$D_AGENT_B_PASSWORD" \
+    --arg c "$COMMUNE_B_ID" '{email:$e, password:$p, nom:"Agent Décor B", communeIds:[$c]}')" \
+    "$ADMIN_TOKEN")"
+  echo "$out" | est_erreur && fail "Création agent B refusée" "$(echo "$out" | jq -c '{code,message}')"
+  sleep "$PACE"
+  AGENT_B_TOKEN="$(agent_b_login)"
+  [ -n "$AGENT_B_TOKEN" ] || fail "Connexion agent B impossible après création"
+fi
+pass "Agent B connecté ($D_AGENT_B_EMAIL) — commune « $COMMUNE_B_NOM »"
 
 # ─────────────────────────────────────────────────────────────────────────────
 step "4. Commerçant actif, registre validé"
@@ -147,8 +175,31 @@ CID="$(api GET "/admin/commercant?limit=100" '' "$ADMIN_TOKEN" \
   | jq -r --arg t "$D_COMMERCANT_TEL" '(.items // .)[] | select(.telephone==$t) | .id' | head -1)"
 if [ -n "$CID" ]; then
   api POST "/admin/commercant/$CID/registre/valider" '{}' "$ADMIN_TOKEN" >/dev/null 2>&1 || true
-  info "Registre validé (ou déjà validé)"
+  info "Registre validé (ou déjà validé) — id $CID"
 fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+step "5. Une promo appartenant à ce commerçant"
+
+# Le banc d'appartenance a besoin d'une ressource RÉELLE à cibler : une promo
+# inexistante rendrait « introuvable » pour la mauvaise raison, et le banc
+# conclurait juste par accident.
+PROMO_ID="$(api GET "/promo/me/all?limit=1" '' "$COMMERCANT_TOKEN" \
+  | jq -r '(.items // .)[0].id // empty')"
+
+if [ -z "$PROMO_ID" ]; then
+  info "Aucune — création"
+  fin="$(date -u -d '+20 days' +%Y-%m-%dT%H:%M:%S.000Z)"
+  out="$(api POST /promo "$(jq -n --arg f "$fin" \
+    '{description:"Promo du décor", prixAvant:1000, prixApres:700,
+      categorie:"alimentation", photoKeys:["promo-photos/decor/decor.jpg"], dateFin:$f}')" \
+    "$COMMERCANT_TOKEN")"
+  echo "$out" | est_erreur && fail "Création promo refusée" "$(echo "$out" | jq -c '{code,message}')"
+  PROMO_ID="$(echo "$out" | jq -r '.id // empty')"
+  [ -n "$PROMO_ID" ] || fail "Promo créée sans id" "$(echo "$out" | head -c 200)"
+  api POST "/promo/$PROMO_ID/publish" '{}' "$COMMERCANT_TOKEN" >/dev/null 2>&1 || true
+fi
+pass "Promo $PROMO_ID"
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo
@@ -158,9 +209,12 @@ echo "════════════════════════�
 cat <<EOF
 
 export API_URL='$API_URL'
-export ADMIN_EMAIL='$D_ADMIN_EMAIL'         ADMIN_PASSWORD='$D_ADMIN_PASSWORD'
-export AGENT_EMAIL='$D_AGENT_EMAIL'         AGENT_PASSWORD='$D_AGENT_PASSWORD'
-export COMMERCANT_TEL='$D_COMMERCANT_TEL'   COMMERCANT_PIN='$D_COMMERCANT_PIN'
+export ADMIN_EMAIL='$D_ADMIN_EMAIL'             ADMIN_PASSWORD='$D_ADMIN_PASSWORD'
+export AGENT_EMAIL='$D_AGENT_EMAIL'             AGENT_PASSWORD='$D_AGENT_PASSWORD'
+export AGENT_B_EMAIL='$D_AGENT_B_EMAIL'   AGENT_B_PASSWORD='$D_AGENT_B_PASSWORD'
+export COMMERCANT_TEL='$D_COMMERCANT_TEL'       COMMERCANT_PIN='$D_COMMERCANT_PIN'
+export COMMERCANT_ID='$CID'
+export PROMO_ID='$PROMO_ID'
 
 ⚠️ Le banc de refus révoque le jeton admin au démarrage — c'est son troisième
    échantillon. Ce décor étant rejouable, il suffit de le relancer si besoin.
