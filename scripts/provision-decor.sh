@@ -96,10 +96,10 @@ step "2. Deux communes DISJOINTES"
 # commune, l'agent intrus serait un agent sans commune — un cas dégénéré qui ne
 # prouve rien du filtre réel.
 COMMUNE_JSON="$(api GET /commune)"
-COMMUNE_ID="$(echo "$COMMUNE_JSON" | jq -r '(.items // .)[0].id // empty')"
-COMMUNE_NOM="$(echo "$COMMUNE_JSON" | jq -r '(.items // .)[0].nom // empty')"
-COMMUNE_B_ID="$(echo "$COMMUNE_JSON" | jq -r '(.items // .)[1].id // empty')"
-COMMUNE_B_NOM="$(echo "$COMMUNE_JSON" | jq -r '(.items // .)[1].nom // empty')"
+COMMUNE_ID="$(echo "$COMMUNE_JSON" | jq -r '.items[0].id // empty')"
+COMMUNE_NOM="$(echo "$COMMUNE_JSON" | jq -r '.items[0].nom // empty')"
+COMMUNE_B_ID="$(echo "$COMMUNE_JSON" | jq -r '.items[1].id // empty')"
+COMMUNE_B_NOM="$(echo "$COMMUNE_JSON" | jq -r '.items[1].nom // empty')"
 [ -n "$COMMUNE_ID" ] || fail "Aucune commune en base" "lancer npm run seed:communes"
 [ -n "$COMMUNE_B_ID" ] || fail "Une seule commune en base — le banc d'appartenance en exige deux"
 pass "Commune A « $COMMUNE_NOM » · Commune B « $COMMUNE_B_NOM »"
@@ -172,7 +172,7 @@ pass "Commerçant connecté ($D_COMMERCANT_TEL)"
 
 # Validation du registre — geste d'administration, pas geste d'utilisateur.
 CID="$(api GET "/admin/commercant?limit=100" '' "$ADMIN_TOKEN" \
-  | jq -r --arg t "$D_COMMERCANT_TEL" '(.items // .)[] | select(.telephone==$t) | .id' | head -1)"
+  | jq -r --arg t "$D_COMMERCANT_TEL" '.items[]? | select(.telephone==$t) | .id' | head -1)"
 [ -n "$CID" ] || fail "Commerçant introuvable côté admin après inscription"
 
 # ⚠️ **Deux gestes, pas un.** Le commerçant SOUMET son registre, l'admin le
@@ -181,14 +181,20 @@ CID="$(api GET "/admin/commercant?limit=100" '' "$ADMIN_TOKEN" \
 # refus `COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION`, et la création de promo
 # échouait trois étapes plus loin en accusant autre chose. Le pire endroit pour
 # un repli est un script de décor.
-ETAT="$(api GET "/admin/commercant?limit=200" '' "$ADMIN_TOKEN" \
-  | jq -r --arg t "$D_COMMERCANT_TEL" '(.items // .)[] | select(.telephone==$t) | .registreStatus // "null"')"
+# ⚠️ `limit` est plafonné côté serveur : une valeur trop grande rend un 400, et
+# un `(.items // .)` complaisant se met alors à itérer l'objet d'erreur au lieu
+# d'échouer. Le repli masquait la panne — on lit donc `.items` et rien d'autre.
+liste="$(api GET "/admin/commercant?limit=100" '' "$ADMIN_TOKEN")"
+echo "$liste" | est_erreur && fail "Liste des commerçants refusée" \
+  "$(echo "$liste" | jq -c '{code,message}')"
+ETAT="$(echo "$liste" | jq -r --arg t "$D_COMMERCANT_TEL" \
+  '.items[] | select(.telephone==$t) | .registreStatus // "aucun"')"
 
 if [ "$ETAT" != "valide" ]; then
   # La clé doit porter le préfixe posé par StorageService.buildKey, sinon
   # COMMERCANT_REGISTRE_KEY_MISMATCH (garde d'appartenance sur le document).
   out="$(api POST /commercant/me/registre \
-    "$(jq -n --arg k "registre-documents/$CID/decor.jpg" '{registreKey:$k}')" '' "$COMMERCANT_TOKEN")"
+    "$(jq -n --arg k "registre-documents/$CID/decor.jpg" '{registreKey:$k}')" "$COMMERCANT_TOKEN")"
   echo "$out" | est_erreur && fail "Soumission du registre refusée" \
     "$(echo "$out" | jq -c '{code,message}')"
 
@@ -205,7 +211,7 @@ step "5. Une promo appartenant à ce commerçant"
 # inexistante rendrait « introuvable » pour la mauvaise raison, et le banc
 # conclurait juste par accident.
 PROMO_ID="$(api GET "/promo/me/all?limit=1" '' "$COMMERCANT_TOKEN" \
-  | jq -r '(.items // .)[0].id // empty')"
+  | jq -r '.items[0].id // empty')"
 
 if [ -z "$PROMO_ID" ]; then
   info "Aucune — création"
