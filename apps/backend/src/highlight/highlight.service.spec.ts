@@ -30,6 +30,12 @@ type Repo = {
   delete: jest.Mock;
 };
 
+/// ⚠️ **Pas d'`as unknown as` ici, contrairement à `makePromo` ci-dessous.**
+/// Ce littéral couvre tous les champs de `Highlight` : l'assertion y était
+/// inutile, et `npm run lint --fix` l'a retirée le 2026-08-05. Le commentaire
+/// qui la justifiait est parti avec — il aurait sinon décrit un code qui
+/// n'existe plus. `makePromo`, lui, ne couvre qu'une partie de `Promo` et
+/// garde donc la sienne : la différence n'est pas un oubli.
 function makeHighlight(overrides: Partial<Highlight> = {}): Highlight {
   return {
     id: 'h1',
@@ -43,8 +49,6 @@ function makeHighlight(overrides: Partial<Highlight> = {}): Highlight {
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
-    // `as unknown as` assumé : ces doubles ne portent que les champs dont
-    // les règles testées se servent, pas l'entité complète.
   };
 }
 
