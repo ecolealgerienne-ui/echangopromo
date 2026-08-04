@@ -103,6 +103,7 @@
   "allCategoriesChip": "All",
   "noActivePromos": "No active promo at the moment.",
   "loadMoreButtonLabel": "Show more",
+  "promoDensityTooltip": "Change layout",
   "filtersSortTooltip": "Filters and sorting",
   "filtersSortTitle": "Filters and sorting",
   "favoritesOnlyLabel": "Show only my favorites",
