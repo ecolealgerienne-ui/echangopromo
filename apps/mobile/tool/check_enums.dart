@@ -120,11 +120,19 @@ Set<String> valeursDart(String source, String nom) {
       .toSet();
 }
 
-/// Les miroirs Dart dont `fromValue` **avale** une valeur inconnue.
+/// Les miroirs Dart dont `fromValue` avale une valeur inconnue **en silence**.
 ///
-/// Ce n'est pas un échec — c'est parfois un choix. Mais c'est le mode de
-/// défaillance « un défaut n'a pas de valeur par défaut » : une valeur ajoutée
-/// côté serveur devient silencieusement autre chose, sans erreur ni journal.
+/// Ce n'est pas un échec — un repli est parfois un choix produit. Ce qui est
+/// visé, c'est le **silence** : une valeur ajoutée côté serveur qui devient
+/// autre chose sans erreur ni journal (« un défaut n'a pas de valeur par
+/// défaut », règle 29).
+///
+/// ⚠️ **Ne détecte que la forme `orElse:`, et c'est délibéré.** Les cinq
+/// miroirs qui la portaient sont passés le 2026-08-04 à `fromApiValue`, qui
+/// conserve le repli mais le **signale** en développement. Le contrôle ne les
+/// voit donc plus — non parce qu'ils ont disparu, mais parce qu'ils ne sont
+/// plus silencieux, ce qui est exactement la distinction qu'on veut tenir.
+/// Un `orElse:` réintroduit demain rallumerait l'avertissement.
 bool repliSilencieux(String source) =>
     RegExp(r'orElse\s*:').hasMatch(_sansCommentaires(source));
 

@@ -1,3 +1,5 @@
+import 'api_enum.dart';
+
 /// Liste fermée des catégories (specs §5.6) — miroir de l'enum backend.
 /// Le libellé affiché est localisé (`categorieLabel` dans
 /// `features/shared/l10n/enum_labels.dart`), pas porté par l'enum lui-même.
@@ -17,6 +19,13 @@ enum Categorie {
 
   final String value;
 
-  static Categorie fromValue(String value) =>
-      Categorie.values.firstWhere((c) => c.value == value, orElse: () => Categorie.autre);
+  /// Repli : une catégorie inconnue s'affiche comme « autre » — comportement
+  /// voulu, documenté par un test depuis le 2026-07-05.
+  static Categorie fromValue(String value) => fromApiValue(
+        valeurs: Categorie.values,
+        valeurDe: (v) => v.value,
+        recu: value,
+        repli: Categorie.autre,
+        enumeration: 'Categorie',
+      );
 }

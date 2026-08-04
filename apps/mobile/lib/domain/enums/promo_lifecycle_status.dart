@@ -1,3 +1,5 @@
+import 'api_enum.dart';
+
 /// Miroir de `PromoLifecycleStatus` (backend) — cycle de vie éditorial,
 /// volontairement séparé du statut de modération (CLAUDE.md règle #8).
 enum PromoLifecycleStatus {
@@ -11,6 +13,15 @@ enum PromoLifecycleStatus {
 
   final String value;
 
-  static PromoLifecycleStatus fromValue(String value) => PromoLifecycleStatus.values
-      .firstWhere((s) => s.value == value, orElse: () => PromoLifecycleStatus.expiree);
+  /// ⚠️ **Le repli le plus lourd du lot** : une promo au statut inconnu
+  /// DISPARAÎT de l'affichage client, et le diagnostic partirait chercher une
+  /// panne de données. Conservé faute de meilleur défaut — aucun n'est juste —
+  /// mais il se signale désormais en développement.
+  static PromoLifecycleStatus fromValue(String value) => fromApiValue(
+        valeurs: PromoLifecycleStatus.values,
+        valeurDe: (v) => v.value,
+        recu: value,
+        repli: PromoLifecycleStatus.expiree,
+        enumeration: 'PromoLifecycleStatus',
+      );
 }

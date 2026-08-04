@@ -1,3 +1,5 @@
+import 'api_enum.dart';
+
 /// Miroir de `CommercantAccountState` (backend).
 enum CommercantAccountState {
   creeAgent('cree_agent'),
@@ -7,6 +9,13 @@ enum CommercantAccountState {
 
   final String value;
 
-  static CommercantAccountState fromValue(String value) => CommercantAccountState.values
-      .firstWhere((s) => s.value == value, orElse: () => CommercantAccountState.autonome);
+  /// Repli : un état de compte inconnu est traité comme autonome, l'état le
+  /// moins restrictif — ne pas brider un commerçant sur une valeur mal comprise.
+  static CommercantAccountState fromValue(String value) => fromApiValue(
+        valeurs: CommercantAccountState.values,
+        valeurDe: (v) => v.value,
+        recu: value,
+        repli: CommercantAccountState.autonome,
+        enumeration: 'CommercantAccountState',
+      );
 }
