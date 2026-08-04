@@ -322,7 +322,7 @@ Le détail de chaque étape, avec son critère de sortie, est dans
 |---|---|---|
 | — | Méthode générique + 5 squelettes | ✅ écrits, auto-tests au vert (16/16 et 13/13) |
 | — | Plan spécifique Promo | ✅ écrit |
-| **1** | Banc de refus (48 routes, par construction) | 🔶 **écrit, épinglage prouvé** (auto-test 14/14 dont 6 refus ; **4/4 mutations**, sans identifiants car la phase d'épinglage précède le réseau). Phase réseau en attente du décor — **0 agent en base** |
+| **1** | Banc de refus (48 routes, par construction) | ✅ **PASSÉ** — 138 sondes, 0 échec, décor posé, **prouvé par mutation sur les deux phases** |
 | **2** | Vérificateurs de synchronisation | ✅ **CLOSE** — 3 vérificateurs, **10 couples sur 10**, **14 mutations sur 14 refusées**. Une commande : `dart run tool/check_all.dart` |
 | **3** | Décor + 4 parcours écran + onboarding | ⬜ non commencé |
 | **4** | Bancs, couverture d'usage complète (**27 bancs, 62/62 routes**) | ⬜ non commencé |
@@ -332,7 +332,7 @@ couvertures distinctes, trois cibles :
 
 | Couverture | État | Cible |
 |---|---|---|
-| **Accès** (qui a le droit d'appeler quoi) | 0 / 62 | **100 %** — atteinte par construction, le banc énumère depuis la source |
+| **Accès** (qui a le droit d'appeler quoi) | ✅ **62 / 62** — 48 sondées, 14 ouvertes épinglées | **100 %** atteint |
 | **Usage** (chaque route appelée au moins une fois) | 0 / 62 | **100 %** — bornée à 62 routes |
 | **Comportement** (chaque règle fait ce qu'elle doit) | 0 / 8 règles chiffrées | **piloté par le risque** — non bornée, un pourcentage y serait inventé |
 | Couples serveur ↔ app | ✅ **10 / 10** — tous éprouvés par mutation | 10 |
@@ -512,6 +512,42 @@ localhost par conception.
 
 Aucune modification du code source : les mutations sont transitoires et
 restaurées dans la seconde, `git status` vide après coup.
+
+### 2026-08-04 (nuit) — Étape 1 passée, la frontière tient
+
+Décor posé de zéro par `scripts/provision-decor.sh` : admin aux identifiants
+connus, agent rattaché à **Ain Chouhada** (il n'y en avait aucun en base),
+commerçant actif au registre validé.
+
+**Banc de refus : 138 sondes, 0 échec.** Les 48 routes protégées refusent les
+trois sondes — sans jeton, avec le jeton d'un rôle qui n'y a pas droit, avec un
+jeton révoqué — chacune avec le bon statut **et** le bon code.
+
+**La preuve par mutation, sur les deux phases.** Le vert ne prouve rien seul :
+
+- *épinglage* (avant le réseau) : garde retiré → refus immédiat ; route ouverte
+  devenue protégée → avertissement ; source introuvable → sortie 2 ;
+- *réseau* : `@Roles('admin')` retiré des routes `/admin/highlight` → **un jeton
+  commerçant obtenait `GET /admin/highlight` en 200**. Le banc l'a vu sur les
+  cinq routes, puis est repassé au vert après restauration.
+
+**Deux défauts trouvés dans mes propres scripts, tous deux de la même famille**
+— une donnée mal câblée ne casse pas, elle disparaît :
+
+- le jeton se nomme `accessToken`, pas `token`. La connexion réussissait en
+  HTTP 201, le jeton ressortait vide, et le décor concluait « connexion
+  impossible » : le message accusait les identifiants pour un contrat de
+  réponse mal lu ;
+- le lanceur ne transmettait pas `"$@"` : `--only` et `--list` étaient avalés,
+  et la commande documentée ne faisait pas ce qu'elle annonçait, en silence.
+
+**Un garde-fou corrigé** : le lanceur de mutations refusait de démarrer à cause
+d'un `..env.production.swp` non suivi. Or la restauration (`git checkout --
+<fichier>`) ne peut atteindre que des fichiers **suivis** : le contrôle porte
+désormais sur `--untracked-files=no`. Un garde-fou trop large devient pénible,
+donc contourné.
+
+⚠️ **Ce fichier d'échange vim traîne toujours** dans le clone WSL (voir P6).
 
 ---
 

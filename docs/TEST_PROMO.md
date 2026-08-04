@@ -357,7 +357,41 @@ disjointes.
 **Critère de sortie** : prouvé par mutation — retirer un `@UseGuards` fait passer
 le banc au rouge, et retirer un `assertZoneMatches` aussi.
 
-#### État au 2026-08-04 — écrit, épinglage prouvé, phase réseau en attente
+#### État au 2026-08-04 — ✅ **passé de bout en bout et prouvé par mutation**
+
+```
+48 routes protégées (sur 62, 14 ouvertes épinglées, 3 host-scopées)
+138 sondes — 0 échec
+```
+
+**Décor** : `scripts/provision-decor.sh` pose un admin aux identifiants connus,
+un agent rattaché à une commune (il n'y en avait **aucun** en base) et un
+commerçant actif au registre validé. Idempotent, identifiants stables.
+
+**La preuve, en deux temps.** Le vert ne prouve rien seul :
+
+*Phase d'épinglage* — sans aucun identifiant, car elle précède le réseau :
+
+| Mutation | Attendu | |
+|---|---|---|
+| `@UseGuards` retiré d'un contrôleur | refus **avant tout appel**, 5 routes nommées | ✅ |
+| route ouverte épinglée devenue protégée | avertissement, liste à nettoyer | ✅ |
+| `SRC_DIR` introuvable | sortie 2, **aucun verdict rendu** | ✅ |
+
+*Phase réseau* — `@Roles('admin')` retiré des routes `/admin/highlight` :
+
+```
+❌ GET /admin/highlight    — rôle commercant : statut 200 (attendu 401/403)
+❌ POST /admin/highlight   — rôle commercant : statut 400 (attendu 401/403)
+❌ PATCH /admin/highlight/:id, DELETE …, POST …/reorder    idem
+5 routes, 15 sondes, 5 échecs
+```
+
+Un jeton **commerçant** obtenait `GET /admin/highlight` en **200**. Le banc
+l'a vu sur les cinq routes, puis est repassé au vert après restauration —
+fichiers suivis intacts.
+
+**Ancien état (avant le décor)**
 
 `scripts/test-frontiere-http.sh` + `scripts/lib/frontiere_http.py`.
 Auto-test **14 cas dont 6 refus**. 62 routes vues, 14 ouvertes épinglées avec
@@ -374,17 +408,14 @@ attrape un garde oublié, donc la propriété la plus importante du banc :
 | route ouverte épinglée devenue protégée | avertissement, liste à nettoyer | ✅ |
 | `SRC_DIR` introuvable | sortie 2, **aucun verdict rendu** | ✅ |
 
-**Ce qui manque pour la phase réseau — du décor, pas du code** :
+**Comment le rejouer** :
 
 ```bash
-export ADMIN_EMAIL=…      ADMIN_PASSWORD=…
-export AGENT_EMAIL=…      AGENT_PASSWORD=…     # ⚠️ 0 agent en base locale
-export COMMERCANT_TEL=…   COMMERCANT_PIN=…
+./scripts/provision-decor.sh            # imprime le bloc export
+# … coller le bloc, attendre une minute (plafond de 5 connexions/min) …
+./scripts/test-frontiere-http.sh                        # les 48 routes, ~3 min
+./scripts/test-frontiere-http.sh --only=/admin/highlight  # une seule, ~1 min
 ```
-
-La base locale contient 1 admin, 1 commerçant, **0 agent**. Les ~140 sondes ne
-peuvent donc pas tourner tant que l'étape 3 n'a pas posé ces comptes. Le banc le
-dit et s'arrête — **il ne conclut pas**.
 
 ⚠️ **Le banc révoque le jeton admin au démarrage** : c'est ce qui lui donne son
 troisième échantillon. Une session admin ouverte ailleurs sera déconnectée.
