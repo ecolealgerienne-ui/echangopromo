@@ -371,6 +371,19 @@ def main():
         print()
 
     protegees = [(m, c, r) for m, c, r, g in routes if g]
+
+    # ⚠️ `--only=<motif>` ne filtre QUE la phase de sondage, jamais la
+    # vérification d'épinglage ci-dessus : celle-ci doit toujours porter sur
+    # l'ensemble, sinon on retrouverait le défaut qu'elle existe pour éviter
+    # (un contrôle dont la cible rétrécit avec ce qu'il contrôle).
+    only = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--only=")), None)
+    if only:
+        protegees = [t for t in protegees if only in t[1]]
+        if not protegees:
+            print("❌ --only=%s ne correspond à aucune route protégée." % only)
+            sys.exit(2)
+        print("⚠️  filtre --only=%s : %d route(s) sondée(s) sur 48.\n"
+              % (only, len(protegees)))
     sondes = sum(3 if set(r) != set(ROLES_CONNUS) else 2 for _, _, r in protegees)
     print("── banc de refus ──")
     print("%d routes protégées (sur %d, %d ouvertes épinglées, %d host-scopées)"
