@@ -39,7 +39,9 @@ Future<int> _lancer(String script, List<String> args) async {
   final r = await Process.run('dart', ['run', script, ...args],
       runInShell: true, stdoutEncoding: utf8, stderrEncoding: utf8);
   final sortie = '${r.stdout}${r.stderr}'.trimRight();
-  if (sortie.isNotEmpty) stdout.writeln(sortie.split('\n').map((l) => '   $l').join('\n'));
+  if (sortie.isNotEmpty) {
+    stdout.writeln(sortie.split('\n').map((l) => '   $l').join('\n'));
+  }
   return r.exitCode;
 }
 

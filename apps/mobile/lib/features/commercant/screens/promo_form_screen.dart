@@ -14,7 +14,8 @@ import '../../../providers/core_providers.dart';
 const _defaultDureeJours = 5;
 const _maxDureeJours = 7;
 
-final _promoFormMeProvider = FutureProvider.autoDispose((ref) => ref.watch(commercantApiProvider).me());
+final _promoFormMeProvider =
+    FutureProvider.autoDispose((ref) => ref.watch(commercantApiProvider).me());
 
 /// Création (brouillon ou publication immédiate) ou édition d'une promo par
 /// le commerçant lui-même (specs §3.2). Durée de validité choisie entre 1 et
@@ -33,7 +34,8 @@ class PromoFormScreen extends ConsumerStatefulWidget {
 
 class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  late final _descriptionController = TextEditingController(text: widget.existingPromo?.description);
+  late final _descriptionController =
+      TextEditingController(text: widget.existingPromo?.description);
   late final _prixAvantController =
       TextEditingController(text: widget.existingPromo?.prixAvant.toString());
   late final _prixApresController =
@@ -107,7 +109,8 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
       final photoKeys = await Future.wait(_photoItems.map((item) async {
         return switch (item) {
           ExistingPhotoItem(:final key) => key,
-          NewPhotoItem(:final file) => await storageApi.uploadPhoto(file, purpose: 'promo'),
+          NewPhotoItem(:final file) =>
+            await storageApi.uploadPhoto(file, purpose: 'promo'),
         };
       }));
 
@@ -127,7 +130,8 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
           prixApres: double.parse(_prixApresController.text.trim()),
           categorie: _categorie!,
           photoKeys: photoKeys,
-          dateFin: asDraft ? null : DateTime.now().add(Duration(days: _dureeJours)),
+          dateFin:
+              asDraft ? null : DateTime.now().add(Duration(days: _dureeJours)),
           asDraft: asDraft,
         );
       }
@@ -170,7 +174,8 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
           children: [
             PromoFormFields(
               photoItems: _photoItems,
-              onPhotoItemsChanged: (items) => setState(() => _photoItems = items),
+              onPhotoItemsChanged: (items) =>
+                  setState(() => _photoItems = items),
               descriptionController: _descriptionController,
               prixAvantController: _prixAvantController,
               prixApresController: _prixApresController,
@@ -179,7 +184,8 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
               onCategorieChanged: (v) => setState(() => _categorie = v),
               dureeJours: _isEditing ? null : _dureeJours,
               maxDureeJours: _maxDureeJours,
-              onDureeJoursChanged: (v) => setState(() => _dureeJours = v ?? _defaultDureeJours),
+              onDureeJoursChanged: (v) =>
+                  setState(() => _dureeJours = v ?? _defaultDureeJours),
             ),
             ErrorText(_error),
           ],
@@ -209,7 +215,8 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
                       // l'exception.
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: _loading ? null : () => _submit(asDraft: true),
+                          onPressed:
+                              _loading ? null : () => _submit(asDraft: true),
                           child: Text(l10n.saveDraftLabel),
                         ),
                       ),

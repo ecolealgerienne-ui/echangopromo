@@ -49,7 +49,8 @@ class NotificationsScreen extends ConsumerWidget {
               child: const NotificationsPanel(),
             ),
             RefreshIndicator(
-              onRefresh: () async => ref.invalidate(notificationHistoryProvider),
+              onRefresh: () async =>
+                  ref.invalidate(notificationHistoryProvider),
               child: const NotificationsPanel(history: true),
             ),
           ],

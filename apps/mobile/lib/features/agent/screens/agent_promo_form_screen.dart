@@ -17,7 +17,8 @@ const _maxDureeJours = 7;
 /// prise dans l'app (pas de galerie), avec horodatage côté serveur — preuve
 /// minimale de passage, sans géolocalisation (specs §3.3/§5.5).
 class AgentPromoFormScreen extends ConsumerStatefulWidget {
-  const AgentPromoFormScreen({super.key, required this.commercantId, this.defaultCategorie});
+  const AgentPromoFormScreen(
+      {super.key, required this.commercantId, this.defaultCategorie});
 
   final String commercantId;
 
@@ -26,7 +27,8 @@ class AgentPromoFormScreen extends ConsumerStatefulWidget {
   final Categorie? defaultCategorie;
 
   @override
-  ConsumerState<AgentPromoFormScreen> createState() => _AgentPromoFormScreenState();
+  ConsumerState<AgentPromoFormScreen> createState() =>
+      _AgentPromoFormScreenState();
 }
 
 class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
@@ -125,7 +127,8 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
             children: [
               PromoFormFields(
                 photoItems: _photoItems,
-                onPhotoItemsChanged: (items) => setState(() => _photoItems = items),
+                onPhotoItemsChanged: (items) =>
+                    setState(() => _photoItems = items),
                 cameraOnly: true,
                 descriptionController: _descriptionController,
                 prixAvantController: _prixAvantController,
@@ -135,11 +138,15 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
                 onCategorieChanged: (v) => setState(() => _categorie = v),
                 dureeJours: _dureeJours,
                 maxDureeJours: _maxDureeJours,
-                onDureeJoursChanged: (v) => setState(() => _dureeJours = v ?? _defaultDureeJours),
+                onDureeJoursChanged: (v) =>
+                    setState(() => _dureeJours = v ?? _defaultDureeJours),
               ),
               ErrorText(_error),
               const SizedBox(height: 16),
-              LoadingButton(loading: _loading, onPressed: _submit, label: l10n.publishLabel),
+              LoadingButton(
+                  loading: _loading,
+                  onPressed: _submit,
+                  label: l10n.publishLabel),
             ],
           ),
         ),

@@ -28,7 +28,8 @@ import 'dart:io';
 // ─────────────────────────────────────────────────────────────────────────────
 
 class Paire {
-  const Paire(this.libelle, this.sourceTs, this.enumTs, this.sourceDart, this.enumDart);
+  const Paire(
+      this.libelle, this.sourceTs, this.enumTs, this.sourceDart, this.enumDart);
   final String libelle;
   final String sourceTs;
   final String enumTs;
@@ -37,31 +38,50 @@ class Paire {
 }
 
 const _paires = <Paire>[
-  Paire('Catégorie',
-      'apps/backend/src/common/enums/categorie.enum.ts', 'Categorie',
-      'apps/mobile/lib/domain/enums/categorie.dart', 'Categorie'),
-  Paire('Cycle de vie promo',
-      'apps/backend/src/promo/entities/promo.entity.ts', 'PromoLifecycleStatus',
-      'apps/mobile/lib/domain/enums/promo_lifecycle_status.dart', 'PromoLifecycleStatus'),
-  Paire('Modération promo',
-      'apps/backend/src/promo/entities/promo.entity.ts', 'PromoModerationStatus',
-      'apps/mobile/lib/domain/enums/promo_moderation_status.dart', 'PromoModerationStatus'),
-  Paire('État de compte commerçant',
-      'apps/backend/src/commercant/entities/commercant.entity.ts', 'CommercantAccountState',
-      'apps/mobile/lib/domain/enums/commercant_account_state.dart', 'CommercantAccountState'),
-  Paire('Vérification d\'origine',
-      'apps/backend/src/commercant/entities/commercant.entity.ts', 'CommercantOriginVerification',
+  Paire('Catégorie', 'apps/backend/src/common/enums/categorie.enum.ts',
+      'Categorie', 'apps/mobile/lib/domain/enums/categorie.dart', 'Categorie'),
+  Paire(
+      'Cycle de vie promo',
+      'apps/backend/src/promo/entities/promo.entity.ts',
+      'PromoLifecycleStatus',
+      'apps/mobile/lib/domain/enums/promo_lifecycle_status.dart',
+      'PromoLifecycleStatus'),
+  Paire(
+      'Modération promo',
+      'apps/backend/src/promo/entities/promo.entity.ts',
+      'PromoModerationStatus',
+      'apps/mobile/lib/domain/enums/promo_moderation_status.dart',
+      'PromoModerationStatus'),
+  Paire(
+      'État de compte commerçant',
+      'apps/backend/src/commercant/entities/commercant.entity.ts',
+      'CommercantAccountState',
+      'apps/mobile/lib/domain/enums/commercant_account_state.dart',
+      'CommercantAccountState'),
+  Paire(
+      'Vérification d\'origine',
+      'apps/backend/src/commercant/entities/commercant.entity.ts',
+      'CommercantOriginVerification',
       'apps/mobile/lib/domain/enums/commercant_origin_verification.dart',
       'CommercantOriginVerification'),
-  Paire('Statut du registre',
-      'apps/backend/src/commercant/entities/commercant.entity.ts', 'RegistreStatus',
-      'apps/mobile/lib/domain/enums/registre_status.dart', 'RegistreStatus'),
-  Paire('Motif de signalement',
-      'apps/backend/src/report/entities/report.entity.ts', 'ReportReason',
-      'apps/mobile/lib/domain/enums/report_reason.dart', 'ReportReason'),
-  Paire('Type d\'acteur (audit)',
-      'apps/backend/src/audit-log/entities/audit-log.entity.ts', 'AuditActorType',
-      'apps/mobile/lib/domain/enums/audit_actor_type.dart', 'AuditActorType'),
+  Paire(
+      'Statut du registre',
+      'apps/backend/src/commercant/entities/commercant.entity.ts',
+      'RegistreStatus',
+      'apps/mobile/lib/domain/enums/registre_status.dart',
+      'RegistreStatus'),
+  Paire(
+      'Motif de signalement',
+      'apps/backend/src/report/entities/report.entity.ts',
+      'ReportReason',
+      'apps/mobile/lib/domain/enums/report_reason.dart',
+      'ReportReason'),
+  Paire(
+      'Type d\'acteur (audit)',
+      'apps/backend/src/audit-log/entities/audit-log.entity.ts',
+      'AuditActorType',
+      'apps/mobile/lib/domain/enums/audit_actor_type.dart',
+      'AuditActorType'),
 ];
 
 /// Enums Dart **sans** contrepartie backend, épinglés avec leur raison.
@@ -87,8 +107,8 @@ String _sansCommentaires(String s) => s
 /// JSON. Les deux langages nomment différemment (`VETEMENTS_TEXTILE` côté TS,
 /// `vetementsTextile` côté Dart) — comparer les noms ne dirait rien.
 Set<String> valeursTs(String source, String nom) {
-  final bloc =
-      RegExp('enum\\s+$nom\\s*\\{([^}]*)\\}').firstMatch(_sansCommentaires(source));
+  final bloc = RegExp('enum\\s+$nom\\s*\\{([^}]*)\\}')
+      .firstMatch(_sansCommentaires(source));
   if (bloc == null) return <String>{};
   return RegExp("""=\\s*['"]([^'"]*)['"]""")
       .allMatches(bloc.group(1)!)
@@ -150,7 +170,8 @@ Directory racineDepot() {
     if (d.parent.path == d.path) break;
     d = d.parent;
   }
-  stderr.writeln('❌ racine du dépôt introuvable depuis ${Directory.current.path}');
+  stderr.writeln(
+      '❌ racine du dépôt introuvable depuis ${Directory.current.path}');
   stderr.writeln("   L'absence de verdict n'est pas un verdict.");
   exit(2);
 }
@@ -172,36 +193,52 @@ void _verifie(String libelle, Object obtenu, Object attendu) {
 
 bool selfTest() {
   // ── Doivent PASSER ────────────────────────────────────────────────────────
-  _verifie('TS simple',
-      (valeursTs("export enum E { A = 'a', B = 'b' }", 'E').toList()..sort()), ['a', 'b']);
-  _verifie('TS multi-lignes',
-      (valeursTs("enum E {\n  A = 'a',\n  LONG = 'long_x',\n}", 'E').toList()..sort()),
+  _verifie(
+      'TS simple',
+      (valeursTs("export enum E { A = 'a', B = 'b' }", 'E').toList()..sort()),
+      ['a', 'b']);
+  _verifie(
+      'TS multi-lignes',
+      (valeursTs("enum E {\n  A = 'a',\n  LONG = 'long_x',\n}", 'E').toList()
+        ..sort()),
       ['a', 'long_x']);
-  _verifie('Dart amélioré',
-      (valeursDart("enum E {\n  a('a'),\n  bC('b_c');\n\n  const E(this.value);\n}", 'E')
+  _verifie(
+      'Dart amélioré',
+      (valeursDart(
+              "enum E {\n  a('a'),\n  bC('b_c');\n\n  const E(this.value);\n}",
+              'E')
           .toList()
         ..sort()),
       ['a', 'b_c']);
-  _verifie('repli silencieux détecté',
-      repliSilencieux("firstWhere((s) => s.value == v, orElse: () => E.a)"), true);
+  _verifie(
+      'repli silencieux détecté',
+      repliSilencieux("firstWhere((s) => s.value == v, orElse: () => E.a)"),
+      true);
 
   // ── Doivent REFUSER ───────────────────────────────────────────────────────
   // ⚠️ Le cas fondateur : les chaînes situées APRÈS le `;` ne sont pas des
   // valeurs. Sans la borne, `fromValue` et son message seraient comptés.
-  _verifie('Dart : rien après le point-virgule',
+  _verifie(
+      'Dart : rien après le point-virgule',
       (valeursDart(
               "enum E {\n  a('a');\n\n  const E(this.value);\n  final String value;\n"
-              "  static E f(String v) => E.values.firstWhere((x) => x.value == v);\n"
-              "  String get libelle => tr('e.libelle');\n}",
+                  "  static E f(String v) => E.values.firstWhere((x) => x.value == v);\n"
+                  "  String get libelle => tr('e.libelle');\n}",
               'E')
           .toList()),
       ['a']);
-  _verifie('TS : membre en commentaire ignoré',
-      (valeursTs("enum E {\n  A = 'a',\n  // B = 'b',\n}", 'E').toList()), ['a']);
-  _verifie('Dart : membre en commentaire ignoré',
-      (valeursDart("enum E {\n  a('a'),\n  // b('b'),\n  c('c');\n}", 'E').toList()..sort()),
+  _verifie(
+      'TS : membre en commentaire ignoré',
+      (valeursTs("enum E {\n  A = 'a',\n  // B = 'b',\n}", 'E').toList()),
+      ['a']);
+  _verifie(
+      'Dart : membre en commentaire ignoré',
+      (valeursDart("enum E {\n  a('a'),\n  // b('b'),\n  c('c');\n}", 'E')
+          .toList()
+        ..sort()),
       ['a', 'c']);
-  _verifie('mauvais nom d’enum → rien', valeursTs("enum Autre { A = 'a' }", 'E').toList(), []);
+  _verifie('mauvais nom d’enum → rien',
+      valeursTs("enum Autre { A = 'a' }", 'E').toList(), []);
   _verifie('enum absent → rien', valeursDart("class X {}", 'E').toList(), []);
   _verifie('absence de repli reconnue',
       repliSilencieux("E.values.firstWhere((x) => x.value == v)"), false);
@@ -261,12 +298,14 @@ void main(List<String> args) {
     final dart = valeursDart(sourceDart, p.enumDart);
 
     if (ts.isEmpty) {
-      stdout.writeln('  ❌ ${p.libelle} — enum ${p.enumTs} introuvable dans ${p.sourceTs}');
+      stdout.writeln(
+          '  ❌ ${p.libelle} — enum ${p.enumTs} introuvable dans ${p.sourceTs}');
       problemes++;
       continue;
     }
     if (dart.isEmpty) {
-      stdout.writeln('  ❌ ${p.libelle} — enum ${p.enumDart} introuvable dans ${p.sourceDart}');
+      stdout.writeln(
+          '  ❌ ${p.libelle} — enum ${p.enumDart} introuvable dans ${p.sourceDart}');
       problemes++;
       continue;
     }
@@ -282,10 +321,12 @@ void main(List<String> args) {
     problemes++;
     stdout.writeln('  ❌ ${p.libelle}');
     for (final v in manquants) {
-      stdout.writeln("       serveur seul   '$v'  (émis par l'API, inconnu du miroir)");
+      stdout.writeln(
+          "       serveur seul   '$v'  (émis par l'API, inconnu du miroir)");
     }
     for (final v in enTrop) {
-      stdout.writeln("       app seule      '$v'  (attendu par l'app, jamais émis)");
+      stdout.writeln(
+          "       app seule      '$v'  (attendu par l'app, jamais émis)");
     }
   }
 
@@ -293,8 +334,10 @@ void main(List<String> args) {
   if (replis.isNotEmpty) {
     stdout.writeln('⚠️  ${replis.length} miroir(s) avec un repli silencieux '
         '(`orElse`) : ${replis.join(', ')}.');
-    stdout.writeln('    Une valeur ajoutée côté serveur y devient autre chose sans');
-    stdout.writeln('    erreur ni journal. Non bloquant — mais à décider, pas à subir.');
+    stdout.writeln(
+        '    Une valeur ajoutée côté serveur y devient autre chose sans');
+    stdout.writeln(
+        '    erreur ni journal. Non bloquant — mais à décider, pas à subir.');
     stdout.writeln();
   }
   if (problemes > 0) {

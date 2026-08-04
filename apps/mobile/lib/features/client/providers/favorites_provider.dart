@@ -15,6 +15,7 @@ class FavoritesController extends StateNotifier<Set<String>> {
   bool isFavorite(String promoId) => state.contains(promoId);
 }
 
-final favoritesProvider = StateNotifierProvider<FavoritesController, Set<String>>(
+final favoritesProvider =
+    StateNotifierProvider<FavoritesController, Set<String>>(
   (ref) => FavoritesController(ref.watch(favoritesStoreProvider)),
 );

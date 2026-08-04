@@ -21,7 +21,8 @@ class RegistreResendScreen extends ConsumerStatefulWidget {
   const RegistreResendScreen({super.key});
 
   @override
-  ConsumerState<RegistreResendScreen> createState() => _RegistreResendScreenState();
+  ConsumerState<RegistreResendScreen> createState() =>
+      _RegistreResendScreenState();
 }
 
 class _RegistreResendScreenState extends ConsumerState<RegistreResendScreen> {
@@ -41,8 +42,11 @@ class _RegistreResendScreenState extends ConsumerState<RegistreResendScreen> {
     });
     try {
       final storage = ref.read(storageApiProvider);
-      final registreKey = await storage.uploadPhoto(_photo!, purpose: 'registre');
-      await ref.read(commercantApiProvider).requestRegistreVerification(registreKey);
+      final registreKey =
+          await storage.uploadPhoto(_photo!, purpose: 'registre');
+      await ref
+          .read(commercantApiProvider)
+          .requestRegistreVerification(registreKey);
       if (mounted) context.pop(true);
     } catch (error) {
       setState(() => _error = extractApiErrorMessage(

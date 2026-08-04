@@ -34,8 +34,10 @@ class ModerationItem {
             .map((e) => e as String)
             .toList(),
         thumbnailUrl: json['thumbnailUrl'] as String?,
-        lifecycleStatus: PromoLifecycleStatus.fromValue(json['lifecycleStatus'] as String),
-        moderationStatus: PromoModerationStatus.fromValue(json['moderationStatus'] as String),
+        lifecycleStatus:
+            PromoLifecycleStatus.fromValue(json['lifecycleStatus'] as String),
+        moderationStatus:
+            PromoModerationStatus.fromValue(json['moderationStatus'] as String),
         commercantId: json['commercantId'] as String,
         commercantNom: json['commercantNom'] as String,
         commercantTelephone: json['commercantTelephone'] as String,

@@ -98,7 +98,8 @@ class _SquigglePainter extends CustomPainter {
 
     final drawn = Path();
     for (final metric in path.computeMetrics()) {
-      drawn.addPath(metric.extractPath(0, metric.length * progress), Offset.zero);
+      drawn.addPath(
+          metric.extractPath(0, metric.length * progress), Offset.zero);
     }
 
     canvas.drawPath(

@@ -70,7 +70,8 @@ class CommercantFieldsForm extends ConsumerWidget {
             TextFormField(
               controller: nomController,
               decoration: InputDecoration(labelText: l10n.nomCommerceLabel),
-              validator: (v) => (v == null || v.isEmpty) ? l10n.nomRequired : null,
+              validator: (v) =>
+                  (v == null || v.isEmpty) ? l10n.nomRequired : null,
             ),
             const SizedBox(height: 12),
             CategoryDropdown(value: categorie, onChanged: onCategorieChanged),
@@ -83,7 +84,8 @@ class CommercantFieldsForm extends ConsumerWidget {
                 prefixIcon: const Icon(Icons.phone_outlined),
               ),
               keyboardType: TextInputType.phone,
-              validator: (v) => (v == null || v.isEmpty) ? l10n.telephoneRequired : null,
+              validator: (v) =>
+                  (v == null || v.isEmpty) ? l10n.telephoneRequired : null,
             ),
           ],
         ),

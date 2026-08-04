@@ -17,8 +17,8 @@ class NotificationsPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final notificationsAsync =
-        ref.watch(history ? notificationHistoryProvider : notificationsProvider);
+    final notificationsAsync = ref
+        .watch(history ? notificationHistoryProvider : notificationsProvider);
     final controller = ref.watch(notificationControllerProvider);
 
     return notificationsAsync.when(
@@ -65,7 +65,8 @@ class NotificationsPanel extends ConsumerWidget {
 /// bandeau du dashboard (CLAUDE.md #21 : extraire dès la 2e duplication).
 /// Couleurs dérivées du thème (audit design 2026-07-11) plutôt que des
 /// `Colors.*` fixes, non calibrées pour le fond sombre.
-Color notificationIconColor(BuildContext context, domain.NotificationType type) {
+Color notificationIconColor(
+    BuildContext context, domain.NotificationType type) {
   final colorScheme = Theme.of(context).colorScheme;
   final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
   switch (type) {
@@ -125,7 +126,8 @@ class _NotificationTile extends ConsumerWidget {
           color: notificationIconColor(context, notification.type),
         ),
         title: Text(notification.message),
-        subtitle: Text(notificationRelativeDate(context, notification.createdAt)),
+        subtitle:
+            Text(notificationRelativeDate(context, notification.createdAt)),
         trailing: !notification.isRead
             ? IconButton(
                 icon: const Icon(Icons.check),
@@ -136,7 +138,9 @@ class _NotificationTile extends ConsumerWidget {
         // `colorScheme.primaryContainer` plutôt qu'un gris fixe : ce dernier
         // restait clair en mode sombre alors que le texte du ListTile suit
         // le thème (clair sur fond sombre) — contraste cassé.
-        tileColor: notification.isRead ? null : Theme.of(context).colorScheme.primaryContainer,
+        tileColor: notification.isRead
+            ? null
+            : Theme.of(context).colorScheme.primaryContainer,
       ),
     );
   }

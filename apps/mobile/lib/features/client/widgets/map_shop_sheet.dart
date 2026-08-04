@@ -62,7 +62,8 @@ class _MapShopSheetState extends State<MapShopSheet> {
 
     return Material(
       color: colorScheme.surface,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.lg)),
+      borderRadius:
+          const BorderRadius.vertical(top: Radius.circular(AppRadii.lg)),
       elevation: 8,
       child: SafeArea(
         top: false,
@@ -210,10 +211,12 @@ class _InitialsAvatar extends StatelessWidget {
   final String nom;
 
   String get _initials {
-    final words = nom.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    final words =
+        nom.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
     if (words.isEmpty) return '?';
     if (words.length == 1) return words.first.characters.first.toUpperCase();
-    return (words[0].characters.first + words[1].characters.first).toUpperCase();
+    return (words[0].characters.first + words[1].characters.first)
+        .toUpperCase();
   }
 
   @override
@@ -251,7 +254,8 @@ class _PromoSlide extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final photo = promo.thumbnailUrl ?? (promo.photoUrls.isNotEmpty ? promo.photoUrls.first : null);
+    final photo = promo.thumbnailUrl ??
+        (promo.photoUrls.isNotEmpty ? promo.photoUrls.first : null);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -274,10 +278,10 @@ class _PromoSlide extends StatelessWidget {
                         : CachedNetworkImage(
                             imageUrl: photo,
                             fit: BoxFit.cover,
-                            placeholder: (context, url) =>
-                                Container(color: colorScheme.surfaceContainerHighest),
-                            errorWidget: (context, url, error) =>
-                                Container(color: colorScheme.surfaceContainerHighest),
+                            placeholder: (context, url) => Container(
+                                color: colorScheme.surfaceContainerHighest),
+                            errorWidget: (context, url, error) => Container(
+                                color: colorScheme.surfaceContainerHighest),
                           ),
                   ),
                   Positioned(
@@ -299,7 +303,8 @@ class _PromoSlide extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 4),
-            PromoPriceRow(prixAvant: promo.prixAvant, prixApres: promo.prixApres),
+            PromoPriceRow(
+                prixAvant: promo.prixAvant, prixApres: promo.prixApres),
           ],
         ),
       ),

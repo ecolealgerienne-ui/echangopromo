@@ -1,7 +1,8 @@
 enum AppRole { commercant, agent, admin }
 
 class AuthSession {
-  const AuthSession({required this.role, required this.token, required this.userId});
+  const AuthSession(
+      {required this.role, required this.token, required this.userId});
 
   final AppRole role;
   final String token;

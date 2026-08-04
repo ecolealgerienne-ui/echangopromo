@@ -13,12 +13,15 @@ import '../widgets/promo_moderation_tile.dart';
 
 /// Filtre commune/wilaya (retour terrain 2026-07-14).
 final _wilayaFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
-final _communeFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
+final _communeFilterProvider =
+    StateProvider.autoDispose<String?>((ref) => null);
 
 final _moderationQueueProvider = FutureProvider.autoDispose((ref) {
   final wilaya = ref.watch(_wilayaFilterProvider);
   final communeId = ref.watch(_communeFilterProvider);
-  return ref.watch(adminApiProvider).moderationQueue(wilaya: wilaya, communeId: communeId);
+  return ref
+      .watch(adminApiProvider)
+      .moderationQueue(wilaya: wilaya, communeId: communeId);
 });
 
 /// Id de la promo dont une action (masquer/vérifier/avertir) est en cours —
@@ -55,7 +58,9 @@ class ModerationQueueScreen extends ConsumerWidget {
         );
       }
     } finally {
-      ref.read(_inFlightProvider.notifier).update((ids) => {...ids}..remove(promoId));
+      ref
+          .read(_inFlightProvider.notifier)
+          .update((ids) => {...ids}..remove(promoId));
     }
   }
 
@@ -66,7 +71,8 @@ class ModerationQueueScreen extends ConsumerWidget {
     final inFlight = ref.watch(_inFlightProvider);
     final api = ref.read(adminApiProvider);
     final role = ref.read(authControllerProvider).value?.role;
-    final detailPath = role == AppRole.agent ? '/agent/promo-detail' : '/admin/promo-detail';
+    final detailPath =
+        role == AppRole.agent ? '/agent/promo-detail' : '/admin/promo-detail';
 
     return Scaffold(
       appBar: AppBar(
@@ -80,8 +86,10 @@ class ModerationQueueScreen extends ConsumerWidget {
             child: CommuneFilterBar(
               wilaya: ref.watch(_wilayaFilterProvider),
               communeId: ref.watch(_communeFilterProvider),
-              onWilayaChanged: (value) => ref.read(_wilayaFilterProvider.notifier).state = value,
-              onCommuneChanged: (value) => ref.read(_communeFilterProvider.notifier).state = value,
+              onWilayaChanged: (value) =>
+                  ref.read(_wilayaFilterProvider.notifier).state = value,
+              onCommuneChanged: (value) =>
+                  ref.read(_communeFilterProvider.notifier).state = value,
             ),
           ),
           Expanded(
@@ -93,7 +101,8 @@ class ModerationQueueScreen extends ConsumerWidget {
                   return Center(child: Text(l10n.noModerationItems));
                 }
                 return RefreshIndicator(
-                  onRefresh: () async => ref.invalidate(_moderationQueueProvider),
+                  onRefresh: () async =>
+                      ref.invalidate(_moderationQueueProvider),
                   child: ListView.builder(
                     itemCount: items.length,
                     itemBuilder: (context, index) {
@@ -102,13 +111,18 @@ class ModerationQueueScreen extends ConsumerWidget {
                         item: item,
                         loading: inFlight.contains(item.id),
                         onTap: () async {
-                          final changed = await context.push<bool>(detailPath, extra: item);
-                          if (changed == true) ref.invalidate(_moderationQueueProvider);
+                          final changed =
+                              await context.push<bool>(detailPath, extra: item);
+                          if (changed == true) {
+                            ref.invalidate(_moderationQueueProvider);
+                          }
                         },
-                        onMasquer: () => _act(context, ref, item.id, () => api.masquerPromo(item.id)),
-                        onVerifierOk: () =>
-                            _act(context, ref, item.id, () => api.verifierOkPromo(item.id)),
-                        onAvertir: () => _act(context, ref, item.id, () => api.avertirPromo(item.id)),
+                        onMasquer: () => _act(context, ref, item.id,
+                            () => api.masquerPromo(item.id)),
+                        onVerifierOk: () => _act(context, ref, item.id,
+                            () => api.verifierOkPromo(item.id)),
+                        onAvertir: () => _act(context, ref, item.id,
+                            () => api.avertirPromo(item.id)),
                       );
                     },
                   ),

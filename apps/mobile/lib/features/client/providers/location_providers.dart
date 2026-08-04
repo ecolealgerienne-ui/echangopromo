@@ -68,5 +68,6 @@ bool _isFreshEnough(Position position) =>
 /// la position du client pour un simple affichage.
 double? distanceTo(LatLng? from, double? latitude, double? longitude) {
   if (from == null || latitude == null || longitude == null) return null;
-  return Geolocator.distanceBetween(from.latitude, from.longitude, latitude, longitude);
+  return Geolocator.distanceBetween(
+      from.latitude, from.longitude, latitude, longitude);
 }

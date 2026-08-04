@@ -8,7 +8,8 @@ import '../../../providers/core_providers.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/app_settings_actions.dart';
 
-final _dashboardProvider = FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).dashboard());
+final _dashboardProvider = FutureProvider.autoDispose(
+    (ref) => ref.watch(adminApiProvider).dashboard());
 
 /// Dashboard (specs §3.4) — partagé admin/agent (décision produit
 /// 2026-07-12, agent = modérateur avec les mêmes écrans que l'admin) :
@@ -24,7 +25,8 @@ class AdminDashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final statsAsync = ref.watch(_dashboardProvider);
-    final isAdmin = ref.watch(authControllerProvider).value?.role == AppRole.admin;
+    final isAdmin =
+        ref.watch(authControllerProvider).value?.role == AppRole.admin;
     final rolePrefix = isAdmin ? '/admin' : '/agent';
 
     return Scaffold(
@@ -198,7 +200,11 @@ class AdminDashboardScreen extends ConsumerWidget {
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard({required this.icon, required this.label, required this.value, this.onTap});
+  const _StatCard(
+      {required this.icon,
+      required this.label,
+      required this.value,
+      this.onTap});
 
   final IconData icon;
   final String label;
@@ -218,7 +224,9 @@ class _StatCard extends StatelessWidget {
               Icon(icon),
               const SizedBox(height: 4),
               Text('$value', style: Theme.of(context).textTheme.titleLarge),
-              Text(label, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
+              Text(label,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
         ),

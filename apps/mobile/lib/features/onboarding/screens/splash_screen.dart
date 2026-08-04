@@ -42,7 +42,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       duration: const Duration(milliseconds: 1600),
     );
 
-    Animation<double> phase(double begin, double end, {Curve curve = Curves.easeOutCubic}) {
+    Animation<double> phase(double begin, double end,
+        {Curve curve = Curves.easeOutCubic}) {
       return CurvedAnimation(
         parent: _controller,
         curve: Interval(begin, end, curve: curve),
@@ -107,7 +108,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   child: Transform.scale(
                     scale: 0.7 + 0.3 * _badge.value.clamp(0.0, 1.0),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 6),
                       decoration: BoxDecoration(
                         color: colorScheme.onSurface,
                         borderRadius: BorderRadius.circular(AppRadii.pill),

@@ -249,7 +249,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       height: cluster.isSingle ? 40 : 64,
                       child: _ClusterMarker(
                         cluster: cluster,
-                        isSelected: cluster.isSingle && cluster.single.id == _selected?.id,
+                        isSelected: cluster.isSingle &&
+                            cluster.single.id == _selected?.id,
                         onTap: () => _openCluster(cluster),
                       ),
                     ),
@@ -331,7 +332,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 onColor: colorScheme.onErrorContainer,
               ),
             )
-          else if ((shopsAsync?.valueOrNull?.truncated ?? false) && _selected == null)
+          else if ((shopsAsync?.valueOrNull?.truncated ?? false) &&
+              _selected == null)
             Positioned(
               left: 16,
               right: 16,
@@ -427,7 +429,8 @@ class _ClusterMarker extends StatelessWidget {
 
     // Le rond grossit avec le nombre de commerces qu'il regroupe — le halo
     // reprend le code visuel universel du clustering cartographique.
-    final size = cluster.count >= 20 ? 60.0 : (cluster.count >= 8 ? 52.0 : 44.0);
+    final size =
+        cluster.count >= 20 ? 60.0 : (cluster.count >= 8 ? 52.0 : 44.0);
     return GestureDetector(
       onTap: onTap,
       child: Center(
@@ -501,7 +504,8 @@ class _ClusterPicker extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-            child: Text(l10n.mapShopsHere(shops.length), style: textTheme.titleMedium),
+            child: Text(l10n.mapShopsHere(shops.length),
+                style: textTheme.titleMedium),
           ),
           // `Flexible` + `shrinkWrap` : la feuille s'ajuste à deux commerces
           // comme à dix, sans occuper l'écran entier pour rien.
@@ -528,14 +532,15 @@ class _ClusterPicker extends StatelessWidget {
                           : CachedNetworkImage(
                               imageUrl: shop.photoUrl!,
                               fit: BoxFit.cover,
-                              placeholder: (context, url) =>
-                                  Container(color: colorScheme.surfaceContainerHighest),
-                              errorWidget: (context, url, error) =>
-                                  Container(color: colorScheme.surfaceContainerHighest),
+                              placeholder: (context, url) => Container(
+                                  color: colorScheme.surfaceContainerHighest),
+                              errorWidget: (context, url, error) => Container(
+                                  color: colorScheme.surfaceContainerHighest),
                             ),
                     ),
                   ),
-                  title: Text(shop.nom, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  title: Text(shop.nom,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(
                     '${categorieLabel(context, shop.categorie)} · '
                     '${l10n.promoCount(shop.promos.length)}',
@@ -644,7 +649,8 @@ class _CategoryChip extends StatelessWidget {
 }
 
 class _RoundButton extends StatelessWidget {
-  const _RoundButton({required this.icon, required this.tooltip, required this.onTap});
+  const _RoundButton(
+      {required this.icon, required this.tooltip, required this.onTap});
 
   final IconData icon;
   final String tooltip;
@@ -668,7 +674,8 @@ class _RoundButton extends StatelessWidget {
 }
 
 class _Banner extends StatelessWidget {
-  const _Banner({required this.message, required this.color, required this.onColor});
+  const _Banner(
+      {required this.message, required this.color, required this.onColor});
 
   final String message;
   final Color color;
@@ -685,7 +692,8 @@ class _Banner extends StatelessWidget {
         child: Text(
           message,
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: onColor),
+          style:
+              Theme.of(context).textTheme.bodyMedium?.copyWith(color: onColor),
         ),
       ),
     );
@@ -707,7 +715,10 @@ class _UserDot extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 3),
         boxShadow: [
-          BoxShadow(color: blue.withValues(alpha: 0.3), blurRadius: 0, spreadRadius: 5),
+          BoxShadow(
+              color: blue.withValues(alpha: 0.3),
+              blurRadius: 0,
+              spreadRadius: 5),
         ],
       ),
     );

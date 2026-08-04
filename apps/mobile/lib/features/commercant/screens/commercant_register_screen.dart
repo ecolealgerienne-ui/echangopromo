@@ -23,10 +23,12 @@ class CommercantRegisterScreen extends ConsumerStatefulWidget {
   const CommercantRegisterScreen({super.key});
 
   @override
-  ConsumerState<CommercantRegisterScreen> createState() => _CommercantRegisterScreenState();
+  ConsumerState<CommercantRegisterScreen> createState() =>
+      _CommercantRegisterScreenState();
 }
 
-class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScreen> {
+class _CommercantRegisterScreenState
+    extends ConsumerState<CommercantRegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _telephoneController = TextEditingController();
   final _nomController = TextEditingController();
@@ -71,7 +73,9 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
     final alreadyRegistered = _alreadyRegistered;
 
     if (!alreadyRegistered &&
-        (!_formKey.currentState!.validate() || _communeId == null || !_acceptedTerms)) {
+        (!_formKey.currentState!.validate() ||
+            _communeId == null ||
+            !_acceptedTerms)) {
       setState(() {
         _error = _communeId == null
             ? l10n.communeRequired
@@ -117,10 +121,12 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
       }
 
       final storage = ref.read(storageApiProvider);
-      final registreKey = await storage.uploadPhoto(_registrePhoto!, purpose: 'registre');
+      final registreKey =
+          await storage.uploadPhoto(_registrePhoto!, purpose: 'registre');
       await api.requestRegistreVerification(registreKey);
       if (_photo != null) {
-        final photoKey = await storage.uploadPhoto(_photo!, purpose: 'commercant');
+        final photoKey =
+            await storage.uploadPhoto(_photo!, purpose: 'commercant');
         await api.updateProfile(photoKey: photoKey);
       }
       if (mounted) context.go('/commercant/dashboard');
@@ -201,7 +207,8 @@ class _CommercantRegisterScreenState extends ConsumerState<CommercantRegisterScr
                   keyboardType: TextInputType.number,
                   obscureText: true,
                   maxLength: 12,
-                  validator: (v) => (v != _pinController.text) ? l10n.pinMismatch : null,
+                  validator: (v) =>
+                      (v != _pinController.text) ? l10n.pinMismatch : null,
                 ),
               ],
             ),

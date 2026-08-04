@@ -79,7 +79,8 @@ class PromoFormFields extends StatelessWidget {
               decoration: InputDecoration(labelText: l10n.descriptionLabel),
               maxLines: 3,
               maxLength: promoDescriptionMaxLength,
-              validator: (v) => (v == null || v.isEmpty) ? l10n.descriptionRequired : null,
+              validator: (v) =>
+                  (v == null || v.isEmpty) ? l10n.descriptionRequired : null,
             ),
             const SizedBox(height: 4),
             CategoryDropdown(value: categorie, onChanged: onCategorieChanged),
@@ -96,9 +97,11 @@ class PromoFormFields extends StatelessWidget {
                   child: TextFormField(
                     controller: prixAvantController,
                     decoration: InputDecoration(labelText: l10n.prixAvantLabel),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    validator: (v) =>
-                        (double.tryParse(v ?? '') == null) ? l10n.commonInvalid : null,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    validator: (v) => (double.tryParse(v ?? '') == null)
+                        ? l10n.commonInvalid
+                        : null,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -106,7 +109,8 @@ class PromoFormFields extends StatelessWidget {
                   child: TextFormField(
                     controller: prixApresController,
                     decoration: InputDecoration(labelText: l10n.prixApresLabel),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                     validator: prixApresValidator,
                   ),
                 ),
@@ -130,7 +134,9 @@ class PromoFormFields extends StatelessWidget {
                 decoration: InputDecoration(labelText: l10n.dureeValiditeLabel),
                 items: [
                   for (var jours = 1; jours <= maxDureeJours; jours++)
-                    DropdownMenuItem(value: jours, child: Text(l10n.dureeJoursOption(jours))),
+                    DropdownMenuItem(
+                        value: jours,
+                        child: Text(l10n.dureeJoursOption(jours))),
                 ],
                 onChanged: onDureeJoursChanged,
               ),
@@ -162,7 +168,8 @@ class _DiscountPreview extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
+    final currency =
+        NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
 
     // `Listenable.merge` plutôt que deux `ValueListenableBuilder` imbriqués :
     // un `TextEditingController` est un `ValueNotifier`, les écouter ensemble
@@ -209,7 +216,8 @@ class _DiscountPreview extends StatelessWidget {
               Expanded(
                 child: Text(
                   l10n.discountPreview(currency.format(saved)),
-                  style: textTheme.bodySmall?.copyWith(color: colorScheme.onPrimaryContainer),
+                  style: textTheme.bodySmall
+                      ?.copyWith(color: colorScheme.onPrimaryContainer),
                 ),
               ),
             ],

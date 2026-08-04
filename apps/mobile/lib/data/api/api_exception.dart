@@ -23,7 +23,8 @@ class ApiException implements Exception {
 
     if (data is Map && data['message'] != null) {
       final rawMessage = data['message'];
-      final message = rawMessage is List ? rawMessage.join(', ') : rawMessage.toString();
+      final message =
+          rawMessage is List ? rawMessage.join(', ') : rawMessage.toString();
       final code = data['code'] as String?;
       return ApiException(statusCode, code, message);
     }
@@ -48,7 +49,8 @@ class ApiException implements Exception {
   /// d'un code pas encore ajouté aux mappings.
   String displayMessage(Locale locale) {
     if (code == null) return message;
-    final messages = _errorMessagesByLocale[locale.languageCode] ?? errorMessagesFr;
+    final messages =
+        _errorMessagesByLocale[locale.languageCode] ?? errorMessagesFr;
     return messages[code] ?? message;
   }
 
@@ -59,7 +61,8 @@ class ApiException implements Exception {
 /// L'intercepteur de [ApiClient] enveloppe toujours l'[ApiException] dans un
 /// nouveau [DioException] (`.error`) — ce helper la retrouve depuis
 /// n'importe quel `catch` d'appel API, sans dupliquer cette logique partout.
-String extractApiErrorMessage(Object error, {required String fallback, required Locale locale}) {
+String extractApiErrorMessage(Object error,
+    {required String fallback, required Locale locale}) {
   if (error is DioException && error.error is ApiException) {
     return (error.error as ApiException).displayMessage(locale);
   }

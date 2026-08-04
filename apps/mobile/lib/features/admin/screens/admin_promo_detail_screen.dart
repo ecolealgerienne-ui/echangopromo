@@ -21,7 +21,8 @@ class AdminPromoDetailScreen extends ConsumerWidget {
 
   final ModerationItem item;
 
-  Future<void> _act(BuildContext context, WidgetRef ref, Future<void> Function() action) async {
+  Future<void> _act(BuildContext context, WidgetRef ref,
+      Future<void> Function() action) async {
     final l10n = AppLocalizations.of(context)!;
     try {
       await action();
@@ -65,9 +66,11 @@ class AdminPromoDetailScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.description, style: Theme.of(context).textTheme.headlineSmall),
+                Text(item.description,
+                    style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 8),
-                PromoPriceRow(prixAvant: item.prixAvant, prixApres: item.prixApres),
+                PromoPriceRow(
+                    prixAvant: item.prixAvant, prixApres: item.prixApres),
                 const SizedBox(height: 4),
                 Text(categorieLabel(context, item.categorie)),
                 const SizedBox(height: 12),
@@ -76,21 +79,27 @@ class AdminPromoDetailScreen extends ConsumerWidget {
                   runSpacing: 8,
                   children: [
                     StatusChip(
-                      label: promoLifecycleLabel(context, item.lifecycleStatus, isExpired: false),
-                      color: promoLifecycleColor(context, item.lifecycleStatus, isExpired: false),
+                      label: promoLifecycleLabel(context, item.lifecycleStatus,
+                          isExpired: false),
+                      color: promoLifecycleColor(context, item.lifecycleStatus,
+                          isExpired: false),
                     ),
                     StatusChip(
-                      label: moderationStatusLabel(context, item.moderationStatus),
-                      color: moderationStatusColor(context, item.moderationStatus),
+                      label:
+                          moderationStatusLabel(context, item.moderationStatus),
+                      color:
+                          moderationStatusColor(context, item.moderationStatus),
                     ),
                   ],
                 ),
                 const Divider(height: 32),
-                Text(item.commercantNom, style: Theme.of(context).textTheme.titleMedium),
+                Text(item.commercantNom,
+                    style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Icon(Icons.phone_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+                    Icon(Icons.phone_outlined,
+                        size: 18, color: colorScheme.onSurfaceVariant),
                     const SizedBox(width: 4),
                     Text(item.commercantTelephone),
                   ],
@@ -99,7 +108,8 @@ class AdminPromoDetailScreen extends ConsumerWidget {
                   const Divider(height: 32),
                   Text(l10n.reportCountLabel(item.activeReportCount!),
                       style: Theme.of(context).textTheme.titleMedium),
-                  if (reasonBreakdown != null && reasonBreakdown.isNotEmpty) ...[
+                  if (reasonBreakdown != null &&
+                      reasonBreakdown.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     for (final entry in reasonBreakdown.entries)
                       Padding(
@@ -116,15 +126,18 @@ class AdminPromoDetailScreen extends ConsumerWidget {
                   runSpacing: 8,
                   children: [
                     OutlinedButton(
-                      onPressed: () => _act(context, ref, () => api.masquerPromo(item.id)),
+                      onPressed: () =>
+                          _act(context, ref, () => api.masquerPromo(item.id)),
                       child: Text(l10n.masquerLabel),
                     ),
                     OutlinedButton(
-                      onPressed: () => _act(context, ref, () => api.verifierOkPromo(item.id)),
+                      onPressed: () => _act(
+                          context, ref, () => api.verifierOkPromo(item.id)),
                       child: Text(l10n.verifierOkLabel),
                     ),
                     OutlinedButton(
-                      onPressed: () => _act(context, ref, () => api.avertirPromo(item.id)),
+                      onPressed: () =>
+                          _act(context, ref, () => api.avertirPromo(item.id)),
                       child: Text(l10n.avertirLabel),
                     ),
                   ],

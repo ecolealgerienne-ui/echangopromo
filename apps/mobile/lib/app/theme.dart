@@ -61,7 +61,8 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
   );
 
   @override
-  AppSemanticColors copyWith({Color? success, Color? warning, Color? favorite}) {
+  AppSemanticColors copyWith(
+      {Color? success, Color? warning, Color? favorite}) {
     return AppSemanticColors(
       success: success ?? this.success,
       warning: warning ?? this.warning,
@@ -100,6 +101,7 @@ class AppTheme {
 
   static const _terracotta = Color(0xFFE8571E);
   static const _safran = Color(0xFFF2A93B);
+
   /// Orange plus clair sur fond sombre : le terracotta manque de contraste
   /// une fois posé sur du noir.
   static const _terracottaDark = Color(0xFFFF7A45);
@@ -218,7 +220,8 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
-        titleTextStyle: textTheme.titleLarge?.copyWith(color: colorScheme.onSurface),
+        titleTextStyle:
+            textTheme.titleLarge?.copyWith(color: colorScheme.onSurface),
         iconTheme: IconThemeData(color: colorScheme.primary),
         actionsIconTheme: IconThemeData(color: colorScheme.primary),
       ),
@@ -247,15 +250,18 @@ class AppTheme {
         ),
       ),
       chipTheme: ChipThemeData(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.sm)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadii.sm)),
         side: BorderSide(color: outline),
         selectedColor: colorScheme.primary,
         backgroundColor: colorScheme.surface,
         labelStyle: textTheme.labelLarge,
-        secondaryLabelStyle: textTheme.labelLarge?.copyWith(color: colorScheme.onPrimary),
+        secondaryLabelStyle:
+            textTheme.labelLarge?.copyWith(color: colorScheme.onPrimary),
       ),
       inputDecorationTheme: InputDecorationTheme(
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadii.md)),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadii.md)),
         filled: true,
         fillColor: colorScheme.surface,
       ),
@@ -265,7 +271,8 @@ class AppTheme {
           foregroundColor: colorScheme.onPrimary,
           textStyle: textTheme.labelLarge,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.md)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.md)),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -274,7 +281,8 @@ class AppTheme {
           foregroundColor: colorScheme.onPrimary,
           textStyle: textTheme.labelLarge,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.md)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.md)),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -283,7 +291,8 @@ class AppTheme {
           side: BorderSide(color: outline),
           textStyle: textTheme.labelLarge,
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.md)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.md)),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -296,7 +305,8 @@ class AppTheme {
   }
 
   static TextTheme _textTheme(ColorScheme colorScheme) {
-    TextStyle title(double size, double lineHeight, FontWeight weight) => GoogleFonts.cairo(
+    TextStyle title(double size, double lineHeight, FontWeight weight) =>
+        GoogleFonts.cairo(
           fontSize: size,
           height: lineHeight / size,
           fontWeight: weight,

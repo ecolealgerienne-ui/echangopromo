@@ -27,13 +27,15 @@ class AdminAgentDetailScreen extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.email_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+              Icon(Icons.email_outlined,
+                  size: 18, color: colorScheme.onSurfaceVariant),
               const SizedBox(width: 8),
               Text(agent.email),
             ],
           ),
           const SizedBox(height: 16),
-          Text(l10n.assignedCommunesLabel, style: Theme.of(context).textTheme.titleMedium),
+          Text(l10n.assignedCommunesLabel,
+              style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           if (agent.communes.isEmpty)
             Text(

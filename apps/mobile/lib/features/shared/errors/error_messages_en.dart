@@ -7,24 +7,20 @@ const Map<String, String> errorMessagesEn = {
   'AUTH_TOKEN_INVALID': 'Your session has expired. Please log in again.',
   'AUTH_TOKEN_REVOKED': 'Your session has been revoked. Please log in again.',
   'AUTH_FORBIDDEN_ROLE': 'You do not have permission to perform this action.',
-
   'ADMIN_NOT_FOUND': 'Administrator not found.',
-
   'AGENT_EMAIL_TAKEN': 'This email is already used by an agent.',
   'AGENT_NOT_FOUND': 'Agent not found.',
   'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT':
       'At least one of these communes is not currently assigned to this agent.',
-
   'COMMUNE_NOT_FOUND': 'Municipality not found.',
-
   'REPORT_ALREADY_SUBMITTED': 'You have already reported this promo.',
-
   'DEVICE_ID_MISSING': 'Missing device identifier. Restart the app.',
-
-  'STORAGE_INVALID_IMAGE': 'The uploaded file is not a valid image. Try again with a photo.',
-  'STORAGE_FILE_TOO_LARGE': 'The photo is too large. Try again with another photo.',
-  'STORAGE_PURPOSE_NOT_ALLOWED': 'This upload type is not allowed for this account.',
-
+  'STORAGE_INVALID_IMAGE':
+      'The uploaded file is not a valid image. Try again with a photo.',
+  'STORAGE_FILE_TOO_LARGE':
+      'The photo is too large. Try again with another photo.',
+  'STORAGE_PURPOSE_NOT_ALLOWED':
+      'This upload type is not allowed for this account.',
   'HIGHLIGHT_NOT_FOUND': 'Featured card not found.',
   'HIGHLIGHT_EMPTY_CONTENT':
       'A featured card must target a promo or carry an uploaded image.',
@@ -32,29 +28,31 @@ const Map<String, String> errorMessagesEn = {
       'The home banner has reached its limit. Remove a featured card to add a new one.',
   'HIGHLIGHT_REORDER_MISMATCH':
       'The submitted order no longer matches the existing featured cards. Reload the list.',
-
   'PROMO_NOT_FOUND': 'Promo not found.',
-  'PROMO_NOT_OWNED_BY_COMMERCANT': 'This promo does not belong to this merchant.',
+  'PROMO_NOT_OWNED_BY_COMMERCANT':
+      'This promo does not belong to this merchant.',
   'PROMO_DATE_FIN_NOT_FUTURE': 'The end date must be in the future.',
   'PROMO_ALREADY_PUBLISHED': 'This promo is already published.',
   'PROMO_NOT_PUBLISHED': 'Only a published promo can be stopped.',
-  'PROMO_PRIX_APRES_NOT_LOWER': 'The discounted price must be lower than the original price.',
-
+  'PROMO_PRIX_APRES_NOT_LOWER':
+      'The discounted price must be lower than the original price.',
   'COMMERCANT_PHONE_TAKEN': 'This phone number is already registered.',
   'COMMERCANT_NOT_FOUND': 'Merchant not found.',
   'COMMERCANT_OLD_PIN_MISMATCH': 'The old PIN does not match.',
-  'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'No pending verification request.',
-  'COMMERCANT_NOT_IN_AGENT_COMMUNES': 'This merchant is not in any of this agent\'s communes.',
-  'COMMERCANT_TERMS_NOT_ACCEPTED': 'You must accept the terms of use to create an account.',
+  'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION':
+      'No pending verification request.',
+  'COMMERCANT_NOT_IN_AGENT_COMMUNES':
+      'This merchant is not in any of this agent\'s communes.',
+  'COMMERCANT_TERMS_NOT_ACCEPTED':
+      'You must accept the terms of use to create an account.',
   'COMMERCANT_REGISTRE_NOT_VALIDATED':
       'Your business registration must be validated by an administrator before you can publish promos.',
-  'COMMERCANT_REGISTRE_KEY_MISMATCH': 'This document does not belong to this merchant.',
+  'COMMERCANT_REGISTRE_KEY_MISMATCH':
+      'This document does not belong to this merchant.',
   'COMMERCANT_PROFILE_PENDING_REVIEW':
       'Your profile changes must be validated by an administrator before you can publish promos.',
-
   'RATE_LIMITED': 'Too many attempts. Please try again shortly.',
   'HTTP_ERROR': 'An error occurred.',
   'INTERNAL_ERROR': 'An unexpected error occurred. Please try again later.',
-
   'NETWORK_ERROR': 'Could not reach the server. Check your connection.',
 };

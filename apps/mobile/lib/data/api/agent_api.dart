@@ -8,7 +8,8 @@ class AgentApi {
 
   final Dio _dio;
 
-  Future<String> login({required String email, required String password}) async {
+  Future<String> login(
+      {required String email, required String password}) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/agent/login',
       data: {'email': email, 'password': password},
@@ -32,7 +33,8 @@ class AgentApi {
     double? latitude,
     double? longitude,
   }) async {
-    final response = await _dio.post<Map<String, dynamic>>('/agent/commercant', data: {
+    final response =
+        await _dio.post<Map<String, dynamic>>('/agent/commercant', data: {
       'telephone': telephone,
       'nom': nom,
       if (adresse != null && adresse.isNotEmpty) 'adresse': adresse,

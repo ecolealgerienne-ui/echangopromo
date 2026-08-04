@@ -15,13 +15,16 @@ final _searchProvider = StateProvider.autoDispose<String>((ref) => '');
 
 /// Filtre commune/wilaya (retour terrain 2026-07-14), en plus de la recherche.
 final _wilayaFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
-final _communeFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
+final _communeFilterProvider =
+    StateProvider.autoDispose<String?>((ref) => null);
 
 final _allPromosProvider = FutureProvider.autoDispose((ref) {
   final search = ref.watch(_searchProvider);
   final wilaya = ref.watch(_wilayaFilterProvider);
   final communeId = ref.watch(_communeFilterProvider);
-  return ref.watch(adminApiProvider).listAllPromos(search: search, wilaya: wilaya, communeId: communeId);
+  return ref
+      .watch(adminApiProvider)
+      .listAllPromos(search: search, wilaya: wilaya, communeId: communeId);
 });
 
 /// Même pattern que `ModerationQueueScreen._inFlightProvider` (audit UX 2026-07-11).
@@ -59,7 +62,9 @@ class AdminPromosScreen extends ConsumerWidget {
         );
       }
     } finally {
-      ref.read(_inFlightProvider.notifier).update((ids) => {...ids}..remove(promoId));
+      ref
+          .read(_inFlightProvider.notifier)
+          .update((ids) => {...ids}..remove(promoId));
     }
   }
 
@@ -70,7 +75,8 @@ class AdminPromosScreen extends ConsumerWidget {
     final inFlight = ref.watch(_inFlightProvider);
     final api = ref.read(adminApiProvider);
     final role = ref.read(authControllerProvider).value?.role;
-    final detailPath = role == AppRole.agent ? '/agent/promo-detail' : '/admin/promo-detail';
+    final detailPath =
+        role == AppRole.agent ? '/agent/promo-detail' : '/admin/promo-detail';
 
     return Scaffold(
       appBar: AppBar(
@@ -88,7 +94,8 @@ class AdminPromosScreen extends ConsumerWidget {
                 border: const OutlineInputBorder(),
                 isDense: true,
               ),
-              onChanged: (value) => ref.read(_searchProvider.notifier).state = value,
+              onChanged: (value) =>
+                  ref.read(_searchProvider.notifier).state = value,
             ),
           ),
           Padding(
@@ -96,8 +103,10 @@ class AdminPromosScreen extends ConsumerWidget {
             child: CommuneFilterBar(
               wilaya: ref.watch(_wilayaFilterProvider),
               communeId: ref.watch(_communeFilterProvider),
-              onWilayaChanged: (value) => ref.read(_wilayaFilterProvider.notifier).state = value,
-              onCommuneChanged: (value) => ref.read(_communeFilterProvider.notifier).state = value,
+              onWilayaChanged: (value) =>
+                  ref.read(_wilayaFilterProvider.notifier).state = value,
+              onCommuneChanged: (value) =>
+                  ref.read(_communeFilterProvider.notifier).state = value,
             ),
           ),
           Expanded(
@@ -118,13 +127,18 @@ class AdminPromosScreen extends ConsumerWidget {
                         item: item,
                         loading: inFlight.contains(item.id),
                         onTap: () async {
-                          final changed = await context.push<bool>(detailPath, extra: item);
-                          if (changed == true) ref.invalidate(_allPromosProvider);
+                          final changed =
+                              await context.push<bool>(detailPath, extra: item);
+                          if (changed == true) {
+                            ref.invalidate(_allPromosProvider);
+                          }
                         },
-                        onMasquer: () => _act(context, ref, item.id, () => api.masquerPromo(item.id)),
-                        onVerifierOk: () =>
-                            _act(context, ref, item.id, () => api.verifierOkPromo(item.id)),
-                        onAvertir: () => _act(context, ref, item.id, () => api.avertirPromo(item.id)),
+                        onMasquer: () => _act(context, ref, item.id,
+                            () => api.masquerPromo(item.id)),
+                        onVerifierOk: () => _act(context, ref, item.id,
+                            () => api.verifierOkPromo(item.id)),
+                        onAvertir: () => _act(context, ref, item.id,
+                            () => api.avertirPromo(item.id)),
                       );
                     },
                   ),

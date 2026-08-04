@@ -38,7 +38,12 @@ final selectedCommuneLabelProvider = Provider.autoDispose<String?>((ref) {
   final ids = ref.watch(selectedCommunesProvider);
   final communes = ref.watch(communeListProvider).valueOrNull;
   if (ids.isEmpty || communes == null) return null;
-  final names = communes.where((commune) => ids.contains(commune.id)).map((c) => c.nom).toList();
+  final names = communes
+      .where((commune) => ids.contains(commune.id))
+      .map((c) => c.nom)
+      .toList();
   if (names.isEmpty) return null;
-  return names.length == 1 ? names.first : '${names.first} +${names.length - 1}';
+  return names.length == 1
+      ? names.first
+      : '${names.first} +${names.length - 1}';
 });

@@ -85,7 +85,8 @@ class FormSection extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               subtitle!,
-              style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+              style: textTheme.bodySmall
+                  ?.copyWith(color: colorScheme.onSurfaceVariant),
             ),
           ],
           const SizedBox(height: 14),

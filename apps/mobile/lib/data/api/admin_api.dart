@@ -15,7 +15,8 @@ class AdminApi {
 
   final Dio _dio;
 
-  Future<String> login({required String email, required String password}) async {
+  Future<String> login(
+      {required String email, required String password}) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/admin/login',
       data: {'email': email, 'password': password},
@@ -49,7 +50,8 @@ class AdminApi {
 
   // --- Modération ---
 
-  Future<List<ModerationItem>> moderationQueue({String? communeId, String? wilaya}) async {
+  Future<List<ModerationItem>> moderationQueue(
+      {String? communeId, String? wilaya}) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/moderation/queue',
       queryParameters: {
@@ -59,7 +61,9 @@ class AdminApi {
       },
     );
     final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => ModerationItem.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => ModerationItem.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> masquerPromo(String promoId) async {
@@ -92,7 +96,9 @@ class AdminApi {
       },
     );
     final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => ModerationItem.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => ModerationItem.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   // --- Commerçants (plan de correction, Phase 2) ---
@@ -110,13 +116,16 @@ class AdminApi {
         'limit': _pageSize,
         if (search != null && search.isNotEmpty) 'search': search,
         if (registreStatus != null) 'registreStatus': registreStatus.value,
-        if (profilePendingReview != null) 'profilePendingReview': profilePendingReview,
+        if (profilePendingReview != null)
+          'profilePendingReview': profilePendingReview,
         if (communeId != null) 'communeId': communeId,
         if (wilaya != null) 'wilaya': wilaya,
       },
     );
     final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => AdminCommercantItem.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => AdminCommercantItem.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> suspendCommercant(String commercantId) async {
@@ -173,7 +182,8 @@ class AdminApi {
     required String nom,
     List<String>? communeIds,
   }) async {
-    final response = await _dio.post<Map<String, dynamic>>('/admin/agent', data: {
+    final response =
+        await _dio.post<Map<String, dynamic>>('/admin/agent', data: {
       'email': email,
       'password': password,
       'nom': nom,
@@ -182,8 +192,10 @@ class AdminApi {
     return Agent.fromJson(response.data!);
   }
 
-  Future<void> assignCommunes({required String agentId, required List<String> communeIds}) async {
-    await _dio.patch<void>('/admin/agent/$agentId/communes', data: {'communeIds': communeIds});
+  Future<void> assignCommunes(
+      {required String agentId, required List<String> communeIds}) async {
+    await _dio.patch<void>('/admin/agent/$agentId/communes',
+        data: {'communeIds': communeIds});
   }
 
   Future<void> revokeAgentToken(String agentId) async {
@@ -234,6 +246,8 @@ class AdminApi {
       queryParameters: {'limit': _pageSize},
     );
     final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => AuditLogEntry.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => AuditLogEntry.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }

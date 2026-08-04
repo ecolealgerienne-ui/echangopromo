@@ -68,7 +68,8 @@ class CommercantDashboardScreen extends ConsumerWidget {
             onSelected: (action) async {
               switch (action) {
                 case 'editProfile':
-                  final updated = await context.push<bool>('/commercant/profile/edit');
+                  final updated =
+                      await context.push<bool>('/commercant/profile/edit');
                   if (updated == true) ref.invalidate(commercantMeProvider);
                 case 'logout':
                   await ref.read(authControllerProvider.notifier).logout();
@@ -79,7 +80,8 @@ class CommercantDashboardScreen extends ConsumerWidget {
               // Modifier sa fiche passe en menu : un commerçant le fait deux
               // fois par an, publier une promo dix fois par mois. Les deux
               // partageaient jusqu'ici le même poids visuel.
-              PopupMenuItem(value: 'editProfile', child: Text(l10n.editProfileLabel)),
+              PopupMenuItem(
+                  value: 'editProfile', child: Text(l10n.editProfileLabel)),
               PopupMenuItem(value: 'logout', child: Text(l10n.logoutTooltip)),
             ],
           ),
@@ -102,12 +104,14 @@ class CommercantDashboardScreen extends ConsumerWidget {
                 children: [
                   _ShopHeader(commercant: commercant),
                   _RegistreStatusBanner(commercant: commercant),
-                  if (commercant.profilePendingReview) const _ProfilePendingReviewBanner(),
+                  if (commercant.profilePendingReview)
+                    const _ProfilePendingReviewBanner(),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-            _QuotaCard(activeCount: activeCount, loading: promosAsync.isLoading),
+            _QuotaCard(
+                activeCount: activeCount, loading: promosAsync.isLoading),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -123,7 +127,9 @@ class CommercantDashboardScreen extends ConsumerWidget {
                 Expanded(
                   child: _StatTile(
                     label: l10n.dashboardPromoViewsLabel,
-                    value: promosAsync.valueOrNull == null ? null : totalPromoViews(promos),
+                    value: promosAsync.valueOrNull == null
+                        ? null
+                        : totalPromoViews(promos),
                     loading: promosAsync.isLoading,
                     icon: Icons.visibility_outlined,
                   ),
@@ -138,7 +144,8 @@ class CommercantDashboardScreen extends ConsumerWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(l10n.myPromosLabel, style: Theme.of(context).textTheme.titleSmall),
+                  child: Text(l10n.myPromosLabel,
+                      style: Theme.of(context).textTheme.titleSmall),
                 ),
                 TextButton(
                   onPressed: () => context.push('/commercant/promos'),
@@ -164,8 +171,11 @@ class CommercantDashboardScreen extends ConsumerWidget {
       // commerçant vient faire, tout le reste en découle.
       floatingActionButton: FloatingActionButton.extended(
         onPressed: atCap ? null : () => context.push('/commercant/promos/new'),
-        backgroundColor: atCap ? Theme.of(context).colorScheme.surfaceContainerHighest : null,
-        foregroundColor: atCap ? Theme.of(context).colorScheme.onSurfaceVariant : null,
+        backgroundColor: atCap
+            ? Theme.of(context).colorScheme.surfaceContainerHighest
+            : null,
+        foregroundColor:
+            atCap ? Theme.of(context).colorScheme.onSurfaceVariant : null,
         icon: Icon(atCap ? Icons.block : Icons.add),
         // Désactivé plutôt que masqué au plafond : sa disparition laisserait
         // croire à un bug, alors que le message explique la limite.
@@ -182,11 +192,15 @@ class _ShopHeader extends StatelessWidget {
   final Commercant commercant;
 
   String get _initials {
-    final words =
-        commercant.nom.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    final words = commercant.nom
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
     if (words.isEmpty) return '?';
     if (words.length == 1) return words.first.characters.first.toUpperCase();
-    return (words[0].characters.first + words[1].characters.first).toUpperCase();
+    return (words[0].characters.first + words[1].characters.first)
+        .toUpperCase();
   }
 
   @override
@@ -207,7 +221,8 @@ class _ShopHeader extends StatelessWidget {
                   width: 46,
                   height: 46,
                   fit: BoxFit.cover,
-                  errorWidget: (context, url, error) => _InitialsBox(initials: _initials),
+                  errorWidget: (context, url, error) =>
+                      _InitialsBox(initials: _initials),
                 )
               : _InitialsBox(initials: _initials),
         ),
@@ -236,7 +251,8 @@ class _ShopHeader extends StatelessWidget {
                   ),
                   if (verified) ...[
                     const SizedBox(width: 6),
-                    Icon(Icons.verified, size: 15, color: semanticColors.success),
+                    Icon(Icons.verified,
+                        size: 15, color: semanticColors.success),
                     const SizedBox(width: 2),
                     Text(
                       l10n.verifiedBadge,
@@ -346,8 +362,8 @@ class _QuotaCard extends StatelessWidget {
                           children: [
                             TextSpan(
                               text: ' / $kMaxPromosActives',
-                              style: textTheme.titleMedium
-                                  ?.copyWith(color: colorScheme.onSurfaceVariant),
+                              style: textTheme.titleMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant),
                             ),
                           ],
                         ),
@@ -360,7 +376,8 @@ class _QuotaCard extends StatelessWidget {
                   child: Text(
                     l10n.dashboardSlotsLeft(remaining),
                     textAlign: TextAlign.end,
-                    style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                    style: textTheme.bodySmall
+                        ?.copyWith(color: colorScheme.onSurfaceVariant),
                   ),
                 ),
             ],
@@ -435,7 +452,8 @@ class _StatTile extends StatelessWidget {
             ),
           Text(
             label,
-            style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+            style: textTheme.bodySmall
+                ?.copyWith(color: colorScheme.onSurfaceVariant),
           ),
         ],
       ),
@@ -475,10 +493,10 @@ class _PromoPreviewList extends StatelessWidget {
 
     // En ligne d'abord : c'est ce qui est visible des clients maintenant.
     final sorted = [...promos]..sort((a, b) {
-      final aLive = a.lifecycleStatus == PromoLifecycleStatus.publiee ? 0 : 1;
-      final bLive = b.lifecycleStatus == PromoLifecycleStatus.publiee ? 0 : 1;
-      return aLive.compareTo(bLive);
-    });
+        final aLive = a.lifecycleStatus == PromoLifecycleStatus.publiee ? 0 : 1;
+        final bLive = b.lifecycleStatus == PromoLifecycleStatus.publiee ? 0 : 1;
+        return aLive.compareTo(bLive);
+      });
 
     return Column(
       children: [
@@ -503,7 +521,8 @@ class _PromoPreviewRow extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final photo = promo.thumbnailUrl ?? promo.photoUrl;
-    final isExpired = promo.dateFin != null && promo.dateFin!.isBefore(DateTime.now());
+    final isExpired =
+        promo.dateFin != null && promo.dateFin!.isBefore(DateTime.now());
 
     return InkWell(
       onTap: () => context.push('/commercant/promos'),
@@ -526,8 +545,8 @@ class _PromoPreviewRow extends StatelessWidget {
                     : CachedNetworkImage(
                         imageUrl: photo,
                         fit: BoxFit.cover,
-                        errorWidget: (context, url, error) =>
-                            Container(color: colorScheme.surfaceContainerHighest),
+                        errorWidget: (context, url, error) => Container(
+                            color: colorScheme.surfaceContainerHighest),
                       ),
               ),
             ),
@@ -541,7 +560,8 @@ class _PromoPreviewRow extends StatelessWidget {
                     promo.description,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    style: textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 4),
                   Row(
@@ -630,7 +650,8 @@ class _UnreadNotificationsBannerState
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    final unread = ref.watch(notificationsProvider).valueOrNull?.items ?? const [];
+    final unread =
+        ref.watch(notificationsProvider).valueOrNull?.items ?? const [];
     if (unread.isEmpty) return const SizedBox.shrink();
 
     // La page courante peut dépasser après un "marquer comme lu" : la liste
@@ -642,7 +663,8 @@ class _UnreadNotificationsBannerState
       children: [
         Row(
           children: [
-            Icon(Icons.notifications_active_outlined, size: 17, color: colorScheme.primary),
+            Icon(Icons.notifications_active_outlined,
+                size: 17, color: colorScheme.primary),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
@@ -673,7 +695,8 @@ class _UnreadNotificationsBannerState
               return Padding(
                 // Laisse deviner la carte suivante : sans ce décalage, rien
                 // n'indique qu'on peut faire glisser.
-                padding: EdgeInsetsDirectional.only(end: i == unread.length - 1 ? 0 : 8),
+                padding: EdgeInsetsDirectional.only(
+                    end: i == unread.length - 1 ? 0 : 8),
                 child: _AlertCard(
                   notification: notification,
                   onOpen: () => context.push('/commercant/promos'),
@@ -696,7 +719,9 @@ class _UnreadNotificationsBannerState
                     width: i == index ? 16 : 6,
                     height: 6,
                     decoration: BoxDecoration(
-                      color: i == index ? colorScheme.primary : colorScheme.outlineVariant,
+                      color: i == index
+                          ? colorScheme.primary
+                          : colorScheme.outlineVariant,
                       borderRadius: BorderRadius.circular(AppRadii.pill),
                     ),
                   ),
@@ -740,7 +765,8 @@ class _AlertCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(notificationIcon(notification.type), color: color, size: 19),
+                Icon(notificationIcon(notification.type),
+                    color: color, size: 19),
                 const SizedBox(width: 9),
                 Expanded(
                   child: Text(
@@ -791,7 +817,8 @@ class _RegistreStatusBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (commercant.originVerification != CommercantOriginVerification.autoInscrit) {
+    if (commercant.originVerification !=
+        CommercantOriginVerification.autoInscrit) {
       return const SizedBox.shrink();
     }
     if (commercant.registreStatus == RegistreStatus.valide) {
@@ -805,9 +832,12 @@ class _RegistreStatusBanner extends ConsumerWidget {
     // Seul le cas rejeté propose une action (`RegistreResendScreen`) : un
     // "en attente" n'a rien de plus à faire qu'attendre la décision admin.
     final isRejected = commercant.registreStatus == RegistreStatus.rejete;
-    final title = isRejected ? l10n.registreRejectedBannerTitle : l10n.registrePendingBannerTitle;
-    final message =
-        isRejected ? l10n.registreRejectedBannerMessage : l10n.registrePendingBannerMessage;
+    final title = isRejected
+        ? l10n.registreRejectedBannerTitle
+        : l10n.registrePendingBannerTitle;
+    final message = isRejected
+        ? l10n.registreRejectedBannerMessage
+        : l10n.registrePendingBannerMessage;
     final color = isRejected ? colorScheme.error : semanticColors.warning;
 
     return Padding(
@@ -820,8 +850,11 @@ class _RegistreStatusBanner extends ConsumerWidget {
             ? _AlertAction(
                 label: l10n.registreResendSubmit,
                 onPressed: () async {
-                  final sent = await context.push<bool>('/commercant/registre/resend');
-                  if (sent == true && context.mounted) ref.invalidate(commercantMeProvider);
+                  final sent =
+                      await context.push<bool>('/commercant/registre/resend');
+                  if (sent == true && context.mounted) {
+                    ref.invalidate(commercantMeProvider);
+                  }
                 },
               )
             : null,

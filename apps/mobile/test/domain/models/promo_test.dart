@@ -8,7 +8,8 @@ import 'package:echango_promo/domain/models/promo.dart';
 /// personne le voie, le SDK Flutter n'étant pas installable dans
 /// l'environnement de l'époque. Trouvé le 2026-08-04, au premier
 /// `flutter test` réel.
-Promo _promo({required String lifecycleStatus, DateTime? dateFin}) => Promo.fromJson({
+Promo _promo({required String lifecycleStatus, DateTime? dateFin}) =>
+    Promo.fromJson({
       'id': 'p1',
       'commercantId': 'c1',
       'description': 'Test',

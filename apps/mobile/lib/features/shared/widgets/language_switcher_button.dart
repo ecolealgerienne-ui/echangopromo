@@ -29,14 +29,18 @@ class LanguageSwitcherButton extends ConsumerWidget {
     return PopupMenuButton<Locale>(
       icon: const Icon(Icons.language),
       tooltip: l10n.languageSwitchTooltip,
-      onSelected: (locale) => ref.read(localeProvider.notifier).setLocale(locale),
+      onSelected: (locale) =>
+          ref.read(localeProvider.notifier).setLocale(locale),
       itemBuilder: (context) => [
         for (final locale in supportedAppLocales)
           PopupMenuItem(
             value: locale,
             child: Row(
               children: [
-                if (locale == current) const Icon(Icons.check, size: 18) else const SizedBox(width: 18),
+                if (locale == current)
+                  const Icon(Icons.check, size: 18)
+                else
+                  const SizedBox(width: 18),
                 const SizedBox(width: 8),
                 Text(_labelFor(l10n, locale)),
               ],

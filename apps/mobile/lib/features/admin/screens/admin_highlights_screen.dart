@@ -119,7 +119,8 @@ class AdminHighlightsScreen extends ConsumerWidget {
                   ),
                   onEdit: (highlight) =>
                       context.push('/admin/highlights/edit', extra: highlight),
-                  onDelete: (highlight) => _confirmDelete(context, ref, highlight),
+                  onDelete: (highlight) =>
+                      _confirmDelete(context, ref, highlight),
                 ),
         ),
       ),
@@ -144,7 +145,8 @@ class _EmptyState extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 64, 24, 24),
       children: [
-        Icon(Icons.view_carousel_outlined, size: 56, color: colorScheme.outline),
+        Icon(Icons.view_carousel_outlined,
+            size: 56, color: colorScheme.outline),
         const SizedBox(height: 16),
         Text(
           l10n.highlightsEmptyTitle,
@@ -155,7 +157,8 @@ class _EmptyState extends StatelessWidget {
         Text(
           l10n.highlightsEmptyBody,
           textAlign: TextAlign.center,
-          style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+          style: textTheme.bodyMedium
+              ?.copyWith(color: colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 24),
         FilledButton.icon(
@@ -199,7 +202,8 @@ class _HighlightList extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
         child: Text(
           l10n.highlightsReorderHint,
-          style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+          style: textTheme.bodySmall
+              ?.copyWith(color: colorScheme.onSurfaceVariant),
         ),
       ),
       onReorder: (oldIndex, newIndex) {
@@ -269,7 +273,8 @@ class _HighlightTile extends StatelessWidget {
               child: photo == null
                   ? Container(
                       color: colorScheme.surfaceContainerHighest,
-                      child: Icon(Icons.image_outlined, color: colorScheme.outline),
+                      child: Icon(Icons.image_outlined,
+                          color: colorScheme.outline),
                     )
                   : CachedNetworkImage(
                       imageUrl: photo,
@@ -306,7 +311,9 @@ class _HighlightTile extends StatelessWidget {
                   runSpacing: 4,
                   children: [
                     if (!active)
-                      _Tag(label: l10n.highlightHiddenBadge, tone: colorScheme.outline),
+                      _Tag(
+                          label: l10n.highlightHiddenBadge,
+                          tone: colorScheme.outline),
                     // La diapositive existe mais ne s'affiche nulle part :
                     // sans ce signal, l'admin la croit publiée.
                     if (highlight.promoVisible == false)
@@ -341,7 +348,8 @@ class _HighlightTile extends StatelessWidget {
                 },
                 itemBuilder: (context) => [
                   PopupMenuItem(value: 'edit', child: Text(l10n.editItem)),
-                  PopupMenuItem(value: 'delete', child: Text(l10n.highlightDeleteLabel)),
+                  PopupMenuItem(
+                      value: 'delete', child: Text(l10n.highlightDeleteLabel)),
                 ],
               ),
             ],

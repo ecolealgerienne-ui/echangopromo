@@ -28,7 +28,8 @@ class AdminCommercantItem {
     required this.createdAt,
   });
 
-  factory AdminCommercantItem.fromJson(Map<String, dynamic> json) => AdminCommercantItem(
+  factory AdminCommercantItem.fromJson(Map<String, dynamic> json) =>
+      AdminCommercantItem(
         id: json['id'] as String,
         nom: json['nom'] as String,
         telephone: json['telephone'] as String,
@@ -38,10 +39,12 @@ class AdminCommercantItem {
         photoUrl: json['photoUrl'] as String?,
         latitude: (json['latitude'] as num?)?.toDouble(),
         longitude: (json['longitude'] as num?)?.toDouble(),
-        accountState: CommercantAccountState.fromValue(json['accountState'] as String),
-        originVerification:
-            CommercantOriginVerification.fromValue(json['originVerification'] as String?),
-        registreStatus: RegistreStatus.fromValue(json['registreStatus'] as String?),
+        accountState:
+            CommercantAccountState.fromValue(json['accountState'] as String),
+        originVerification: CommercantOriginVerification.fromValue(
+            json['originVerification'] as String?),
+        registreStatus:
+            RegistreStatus.fromValue(json['registreStatus'] as String?),
         registreUrl: json['registreUrl'] as String?,
         profilePendingReview: json['profilePendingReview'] as bool? ?? false,
         suspended: json['suspended'] as bool,

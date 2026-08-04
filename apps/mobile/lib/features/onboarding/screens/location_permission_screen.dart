@@ -32,15 +32,18 @@ class LocationPermissionScreen extends ConsumerWidget {
                     color: colorScheme.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(AppRadii.lg),
                   ),
-                  child: Icon(Icons.location_on_outlined, size: 30, color: colorScheme.primary),
+                  child: Icon(Icons.location_on_outlined,
+                      size: 30, color: colorScheme.primary),
                 ),
               ),
               const SizedBox(height: 20),
-              Text(l10n.onboardingLocationTitle, style: textTheme.headlineMedium),
+              Text(l10n.onboardingLocationTitle,
+                  style: textTheme.headlineMedium),
               const SizedBox(height: 10),
               Text(
                 l10n.onboardingLocationSubtitle,
-                style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+                style: textTheme.bodyMedium
+                    ?.copyWith(color: colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 24),
               _Perk(label: l10n.onboardingLocationPerkNearby),
@@ -55,7 +58,8 @@ class LocationPermissionScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               TextButton(
-                onPressed: () => context.go('/onboarding/location/second-chance'),
+                onPressed: () =>
+                    context.go('/onboarding/location/second-chance'),
                 child: Text(l10n.onboardingLocationLater),
               ),
             ],

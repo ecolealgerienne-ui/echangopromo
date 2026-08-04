@@ -21,7 +21,8 @@ class CommercantLoginScreen extends ConsumerStatefulWidget {
   const CommercantLoginScreen({super.key});
 
   @override
-  ConsumerState<CommercantLoginScreen> createState() => _CommercantLoginScreenState();
+  ConsumerState<CommercantLoginScreen> createState() =>
+      _CommercantLoginScreenState();
 }
 
 class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
@@ -73,7 +74,8 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
         await ref.read(authControllerProvider.notifier).loginThenResolveId(
               role: AppRole.commercant,
               token: token,
-              fetchId: () async => (await ref.read(commercantApiProvider).me()).id,
+              fetchId: () async =>
+                  (await ref.read(commercantApiProvider).me()).id,
             );
         if (mounted) context.go('/commercant/dashboard');
       }
@@ -96,7 +98,9 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
         title: Text(l10n.forgotPinTitle),
         content: Text(l10n.forgotPinBody),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(l10n.commonUnderstood)),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(l10n.commonUnderstood)),
         ],
       ),
     );
@@ -124,7 +128,8 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
                     // Cet écran est atteint par `push()` depuis l'accueil,
                     // mais aussi par `go('/commercant')` (redirection du
                     // routeur) où la pile est vide — d'où le repli sur '/'.
-                    onPressed: () => context.canPop() ? context.pop() : context.go('/'),
+                    onPressed: () =>
+                        context.canPop() ? context.pop() : context.go('/'),
                   ),
                   const Spacer(),
                   const AppSettingsActions(),
@@ -139,11 +144,13 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
                   children: [
                     const EchangoWordmark(fontSize: 26),
                     const SizedBox(height: 28),
-                    Text(l10n.commercantSpaceTitle, style: textTheme.headlineMedium),
+                    Text(l10n.commercantSpaceTitle,
+                        style: textTheme.headlineMedium),
                     const SizedBox(height: 8),
                     Text(
                       l10n.commercantLoginSubtitle,
-                      style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+                      style: textTheme.bodyMedium
+                          ?.copyWith(color: colorScheme.onSurfaceVariant),
                     ),
                     const SizedBox(height: 28),
                     TextFormField(
@@ -159,33 +166,44 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
                       // normalement sur ce clavier, un numéro de téléphone n'est
                       // donc pas plus difficile à saisir.
                       keyboardType: TextInputType.emailAddress,
-                      onChanged: (v) => setState(() => _isAdminMode = v.contains('@')),
-                      validator: (v) => (v == null || v.isEmpty) ? l10n.telephoneRequired : null,
+                      onChanged: (v) =>
+                          setState(() => _isAdminMode = v.contains('@')),
+                      validator: (v) => (v == null || v.isEmpty)
+                          ? l10n.telephoneRequired
+                          : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _pinController,
                       decoration: InputDecoration(
-                        labelText: _isAdminMode ? l10n.passwordLabel : l10n.pinLabel,
+                        labelText:
+                            _isAdminMode ? l10n.passwordLabel : l10n.pinLabel,
                         prefixIcon: const Icon(Icons.lock_outline),
                         // Le compteur de caractères par défaut réservait une
                         // ligne sous le champ pour une information dont le
                         // commerçant n'a rien à faire.
                         counterText: '',
                       ),
-                      keyboardType: _isAdminMode ? TextInputType.visiblePassword : TextInputType.number,
+                      keyboardType: _isAdminMode
+                          ? TextInputType.visiblePassword
+                          : TextInputType.number,
                       obscureText: true,
                       maxLength: _isAdminMode ? null : 12,
                       // Validateur permissif (4-12 chiffres) : un PIN valide fixé
                       // avant le relèvement du minimum à 6 (2026-07-13) doit
                       // rester utilisable pour se connecter.
                       validator: _isAdminMode
-                          ? (v) => (v == null || v.length < 8) ? l10n.passwordRequired : null
+                          ? (v) => (v == null || v.length < 8)
+                              ? l10n.passwordRequired
+                              : null
                           : validateExistingPin(context),
                     ),
                     ErrorText(_error),
                     const SizedBox(height: 20),
-                    LoadingButton(loading: _loading, onPressed: _submit, label: l10n.loginLabel),
+                    LoadingButton(
+                        loading: _loading,
+                        onPressed: _submit,
+                        label: l10n.loginLabel),
                     // Liens spécifiques au parcours commerçant — sans objet une
                     // fois basculé en mode admin, et inutilement déroutants.
                     if (!_isAdminMode) ...[

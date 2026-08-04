@@ -96,12 +96,16 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         OutlinedButton.icon(
-          icon: Icon(located ? Icons.check_circle_outline : Icons.my_location_outlined),
+          icon: Icon(located
+              ? Icons.check_circle_outline
+              : Icons.my_location_outlined),
           label: Text(located ? l10n.locationSaved : l10n.locationCapture),
           onPressed: _locating ? null : _locate,
         ),
         if (_locating)
-          const Padding(padding: EdgeInsets.only(top: 8), child: LinearProgressIndicator()),
+          const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: LinearProgressIndicator()),
         // Coordonnées affichées en clair : le commerçant voit que quelque
         // chose a réellement été capté, plutôt qu'un libellé de bouton qui
         // change. Sert aussi au support — une position aberrante se repère
@@ -119,7 +123,8 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            child: Text(_error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ),
       ],
     );

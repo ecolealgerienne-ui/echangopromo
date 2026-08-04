@@ -62,7 +62,8 @@ class PromoDetailScreen extends ConsumerWidget {
   /// est renseigné (vide tant que l'app n'est pas publiée).
   Future<void> _share(BuildContext context, Promo promo) async {
     final l10n = AppLocalizations.of(context)!;
-    final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
+    final currency =
+        NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
 
     final buffer = StringBuffer(
       l10n.shareMessage(
@@ -80,7 +81,9 @@ class PromoDetailScreen extends ConsumerWidget {
     }
     final message = buffer.toString();
 
-    final photo = promo.photoUrl != null ? await _downloadForShare(promo.photoUrl!) : null;
+    final photo = promo.photoUrl != null
+        ? await _downloadForShare(promo.photoUrl!)
+        : null;
     if (photo != null) {
       // Certaines applis (Messenger notamment) ignorent le texte joint à une
       // image dans l'intent de partage natif et n'affichent que la photo —
@@ -104,7 +107,8 @@ class PromoDetailScreen extends ConsumerWidget {
   Future<File?> _downloadForShare(String url) async {
     try {
       final dir = await getTemporaryDirectory();
-      final path = p.join(dir.path, 'share_promo_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final path = p.join(
+          dir.path, 'share_promo_${DateTime.now().millisecondsSinceEpoch}.jpg');
       await Dio().download(url, path);
       return File(path);
     } catch (_) {
@@ -122,7 +126,8 @@ class PromoDetailScreen extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Text(l10n.reportReasonTitle, style: Theme.of(context).textTheme.titleMedium),
+              child: Text(l10n.reportReasonTitle,
+                  style: Theme.of(context).textTheme.titleMedium),
             ),
             for (final option in ReportReason.values)
               ListTile(
@@ -139,12 +144,15 @@ class PromoDetailScreen extends ConsumerWidget {
     try {
       await ref.read(reportApiProvider).create(promoId, reason);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.reportSent)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(l10n.reportSent)));
       }
     } catch (error) {
-      final message = extractApiErrorMessage(error, fallback: l10n.reportFailed, locale: locale);
+      final message = extractApiErrorMessage(error,
+          fallback: l10n.reportFailed, locale: locale);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
       }
     }
   }
@@ -167,7 +175,8 @@ class _PromoDetailBody extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final isFavorite = ref.watch(favoritesProvider).contains(promo.id);
-    final commercantAsync = ref.watch(commercantPublicProfileProvider(promo.commercantId));
+    final commercantAsync =
+        ref.watch(commercantPublicProfileProvider(promo.commercantId));
     final commercant = commercantAsync.valueOrNull;
 
     return Column(
@@ -193,9 +202,11 @@ class _PromoDetailBody extends ConsumerWidget {
                         children: [
                           _GlassButton(
                             icon: Icons.arrow_back,
-                            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                            onTap: () =>
-                                context.canPop() ? context.pop() : context.go('/'),
+                            tooltip: MaterialLocalizations.of(context)
+                                .backButtonTooltip,
+                            onTap: () => context.canPop()
+                                ? context.pop()
+                                : context.go('/'),
                           ),
                           const Spacer(),
                           _GlassButton(
@@ -205,12 +216,16 @@ class _PromoDetailBody extends ConsumerWidget {
                           ),
                           const SizedBox(width: 6),
                           _GlassButton(
-                            icon: isFavorite ? Icons.favorite : Icons.favorite_border,
+                            icon: isFavorite
+                                ? Icons.favorite
+                                : Icons.favorite_border,
                             tooltip: isFavorite
                                 ? l10n.removeFavoriteTooltip
                                 : l10n.addFavoriteTooltip,
                             highlighted: isFavorite,
-                            onTap: () => ref.read(favoritesProvider.notifier).toggle(promo.id),
+                            onTap: () => ref
+                                .read(favoritesProvider.notifier)
+                                .toggle(promo.id),
                           ),
                         ],
                       ),
@@ -321,7 +336,8 @@ class _PriceBlock extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final l10n = AppLocalizations.of(context)!;
     final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
-    final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
+    final currency =
+        NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
     final saved = promo.prixAvant - promo.prixApres;
 
     return Row(
@@ -341,7 +357,8 @@ class _PriceBlock extends StatelessWidget {
               ),
               Text(
                 currency.format(promo.prixApres),
-                style: textTheme.headlineMedium?.copyWith(color: colorScheme.primary),
+                style: textTheme.headlineMedium
+                    ?.copyWith(color: colorScheme.primary),
               ),
             ],
           ),
@@ -408,14 +425,17 @@ class _DeadlineChip extends StatelessWidget {
           Icon(
             Icons.schedule,
             size: 18,
-            color: urgent ? semanticColors.warning : colorScheme.onSurfaceVariant,
+            color:
+                urgent ? semanticColors.warning : colorScheme.onSurfaceVariant,
           ),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
               label,
               style: textTheme.labelLarge?.copyWith(
-                color: urgent ? semanticColors.warning : colorScheme.onSurfaceVariant,
+                color: urgent
+                    ? semanticColors.warning
+                    : colorScheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -440,7 +460,8 @@ class _ShopCard extends StatelessWidget {
   String _subtitle(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return [
-      if (commercant.adresse != null && commercant.adresse!.isNotEmpty) commercant.adresse!,
+      if (commercant.adresse != null && commercant.adresse!.isNotEmpty)
+        commercant.adresse!,
       if (distanceMeters != null) formatDistance(l10n, distanceMeters!),
     ].join(' · ');
   }
@@ -482,7 +503,8 @@ class _ShopCard extends StatelessWidget {
                   colors: [colorScheme.secondary, colorScheme.primary],
                 ),
               ),
-              child: Icon(Icons.storefront, color: colorScheme.onPrimary, size: 22),
+              child: Icon(Icons.storefront,
+                  color: colorScheme.onPrimary, size: 22),
             ),
           const SizedBox(width: 12),
           Expanded(
@@ -520,7 +542,8 @@ class _ShopCard extends StatelessWidget {
 /// « Autres promos du magasin » — réutilise `GET /promo` avec un filtre
 /// `commercantId`, sans nouvel endpoint. Section absente s'il n'y en a pas.
 class _OtherShopPromos extends ConsumerWidget {
-  const _OtherShopPromos({required this.commercantId, required this.excludePromoId});
+  const _OtherShopPromos(
+      {required this.commercantId, required this.excludePromoId});
 
   final String commercantId;
   final String excludePromoId;
@@ -548,7 +571,8 @@ class _OtherShopPromos extends ConsumerWidget {
             scrollDirection: Axis.horizontal,
             itemCount: promos.length,
             separatorBuilder: (context, index) => const SizedBox(width: 10),
-            itemBuilder: (context, index) => _MiniPromoCard(promo: promos[index]),
+            itemBuilder: (context, index) =>
+                _MiniPromoCard(promo: promos[index]),
           ),
         ),
         const SizedBox(height: 8),
@@ -566,9 +590,10 @@ class _MiniPromoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
-    final photo =
-        promo.thumbnailUrl ?? (promo.photoUrls.isNotEmpty ? promo.photoUrls.first : null);
+    final currency =
+        NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
+    final photo = promo.thumbnailUrl ??
+        (promo.photoUrls.isNotEmpty ? promo.photoUrls.first : null);
 
     return SizedBox(
       width: 132,
@@ -593,8 +618,8 @@ class _MiniPromoCard extends StatelessWidget {
                         : CachedNetworkImage(
                             imageUrl: photo,
                             fit: BoxFit.cover,
-                            errorWidget: (context, url, error) =>
-                                Container(color: colorScheme.surfaceContainerHighest),
+                            errorWidget: (context, url, error) => Container(
+                                color: colorScheme.surfaceContainerHighest),
                           ),
                   ),
                   PositionedDirectional(
@@ -603,7 +628,8 @@ class _MiniPromoCard extends StatelessWidget {
                     child: PromoDiscountBadge(
                       prixAvant: promo.prixAvant,
                       prixApres: promo.prixApres,
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       textStyle: textTheme.labelSmall,
                     ),
                   ),

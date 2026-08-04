@@ -7,50 +7,45 @@ const Map<String, String> errorMessagesAr = {
   'AUTH_TOKEN_INVALID': 'انتهت صلاحية جلستك. الرجاء إعادة تسجيل الدخول.',
   'AUTH_TOKEN_REVOKED': 'تم إلغاء جلستك. الرجاء إعادة تسجيل الدخول.',
   'AUTH_FORBIDDEN_ROLE': 'ليست لديك الصلاحية للقيام بهذا الإجراء.',
-
   'ADMIN_NOT_FOUND': 'المسؤول غير موجود.',
-
   'AGENT_EMAIL_TAKEN': 'هذا البريد الإلكتروني مستخدم بالفعل من طرف عون آخر.',
   'AGENT_NOT_FOUND': 'العون غير موجود.',
-  'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT': 'إحدى هذه البلديات غير مسندة حاليًا لهذا العون.',
-
+  'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT':
+      'إحدى هذه البلديات غير مسندة حاليًا لهذا العون.',
   'COMMUNE_NOT_FOUND': 'البلدية غير موجودة.',
-
   'REPORT_ALREADY_SUBMITTED': 'لقد قمت بالإبلاغ عن هذا العرض من قبل.',
-
   'DEVICE_ID_MISSING': 'معرّف الجهاز مفقود. أعد تشغيل التطبيق.',
-
   'STORAGE_INVALID_IMAGE': 'الملف المرسل ليس صورة صالحة. أعد المحاولة بصورة.',
   'STORAGE_FILE_TOO_LARGE': 'الصورة كبيرة جدًا. أعد المحاولة بصورة أخرى.',
   'STORAGE_PURPOSE_NOT_ALLOWED': 'نوع الرفع هذا غير مسموح لهذا الحساب.',
-
   'HIGHLIGHT_NOT_FOUND': 'الإبراز غير موجود.',
-  'HIGHLIGHT_EMPTY_CONTENT': 'يجب أن يستهدف الإبراز عرضًا أو أن يحمل صورة مستوردة.',
+  'HIGHLIGHT_EMPTY_CONTENT':
+      'يجب أن يستهدف الإبراز عرضًا أو أن يحمل صورة مستوردة.',
   'HIGHLIGHT_CAP_REACHED':
       'بلغ شريط الصفحة الرئيسية حدّه الأقصى. احذف إبرازًا لإضافة إبراز جديد.',
   'HIGHLIGHT_REORDER_MISMATCH':
       'الترتيب المُرسَل لم يعد مطابقًا للإبرازات الموجودة. أعد تحميل القائمة.',
-
   'PROMO_NOT_FOUND': 'العرض غير موجود.',
   'PROMO_NOT_OWNED_BY_COMMERCANT': 'هذا العرض لا ينتمي إلى هذا التاجر.',
   'PROMO_DATE_FIN_NOT_FUTURE': 'يجب أن يكون تاريخ الانتهاء في المستقبل.',
   'PROMO_ALREADY_PUBLISHED': 'هذا العرض منشور بالفعل.',
   'PROMO_NOT_PUBLISHED': 'لا يمكن إيقاف سوى عرض منشور.',
-  'PROMO_PRIX_APRES_NOT_LOWER': 'يجب أن يكون السعر بعد التخفيض أقل من السعر قبله.',
-
+  'PROMO_PRIX_APRES_NOT_LOWER':
+      'يجب أن يكون السعر بعد التخفيض أقل من السعر قبله.',
   'COMMERCANT_PHONE_TAKEN': 'رقم الهاتف هذا مسجل بالفعل.',
   'COMMERCANT_NOT_FOUND': 'التاجر غير موجود.',
   'COMMERCANT_OLD_PIN_MISMATCH': 'رمز PIN القديم غير مطابق.',
-  'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'لا يوجد طلب تحقق في الانتظار.',
+  'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION':
+      'لا يوجد طلب تحقق في الانتظار.',
   'COMMERCANT_NOT_IN_AGENT_COMMUNES': 'هذا التاجر ليس ضمن بلديات هذا العون.',
   'COMMERCANT_TERMS_NOT_ACCEPTED': 'يجب عليك قبول شروط الاستخدام لإنشاء حساب.',
-  'COMMERCANT_REGISTRE_NOT_VALIDATED': 'يجب أن يصادق مسؤول على سجلك التجاري قبل أن تتمكن من نشر العروض.',
+  'COMMERCANT_REGISTRE_NOT_VALIDATED':
+      'يجب أن يصادق مسؤول على سجلك التجاري قبل أن تتمكن من نشر العروض.',
   'COMMERCANT_REGISTRE_KEY_MISMATCH': 'هذا المستند لا يخص هذا التاجر.',
-  'COMMERCANT_PROFILE_PENDING_REVIEW': 'يجب أن يصادق مسؤول على تعديلات ملفك الشخصي قبل أن تتمكن من نشر العروض.',
-
+  'COMMERCANT_PROFILE_PENDING_REVIEW':
+      'يجب أن يصادق مسؤول على تعديلات ملفك الشخصي قبل أن تتمكن من نشر العروض.',
   'RATE_LIMITED': 'عدد كبير جدًا من المحاولات. أعد المحاولة بعد قليل.',
   'HTTP_ERROR': 'حدث خطأ ما.',
   'INTERNAL_ERROR': 'حدث خطأ غير متوقع. أعد المحاولة لاحقًا.',
-
   'NETWORK_ERROR': 'تعذّر الاتصال بالخادم. تحقق من اتصالك.',
 };

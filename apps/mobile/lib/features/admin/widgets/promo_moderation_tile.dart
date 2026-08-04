@@ -37,7 +37,8 @@ class PromoModerationTile extends StatelessWidget {
     final breakdown = item.reasonBreakdown;
     if (breakdown == null || breakdown.isEmpty) return '';
     return breakdown.entries
-        .map((entry) => '${entry.value} ${reportReasonLabel(context, ReportReason.fromValue(entry.key))}')
+        .map((entry) =>
+            '${entry.value} ${reportReasonLabel(context, ReportReason.fromValue(entry.key))}')
         .join(', ');
   }
 
@@ -55,14 +56,16 @@ class PromoModerationTile extends StatelessWidget {
 
     // CircleAvatar par défaut : 40dp de diamètre — décodage limité à cette
     // taille plutôt qu'à la résolution source de l'image.
-    final avatarCachePx = (40 * MediaQuery.of(context).devicePixelRatio).round();
+    final avatarCachePx =
+        (40 * MediaQuery.of(context).devicePixelRatio).round();
 
     return ListTile(
       onTap: onTap,
       leading: CircleAvatar(
         backgroundImage: (item.thumbnailUrl ?? item.photoUrl) != null
             ? ResizeImage(
-                CachedNetworkImageProvider((item.thumbnailUrl ?? item.photoUrl)!),
+                CachedNetworkImageProvider(
+                    (item.thumbnailUrl ?? item.photoUrl)!),
                 width: avatarCachePx,
               )
             : null,
@@ -73,7 +76,8 @@ class PromoModerationTile extends StatelessWidget {
       title: Row(
         children: [
           Expanded(
-            child: Text(item.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+            child: Text(item.description,
+                maxLines: 2, overflow: TextOverflow.ellipsis),
           ),
           const SizedBox(width: 8),
           StatusChip(
@@ -103,7 +107,8 @@ class PromoModerationTile extends StatelessWidget {
               },
               itemBuilder: (context) => [
                 PopupMenuItem(value: 'masquer', child: Text(l10n.masquerLabel)),
-                PopupMenuItem(value: 'verifier', child: Text(l10n.verifierOkLabel)),
+                PopupMenuItem(
+                    value: 'verifier', child: Text(l10n.verifierOkLabel)),
                 PopupMenuItem(value: 'avertir', child: Text(l10n.avertirLabel)),
               ],
             ),

@@ -20,18 +20,21 @@ import 'auth_provider.dart';
 
 /// Surchargé dans `main()` une fois `SharedPreferences.getInstance()` résolu.
 final sharedPreferencesProvider = Provider<SharedPreferences>(
-  (ref) => throw UnimplementedError('sharedPreferencesProvider doit être surchargé dans main()'),
+  (ref) => throw UnimplementedError(
+      'sharedPreferencesProvider doit être surchargé dans main()'),
 );
 
-final secureStorageProvider = Provider<FlutterSecureStorage>((ref) => const FlutterSecureStorage());
+final secureStorageProvider =
+    Provider<FlutterSecureStorage>((ref) => const FlutterSecureStorage());
 
 final deviceIdStoreProvider =
     Provider((ref) => DeviceIdStore(ref.watch(sharedPreferencesProvider)));
 
-final deviceIdProvider = Provider<String>((ref) => ref.watch(deviceIdStoreProvider).getOrCreate());
+final deviceIdProvider =
+    Provider<String>((ref) => ref.watch(deviceIdStoreProvider).getOrCreate());
 
-final selectedCommuneStoreProvider =
-    Provider((ref) => SelectedCommuneStore(ref.watch(sharedPreferencesProvider)));
+final selectedCommuneStoreProvider = Provider(
+    (ref) => SelectedCommuneStore(ref.watch(sharedPreferencesProvider)));
 
 final favoritesStoreProvider =
     Provider((ref) => FavoritesStore(ref.watch(sharedPreferencesProvider)));
@@ -55,12 +58,21 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   );
 });
 
-final communeApiProvider = Provider((ref) => CommuneApi(ref.watch(apiClientProvider).dio));
-final promoApiProvider = Provider((ref) => PromoApi(ref.watch(apiClientProvider).dio));
-final commercantApiProvider = Provider((ref) => CommercantApi(ref.watch(apiClientProvider).dio));
-final agentApiProvider = Provider((ref) => AgentApi(ref.watch(apiClientProvider).dio));
-final reportApiProvider = Provider((ref) => ReportApi(ref.watch(apiClientProvider).dio));
-final storageApiProvider = Provider((ref) => StorageApi(ref.watch(apiClientProvider).dio));
-final adminApiProvider = Provider((ref) => AdminApi(ref.watch(apiClientProvider).dio));
-final highlightApiProvider = Provider((ref) => HighlightApi(ref.watch(apiClientProvider).dio));
-final notificationApiProvider = Provider((ref) => NotificationApi(ref.watch(apiClientProvider).dio));
+final communeApiProvider =
+    Provider((ref) => CommuneApi(ref.watch(apiClientProvider).dio));
+final promoApiProvider =
+    Provider((ref) => PromoApi(ref.watch(apiClientProvider).dio));
+final commercantApiProvider =
+    Provider((ref) => CommercantApi(ref.watch(apiClientProvider).dio));
+final agentApiProvider =
+    Provider((ref) => AgentApi(ref.watch(apiClientProvider).dio));
+final reportApiProvider =
+    Provider((ref) => ReportApi(ref.watch(apiClientProvider).dio));
+final storageApiProvider =
+    Provider((ref) => StorageApi(ref.watch(apiClientProvider).dio));
+final adminApiProvider =
+    Provider((ref) => AdminApi(ref.watch(apiClientProvider).dio));
+final highlightApiProvider =
+    Provider((ref) => HighlightApi(ref.watch(apiClientProvider).dio));
+final notificationApiProvider =
+    Provider((ref) => NotificationApi(ref.watch(apiClientProvider).dio));

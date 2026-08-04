@@ -15,9 +15,14 @@ const _activePageSize = 50;
 
 /// Miroir mobile de `PaginatedResult<T>` (backend) pour `listActive()`.
 class PaginatedPromos {
-  PaginatedPromos({required this.items, required this.total, required this.page, required this.limit});
+  PaginatedPromos(
+      {required this.items,
+      required this.total,
+      required this.page,
+      required this.limit});
 
-  factory PaginatedPromos.fromJson(Map<String, dynamic> json) => PaginatedPromos(
+  factory PaginatedPromos.fromJson(Map<String, dynamic> json) =>
+      PaginatedPromos(
         items: (json['items'] as List<dynamic>)
             .map((e) => Promo.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -76,7 +81,8 @@ class PromoApi {
       'page': page,
       'limit': limit ?? _activePageSize,
     };
-    final response = await _dio.get<Map<String, dynamic>>('/promo', queryParameters: query);
+    final response =
+        await _dio.get<Map<String, dynamic>>('/promo', queryParameters: query);
     return PaginatedPromos.fromJson(response.data!);
   }
 
@@ -119,7 +125,8 @@ class PromoApi {
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/promo',
-      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKeys, dateFin, asDraft),
+      data: _buildPayload(description, prixAvant, prixApres, categorie,
+          photoKeys, dateFin, asDraft),
     );
     return Promo.fromJson(response.data!);
   }
@@ -136,7 +143,8 @@ class PromoApi {
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/promo/agent/$commercantId',
-      data: _buildPayload(description, prixAvant, prixApres, categorie, photoKeys, dateFin, asDraft),
+      data: _buildPayload(description, prixAvant, prixApres, categorie,
+          photoKeys, dateFin, asDraft),
     );
     return Promo.fromJson(response.data!);
   }

@@ -18,10 +18,12 @@ class CommuneSelectionScreen extends ConsumerStatefulWidget {
   const CommuneSelectionScreen({super.key});
 
   @override
-  ConsumerState<CommuneSelectionScreen> createState() => _CommuneSelectionScreenState();
+  ConsumerState<CommuneSelectionScreen> createState() =>
+      _CommuneSelectionScreenState();
 }
 
-class _CommuneSelectionScreenState extends ConsumerState<CommuneSelectionScreen> {
+class _CommuneSelectionScreenState
+    extends ConsumerState<CommuneSelectionScreen> {
   late Set<String> _selectedCommuneIds;
 
   @override
@@ -33,7 +35,9 @@ class _CommuneSelectionScreenState extends ConsumerState<CommuneSelectionScreen>
 
   Future<void> _confirm() async {
     if (_selectedCommuneIds.isEmpty) return;
-    await ref.read(selectedCommunesProvider.notifier).select(_selectedCommuneIds.toList());
+    await ref
+        .read(selectedCommunesProvider.notifier)
+        .select(_selectedCommuneIds.toList());
     if (mounted) context.go('/');
   }
 
@@ -60,18 +64,21 @@ class _CommuneSelectionScreenState extends ConsumerState<CommuneSelectionScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(l10n.maxCommunesHint(kMaxSelectedCommunes), style: textTheme.bodyMedium),
+                  Text(l10n.maxCommunesHint(kMaxSelectedCommunes),
+                      style: textTheme.bodyMedium),
                   const SizedBox(height: 8),
                   // Compteur vivant plutôt qu'une consigne figée : le client
                   // voit combien il lui reste de choix au lieu de découvrir
                   // le plafond en butant dessus.
                   Row(
                     children: [
-                      Icon(Icons.info_outline, size: 15, color: colorScheme.onSurfaceVariant),
+                      Icon(Icons.info_outline,
+                          size: 15, color: colorScheme.onSurfaceVariant),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          l10n.communesSelectedCount(_selectedCommuneIds.length),
+                          l10n.communesSelectedCount(
+                              _selectedCommuneIds.length),
                           style: textTheme.bodySmall
                               ?.copyWith(color: colorScheme.onSurfaceVariant),
                         ),

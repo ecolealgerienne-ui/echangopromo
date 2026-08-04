@@ -19,7 +19,8 @@ class CommercantApi {
     double? longitude,
     required bool acceptedTerms,
   }) async {
-    final response = await _dio.post<Map<String, dynamic>>('/commercant/register', data: {
+    final response =
+        await _dio.post<Map<String, dynamic>>('/commercant/register', data: {
       'telephone': telephone,
       'nom': nom,
       if (adresse != null && adresse.isNotEmpty) 'adresse': adresse,
@@ -52,8 +53,10 @@ class CommercantApi {
   /// oublié", qui passe par un admin/agent). Le token courant devient
   /// invalide juste après cet appel (tokenVersion incrémenté côté service),
   /// à l'appelant de déconnecter et renvoyer vers l'écran de connexion.
-  Future<void> changePin({required String oldPin, required String newPin}) async {
-    await _dio.patch<void>('/commercant/me/pin', data: {'oldPin': oldPin, 'newPin': newPin});
+  Future<void> changePin(
+      {required String oldPin, required String newPin}) async {
+    await _dio.patch<void>('/commercant/me/pin',
+        data: {'oldPin': oldPin, 'newPin': newPin});
   }
 
   /// Édition du profil — téléphone volontairement non modifiable ici.
@@ -65,7 +68,8 @@ class CommercantApi {
     double? latitude,
     double? longitude,
   }) async {
-    final response = await _dio.patch<Map<String, dynamic>>('/commercant/me', data: {
+    final response =
+        await _dio.patch<Map<String, dynamic>>('/commercant/me', data: {
       if (nom != null) 'nom': nom,
       if (adresse != null && adresse.isNotEmpty) 'adresse': adresse,
       if (categorie != null) 'categorie': categorie.value,
@@ -77,17 +81,20 @@ class CommercantApi {
   }
 
   Future<Commercant> publicProfile(String id) async {
-    final response = await _dio.get<Map<String, dynamic>>('/commercant/$id/public');
+    final response =
+        await _dio.get<Map<String, dynamic>>('/commercant/$id/public');
     return Commercant.fromJson(response.data!);
   }
 
   Future<int> dashboardProfileViewCount() async {
-    final response = await _dio.get<Map<String, dynamic>>('/commercant/me/dashboard');
+    final response =
+        await _dio.get<Map<String, dynamic>>('/commercant/me/dashboard');
     return response.data!['profileViewCount'] as int;
   }
 
   Future<void> requestRegistreVerification(String registreKey) async {
-    await _dio.post<void>('/commercant/me/registre', data: {'registreKey': registreKey});
+    await _dio.post<void>('/commercant/me/registre',
+        data: {'registreKey': registreKey});
   }
 
   /// Soft delete côté backend (deletedAt) — jamais de suppression physique.

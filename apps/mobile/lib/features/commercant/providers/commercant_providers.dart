@@ -31,8 +31,9 @@ final myPromosProvider =
 /// Promos actuellement en ligne — la seule mesure qui compte face au plafond.
 /// `PromoLifecycleStatus.publiee` uniquement : un brouillon ou une promo
 /// arrêtée n'occupe pas d'emplacement, exactement comme côté backend.
-int countActivePromos(List<Promo> promos) =>
-    promos.where((promo) => promo.lifecycleStatus == PromoLifecycleStatus.publiee).length;
+int countActivePromos(List<Promo> promos) => promos
+    .where((promo) => promo.lifecycleStatus == PromoLifecycleStatus.publiee)
+    .length;
 
 /// Somme des vues de toutes les promos. `viewCount` n'est renseigné que par
 /// `GET /promo/me/all` (propriétaire authentifié) — d'où le repli à zéro.

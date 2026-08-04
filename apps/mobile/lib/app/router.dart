@@ -70,18 +70,21 @@ class _AppRoute {
   }
 }
 
-Widget _unusedBuilder(BuildContext context, GoRouterState state) => const SizedBox.shrink();
+Widget _unusedBuilder(BuildContext context, GoRouterState state) =>
+    const SizedBox.shrink();
 
 final _appRoutes = <_AppRoute>[
   _AppRoute('/', (context, state) => const PromoListScreen()),
-  _AppRoute('/select-commune', (context, state) => const CommuneSelectionScreen()),
+  _AppRoute(
+      '/select-commune', (context, state) => const CommuneSelectionScreen()),
   // Carte "autour de moi" — publique comme la liste : pas de compte client.
   _AppRoute('/carte', (context, state) => const MapScreen()),
   // Premier lancement (splash → rôle → localisation). Publics : ces écrans
   // précèdent par nature toute authentification.
   _AppRoute('/onboarding', (context, state) => const SplashScreen()),
   _AppRoute('/onboarding/role', (context, state) => const RoleChoiceScreen()),
-  _AppRoute('/onboarding/location', (context, state) => const LocationPermissionScreen()),
+  _AppRoute('/onboarding/location',
+      (context, state) => const LocationPermissionScreen()),
   _AppRoute(
     '/onboarding/location/second-chance',
     (context, state) => const LocationSecondChanceScreen(),
@@ -89,10 +92,12 @@ final _appRoutes = <_AppRoute>[
   // Publics, sans rôle requis — accessibles depuis l'inscription commerçant
   // et un lien général (plan de correction, Phase 4).
   _AppRoute('/legal/cgu', (context, state) => const LegalDocumentScreen.cgu()),
-  _AppRoute('/legal/confidentialite', (context, state) => const LegalDocumentScreen.privacy()),
+  _AppRoute('/legal/confidentialite',
+      (context, state) => const LegalDocumentScreen.privacy()),
   // TEMPORAIRE — écran de test pour basculer entre profils, à supprimer
   // avant l'ouverture publique (voir commentaire en tête du fichier).
-  _AppRoute('/dev/profiles', (context, state) => const DevProfileSwitcherScreen()),
+  _AppRoute(
+      '/dev/profiles', (context, state) => const DevProfileSwitcherScreen()),
   _AppRoute(
     '/promo/:id',
     (context, state) => PromoDetailScreen(promoId: state.pathParameters['id']!),
@@ -109,8 +114,10 @@ final _appRoutes = <_AppRoute>[
 
   // Commerçant
   _AppRoute('/commercant', (context, state) => const CommercantLoginScreen()),
-  _AppRoute('/commercant/login', (context, state) => const CommercantLoginScreen()),
-  _AppRoute('/commercant/register', (context, state) => const CommercantRegisterScreen()),
+  _AppRoute(
+      '/commercant/login', (context, state) => const CommercantLoginScreen()),
+  _AppRoute('/commercant/register',
+      (context, state) => const CommercantRegisterScreen()),
   _AppRoute(
     '/commercant/dashboard',
     (context, state) => const CommercantDashboardScreen(),
@@ -183,7 +190,8 @@ final _appRoutes = <_AppRoute>[
   // moderation/promos ci-dessus (widget partagé, backend scope par JWT).
   _AppRoute(
     '/agent/promo-detail',
-    (context, state) => AdminPromoDetailScreen(item: state.extra as ModerationItem),
+    (context, state) =>
+        AdminPromoDetailScreen(item: state.extra as ModerationItem),
     requiredRole: AppRole.agent,
   ),
   _AppRoute(
@@ -193,7 +201,8 @@ final _appRoutes = <_AppRoute>[
   ),
   _AppRoute(
     '/agent/commercants/detail',
-    (context, state) => AdminCommercantDetailScreen(item: state.extra as AdminCommercantItem),
+    (context, state) =>
+        AdminCommercantDetailScreen(item: state.extra as AdminCommercantItem),
     requiredRole: AppRole.agent,
   ),
 
@@ -220,7 +229,8 @@ final _appRoutes = <_AppRoute>[
   ),
   _AppRoute(
     '/admin/promo-detail',
-    (context, state) => AdminPromoDetailScreen(item: state.extra as ModerationItem),
+    (context, state) =>
+        AdminPromoDetailScreen(item: state.extra as ModerationItem),
     requiredRole: AppRole.admin,
   ),
   _AppRoute(
@@ -230,7 +240,8 @@ final _appRoutes = <_AppRoute>[
   ),
   _AppRoute(
     '/admin/commercants/detail',
-    (context, state) => AdminCommercantDetailScreen(item: state.extra as AdminCommercantItem),
+    (context, state) =>
+        AdminCommercantDetailScreen(item: state.extra as AdminCommercantItem),
     requiredRole: AppRole.admin,
   ),
   // Curation du bandeau « Top promos » de l'accueil client — admin seul
@@ -247,7 +258,8 @@ final _appRoutes = <_AppRoute>[
   ),
   _AppRoute(
     '/admin/highlights/edit',
-    (context, state) => AdminHighlightFormScreen(existing: state.extra as Highlight),
+    (context, state) =>
+        AdminHighlightFormScreen(existing: state.extra as Highlight),
     requiredRole: AppRole.admin,
   ),
   _AppRoute(
@@ -345,13 +357,19 @@ final routerProvider = Provider<GoRouter>((ref) {
       // connecté avec ce rôle, sinon vers l'écran de connexion — distinct
       // d'une protection de route (pas de `requiredRole` à vérifier ici).
       if (path == '/commercant') {
-        return session?.role == AppRole.commercant ? '/commercant/dashboard' : '/commercant/login';
+        return session?.role == AppRole.commercant
+            ? '/commercant/dashboard'
+            : '/commercant/login';
       }
       if (path == '/agent') {
-        return session?.role == AppRole.agent ? '/agent/dashboard' : '/agent/login';
+        return session?.role == AppRole.agent
+            ? '/agent/dashboard'
+            : '/agent/login';
       }
       if (path == '/admin') {
-        return session?.role == AppRole.admin ? '/admin/dashboard' : '/admin/login';
+        return session?.role == AppRole.admin
+            ? '/admin/dashboard'
+            : '/admin/login';
       }
 
       final requiredRole = _appRoutes
@@ -367,7 +385,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      for (final route in _appRoutes) GoRoute(path: route.path, builder: route.builder),
+      for (final route in _appRoutes)
+        GoRoute(path: route.path, builder: route.builder),
     ],
   );
 });

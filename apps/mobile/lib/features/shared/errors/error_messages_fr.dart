@@ -20,7 +20,8 @@ const Map<String, String> errorMessagesFr = {
   'AUTH_TOKEN_MISSING': 'Vous devez être connecté pour effectuer cette action.',
   'AUTH_TOKEN_INVALID': 'Votre session a expiré. Reconnectez-vous.',
   'AUTH_TOKEN_REVOKED': 'Votre session a été révoquée. Reconnectez-vous.',
-  'AUTH_FORBIDDEN_ROLE': "Vous n'avez pas les droits pour effectuer cette action.",
+  'AUTH_FORBIDDEN_ROLE':
+      "Vous n'avez pas les droits pour effectuer cette action.",
 
   'ADMIN_NOT_FOUND': 'Administrateur introuvable.',
 
@@ -33,11 +34,15 @@ const Map<String, String> errorMessagesFr = {
 
   'REPORT_ALREADY_SUBMITTED': 'Vous avez déjà signalé cette promotion.',
 
-  'DEVICE_ID_MISSING': "Identifiant d'appareil manquant. Redémarrez l'application.",
+  'DEVICE_ID_MISSING':
+      "Identifiant d'appareil manquant. Redémarrez l'application.",
 
-  'STORAGE_INVALID_IMAGE': "Le fichier envoyé n'est pas une image valide. Réessayez avec une photo.",
-  'STORAGE_FILE_TOO_LARGE': 'La photo est trop volumineuse. Réessayez avec une autre photo.',
-  'STORAGE_PURPOSE_NOT_ALLOWED': "Ce type d'upload n'est pas autorisé pour ce compte.",
+  'STORAGE_INVALID_IMAGE':
+      "Le fichier envoyé n'est pas une image valide. Réessayez avec une photo.",
+  'STORAGE_FILE_TOO_LARGE':
+      'La photo est trop volumineuse. Réessayez avec une autre photo.',
+  'STORAGE_PURPOSE_NOT_ALLOWED':
+      "Ce type d'upload n'est pas autorisé pour ce compte.",
 
   'HIGHLIGHT_NOT_FOUND': 'Mise en avant introuvable.',
   'HIGHLIGHT_EMPTY_CONTENT':
@@ -51,7 +56,8 @@ const Map<String, String> errorMessagesFr = {
       "L'ordre envoyé ne correspond plus aux mises en avant existantes. Rechargez la liste.",
 
   'PROMO_NOT_FOUND': 'Promotion introuvable.',
-  'PROMO_NOT_OWNED_BY_COMMERCANT': "Cette promotion n'appartient pas à ce commerçant.",
+  'PROMO_NOT_OWNED_BY_COMMERCANT':
+      "Cette promotion n'appartient pas à ce commerçant.",
   'PROMO_DATE_FIN_NOT_FUTURE': 'La date de fin doit être dans le futur.',
   'PROMO_ALREADY_PUBLISHED': 'Cette promotion est déjà publiée.',
   'PROMO_NOT_PUBLISHED': 'Seule une promotion publiée peut être arrêtée.',
@@ -61,12 +67,16 @@ const Map<String, String> errorMessagesFr = {
   'COMMERCANT_PHONE_TAKEN': 'Ce numéro de téléphone est déjà enregistré.',
   'COMMERCANT_NOT_FOUND': 'Commerçant introuvable.',
   'COMMERCANT_OLD_PIN_MISMATCH': "L'ancien PIN ne correspond pas.",
-  'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'Aucune demande de vérification en attente.',
-  'COMMERCANT_NOT_IN_AGENT_COMMUNES': "Ce commerçant n'est dans aucune des communes de cet agent.",
-  'COMMERCANT_TERMS_NOT_ACCEPTED': "Vous devez accepter les conditions d'utilisation pour créer un compte.",
+  'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION':
+      'Aucune demande de vérification en attente.',
+  'COMMERCANT_NOT_IN_AGENT_COMMUNES':
+      "Ce commerçant n'est dans aucune des communes de cet agent.",
+  'COMMERCANT_TERMS_NOT_ACCEPTED':
+      "Vous devez accepter les conditions d'utilisation pour créer un compte.",
   'COMMERCANT_REGISTRE_NOT_VALIDATED':
       "Votre registre de commerce doit être validé par un administrateur avant de pouvoir publier des promos.",
-  'COMMERCANT_REGISTRE_KEY_MISMATCH': "Ce document n'appartient pas à ce commerçant.",
+  'COMMERCANT_REGISTRE_KEY_MISMATCH':
+      "Ce document n'appartient pas à ce commerçant.",
   'COMMERCANT_PROFILE_PENDING_REVIEW':
       'Les modifications de votre profil doivent être validées par un administrateur avant de pouvoir publier des promos.',
 
@@ -76,5 +86,6 @@ const Map<String, String> errorMessagesFr = {
 
   /// Pas un `ErrorCode` backend — utilisé par [ApiException.fromDioError]
   /// quand la requête n'a même pas atteint le serveur (pas de réponse HTTP).
-  'NETWORK_ERROR': 'Impossible de contacter le serveur. Vérifiez votre connexion.',
+  'NETWORK_ERROR':
+      'Impossible de contacter le serveur. Vérifiez votre connexion.',
 };

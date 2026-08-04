@@ -43,7 +43,9 @@ class _PromoPhotoHeroState extends State<PromoPhotoHero> {
     // de contrainte de largeur avant construction). Sans effet si ça dépasse
     // la résolution source (~1200px max, voir StorageApi._compress) :
     // `memCacheWidth` ne fait jamais remonter au-dessus de l'original.
-    final heroCacheWidth = (MediaQuery.sizeOf(context).width * MediaQuery.of(context).devicePixelRatio).round();
+    final heroCacheWidth = (MediaQuery.sizeOf(context).width *
+            MediaQuery.of(context).devicePixelRatio)
+        .round();
 
     return Stack(
       children: [
@@ -65,7 +67,8 @@ class _PromoPhotoHeroState extends State<PromoPhotoHero> {
         PositionedDirectional(
           top: 12,
           start: 12,
-          child: PromoDiscountBadge(prixAvant: widget.prixAvant, prixApres: widget.prixApres),
+          child: PromoDiscountBadge(
+              prixAvant: widget.prixAvant, prixApres: widget.prixApres),
         ),
         if (photoUrls.length > 1)
           PositionedDirectional(

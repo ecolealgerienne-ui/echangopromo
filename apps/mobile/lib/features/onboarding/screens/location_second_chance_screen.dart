@@ -35,7 +35,10 @@ class LocationSecondChanceScreen extends ConsumerWidget {
                   ),
                 ),
                 const _Pin(alignment: Alignment(-0.45, -0.25), label: '−30%'),
-                const _Pin(alignment: Alignment(0.5, -0.15), label: '−20%', secondary: true),
+                const _Pin(
+                    alignment: Alignment(0.5, -0.15),
+                    label: '−20%',
+                    secondary: true),
                 const _Pin(alignment: Alignment(-0.3, 0.3), label: '−45%'),
                 // Fondu vers le bas : le texte reste lisible sans assombrir
                 // toute l'illustration.
@@ -61,7 +64,8 @@ class LocationSecondChanceScreen extends ConsumerWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(l10n.onboardingSecondChanceTitle, style: textTheme.titleLarge),
+                        Text(l10n.onboardingSecondChanceTitle,
+                            style: textTheme.titleLarge),
                         const SizedBox(height: 6),
                         Text(
                           l10n.onboardingSecondChanceSubtitle,
@@ -111,7 +115,8 @@ class LocationSecondChanceScreen extends ConsumerWidget {
 }
 
 class _Pin extends StatelessWidget {
-  const _Pin({required this.alignment, required this.label, this.secondary = false});
+  const _Pin(
+      {required this.alignment, required this.label, this.secondary = false});
 
   final Alignment alignment;
   final String label;
@@ -121,7 +126,8 @@ class _Pin extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final background = secondary ? colorScheme.secondary : colorScheme.primary;
-    final foreground = secondary ? colorScheme.onSurface : colorScheme.onPrimary;
+    final foreground =
+        secondary ? colorScheme.onSurface : colorScheme.onPrimary;
 
     return Align(
       alignment: alignment,
@@ -171,8 +177,8 @@ class _MapTeaserPainter extends CustomPainter {
     void drawBlock(double left, double top, double width, double height) {
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(size.width * left, size.height * top, size.width * width,
-              size.height * height),
+          Rect.fromLTWH(size.width * left, size.height * top,
+              size.width * width, size.height * height),
           const Radius.circular(6),
         ),
         blockPaint,

@@ -37,8 +37,8 @@ import 'dart:io';
 // ─────────────────────────────────────────────────────────────────────────────
 
 class Borne {
-  const Borne(this.libelle, this.dto, this.champ, this.decorateur, this.fichierApp,
-      this.motifApp);
+  const Borne(this.libelle, this.dto, this.champ, this.decorateur,
+      this.fichierApp, this.motifApp);
 
   final String libelle;
   final String dto;
@@ -51,35 +51,54 @@ class Borne {
 }
 
 const _bornes = <Borne>[
-  Borne('description de promo (max)',
-      'apps/backend/src/promo/dto/create-promo.dto.ts', 'description', 'MaxLength',
+  Borne(
+      'description de promo (max)',
+      'apps/backend/src/promo/dto/create-promo.dto.ts',
+      'description',
+      'MaxLength',
       'apps/mobile/lib/features/shared/widgets/promo_form_fields.dart',
       r'promoDescriptionMaxLength\s*=\s*(\d+)'),
-  Borne('titre de mise en avant (max)',
-      'apps/backend/src/highlight/dto/create-highlight.dto.ts', 'titre', 'MaxLength',
+  Borne(
+      'titre de mise en avant (max)',
+      'apps/backend/src/highlight/dto/create-highlight.dto.ts',
+      'titre',
+      'MaxLength',
       'apps/mobile/lib/features/admin/screens/admin_highlight_form_screen.dart',
       r'maxLength:\s*(\d+)'),
-  Borne('sous-titre de mise en avant (max)',
-      'apps/backend/src/highlight/dto/create-highlight.dto.ts', 'sousTitre', 'MaxLength',
+  Borne(
+      'sous-titre de mise en avant (max)',
+      'apps/backend/src/highlight/dto/create-highlight.dto.ts',
+      'sousTitre',
+      'MaxLength',
       'apps/mobile/lib/features/admin/screens/admin_highlight_form_screen.dart',
       r'maxLength:\s*(\d+)'),
-  Borne('mot de passe agent (min) — création',
-      'apps/backend/src/agent/dto/create-agent.dto.ts', 'password', 'MinLength',
+  Borne(
+      'mot de passe agent (min) — création',
+      'apps/backend/src/agent/dto/create-agent.dto.ts',
+      'password',
+      'MinLength',
       'apps/mobile/lib/features/admin/screens/create_agent_screen.dart',
       r'length\s*<\s*(\d+)'),
-  Borne('mot de passe agent (min) — réinitialisation',
-      'apps/backend/src/agent/dto/create-agent.dto.ts', 'password', 'MinLength',
+  Borne(
+      'mot de passe agent (min) — réinitialisation',
+      'apps/backend/src/agent/dto/create-agent.dto.ts',
+      'password',
+      'MinLength',
       'apps/mobile/lib/features/admin/screens/agent_list_screen.dart',
       r'length\s*<\s*(\d+)'),
-  Borne('mot de passe (min) — connexion',
-      'apps/backend/src/agent/dto/create-agent.dto.ts', 'password', 'MinLength',
+  Borne(
+      'mot de passe (min) — connexion',
+      'apps/backend/src/agent/dto/create-agent.dto.ts',
+      'password',
+      'MinLength',
       'apps/mobile/lib/features/commercant/screens/commercant_login_screen.dart',
       r'length\s*<\s*(\d+)'),
 ];
 
 /// Les **motifs** (regex) recopiés, comparés sur leur texte.
 class Motif {
-  const Motif(this.libelle, this.sourceTs, this.nomTs, this.fichierApp, this.nomApp);
+  const Motif(
+      this.libelle, this.sourceTs, this.nomTs, this.fichierApp, this.nomApp);
   final String libelle;
   final String sourceTs;
   final String nomTs;
@@ -88,12 +107,18 @@ class Motif {
 }
 
 const _motifs = <Motif>[
-  Motif('PIN à fixer',
-      'apps/backend/src/commercant/pin.constants.ts', 'PIN_SET_PATTERN',
-      'apps/mobile/lib/features/shared/validators/pin_validator.dart', '_pinSetPattern'),
-  Motif('PIN à vérifier',
-      'apps/backend/src/commercant/pin.constants.ts', 'PIN_VERIFY_PATTERN',
-      'apps/mobile/lib/features/shared/validators/pin_validator.dart', '_pinVerifyPattern'),
+  Motif(
+      'PIN à fixer',
+      'apps/backend/src/commercant/pin.constants.ts',
+      'PIN_SET_PATTERN',
+      'apps/mobile/lib/features/shared/validators/pin_validator.dart',
+      '_pinSetPattern'),
+  Motif(
+      'PIN à vérifier',
+      'apps/backend/src/commercant/pin.constants.ts',
+      'PIN_VERIFY_PATTERN',
+      'apps/mobile/lib/features/shared/validators/pin_validator.dart',
+      '_pinVerifyPattern'),
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,7 +145,9 @@ int? borneServeur(String source, String champ, String decorateur) {
     for (var j = i + 1; j < lignes.length && j <= i + 10; j++) {
       if (decl.hasMatch(lignes[j])) return int.parse(m.group(1)!);
       // Un autre décorateur de champ intercalé : on continue.
-      if (lignes[j].trim().isEmpty || lignes[j].trimLeft().startsWith('@')) continue;
+      if (lignes[j].trim().isEmpty || lignes[j].trimLeft().startsWith('@')) {
+        continue;
+      }
       break; // autre chose → ce décorateur ne porte pas sur `champ`
     }
   }
@@ -128,11 +155,10 @@ int? borneServeur(String source, String champ, String decorateur) {
 }
 
 /// Tous les nombres capturés par [motif] dans une source d'application.
-Set<int> nombresApp(String source, String motif) =>
-    RegExp(motif)
-        .allMatches(_sansCommentaires(source))
-        .map((m) => int.parse(m.group(1)!))
-        .toSet();
+Set<int> nombresApp(String source, String motif) => RegExp(motif)
+    .allMatches(_sansCommentaires(source))
+    .map((m) => int.parse(m.group(1)!))
+    .toSet();
 
 /// Le texte d'un motif régulier, quel que soit le langage.
 ///
@@ -142,7 +168,8 @@ String? motifRegex(String source, String nom) {
   final propre = _sansCommentaires(source);
   final ts = RegExp('$nom\\s*=\\s*/(.+?)/[gimsuy]*\\s*;').firstMatch(propre);
   if (ts != null) return ts.group(1);
-  final dart = RegExp("$nom\\s*=\\s*RegExp\\(\\s*r?['\"](.+?)['\"]").firstMatch(propre);
+  final dart =
+      RegExp("$nom\\s*=\\s*RegExp\\(\\s*r?['\"](.+?)['\"]").firstMatch(propre);
   return dart?.group(1);
 }
 
@@ -160,7 +187,8 @@ Directory racineDepot() {
     if (d.parent.path == d.path) break;
     d = d.parent;
   }
-  stderr.writeln('❌ racine du dépôt introuvable depuis ${Directory.current.path}');
+  stderr.writeln(
+      '❌ racine du dépôt introuvable depuis ${Directory.current.path}');
   stderr.writeln("   L'absence de verdict n'est pas un verdict.");
   exit(2);
 }
@@ -198,27 +226,47 @@ export class D {
 ''';
 
   // ── Doivent PASSER ────────────────────────────────────────────────────────
-  _verifie('MaxLength à travers un autre décorateur', borneServeur(dto, 'description', 'MaxLength'), 140);
-  _verifie('MinLength du même champ', borneServeur(dto, 'description', 'MinLength'), 2);
-  _verifie('champ optionnel (titre?)', borneServeur(dto, 'titre', 'MaxLength'), 60);
-  _verifie('décorateur avec options', borneServeur(dto, 'photoKeys', 'MinLength'), 1);
-  _verifie('nombres côté app', nombresApp('maxLength: 60,\nmaxLength: 100,', r'maxLength:\s*(\d+)').toList()..sort(), [60, 100]);
-  _verifie('motif TS', motifRegex(r"export const P = /^\d{6,12}$/;", 'P'), r'^\d{6,12}$');
-  _verifie('motif Dart', motifRegex(r"final P = RegExp(r'^\d{6,12}$');", 'P'), r'^\d{6,12}$');
+  _verifie('MaxLength à travers un autre décorateur',
+      borneServeur(dto, 'description', 'MaxLength'), 140);
+  _verifie('MinLength du même champ',
+      borneServeur(dto, 'description', 'MinLength'), 2);
+  _verifie(
+      'champ optionnel (titre?)', borneServeur(dto, 'titre', 'MaxLength'), 60);
+  _verifie('décorateur avec options',
+      borneServeur(dto, 'photoKeys', 'MinLength'), 1);
+  _verifie(
+      'nombres côté app',
+      nombresApp('maxLength: 60,\nmaxLength: 100,', r'maxLength:\s*(\d+)')
+          .toList()
+        ..sort(),
+      [60, 100]);
+  _verifie('motif TS', motifRegex(r"export const P = /^\d{6,12}$/;", 'P'),
+      r'^\d{6,12}$');
+  _verifie('motif Dart', motifRegex(r"final P = RegExp(r'^\d{6,12}$');", 'P'),
+      r'^\d{6,12}$');
 
   // ── Doivent REFUSER ───────────────────────────────────────────────────────
   // ⚠️ Le cas fondateur : un décorateur qui ne porte PAS sur le champ cherché
   // ne doit pas être attribué. Sans la borne « autre chose → on arrête », le
   // @MaxLength(140) de `description` serait lu comme celui de `titre`.
-  _verifie('décorateur d’un AUTRE champ non attribué',
-      borneServeur('@MaxLength(9)\n  autre: string;\n\n  titre: string;', 'titre', 'MaxLength'), null);
-  _verifie('champ absent → null', borneServeur(dto, 'inexistant', 'MaxLength'), null);
-  _verifie('décorateur absent → null', borneServeur(dto, 'description', 'Min'), null);
-  _verifie('décorateur en commentaire ignoré',
-      borneServeur('// @MaxLength(140)\n  description: string;', 'description', 'MaxLength'), null);
+  _verifie(
+      'décorateur d’un AUTRE champ non attribué',
+      borneServeur('@MaxLength(9)\n  autre: string;\n\n  titre: string;',
+          'titre', 'MaxLength'),
+      null);
+  _verifie('champ absent → null', borneServeur(dto, 'inexistant', 'MaxLength'),
+      null);
+  _verifie('décorateur absent → null', borneServeur(dto, 'description', 'Min'),
+      null);
+  _verifie(
+      'décorateur en commentaire ignoré',
+      borneServeur('// @MaxLength(140)\n  description: string;', 'description',
+          'MaxLength'),
+      null);
   _verifie('aucun nombre côté app → ensemble vide',
       nombresApp('rien ici', r'maxLength:\s*(\d+)').toList(), []);
-  _verifie('motif introuvable → null', motifRegex('const autre = 1;', 'P'), null);
+  _verifie(
+      'motif introuvable → null', motifRegex('const autre = 1;', 'P'), null);
 
   const casRefus = 6;
   final total = _ok + _echecs.length;
@@ -253,8 +301,10 @@ void main(List<String> args) {
     final serveur = borneServeur(lire(b.dto), b.champ, b.decorateur);
     if (serveur == null) {
       stdout.writeln('  ❌ ${b.libelle}');
-      stdout.writeln('       @${b.decorateur} sur `${b.champ}` introuvable dans ${b.dto}');
-      stdout.writeln('       Le DTO a-t-il changé ? Un contrôle qui ne trouve plus sa '
+      stdout.writeln(
+          '       @${b.decorateur} sur `${b.champ}` introuvable dans ${b.dto}');
+      stdout.writeln(
+          '       Le DTO a-t-il changé ? Un contrôle qui ne trouve plus sa '
           'cible ne conclut pas.');
       problemes++;
       continue;
@@ -264,7 +314,8 @@ void main(List<String> args) {
     if (app.isEmpty) {
       stdout.writeln('  ❌ ${b.libelle}');
       stdout.writeln('       aucune valeur trouvée dans ${b.fichierApp}');
-      stdout.writeln('       (motif : ${b.motifApp}) — l\'ancre a-t-elle bougé ?');
+      stdout.writeln(
+          '       (motif : ${b.motifApp}) — l\'ancre a-t-elle bougé ?');
       problemes++;
       continue;
     }

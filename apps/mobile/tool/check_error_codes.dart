@@ -54,16 +54,13 @@ const _tablesApp = <String, String>{
 /// (il perdrait la valeur interpolée) mais de faire porter les paramètres par
 /// la réponse serveur pour que l'app compose la phrase elle-même.
 const _exclusions = <String, String>{
-  'VALIDATION_ERROR':
-      'message par champ, composé dynamiquement côté serveur',
+  'VALIDATION_ERROR': 'message par champ, composé dynamiquement côté serveur',
   'PROMO_DATE_FIN_EXCEEDS_MAX':
       'le message interpole la durée maximale — un mapping statique la perdrait',
-  'PROMO_ACTIVE_CAP_REACHED':
-      'le message interpole le plafond — idem',
+  'PROMO_ACTIVE_CAP_REACHED': 'le message interpole le plafond — idem',
   'PROMO_DAILY_CREATION_CAP_REACHED':
       'le message interpole le plafond quotidien — idem',
-  'PROMO_REPUBLISH_TOO_SOON':
-      'le message interpole le délai restant — idem',
+  'PROMO_REPUBLISH_TOO_SOON': 'le message interpole le délai restant — idem',
   // ⚠️ HIGHLIGHT_CAP_REACHED n'est PAS ici, délibérément. Son message
   // interpole lui aussi une valeur (`limité à ${HIGHLIGHT_MAX_SLIDES}`), il
   // appartient donc probablement à la même famille — mais il n'a jamais été
@@ -94,8 +91,8 @@ String _sansCommentaires(String s) => s
 /// membre dont la valeur reprend le nom serait compté deux fois, et un enum
 /// déclaré sur une seule ligne ne rendrait que son premier membre.
 Set<String> membresEnum(String source, String nom) {
-  final bloc =
-      RegExp('enum\\s+$nom\\s*\\{([\\s\\S]*?)\\}').firstMatch(_sansCommentaires(source));
+  final bloc = RegExp('enum\\s+$nom\\s*\\{([\\s\\S]*?)\\}')
+      .firstMatch(_sansCommentaires(source));
   if (bloc == null) return <String>{};
 
   final sansValeurs = bloc
@@ -115,11 +112,10 @@ Set<String> membresEnum(String source, String nom) {
 /// forme, signalerait un manque inexistant, et l'entrée ajoutée pour satisfaire
 /// le contrôle créerait un doublon. On reconnaît donc toute chaîne littérale
 /// suivie d'un `:`.
-List<String> clesTable(String source) =>
-    RegExp("""['"]([^'"]+)['"]\\s*:""")
-        .allMatches(_sansCommentaires(source))
-        .map((m) => m.group(1)!)
-        .toList();
+List<String> clesTable(String source) => RegExp("""['"]([^'"]+)['"]\\s*:""")
+    .allMatches(_sansCommentaires(source))
+    .map((m) => m.group(1)!)
+    .toList();
 
 List<String> doublons(List<String> cles) {
   final vus = <String>{};
@@ -144,7 +140,8 @@ Directory racineDepot() {
     if (d.parent.path == d.path) break;
     d = d.parent;
   }
-  stderr.writeln('❌ racine du dépôt introuvable depuis ${Directory.current.path}');
+  stderr.writeln(
+      '❌ racine du dépôt introuvable depuis ${Directory.current.path}');
   stderr.writeln("   L'absence de verdict n'est pas un verdict.");
   exit(2);
 }
@@ -166,33 +163,46 @@ void _verifie(String libelle, Object obtenu, Object attendu) {
 
 bool selfTest() {
   // ── Doivent PASSER ────────────────────────────────────────────────────────
-  _verifie('enum sur une ligne',
-      membresEnum("export enum E { A = 'a', B = 'b' }", 'E').toList()..sort(), ['A', 'B']);
-  _verifie('enum multi-lignes',
-      membresEnum("enum E {\n  A = 'a',\n  LONG_NOM = 'x',\n}", 'E').toList()..sort(),
+  _verifie(
+      'enum sur une ligne',
+      membresEnum("export enum E { A = 'a', B = 'b' }", 'E').toList()..sort(),
+      ['A', 'B']);
+  _verifie(
+      'enum multi-lignes',
+      membresEnum("enum E {\n  A = 'a',\n  LONG_NOM = 'x',\n}", 'E').toList()
+        ..sort(),
       ['A', 'LONG_NOM']);
-  _verifie('clé pointée', clesTable("{'order.not_found': 'x'}"), ['order.not_found']);
-  _verifie('clé courte sans séparateur', clesTable("{'not_found': 'x'}"), ['not_found']);
+  _verifie('clé pointée', clesTable("{'order.not_found': 'x'}"),
+      ['order.not_found']);
+  _verifie('clé courte sans séparateur', clesTable("{'not_found': 'x'}"),
+      ['not_found']);
   _verifie('guillemets doubles', clesTable('{"A": "x"}'), ['A']);
   _verifie('doublon détecté', doublons(['a', 'b', 'a']), ['a']);
   _verifie('valeur interpolée reste une valeur',
       clesTable("{'A': 'limité à \$MAX unités'}"), ['A']);
 
   // ── Doivent REFUSER ───────────────────────────────────────────────────────
-  _verifie('membre en commentaire ligne ignoré',
-      membresEnum("enum E {\n  A = 'a',\n  // B = 'b',\n}", 'E').toList(), ['A']);
-  _verifie('membre en bloc commentaire ignoré',
-      membresEnum("enum E {\n  A = 'a',\n  /* B = 'b', */\n}", 'E').toList(), ['A']);
-  _verifie('mauvais nom d’enum → rien', membresEnum("enum Autre { A = 'a' }", 'E').toList(), []);
+  _verifie(
+      'membre en commentaire ligne ignoré',
+      membresEnum("enum E {\n  A = 'a',\n  // B = 'b',\n}", 'E').toList(),
+      ['A']);
+  _verifie(
+      'membre en bloc commentaire ignoré',
+      membresEnum("enum E {\n  A = 'a',\n  /* B = 'b', */\n}", 'E').toList(),
+      ['A']);
+  _verifie('mauvais nom d’enum → rien',
+      membresEnum("enum Autre { A = 'a' }", 'E').toList(), []);
   _verifie('clé en commentaire ignorée',
       clesTable("// {'fantome': 'x'}\n{'vrai': 'y'}"), ['vrai']);
-  _verifie('URL dans une valeur n’est pas une clé', clesTable("{'a': 'http://x'}"), ['a']);
+  _verifie('URL dans une valeur n’est pas une clé',
+      clesTable("{'a': 'http://x'}"), ['a']);
   _verifie('table vide → rien', clesTable('{}'), []);
 
   // ⚠️ Le cas qui garde ce fichier honnête : toute exclusion porte une raison
   // non vide. Sans lui, on pourrait neutraliser le contrôle en ajoutant une
   // clé sans justification.
-  final sansRaison = _exclusions.entries.where((e) => e.value.trim().isEmpty).toList();
+  final sansRaison =
+      _exclusions.entries.where((e) => e.value.trim().isEmpty).toList();
   _verifie('toute exclusion porte une raison', sansRaison.length, 0);
 
   const casRefus = 7;
@@ -245,7 +255,8 @@ void main(List<String> args) {
 
   final serveur = membresEnum(lire(_sourceServeur), _nomEnum);
   if (serveur.isEmpty) {
-    stderr.writeln('❌ enum $_nomEnum vide ou non reconnue dans $_sourceServeur');
+    stderr
+        .writeln('❌ enum $_nomEnum vide ou non reconnue dans $_sourceServeur');
     exit(2);
   }
 
@@ -273,11 +284,13 @@ void main(List<String> args) {
     problemes++;
     stdout.writeln('  ❌ $langue');
     for (final c in manquants) {
-      stdout.writeln('       manque   $c  (servi, jamais traduit — l\'utilisateur '
+      stdout.writeln(
+          '       manque   $c  (servi, jamais traduit — l\'utilisateur '
           'verra le message backend, en français)');
     }
     for (final c in enTrop) {
-      stdout.writeln('       en trop  $c  (traduit, mais le serveur ne l\'émet pas)');
+      stdout.writeln(
+          '       en trop  $c  (traduit, mais le serveur ne l\'émet pas)');
     }
     for (final c in deuxFois) {
       stdout.writeln('       doublon  $c');
@@ -287,9 +300,11 @@ void main(List<String> args) {
   stdout.writeln();
   if (problemes > 0) {
     stdout.writeln('❌ $problemes table(s) désynchronisée(s).');
-    stdout.writeln('   Soit traduire le code, soit l\'épingler dans _exclusions '
-        'AVEC sa raison — jamais le laisser sans décision.');
+    stdout
+        .writeln('   Soit traduire le code, soit l\'épingler dans _exclusions '
+            'AVEC sa raison — jamais le laisser sans décision.');
     exit(1);
   }
-  stdout.writeln('✅ les ${_tablesApp.length} tables sont d\'accord avec le serveur.');
+  stdout.writeln(
+      '✅ les ${_tablesApp.length} tables sont d\'accord avec le serveur.');
 }

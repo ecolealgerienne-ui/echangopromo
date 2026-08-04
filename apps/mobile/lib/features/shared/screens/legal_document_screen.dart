@@ -14,7 +14,8 @@ class LegalDocumentScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final title = _isPrivacy ? l10n.legalPrivacyTitle : l10n.legalCguTitle;
-    final content = _isPrivacy ? l10n.legalPrivacyContent : l10n.legalCguContent;
+    final content =
+        _isPrivacy ? l10n.legalPrivacyContent : l10n.legalCguContent;
 
     return Scaffold(
       appBar: AppBar(title: Text(title)),
@@ -70,7 +71,9 @@ class _LegalParagraph extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(firstLine, style: textTheme.titleSmall?.copyWith(color: colorScheme.primary)),
+          Text(firstLine,
+              style:
+                  textTheme.titleSmall?.copyWith(color: colorScheme.primary)),
           if (body.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(

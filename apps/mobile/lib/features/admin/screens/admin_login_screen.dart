@@ -82,18 +82,23 @@ class _AdminLoginScreenState extends ConsumerState<AdminLoginScreen> {
                 controller: _emailController,
                 decoration: InputDecoration(labelText: l10n.emailLabel),
                 keyboardType: TextInputType.emailAddress,
-                validator: (v) => (v == null || !v.contains('@')) ? l10n.emailInvalid : null,
+                validator: (v) =>
+                    (v == null || !v.contains('@')) ? l10n.emailInvalid : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _passwordController,
                 decoration: InputDecoration(labelText: l10n.passwordLabel),
                 obscureText: true,
-                validator: (v) => (v == null || v.isEmpty) ? l10n.passwordRequired : null,
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? l10n.passwordRequired : null,
               ),
               ErrorText(_error),
               const SizedBox(height: 16),
-              LoadingButton(loading: _loading, onPressed: _submit, label: l10n.loginLabel),
+              LoadingButton(
+                  loading: _loading,
+                  onPressed: _submit,
+                  label: l10n.loginLabel),
             ],
           ),
         ),

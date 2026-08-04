@@ -32,7 +32,8 @@ class NotificationApi {
   final Dio _dio;
 
   /// Récupère les notifications non lues de l'utilisateur
-  Future<PaginatedNotifications> listUnread({int page = 1, int limit = 20}) async {
+  Future<PaginatedNotifications> listUnread(
+      {int page = 1, int limit = 20}) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/notifications/unread',
       queryParameters: {'page': page, 'limit': limit},
@@ -51,7 +52,8 @@ class NotificationApi {
 
   /// Compte les notifications non lues (pour un badge)
   Future<int> countUnread() async {
-    final response = await _dio.get<Map<String, dynamic>>('/notifications/unread/count');
+    final response =
+        await _dio.get<Map<String, dynamic>>('/notifications/unread/count');
     return response.data!['count'] as int;
   }
 

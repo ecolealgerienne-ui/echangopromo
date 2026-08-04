@@ -9,6 +9,7 @@ enum RegistreStatus {
 
   final String value;
 
-  static RegistreStatus? fromValue(String? value) =>
-      value == null ? null : RegistreStatus.values.firstWhere((s) => s.value == value);
+  static RegistreStatus? fromValue(String? value) => value == null
+      ? null
+      : RegistreStatus.values.firstWhere((s) => s.value == value);
 }

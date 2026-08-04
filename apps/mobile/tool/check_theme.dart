@@ -53,13 +53,35 @@ const _horsCible = <String, String>{
 /// parce qu'un refus par défaut sur un nom qu'on n'a pas examiné accuserait à
 /// l'aveugle.
 const _semantiquesInterdites = <String>{
-  'red', 'redAccent', 'green', 'greenAccent', 'blue', 'blueAccent',
-  'amber', 'amberAccent', 'orange', 'orangeAccent', 'yellow',
-  'grey', 'blueGrey', 'purple', 'teal', 'pink', 'indigo', 'cyan', 'lime',
+  'red',
+  'redAccent',
+  'green',
+  'greenAccent',
+  'blue',
+  'blueAccent',
+  'amber',
+  'amberAccent',
+  'orange',
+  'orangeAccent',
+  'yellow',
+  'grey',
+  'blueGrey',
+  'purple',
+  'teal',
+  'pink',
+  'indigo',
+  'cyan',
+  'lime',
 };
 
 /// Neutres admis — mais seulement dans les fichiers épinglés ci-dessous.
-const _neutres = <String>{'white', 'black', 'transparent', 'white70', 'black54'};
+const _neutres = <String>{
+  'white',
+  'black',
+  'transparent',
+  'white70',
+  'black54'
+};
 
 /// Fichiers autorisés à poser un neutre ou une valeur hexadécimale, AVEC leur
 /// raison.
@@ -82,10 +104,10 @@ const _epingles = <String, String>{
 
 final _couleurNommee = RegExp(r'(?:^|[^a-zA-Z.])Colors\.([a-zA-Z0-9]+)');
 final _couleurHexa = RegExp(r'Color\(0x[0-9A-Fa-f]+\)');
-final _espacement = RegExp(
-    r'EdgeInsets\.(?:all|symmetric|only|fromLTRB)\(\s*[a-z:\s]*\d|'
-    r'SizedBox\(\s*(?:height|width):\s*\d|'
-    r'BorderRadius\.circular\(\s*\d');
+final _espacement =
+    RegExp(r'EdgeInsets\.(?:all|symmetric|only|fromLTRB)\(\s*[a-z:\s]*\d|'
+        r'SizedBox\(\s*(?:height|width):\s*\d|'
+        r'BorderRadius\.circular\(\s*\d');
 
 String _sansCommentaires(String s) => s
     .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
@@ -109,10 +131,10 @@ String? verdictCouleur(String nom, String cheminRelatif) {
   return null; // nom non examiné : on n'accuse pas à l'aveugle
 }
 
-String? verdictHexa(String cheminRelatif) =>
-    _epingles.containsKey(cheminRelatif)
-        ? null
-        : 'valeur hexadécimale en dur — la nommer dans le thème, ou épingler le fichier';
+String? verdictHexa(String cheminRelatif) => _epingles
+        .containsKey(cheminRelatif)
+    ? null
+    : 'valeur hexadécimale en dur — la nommer dans le thème, ou épingler le fichier';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -126,7 +148,8 @@ Directory racineDepot() {
     if (d.parent.path == d.path) break;
     d = d.parent;
   }
-  stderr.writeln('❌ racine du dépôt introuvable depuis ${Directory.current.path}');
+  stderr.writeln(
+      '❌ racine du dépôt introuvable depuis ${Directory.current.path}');
   stderr.writeln("   L'absence de verdict n'est pas un verdict.");
   exit(2);
 }
@@ -140,11 +163,14 @@ final _echecs = <String>[];
 
 void _verifie(String libelle, Object? obtenu, Object? attendu) {
   final egal = (obtenu == null && attendu == null) ||
-      (obtenu != null && attendu != null && obtenu.toString().contains(attendu.toString()));
+      (obtenu != null &&
+          attendu != null &&
+          obtenu.toString().contains(attendu.toString()));
   if (egal) {
     _ok++;
   } else {
-    _echecs.add('$libelle — obtenu ${obtenu ?? "admis"}, attendu ${attendu ?? "admis"}');
+    _echecs.add(
+        '$libelle — obtenu ${obtenu ?? "admis"}, attendu ${attendu ?? "admis"}');
   }
 }
 
@@ -153,21 +179,28 @@ bool selfTest() {
   const libre = 'admin/screens/admin_dashboard_screen.dart';
 
   // ── Doivent PASSER (admis) ────────────────────────────────────────────────
-  _verifie('neutre dans un fichier épinglé', verdictCouleur('white', epingle), null);
-  _verifie('transparent dans un fichier épinglé', verdictCouleur('transparent', epingle), null);
+  _verifie(
+      'neutre dans un fichier épinglé', verdictCouleur('white', epingle), null);
+  _verifie('transparent dans un fichier épinglé',
+      verdictCouleur('transparent', epingle), null);
   _verifie('hexa dans un fichier épinglé', verdictHexa(epingle), null);
-  _verifie('nom non examiné → admis', verdictCouleur('deepPurpleAccent700', libre), null);
+  _verifie('nom non examiné → admis',
+      verdictCouleur('deepPurpleAccent700', libre), null);
   _verifie('extraction ignore les commentaires',
       _couleurNommee.hasMatch(_sansCommentaires('// Colors.red')), false);
   _verifie('semanticColors.success n\'est PAS Colors.success',
       _couleurNommee.hasMatch('semanticColors.success'), false);
 
   // ── Doivent REFUSER ───────────────────────────────────────────────────────
-  _verifie('sémantique interdite partout', verdictCouleur('redAccent', epingle), 'sémantique');
-  _verifie('sémantique dans un fichier libre', verdictCouleur('amber', libre), 'sémantique');
-  _verifie('neutre hors épinglage', verdictCouleur('white', libre), 'non épinglé');
+  _verifie('sémantique interdite partout', verdictCouleur('redAccent', epingle),
+      'sémantique');
+  _verifie('sémantique dans un fichier libre', verdictCouleur('amber', libre),
+      'sémantique');
+  _verifie(
+      'neutre hors épinglage', verdictCouleur('white', libre), 'non épinglé');
   _verifie('hexa hors épinglage', verdictHexa(libre), 'hexadécimale');
-  _verifie('Colors.red bien détecté', _couleurNommee.firstMatch(' Colors.red')?.group(1), 'red');
+  _verifie('Colors.red bien détecté',
+      _couleurNommee.firstMatch(' Colors.red')?.group(1), 'red');
   _verifie('espacement littéral détecté',
       _espacement.hasMatch('EdgeInsets.all(16)'), true);
 
@@ -228,7 +261,10 @@ void main(List<String> args) {
       }
     }
     final n = _espacement.allMatches(source).length;
-    if (n > 0) espacementsParDossier[dossier] = (espacementsParDossier[dossier] ?? 0) + n;
+    if (n > 0) {
+      espacementsParDossier[dossier] =
+          (espacementsParDossier[dossier] ?? 0) + n;
+    }
   }
 
   stdout.writeln('── couleurs ──');
@@ -248,8 +284,10 @@ void main(List<String> args) {
     stdout.writeln('  ${e.value.toString().padLeft(4)}  ${e.key}');
   }
   stdout.writeln('  ${total.toString().padLeft(4)}  total');
-  stdout.writeln('  ⓘ pas de barème `AppSpacing` à ce jour : refuser demanderait de');
-  stdout.writeln('    converger vers rien, et faire converger déplace des pixels.');
+  stdout.writeln(
+      '  ⓘ pas de barème `AppSpacing` à ce jour : refuser demanderait de');
+  stdout.writeln(
+      '    converger vers rien, et faire converger déplace des pixels.');
 
   stdout.writeln();
   if (refus.isNotEmpty) {

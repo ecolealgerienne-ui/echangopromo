@@ -22,10 +22,12 @@ class DevProfileSwitcherScreen extends ConsumerStatefulWidget {
   const DevProfileSwitcherScreen({super.key});
 
   @override
-  ConsumerState<DevProfileSwitcherScreen> createState() => _DevProfileSwitcherScreenState();
+  ConsumerState<DevProfileSwitcherScreen> createState() =>
+      _DevProfileSwitcherScreenState();
 }
 
-class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScreen> {
+class _DevProfileSwitcherScreenState
+    extends ConsumerState<DevProfileSwitcherScreen> {
   static const _keyCommercantTelephone = 'dev_switcher_commercant_telephone';
   static const _keyCommercantPin = 'dev_switcher_commercant_pin';
   static const _keyAgentEmail = 'dev_switcher_agent_email';
@@ -40,7 +42,8 @@ class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScr
   final _commercantPin = TextEditingController(text: '010203');
   final _agentEmail = TextEditingController(text: 'agent1@echangopromo.com');
   final _agentPassword = TextEditingController(text: '123456789');
-  final _adminEmail = TextEditingController(text: 'superadmin@echangopromo.com');
+  final _adminEmail =
+      TextEditingController(text: 'superadmin@echangopromo.com');
   final _adminPassword = TextEditingController(text: '123456789');
 
   bool _loading = false;
@@ -87,12 +90,16 @@ class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScr
     setState(() {});
   }
 
-  Future<void> _save(String key, String value) => _storage.write(key: key, value: value);
+  Future<void> _save(String key, String value) =>
+      _storage.write(key: key, value: value);
 
   void _showError(Object error) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(extractApiErrorMessage(error, fallback: 'Connexion impossible.', locale: Localizations.localeOf(context)))),
+      SnackBar(
+          content: Text(extractApiErrorMessage(error,
+              fallback: 'Connexion impossible.',
+              locale: Localizations.localeOf(context)))),
     );
   }
 
@@ -135,7 +142,8 @@ class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScr
     });
     try {
       final api = ref.read(agentApiProvider);
-      final token = await api.login(email: _agentEmail.text.trim(), password: _agentPassword.text);
+      final token = await api.login(
+          email: _agentEmail.text.trim(), password: _agentPassword.text);
       await ref.read(authControllerProvider.notifier).loginThenResolveId(
             role: AppRole.agent,
             token: token,
@@ -158,7 +166,8 @@ class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScr
     });
     try {
       final api = ref.read(adminApiProvider);
-      final token = await api.login(email: _adminEmail.text.trim(), password: _adminPassword.text);
+      final token = await api.login(
+          email: _adminEmail.text.trim(), password: _adminPassword.text);
       await ref.read(authControllerProvider.notifier).loginThenResolveId(
             role: AppRole.admin,
             token: token,
@@ -272,9 +281,11 @@ class _DevProfileSwitcherScreenState extends ConsumerState<DevProfileSwitcherScr
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Client (sans connexion)', style: Theme.of(context).textTheme.titleMedium),
+                  Text('Client (sans connexion)',
+                      style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
-                  const Text('Déconnecte la session en cours et ouvre l\'app grand public.'),
+                  const Text(
+                      'Déconnecte la session en cours et ouvre l\'app grand public.'),
                   const SizedBox(height: 12),
                   FilledButton(
                     onPressed: _loading ? null : _useClientWithoutLogin,

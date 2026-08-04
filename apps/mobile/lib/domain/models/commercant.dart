@@ -29,9 +29,10 @@ class Commercant {
         accountState: json['accountState'] != null
             ? CommercantAccountState.fromValue(json['accountState'] as String)
             : null,
-        originVerification:
-            CommercantOriginVerification.fromValue(json['originVerification'] as String?),
-        registreStatus: RegistreStatus.fromValue(json['registreStatus'] as String?),
+        originVerification: CommercantOriginVerification.fromValue(
+            json['originVerification'] as String?),
+        registreStatus:
+            RegistreStatus.fromValue(json['registreStatus'] as String?),
         profilePendingReview: json['profilePendingReview'] as bool? ?? false,
         telephone: json['telephone'] as String?,
         photoUrl: json['photoUrl'] as String?,

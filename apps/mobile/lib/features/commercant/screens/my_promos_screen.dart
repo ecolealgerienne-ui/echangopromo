@@ -23,14 +23,17 @@ import '../providers/commercant_providers.dart';
 class MyPromosScreen extends ConsumerWidget {
   const MyPromosScreen({super.key});
 
-  Future<void> _editPromo(BuildContext context, WidgetRef ref, Promo promo) async {
-    final updated = await context.push<bool>('/commercant/promos/new', extra: promo);
+  Future<void> _editPromo(
+      BuildContext context, WidgetRef ref, Promo promo) async {
+    final updated =
+        await context.push<bool>('/commercant/promos/new', extra: promo);
     if (updated == true && context.mounted) {
       ref.invalidate(myPromosProvider);
     }
   }
 
-  Future<void> _publish(BuildContext context, WidgetRef ref, Promo promo) async {
+  Future<void> _publish(
+      BuildContext context, WidgetRef ref, Promo promo) async {
     final l10n = AppLocalizations.of(context)!;
     try {
       await ref.read(promoApiProvider).publish(promo.id);
@@ -75,7 +78,8 @@ class MyPromosScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final promosAsync = ref.watch(myPromosProvider);
     final dateFormat = DateFormat('dd/MM/yyyy');
-    final activeCount = promosAsync.valueOrNull?.where((p) => p.isPublished).length ?? 0;
+    final activeCount =
+        promosAsync.valueOrNull?.where((p) => p.isPublished).length ?? 0;
     final atCap = activeCount >= kMaxPromosActives;
 
     return Scaffold(
@@ -127,7 +131,9 @@ class MyPromosScreen extends ConsumerWidget {
                           decoration: BoxDecoration(
                             color: i < activeCount
                                 ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
                             borderRadius: BorderRadius.circular(AppRadii.pill),
                           ),
                         ),
@@ -139,7 +145,8 @@ class MyPromosScreen extends ConsumerWidget {
                 child: ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
                   itemCount: promos.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 10),
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final promo = promos[index];
                     final dateLabel = promo.dateFin != null
@@ -177,7 +184,8 @@ class MyPromosScreen extends ConsumerWidget {
                                       imageUrl: photo,
                                       fit: BoxFit.cover,
                                       memCacheWidth: thumbCachePx,
-                                      errorWidget: (context, url, error) => Container(
+                                      errorWidget: (context, url, error) =>
+                                          Container(
                                         color: Theme.of(context)
                                             .colorScheme
                                             .surfaceContainerHighest,
@@ -195,7 +203,10 @@ class MyPromosScreen extends ConsumerWidget {
                                   promo.description,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
                                         fontWeight: FontWeight.w600,
                                       ),
                                 ),
@@ -223,7 +234,10 @@ class MyPromosScreen extends ConsumerWidget {
                                     ),
                                     Text(
                                       '$dateLabel · ${l10n.myPromosViewsCount(promo.viewCount ?? 0)}',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
                                             color: Theme.of(context)
                                                 .colorScheme
                                                 .onSurfaceVariant,
@@ -246,11 +260,15 @@ class MyPromosScreen extends ConsumerWidget {
                               }
                             },
                             itemBuilder: (context) => [
-                              PopupMenuItem(value: 'edit', child: Text(l10n.editItem)),
+                              PopupMenuItem(
+                                  value: 'edit', child: Text(l10n.editItem)),
                               if (promo.isPublished)
-                                PopupMenuItem(value: 'stop', child: Text(l10n.stopItem))
+                                PopupMenuItem(
+                                    value: 'stop', child: Text(l10n.stopItem))
                               else
-                                PopupMenuItem(value: 'publish', child: Text(l10n.publishLabel)),
+                                PopupMenuItem(
+                                    value: 'publish',
+                                    child: Text(l10n.publishLabel)),
                             ],
                           ),
                         ],

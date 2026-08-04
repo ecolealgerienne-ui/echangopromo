@@ -55,8 +55,8 @@ class MapBounds {
 /// Commerces de la zone visible. `autoDispose` + `family` : chaque zone est
 /// une requête distincte, et le cache se libère en quittant l'écran plutôt
 /// que de garder en mémoire toutes les zones déjà survolées.
-final mapShopsProvider =
-    FutureProvider.autoDispose.family<MapShopsResult, MapBounds>((ref, bounds) async {
+final mapShopsProvider = FutureProvider.autoDispose
+    .family<MapShopsResult, MapBounds>((ref, bounds) async {
   final categorie = ref.watch(categoryFilterProvider);
   return ref.watch(promoApiProvider).listForMap(
         north: bounds.north,

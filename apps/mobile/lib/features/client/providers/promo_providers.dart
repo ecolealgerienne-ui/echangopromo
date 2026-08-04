@@ -15,7 +15,8 @@ final categoryFilterProvider = StateProvider<Categorie?>((ref) => null);
 /// Filtre "mes favoris uniquement" — indépendant du tri, feuille "Filtres et
 /// tri" (proposition 2026-07-11 : liste plutôt que grille, filtre par
 /// favoris/date).
-final favoritesOnlyFilterProvider = StateProvider.autoDispose<bool>((ref) => false);
+final favoritesOnlyFilterProvider =
+    StateProvider.autoDispose<bool>((ref) => false);
 
 /// Texte saisi dans la barre de recherche de l'accueil (nom de promo ou de
 /// magasin). Envoyé au backend (`search`), pas filtré localement : filtrer
@@ -52,14 +53,16 @@ enum PromoDensity {
   final int columns;
 
   /// Valeur suivante dans le cycle, en boucle.
-  PromoDensity get next => PromoDensity.values[(index + 1) % PromoDensity.values.length];
+  PromoDensity get next =>
+      PromoDensity.values[(index + 1) % PromoDensity.values.length];
 }
 
 /// Préférence d'affichage, pas un filtre : volontairement absente de
 /// `_resetToHome` (promo_list_screen.dart), qui ne remet à zéro que ce qui
 /// restreint les résultats. Sans `autoDispose`, pour survivre à un aller-
 /// retour vers la carte ou la fiche d'une promo.
-final promoDensityProvider = StateProvider<PromoDensity>((ref) => PromoDensity.list);
+final promoDensityProvider =
+    StateProvider<PromoDensity>((ref) => PromoDensity.list);
 
 enum PromoSort { expireBientot, plusGrosseReduction, nouveautes }
 
@@ -69,7 +72,8 @@ enum PromoSort { expireBientot, plusGrosseReduction, nouveautes }
 /// côté client, sur les promos chargées jusqu'ici (pas un tri global
 /// serveur) — acceptable tant que le tri par défaut reste celui qui pousse
 /// à charger plus de pages.
-final promoSortProvider = StateProvider.autoDispose<PromoSort>((ref) => PromoSort.nouveautes);
+final promoSortProvider =
+    StateProvider.autoDispose<PromoSort>((ref) => PromoSort.nouveautes);
 
 enum PromoListStatus { loading, loaded, error }
 
@@ -158,7 +162,11 @@ class PromoListController extends StateNotifier<PromoListState> {
   /// promos déjà chargées. Laisse l'erreur remonter à l'appelant (bouton)
   /// pour afficher un SnackBar, sans perdre les promos déjà affichées.
   Future<void> loadMore() async {
-    if (state.status != PromoListStatus.loaded || !state.hasMore || state.loadingMore) return;
+    if (state.status != PromoListStatus.loaded ||
+        !state.hasMore ||
+        state.loadingMore) {
+      return;
+    }
     state = state.copyWith(loadingMore: true);
     try {
       final nextPage = state.page + 1;
@@ -189,7 +197,9 @@ class PromoListController extends StateNotifier<PromoListState> {
 /// serveur elle-même (`favoriteIds` change même le tri backend). `sort` et
 /// `favoritesOnlyFilterProvider` restent des filtres purement locaux
 /// (`visiblePromosProvider`), appliqués sans redéclencher de requête.
-final promoListProvider = StateNotifierProvider.autoDispose<PromoListController, PromoListState>((ref) {
+final promoListProvider =
+    StateNotifierProvider.autoDispose<PromoListController, PromoListState>(
+        (ref) {
   final api = ref.watch(promoApiProvider);
   final communeIds = ref.watch(selectedCommunesProvider);
   final categorie = ref.watch(categoryFilterProvider);
@@ -214,8 +224,9 @@ final visiblePromosProvider = Provider.autoDispose<List<Promo>>((ref) {
 
   final search = ref.watch(searchQueryProvider).trim().toLowerCase();
 
-  var filtered =
-      favoritesOnly ? state.items.where((p) => favorites.contains(p.id)).toList() : [...state.items];
+  var filtered = favoritesOnly
+      ? state.items.where((p) => favorites.contains(p.id)).toList()
+      : [...state.items];
 
   // Le backend filtre déjà via `search`, mais on refiltre ici. Deux raisons :
   // le résultat est immédiat pendant que la requête part (pas d'attente de
@@ -250,8 +261,8 @@ final visiblePromosProvider = Provider.autoDispose<List<Promo>>((ref) {
       // tri. Toutes les promos ici sont déjà publiées (findActiveForClient),
       // publishedAt est donc toujours renseigné — le fallback ne sert qu'à
       // rassurer l'analyseur de types.
-      filtered.sort((a, b) =>
-          (b.publishedAt ?? b.createdAt).compareTo(a.publishedAt ?? a.createdAt));
+      filtered.sort((a, b) => (b.publishedAt ?? b.createdAt)
+          .compareTo(a.publishedAt ?? a.createdAt));
   }
   return filtered;
 });
@@ -282,14 +293,16 @@ final topPromosProvider = FutureProvider.autoDispose<List<Highlight>>((ref) {
 /// "Autres promos du magasin" sur la fiche promo. La promo consultée est
 /// retirée de la liste côté client : le backend n'a pas à connaître le
 /// contexte d'affichage pour ça.
-final shopPromosProvider =
-    FutureProvider.autoDispose.family<List<Promo>, ({String commercantId, String excludePromoId})>(
+final shopPromosProvider = FutureProvider.autoDispose
+    .family<List<Promo>, ({String commercantId, String excludePromoId})>(
         (ref, args) async {
   final result = await ref.watch(promoApiProvider).listActive(
         commercantId: args.commercantId,
         limit: 10,
       );
-  return result.items.where((promo) => promo.id != args.excludePromoId).toList();
+  return result.items
+      .where((promo) => promo.id != args.excludePromoId)
+      .toList();
 });
 
 /// Fiche publique du commerçant. Partagée entre la fiche promo et tout écran

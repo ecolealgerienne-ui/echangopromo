@@ -8,7 +8,8 @@ import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/app_settings_actions.dart';
 
-final _auditLogProvider = FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).auditLog());
+final _auditLogProvider =
+    FutureProvider.autoDispose((ref) => ref.watch(adminApiProvider).auditLog());
 
 /// Journal d'audit (plan de correction, Phase 3) — traçabilité des actions
 /// agent/admin, jusqu'ici enregistrées en base mais jamais consultables
@@ -40,7 +41,8 @@ class AdminAuditLogScreen extends ConsumerWidget {
               itemCount: entries.length,
               itemBuilder: (context, index) {
                 final entry = entries[index];
-                final actorLabel = auditActorTypeLabel(context, entry.actorType);
+                final actorLabel =
+                    auditActorTypeLabel(context, entry.actorType);
                 return ListTile(
                   leading: Icon(
                     entry.actorType == AuditActorType.admin
@@ -51,7 +53,8 @@ class AdminAuditLogScreen extends ConsumerWidget {
                   subtitle: Text(
                     [
                       '$actorLabel ${entry.actorId}',
-                      if (entry.targetType != null) '${entry.targetType} ${entry.targetId}',
+                      if (entry.targetType != null)
+                        '${entry.targetType} ${entry.targetId}',
                       dateFormat.format(entry.createdAt),
                     ].join(' · '),
                   ),

@@ -23,6 +23,8 @@ class Env {
   /// la ligne "installe l'app" que si le lien correspondant à la
   /// plateforme est non vide, donc renseigner ces valeurs à la publication
   /// (`--dart-define=PLAY_STORE_URL=...`) suffit, sans toucher au code.
-  static const playStoreUrl = String.fromEnvironment('PLAY_STORE_URL', defaultValue: '');
-  static const appStoreUrl = String.fromEnvironment('APP_STORE_URL', defaultValue: '');
+  static const playStoreUrl =
+      String.fromEnvironment('PLAY_STORE_URL', defaultValue: '');
+  static const appStoreUrl =
+      String.fromEnvironment('APP_STORE_URL', defaultValue: '');
 }
