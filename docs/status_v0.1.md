@@ -134,7 +134,58 @@ nombre. `CORS_ORIGINS` mérite d'être fixée aussi.
 > **imprime la valeur qu'il a effectivement utilisée**. Une borne lue depuis
 > l'environnement est une donnée d'entrée du banc, pas une constante.
 
-### P4 — Le verrou du plafond de 5 promos n'a jamais été éprouvé en concurrence
+### P9 — `S3_ENDPOINT` sert deux rôles incompatibles 🆕 *contourné en local*
+
+**Trouvé le 2026-08-04** en instrumentant le banc de concurrence : une création
+de promo prenait **plus de 300 secondes**.
+
+```
+WARN [PromoService] Échec de génération de la miniature :
+     TimeoutError: connect ETIMEDOUT 10.0.2.2:9000
+```
+
+`S3_ENDPOINT` valait `http://10.0.2.2:9000` — l'alias de l'hôte **vu depuis
+l'émulateur Android**, choisi pour que le mobile puisse charger les images. Mais
+la même variable est le point d'accès du **client S3 du serveur**
+(`storage.service.ts:72`), et `10.0.2.2` n'est pas routable depuis WSL. Chaque
+création attendait donc un timeout TCP.
+
+**Une valeur juste dans un contexte, fausse dans l'autre** — et le `.env`
+documentait même le choix sans voir qu'il servait deux consommateurs.
+
+**Contourné en local** : les deux rôles sont désormais séparés, avec le
+mécanisme qui existait déjà.
+
+```
+S3_ENDPOINT=http://localhost:9000                     # ce que le SERVEUR appelle
+S3_CDN_BASE_URL=http://10.0.2.2:9000/echango-promo    # ce que le CLIENT reçoit
+```
+
+Création de promo : **300 s → 88 ms**.
+
+⚠️ **Ce n'est qu'un contournement local** (`.env`, non versionné). Deux
+questions restent ouvertes pour l'équipe : le `.env.example` devrait-il porter
+cette séparation, et la génération de miniature — best-effort, mais **dans le
+chemin de création** — mérite-t-elle un timeout court plutôt que celui du SDK ?
+
+### P4 — Le verrou du plafond de 5 promos ✅ *fermé le 2026-08-04*
+
+**Fermé** par `scripts/test-plafond-promos.sh` : **5 tours × 4 créations
+simultanées, 1 seul gagnant à chaque tour, 5 actives après**.
+
+**Prouvé par mutation** — le verrou rendu non sérialisant
+(`hashtext($1 || clock_timestamp())`, donc un verrou différent par
+transaction) : **4 créations sur 4 réussissent**, sur les 3 tours. C'est le
+défaut d'origine reproduit à l'identique.
+
+⚠️ **Ma première mutation était invalide** et mérite d'être notée : remplacer la
+requête par `SELECT 1` cassait le paramètre lié et rendait `INTERNAL_ERROR`. Le
+banc a dit « non concluant » — correctement — mais **mon harnais** avait conclu
+« ✅ » sur le seul code de sortie non nul. Une mutation qui **casse** au lieu de
+**dégrader** ne prouve rien, et un harnais qui juge sur le code de sortie plutôt
+que sur le motif attendu se trompe de question.
+
+<details><summary>Le constat d'origine</summary>
 
 La race condition sur `MAX_PROMOS_ACTIVES` (`promo.service.ts:43`) a été
 corrigée par un `pg_advisory_xact_lock` scopé au commerçant. **La correction n'a
@@ -142,6 +193,8 @@ jamais été rejouée sous charge.** Un banc de concurrence est probabiliste : u
 passage au vert ne prouve rien, il en faut plusieurs tours.
 
 **Débloqué par** : étape 4 de `docs/TEST_PROMO.md`, banc `test-plafond-promos`.
+
+</details>
 
 ### P5 — L'IDOR agent → promo ✅ *fermé le 2026-08-04*
 
