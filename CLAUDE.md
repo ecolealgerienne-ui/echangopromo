@@ -207,7 +207,15 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
     exacte du SDK Flutter installé — risque de blocage de `flutter pub get`
     avant même la compilation.*
 
-19. **Créer un enum Dart miroir pour chaque enum backend** (sur le modèle
+19. ⚠️ **La justification ci-dessous est au passé — vérifié le 2026-08-05.**
+    Le défaut décrit (`status == 'active'` comparé par chaîne) **ne se
+    reproduit plus** : zéro comparaison littérale dans le dépôt, et tous les
+    champs d'état des modèles sont typés en enum. La règle reste valable pour
+    ce qu'elle prescrit ; c'est son exemple qui a vieilli. *Il a d'ailleurs
+    servi de donnée d'appui fausse : un audit l'a recopié comme un écart réel
+    sans le mesurer.* La règle est tenue par `tool/check_enums.dart`.
+
+    **Créer un enum Dart miroir pour chaque enum backend** (sur le modèle
     de `Categorie` ↔ `categorie.enum.ts`), plutôt que de propager la
     valeur comme `String` brute côté mobile. *Trouvé : `PromoStatus` et
     `CommercantAccountState` sont comparés par chaîne littérale

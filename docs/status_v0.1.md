@@ -873,6 +873,57 @@ rouge sur un vrai défaut et non sur un travail inachevé.
 
 ---
 
+## Audit de conformité aux 35 règles — 2026-08-04/05
+
+**Méthode** : 4 vérificateurs statiques, 2 bancs, et 14 mesures ciblées. Tout ce
+qui suit est **mesuré**, pas lu.
+
+**Résultat : 26 règles conformes, 5 écarts — tous corrigés.**
+
+| Écart | Correction |
+|---|---|
+| **P10** — `login` sans filtre `deletedAt` 🔴 | `findVivantByTelephone`, **un seul endroit** au lieu du filtre recopié. Banc de cycle de vie : 8/8 |
+| **R31** — `POST /admin/me/revoke-token` sans appelant | menu compte du tableau de bord admin, avec déconnexion enchaînée. Audit R31 : ne restent que les 3 App Links |
+| **R35** — `Colors.redAccent` | champ `favorite` dans `AppSemanticColors`, variante sombre incluse |
+| **P7** — 5 replis silencieux | helper `fromApiValue` : le repli **reste** mais se signale en développement |
+| **P8** — comparaisons littérales | **ne se reproduit pas** — voir ci-dessous |
+
+### ⚠️ P8 était une fausse alerte de ma part
+
+Je l'ai signalé en recopiant la justification de la **règle 19** du `CLAUDE.md`
+(*« `PromoStatus` et `CommercantAccountState` sont comparés par chaîne littérale
+dans plusieurs écrans »*) sans la vérifier. Mesuré : **zéro** comparaison
+littérale, et **tous** les champs d'état des modèles sont typés en enum
+(`Categorie`, `PromoLifecycleStatus`, `PromoModerationStatus`,
+`CommercantAccountState`, `RegistreStatus`).
+
+Le défaut a été corrigé à une date que je n'ai pas cherchée ; c'est le **texte
+de la règle** qui est resté au passé. **J'ai fait exactement ce que la méthode
+reproche** : traiter une documentation périmée comme une donnée d'appui. Deux
+fois en deux jours, après avoir écrit la mise en garde moi-même.
+
+### Trois défauts trouvés en chemin, hors des 35 règles
+
+- **Les tests unitaires mobile étaient cassés depuis trois semaines.** Cinq
+  tests de `promo_test.dart` échouaient : `Promo.fromJson` caste `createdAt`
+  sans repli depuis le commit `publishedAt` du 2026-07-14, et le helper du test
+  datait du 2026-07-05. Personne ne pouvait le voir — le SDK Flutter n'était
+  pas installable. **Premier `flutter test` réel du projet.**
+- **Le code de localisation généré était périmé** depuis le merge d'`apqp5r` :
+  `flutter analyze` rendait une **erreur** sur `promoDensityTooltip`. Les trois
+  `.arb` avaient bien la clé — règle 27 respectée — c'est `gen-l10n` qui n'avait
+  pas tourné.
+- **Cinq fichiers Flutter générés apparaissaient modifiés en permanence** alors
+  que `git diff` ne rendait rien : seules les fins de ligne changeaient. Réglé
+  par un `.gitattributes` de portée étroite.
+
+### État final
+
+`flutter analyze` **0** · `flutter test` **14 verts** · `check_all` **4/4** ·
+banc de cycle de vie **8/8**.
+
+---
+
 ## Comment tenir ce fichier
 
 - **Une entrée de journal par session**, datée, qui dit ce qui a été fait **et
