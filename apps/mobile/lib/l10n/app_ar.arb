@@ -262,6 +262,8 @@
   "noCommunesAssignedLabel": "لا توجد بلديات معيّنة.",
   "revokeTokenLabel": "إلغاء الجلسات",
   "revokeTokenConfirmMessage": "سيتم تسجيل خروج جميع الجلسات النشطة لهذا العون.",
+  "revokeOwnSessionsLabel": "إلغاء جلساتي",
+  "revokeOwnSessionsConfirmMessage": "سيتم تسجيل خروج جميع جلساتك، بما فيها هذه الجلسة. استخدم هذا إذا فُقد جهاز أو سُرق.",
   "transferCommunesLabel": "نقل بلديات",
   "fromAgentLabel": "من العون",
   "toAgentLabel": "إلى العون",

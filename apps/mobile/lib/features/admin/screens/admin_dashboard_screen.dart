@@ -45,10 +45,19 @@ class AdminDashboardScreen extends ConsumerWidget {
                 case 'logout':
                   await ref.read(authControllerProvider.notifier).logout();
                   if (context.mounted) context.go('/');
+                case 'revoke-sessions':
+                  await _revokeOwnSessions(context, ref);
               }
             },
             itemBuilder: (context) => [
               PopupMenuItem(value: 'logout', child: Text(l10n.logoutTooltip)),
+              // Appareil perdu ou volé : réservé à l'admin, la route backend
+              // étant `@Roles('admin')`.
+              if (isAdmin)
+                PopupMenuItem(
+                  value: 'revoke-sessions',
+                  child: Text(l10n.revokeOwnSessionsLabel),
+                ),
             ],
           ),
         ],
@@ -140,6 +149,51 @@ class AdminDashboardScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// Révoque toutes les sessions de l'admin — appareil perdu ou volé.
+  ///
+  /// ⚠️ **La session courante en fait partie**, c'est le but : le jeton volé
+  /// doit cesser de servir. On enchaîne donc sur une déconnexion locale, sinon
+  /// l'écran suivant se heurterait à `AUTH_TOKEN_REVOKED` et l'utilisateur
+  /// croirait à une panne.
+  ///
+  /// ⚠️ `ConsumerWidget` n'a pas de `mounted` propre : chaque usage de `ref` ou
+  /// de `context` après un `await` passe par `context.mounted` (règle 20).
+  Future<void> _revokeOwnSessions(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirme = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.revokeOwnSessionsLabel),
+        content: Text(l10n.revokeOwnSessionsConfirmMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.commonConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirme != true || !context.mounted) return;
+
+    try {
+      await ref.read(adminApiProvider).revokeOwnSessions();
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: ApiErrorText(error)),
+        );
+      }
+      return;
+    }
+    if (!context.mounted) return;
+    await ref.read(authControllerProvider.notifier).logout();
+    if (context.mounted) context.go('/');
   }
 }
 

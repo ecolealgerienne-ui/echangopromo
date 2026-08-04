@@ -190,6 +190,20 @@ class AdminApi {
     await _dio.post<void>('/admin/agent/$agentId/revoke-token');
   }
 
+  /// Révoque **toutes** les sessions de l'admin connecté — appareil perdu ou
+  /// volé (audit V1 §1).
+  ///
+  /// ⚠️ La session courante en fait partie : l'appelant doit enchaîner sur une
+  /// déconnexion, sinon l'écran suivant se heurtera à `AUTH_TOKEN_REVOKED`.
+  ///
+  /// ⚠️ Cette route existait côté backend depuis l'audit V1 et **n'avait aucun
+  /// appelant** — capacité écrite, testée, documentée, et injoignable depuis
+  /// l'application (trouvé par l'audit du 2026-08-04, règle 31). L'admin
+  /// pouvait révoquer un agent, jamais lui-même.
+  Future<void> revokeOwnSessions() async {
+    await _dio.post<void>('/admin/me/revoke-token');
+  }
+
   /// Mot de passe agent oublié/perdu — l'agent ne peut pas le changer
   /// lui-même (décision produit 2026-07-14), seul l'admin fixe un nouveau
   /// mot de passe, à communiquer de vive voix.

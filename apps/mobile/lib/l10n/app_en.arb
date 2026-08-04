@@ -262,6 +262,8 @@
   "noCommunesAssignedLabel": "No communes assigned.",
   "revokeTokenLabel": "Revoke sessions",
   "revokeTokenConfirmMessage": "All active sessions for this agent will be signed out.",
+  "revokeOwnSessionsLabel": "Revoke my sessions",
+  "revokeOwnSessionsConfirmMessage": "All your sessions will be signed out, including this one. Use this if a device was lost or stolen.",
   "transferCommunesLabel": "Transfer communes",
   "fromAgentLabel": "From agent",
   "toAgentLabel": "To agent",

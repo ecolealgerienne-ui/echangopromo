@@ -278,6 +278,8 @@
   "noCommunesAssignedLabel": "Aucune commune assignée.",
   "revokeTokenLabel": "Révoquer les sessions",
   "revokeTokenConfirmMessage": "Toutes les sessions actives de cet agent seront déconnectées.",
+  "revokeOwnSessionsLabel": "Révoquer mes sessions",
+  "revokeOwnSessionsConfirmMessage": "Toutes vos sessions seront déconnectées, y compris celle-ci. À utiliser si un appareil a été perdu ou volé.",
   "transferCommunesLabel": "Transférer des communes",
   "fromAgentLabel": "Agent source",
   "toAgentLabel": "Agent destination",
