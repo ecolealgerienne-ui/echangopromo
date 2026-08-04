@@ -56,4 +56,4 @@ python3 "$HERE/lib/frontiere_http.py" --self-test || {
 }
 
 echo
-exec python3 "$HERE/lib/frontiere_http.py"
+exec python3 "$HERE/lib/frontiere_http.py" "$@"
