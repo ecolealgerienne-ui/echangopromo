@@ -55,18 +55,51 @@ Commandes utiles :
   (`synchronize: false` toujours, plus de bascule sur `NODE_ENV`) —
   lancer `npm run migration:run` avant le premier `start:dev` sur une
   base neuve, et avant les scripts seed.
-- Mobile : `cd apps/mobile && flutter pub get && flutter analyze`.
+- Mobile : `cd apps/mobile && flutter pub get && flutter analyze && flutter test`.
   ⚠️ **Le paragraphe qui suivait ici est faux depuis le 2026-08-04.** Il
   affirmait que le SDK Flutter n'avait jamais pu être installé et que le code
   mobile n'avait **jamais été compilé**. Flutter 3.35.7 compile désormais,
-  `flutter analyze` rend **1 avertissement** sur tout le projet, et l'app
-  tourne sur émulateur. Le « proxy bloquant » était en réalité l'analyse
-  HTTPS d'un antivirus (voir § Environnement).
+  `flutter analyze` rend **0 problème** et `flutter test` **14 tests verts**.
+  Le « proxy bloquant » était en réalité l'analyse HTTPS d'un antivirus (voir
+  § Environnement).
 - Vérificateurs de synchronisation : `cd apps/mobile && dart run tool/check_all.dart`
   — statiques, instantanés, sans base ni émulateur. Le seul lot qui peut
   tourner à chaque commit.
 - Bancs de test : `./scripts/provision-decor.sh` puis les `./scripts/test-*.sh`.
   Détail, verdicts et ordre de reprise dans `docs/status_v0.1.md`.
+
+### ⚠️ Vérifier le formatage sans le réécrire
+
+**`npm run lint` porte `--fix`** : la commande **modifie** le dépôt au lieu de
+le juger. Elle a réécrit 46 fichiers le 2026-08-05, et c'était déjà elle
+l'origine des « 18 fichiers Prettier » trouvés modifiés dans le clone WSL la
+veille — écartés sans qu'on en comprenne la cause. Un outil de vérification qui
+fabrique le diff qu'il devrait signaler ne peut pas servir de barrière.
+
+Pour **constater** sans écrire, les deux commandes à utiliser :
+
+```bash
+cd apps/backend && npx eslint 'src/**/*.ts'                    # sans --fix
+cd apps/mobile  && dart format --output=none --set-exit-if-changed lib test tool
+```
+
+Les deux sortent à **0** depuis le 2026-08-05, le dépôt ayant été formaté une
+fois pour toutes (46 fichiers côté backend, 104 côté mobile). Elles peuvent donc
+servir de garde : toute sortie non nulle signale une dérive, pas un état de
+départ.
+
+⚠️ **`dart format` est un formateur pur ; `eslint --fix` ne l'est pas.** Le
+second applique aussi des règles de lint et peut **changer le code** — il a
+retiré une assertion de type le 2026-08-05, laissant le commentaire qui la
+justifiait décrire un code disparu. Relire son diff, pas seulement celui de
+`dart format`.
+
+⚠️ **Reformater peut réveiller un lint endormi.** `dart format` replie les
+lignes longues, et `curly_braces_in_flow_control_structures` **tolère**
+`if (cond) instruction;` sur une seule ligne mais **l'interdit** sur deux : le
+reformatage a fait apparaître 9 avertissements d'un coup. Ce ne sont pas des
+régressions — la forme sans accolades était simplement invisible tant qu'elle
+tenait sur une ligne.
 
 ---
 
