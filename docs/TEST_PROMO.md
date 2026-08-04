@@ -60,33 +60,64 @@ Tout ce qui est chiffré ici a été **mesuré le 2026-08-04** sur `main`
 
 Trouvés **en instanciant la méthode**, avant même d'avoir écrit un banc.
 
-### D1 — Cinq codes d'erreur servis et jamais traduits ⚠️ ouvert
+### D1 — Un code d'erreur sans décision, et quatre exclusions illisibles
 
-`dart run docs/methode-test/check-sync.dart` sur `main` :
+⚠️ **Ce constat a été corrigé le 2026-08-04 après vérification.** La première
+version annonçait « cinq codes servis et jamais traduits », donc cinq défauts.
+C'était faux pour quatre d'entre eux, et la raison de l'erreur est le vrai
+enseignement — voir plus bas.
 
-| Code | Émis par | Traduit en FR | EN | AR |
-|---|---|---|---|---|
-| `PROMO_DATE_FIN_EXCEEDS_MAX` | `promo.service.ts:103` | ❌ | ❌ | ❌ |
-| `PROMO_ACTIVE_CAP_REACHED` | `promo.service.ts:126` | ❌ | ❌ | ❌ |
-| `PROMO_DAILY_CREATION_CAP_REACHED` | `promo.service.ts:154` | ❌ | ❌ | ❌ |
-| `PROMO_REPUBLISH_TOO_SOON` | `promo.service.ts:174` | ❌ | ❌ | ❌ |
-| `HIGHLIGHT_CAP_REACHED` | `highlight.service.ts:222` | ❌ | ❌ | ❌ |
+`dart run tool/check_error_codes.dart` sur `main` :
 
-**Ce que ça produit.** Un commerçant qui atteint le plafond de 5 promos actives
-reçoit le message brut du backend — **toujours en français**, y compris sur un
-téléphone en arabe ou en anglais. Aucune erreur de compilation d'aucun côté ne
-le signale. C'est exactement le défaut que la **règle 26** de `CLAUDE.md` existe
-pour empêcher, et elle n'était tenue par rien d'autre qu'une consigne écrite.
+| Code | Émis par | Dans les 3 tables | Verdict |
+|---|---|---|---|
+| `PROMO_DATE_FIN_EXCEEDS_MAX` | `promo.service.ts:103` | ❌ | **exclusion volontaire** |
+| `PROMO_ACTIVE_CAP_REACHED` | `promo.service.ts:126` | ❌ | **exclusion volontaire** |
+| `PROMO_DAILY_CREATION_CAP_REACHED` | `promo.service.ts:154` | ❌ | **exclusion volontaire** |
+| `PROMO_REPUBLISH_TOO_SOON` | `promo.service.ts:174` | ❌ | **exclusion volontaire** |
+| `HIGHLIGHT_CAP_REACHED` | `highlight.service.ts:222` | ❌ | ⚠️ **sans décision écrite** |
 
-**Ce que ça confirme sur la méthode** : ces cinq codes appartiennent aux
-fonctionnalités les plus récentes (anti-abus promo, bandeau Top promos). La
-règle a été respectée pendant des mois, puis oubliée exactement là où le rythme
-s'est accéléré. Un contrôle exécuté ne se fatigue pas.
+**Les quatre exclusions sont légitimes et documentées.** L'en-tête de
+`error_messages_fr.dart` explique que le message backend de ces codes
+**interpole une valeur** (le plafond, la durée, le délai restant) et qu'un
+mapping statique la perdrait. `ApiException.displayMessage` retombe alors sur
+le message brut (`messages[code] ?? message`, `api_exception.dart:52`). C'est un
+arbitrage assumé, pas un oubli.
 
-**Correction** : ajouter les 5 entrées dans les 3 tables
-`apps/mobile/lib/features/shared/errors/error_messages_{fr,en,ar}.dart`.
-⚠️ C'est une **modification** de fichiers existants — à arbitrer avec la règle
-« ajout seulement », ou à faire dans un commit isolé et minimal.
+**Le prix de cet arbitrage doit rester conscient** : le message backend est
+**toujours en français**. Un commerçant arabophone qui atteint le plafond de 5
+promos voit donc une phrase en français. Si ce prix devient inacceptable, la
+sortie n'est pas d'ajouter un mapping statique — il reperdrait la valeur — mais
+de faire porter les paramètres par la réponse serveur pour que l'app compose la
+phrase elle-même.
+
+**Ce qui reste un vrai défaut** : `HIGHLIGHT_CAP_REACHED` n'est ni traduit, ni
+inscrit dans la liste des exclusions. Son message interpole lui aussi une
+valeur, il appartient donc probablement à la même famille — mais **rien ne le
+dit**, et une exclusion non écrite est indiscernable d'un oubli. Quelqu'un doit
+trancher : le traduire, ou l'épingler avec sa raison.
+
+**Pourquoi je me suis trompé, et c'est le vrai enseignement.** Les exclusions
+vivaient dans un **commentaire d'en-tête**. Aucun outil ne peut lire un
+commentaire : le vérificateur les a donc toutes signalées comme des défauts, et
+j'ai conclu trop vite. C'est le mode **M5** du générique — *un invariant
+s'applique, il ne se documente pas* — appliqué à une liste d'exceptions plutôt
+qu'à une règle. La liste vit désormais **en donnée**, dans
+`apps/mobile/tool/check_error_codes.dart`, chaque entrée portant sa raison, et
+l'auto-test refuse une exclusion sans justification.
+
+**Et l'enseignement inverse, qui vaut autant** : un contrôle peut mentir en
+disant **non**. Un faux positif qui accuse à tort se paie en confiance perdue —
+c'est ainsi que les contrôles finissent désactivés.
+
+**Ce qu'il reste à faire** — bien plus petit que ce qui était annoncé :
+
+1. Trancher sur `HIGHLIGHT_CAP_REACHED` — le traduire dans les 3 tables, ou
+   l'épingler dans `_exclusions` avec sa raison.
+2. Faire pointer le commentaire d'en-tête de `error_messages_fr.dart` vers
+   `tool/check_error_codes.dart`, pour qu'il n'y ait **qu'une seule** source de
+   vérité sur les exclusions. ⚠️ C'est une **modification** de fichier existant
+   — à arbitrer avec la règle « ajout seulement ».
 
 ### D2 — Huit clés d'environnement absentes du `.env` local ⚠️ à vérifier
 

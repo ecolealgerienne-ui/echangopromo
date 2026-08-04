@@ -59,33 +59,44 @@ Mesuré, pas estimé. La méthode et les commandes sont dans `docs/TEST_PROMO.md
 Classés par ce qu'ils coûtent s'ils restent ouverts. Chacun porte ce qui le
 débloque.
 
-### P1 — Cinq codes d'erreur servis et jamais traduits ⚠️ visible par l'utilisateur
+### P1 — Un code d'erreur sans décision écrite 🔽 *revu à la baisse le 2026-08-04*
 
-**Trouvé le 2026-08-04** par `docs/methode-test/check-sync.dart` sur `main`.
+> ⚠️ **Ce point a été formulé, puis corrigé le même jour.** Première version :
+> « cinq codes servis et jamais traduits », présentés comme cinq défauts
+> visibles par l'utilisateur. **C'était faux pour quatre d'entre eux.**
 
-| Code | Émis par |
-|---|---|
-| `PROMO_DATE_FIN_EXCEEDS_MAX` | `promo.service.ts:103` |
-| `PROMO_ACTIVE_CAP_REACHED` | `promo.service.ts:126` |
-| `PROMO_DAILY_CREATION_CAP_REACHED` | `promo.service.ts:154` |
-| `PROMO_REPUBLISH_TOO_SOON` | `promo.service.ts:174` |
-| `HIGHLIGHT_CAP_REACHED` | `highlight.service.ts:222` |
+**Ce qui est établi.** L'en-tête de `error_messages_fr.dart` documente que
+`PROMO_DATE_FIN_EXCEEDS_MAX`, `PROMO_ACTIVE_CAP_REACHED`,
+`PROMO_DAILY_CREATION_CAP_REACHED` et `PROMO_REPUBLISH_TOO_SOON` sont
+**volontairement absents** : leur message backend interpole une valeur (plafond,
+durée, délai restant) qu'un mapping statique perdrait.
+`ApiException.displayMessage` retombe alors sur le message brut
+(`api_exception.dart:52`). Arbitrage assumé, pas oubli.
 
-Aucun n'a d'entrée dans `error_messages_fr.dart`, `_en.dart` ni `_ar.dart`.
+**Ce qui reste ouvert** : `HIGHLIGHT_CAP_REACHED` (`highlight.service.ts:222`)
+n'est **ni traduit, ni épinglé** comme exclusion. Son message interpole lui
+aussi une valeur, il appartient donc probablement à la même famille — mais rien
+ne le dit. Une exclusion non écrite est indiscernable d'un oubli.
 
-**Effet.** Un commerçant qui atteint le plafond de 5 promos actives reçoit le
-message brut du backend — **toujours en français**, y compris sur un téléphone
-configuré en arabe ou en anglais. Aucune erreur de compilation d'aucun côté ne
-le signale : c'est une panne silencieuse.
+**Le prix de ces exclusions, à garder conscient** : le message backend est
+toujours en français. Un commerçant arabophone qui atteint le plafond de
+5 promos voit une phrase en français. Si ce prix devient inacceptable, la sortie
+n'est pas un mapping statique — il reperdrait la valeur — mais des paramètres
+portés par la réponse serveur, l'app composant la phrase.
 
-**Ce que ça dit de la règle 26 de `CLAUDE.md`.** Elle exige précisément
-l'inverse, et elle a tenu pendant des mois. Les cinq codes appartiennent tous
-aux fonctionnalités les plus récentes (anti-abus promo, bandeau Top promos) :
-la règle a lâché exactement là où le rythme s'est accéléré. **Une consigne
-écrite ne peut pas échouer ; un contrôle exécuté, si.** D'où P2.
+**Pourquoi l'erreur a été commise, et ce qu'elle a produit de bon.** Les
+exclusions vivaient dans un **commentaire**, qu'aucun outil ne peut lire. Le
+vérificateur les a donc toutes signalées, et j'ai conclu trop vite à cinq
+défauts. La liste vit désormais **en donnée**, dans
+`apps/mobile/tool/check_error_codes.dart`, chaque entrée portant sa raison, et
+l'auto-test **refuse une exclusion sans justification**. C'est le mode M5 du
+générique appliqué à une liste d'exceptions — et l'illustration qu'**un contrôle
+peut aussi mentir en disant non**.
 
-**Débloqué par** : ajouter 5 entrées dans chacun des 3 fichiers.
-⚠️ **Arbitrage à rendre** — voir A1.
+**Débloqué par** : trancher sur `HIGHLIGHT_CAP_REACHED` (le traduire, ou
+l'épingler avec sa raison), et faire pointer le commentaire de
+`error_messages_fr.dart` vers le vérificateur pour qu'il n'y ait qu'une source
+de vérité. ⚠️ Le second point modifie un fichier existant — voir A1.
 
 ### P2 — Aucun contrôle exécuté ne tient les couples serveur ↔ app
 
@@ -273,7 +284,7 @@ Le détail de chaque étape, avec son critère de sortie, est dans
 | — | Méthode générique + 5 squelettes | ✅ écrits, auto-tests au vert (16/16 et 13/13) |
 | — | Plan spécifique Promo | ✅ écrit |
 | **1** | Banc de refus (48 routes, par construction) | ⬜ non commencé |
-| **2** | Vérificateurs de synchronisation | 🔶 squelette fonctionnel, à déplacer dans `tool/` et à éprouver par mutation |
+| **2** | Vérificateurs de synchronisation | 🔶 **codes d'erreur : fait et éprouvé** (`tool/check_error_codes.dart`, auto-test 14/14 dont 7 refus, **5/5 mutations refusées**). Reste les enums miroirs (catégories, `CommercantAccountState`) |
 | **3** | Décor + 4 parcours écran + onboarding | ⬜ non commencé |
 | **4** | Bancs, couverture d'usage complète (**27 bancs, 62/62 routes**) | ⬜ non commencé |
 
@@ -285,7 +296,7 @@ couvertures distinctes, trois cibles :
 | **Accès** (qui a le droit d'appeler quoi) | 0 / 62 | **100 %** — atteinte par construction, le banc énumère depuis la source |
 | **Usage** (chaque route appelée au moins une fois) | 0 / 62 | **100 %** — bornée à 62 routes |
 | **Comportement** (chaque règle fait ce qu'elle doit) | 0 / 8 règles chiffrées | **piloté par le risque** — non bornée, un pourcentage y serait inventé |
-| Couples serveur ↔ app | 0 / 6 | 6, dont 1 déjà désynchronisé (P1) |
+| Couples serveur ↔ app | **1 / 6** — codes d'erreur, éprouvé par mutation | 6 |
 | Écrans | 0 / 34 | 33 (`dev_profile_switcher` exclu, outil de développement) |
 
 ---
@@ -344,6 +355,32 @@ d'auto-test.
 
 **Résultats de la première passe** : 62 routes, 14 ouvertes — toutes légitimes,
 **aucun garde manquant**. Et P1, ci-dessus.
+
+### 2026-08-04 (suite) — Étape 2, premier vérificateur en place et éprouvé
+
+`apps/mobile/tool/check_error_codes.dart` compare le registre serveur
+(42 codes) aux trois tables de traduction. Auto-test **14/14, dont 7 refus** ;
+et surtout **5 mutations des vrais fichiers, 5 refus** :
+
+| Mutation | Attendu | Obtenu |
+|---|---|---|
+| membre bidon ajouté à l'enum serveur | 3 manques | ✅ |
+| clé retirée d'**une seule** table | 1 manque | ✅ |
+| doublon dans une table | 1 doublon | ✅ |
+| clé inconnue du serveur | 1 « en trop » | ✅ |
+| table renommée (`_ar` → `_arabe`) | **échec sur source introuvable** | ✅ sortie 2 |
+
+La cinquième est la plus importante : un contrôle qui **conclut à l'accord**
+quand il ne trouve pas sa source est le mode de panne le plus dangereux de
+cette famille. Fichiers restaurés à l'identique après chaque mutation.
+
+**Ce que ce vérificateur a coûté en confiance, et pourquoi c'est instructif.**
+Sa première version a produit un faux positif à quatre entrées (voir P1) parce
+que les exclusions volontaires vivaient dans un commentaire. Un contrôle qui
+accuse à tort se paie plus cher qu'un contrôle absent : c'est ainsi qu'ils
+finissent désactivés. La correction n'a pas été de désactiver le contrôle mais
+de **déplacer la liste d'exclusions du commentaire vers la donnée**, avec
+obligation de justification — l'auto-test refuse une exclusion sans raison.
 
 ---
 
