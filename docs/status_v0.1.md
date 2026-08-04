@@ -152,6 +152,83 @@ par route**) fait que **la route qu'on oublie est ouverte**.
 
 ---
 
+## Trous de couverture
+
+Relevés le **2026-08-04** en mesurant la surface réelle par profil (`@Roles` de
+chaque route, écrans par dossier) et en la confrontant au plan de test. Le plan
+d'alors prévoyait 8 bancs choisis par défaut historique : ils couvraient
+**15 routes sur 62**, et le déséquilibre entre profils ne se voyait pas.
+
+`docs/TEST_PROMO.md` §6 a été repris en conséquence : **27 bancs, 62 routes sur
+62**.
+
+| Profil | Routes | Écrans | Couvert par le plan d'alors |
+|---|---|---|---|
+| Admin | **35** | **13** | 3 bancs partiels |
+| Agent | **26** | 3 | 1 banc |
+| Commerçant | 17 | 7 | 1 banc + 1 parcours |
+| Client | 14 (ouvertes) | 4 + 4 onboarding | 3 bancs |
+
+*(les routes partagées comptent par profil, d'où un total supérieur à 62)*
+
+### T1 — L'agent cumule le plus de pouvoir et la plus faible couverture ⚠️
+
+**14 des 26 routes de l'agent sont sous `/admin/*`** : il suspend un commerçant,
+le **supprime**, valide ou rejette son registre, réinitialise son PIN, modère
+des promos. Le plan ne prévoyait qu'un banc d'appartenance **centré sur la
+promo**.
+
+La question « un agent hors de ses communes peut-il suspendre *ce* commerçant ? »
+n'était posée nulle part. C'est la forme exacte de l'IDOR critique de l'audit
+V0, sur une surface **sept fois plus grande** que celle qui avait été corrigée.
+
+**Traité dans le plan** par `test-agent-appartenance`, étendu aux 16 routes
+concernées et remonté en priorité 4 du §9.
+
+### T2 — L'admin : plus grande surface, trois bancs partiels
+
+Non couvert avant reprise : le module **highlight** (5 routes, livré fin
+juillet, jamais éprouvé, et porteur du `HIGHLIGHT_CAP_REACHED` de P1), la
+**gestion des agents** (6 routes dont `transfer-communes` — précisément ce que
+l'`AuditLogModule` devait tracer), l'**audit-log** lui-même, le **dashboard**
+(historique de surcompte).
+
+**Traité** par `test-admin-highlight`, `test-admin-agents`,
+`test-admin-audit-log`, `test-admin-dashboard`.
+
+### T3 — Le module notifications n'était couvert nulle part
+
+5 routes, partagées par les 3 profils authentifiés, 1 écran. Zéro banc, zéro
+parcours. **Traité** par `test-notifications`.
+
+### T4 — `DELETE /commercant/me` n'est éprouvé par rien
+
+Un commerçant peut supprimer son propre compte. Action **irréversible**, aucun
+test. **Traité** par `test-commercant-autosuppression`, en priorité 3.
+
+### T5 — La carte client n'était pas couverte
+
+`GET /promo/map` porte deux nombres explicites — **300 commerces**, **180
+req/min** — et c'est la fonctionnalité client la plus récente. `GET /commune`
+non plus, alors qu'elle porte le piège de pagination de la règle 15.
+**Traité** par `test-client-carte` et `test-client-commune`.
+
+### T6 — L'onboarding n'était couvert par rien
+
+4 écrans (splash, choix de rôle, localisation ×2), premier contact, et ils
+conditionnent l'accès à tout le reste. **Traité** dans l'étape 3.
+
+### T7 — Trois profils sur quatre n'avaient aucun parcours écran
+
+Le seul prévu était commerçant. **Traité** : un parcours minimal par profil,
+plus l'onboarding (§6 étape 3).
+
+> ⚠️ **T1-T7 sont « traités dans le plan », pas résolus.** Aucun de ces bancs
+> n'est écrit. Ils ne se ferment qu'une fois le banc écrit **et prouvé par
+> mutation**.
+
+---
+
 ## Arbitrages en attente
 
 ### A1 — Corriger P1 impose de modifier des fichiers existants
@@ -195,14 +272,21 @@ Le détail de chaque étape, avec son critère de sortie, est dans
 |---|---|---|
 | — | Méthode générique + 5 squelettes | ✅ écrits, auto-tests au vert (16/16 et 13/13) |
 | — | Plan spécifique Promo | ✅ écrit |
-| **1** | Banc de refus + banc d'appartenance | ⬜ non commencé |
+| **1** | Banc de refus (48 routes, par construction) | ⬜ non commencé |
 | **2** | Vérificateurs de synchronisation | 🔶 squelette fonctionnel, à déplacer dans `tool/` et à éprouver par mutation |
-| **3** | Décor + premier parcours écran | ⬜ non commencé |
-| **4** | Bancs métier (8 identifiés) | ⬜ non commencé |
+| **3** | Décor + 4 parcours écran + onboarding | ⬜ non commencé |
+| **4** | Bancs, couverture d'usage complète (**27 bancs, 62/62 routes**) | ⬜ non commencé |
 
-**Couverture actuelle**, décomposée (`docs/TEST_PROMO.md` §4) : 0 route sur 48
-protégées éprouvée, 0 règle métier chiffrée sur 8 couverte, 0 couple sur 6 tenu
-par un contrôle, 0 écran sur 34 ouvert par un test.
+**Couverture actuelle**, décomposée (`docs/TEST_PROMO.md` §4) — trois
+couvertures distinctes, trois cibles :
+
+| Couverture | État | Cible |
+|---|---|---|
+| **Accès** (qui a le droit d'appeler quoi) | 0 / 62 | **100 %** — atteinte par construction, le banc énumère depuis la source |
+| **Usage** (chaque route appelée au moins une fois) | 0 / 62 | **100 %** — bornée à 62 routes |
+| **Comportement** (chaque règle fait ce qu'elle doit) | 0 / 8 règles chiffrées | **piloté par le risque** — non bornée, un pourcentage y serait inventé |
+| Couples serveur ↔ app | 0 / 6 | 6, dont 1 déjà désynchronisé (P1) |
+| Écrans | 0 / 34 | 33 (`dev_profile_switcher` exclu, outil de développement) |
 
 ---
 

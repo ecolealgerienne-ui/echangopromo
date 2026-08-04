@@ -107,14 +107,24 @@ conclurait juste sur le mauvais nombre.
 
 ## 3. Ce qu'il y a à éprouver
 
-### Les personas
+### Les personas, et leur surface mesurée
 
-| Persona | Authentification | Particularité pour les tests |
-|---|---|---|
-| **Client** | **aucune** — anonyme | C'est ce qui rend 14 routes légitimement ouvertes. Identifié par un `X-Device-Id` **déclaratif, jamais vérifié** — d'où le throttle par IP sur `/report`. |
-| **Commerçant** | PIN | Cycle de vie : inscription → validation registre → actif → suspendu → supprimé |
-| **Agent** | mot de passe | Rattaché à N communes. ⚠️ Rôle appelé à disparaître à l'extension multi-wilaya |
-| **Admin** | mot de passe | Compte **unique** en V0. Accès par URL directe `/admin`, non découvrable dans l'app |
+Mesuré le 2026-08-04 en lisant les `@Roles` de chaque route. ⚠️ Les routes
+partagées (`/notifications`, `/storage/upload`, `/promo/:id`) comptent pour
+**chaque** profil qui y a droit — le total par colonne dépasse donc 62.
+
+| Persona | Auth. | Routes | Écrans | Particularité pour les tests |
+|---|---|---|---|---|
+| **Admin** | mot de passe | **35** | **13** | Compte **unique** en V0. Accès par URL directe `/admin`, non découvrable dans l'app. **La plus grande surface des quatre, de loin.** |
+| **Agent** | mot de passe | **26** | 3 | Rattaché à N communes. ⚠️ **14 de ses routes sont sous `/admin/*`** : il suspend, supprime, valide un registre, réinitialise un PIN, modère. Rôle appelé à disparaître à l'extension multi-wilaya — mais bien présent aujourd'hui. |
+| **Commerçant** | PIN | 17 | 7 | Cycle de vie : inscription → validation registre → actif → suspendu → supprimé. Peut **s'auto-supprimer** (`DELETE /commercant/me`). |
+| **Client** | **aucune** — anonyme | 14 (ouvertes) | 4 + 4 onboarding | C'est ce qui rend 14 routes légitimement ouvertes. Identifié par un `X-Device-Id` **déclaratif, jamais vérifié** — d'où le throttle par IP sur `/report`. |
+
+> ⚠️ **Le fait qui doit orienter tout le plan** : l'**agent** cumule un pouvoir
+> quasi administratif (14 routes `/admin/*`) et la plus faible couverture. La
+> question « un agent hors de ses communes peut-il suspendre *ce* commerçant ? »
+> porte sur une surface **sept fois plus grande** que l'IDOR promo corrigé à
+> l'audit V0 — et elle n'est posée nulle part aujourd'hui.
 
 ### Les règles métier, avec leur valeur et leur emplacement
 
@@ -169,28 +179,65 @@ Chaque ligne est un couple qui doit rester d'accord, aujourd'hui tenu par rien.
 Ce qui est couvert, ce qui ne l'est pas, et **pourquoi**. Un total sans sa
 décomposition ne se vérifie pas.
 
+### Trois couvertures, trois cibles différentes
+
+Les confondre conduit à annoncer un pourcentage qui ne veut rien dire. Elles ne
+répondent pas à la même question et n'ont pas le même plafond atteignable.
+
+| Couverture | Question | Cible | Pourquoi cette cible |
+|---|---|---|---|
+| **Accès** | qui a le droit d'appeler quoi | **100 %** | Atteinte **par construction** : le banc énumère les routes depuis la source, donc une route ajoutée demain est couverte sans que personne y pense |
+| **Usage** | chaque route est-elle appelée au moins une fois en cas nominal | **100 %** | Atteignable et bornée : 62 routes, une passe chacune. Attrape les 500, les sérialisations cassées, les réponses vides — la famille de défauts qui ne lève jamais |
+| **Comportement** | chaque règle métier fait-elle ce qu'elle doit | **piloté par le risque** | **Non bornée** : les combinaisons, l'ordre et la concurrence sont infinis. Un pourcentage y serait un chiffre inventé |
+
+> **Pourquoi la couverture d'usage mérite 100 % et pas moins.** C'est la seule
+> qui se compte honnêtement, et elle coûte peu par route une fois le décor
+> posé. Surtout, elle traite le mode de défaillance central de ce projet : une
+> donnée mal câblée ne casse pas, elle **disparaît** — en HTTP 200. Une route
+> jamais appelée peut servir une liste vide depuis des semaines sans que rien
+> ne le dise.
+
+### État au 2026-08-04
+
 ```
-Routes                                          62
-  éprouvées par un banc de refus .............   0     ← étape 1
-  ouvertes, épinglées (voir §5) ..............  14
-  protégées, jamais éprouvées ................  48
+Couverture d'ACCÈS                    0 / 62 routes      ← étape 1, cible 100 %
+  protégées, à éprouver .......      48
+  ouvertes, à épingler (§5) ...      14
 
-Règles métier chiffrées                          8
-  couvertes par un test .......................  0     ← étape 4
-  (le plafond de 5 est protégé par un verrou
-   consultatif Postgres, jamais éprouvé en
-   concurrence)
+Couverture d'USAGE                    0 / 62 routes      ← étape 4, cible 100 %
+  admin ......................       35
+  agent ......................       26   dont 14 sous /admin/*
+  commerçant .................       17
+  client (ouvertes) ..........       14
+  (somme > 62 : les routes partagées comptent par profil)
 
-Couples serveur ↔ app                            6
-  tenus par un contrôle exécuté ...............  0     ← étape 2
+Couverture COMPORTEMENTALE            0 / 8 règles chiffrées   ← étape 4
+  (le plafond de 5 est protégé par un verrou consultatif
+   Postgres, jamais éprouvé en concurrence)
+
+Couples serveur ↔ app                 0 / 6 tenus        ← étape 2
   dont 1 DÉJÀ désynchronisé (D1)
 
-Écrans (*_screen.dart)                          34
-  ouverts par un test ..........................  0     ← étape 3
+Écrans (*_screen.dart)                0 / 34 ouverts     ← étape 3
+  admin 13 · commercant 7 · client 4 · onboarding 4
+  agent 3 · shared 2 · dev 1
 ```
 
-**Exclusions épinglées** — aucune à ce jour. Toute exclusion future s'écrit ici
-avec sa raison : une exclusion anonyme est indiscernable d'un oubli.
+### Exclusions épinglées
+
+Aucune exclusion **définitive** à ce jour. Les quatre points ci-dessous
+coûtent plus cher que les autres, mais **aucun n'est un obstacle** — les
+nommer sert à ce qu'ils ne deviennent pas des oublis silencieux.
+
+| Point coûteux | Pourquoi | Ce qui le débloque |
+|---|---|---|
+| `POST /storage/upload` de bout en bout | la POST policy S3 (`content-length-range`) ne s'éprouve pas contre un stub | **MinIO tourne déjà en local** (`echangopromo-minio-1`) — c'est faisable aujourd'hui |
+| `POST /commercant/me/registre` | demande un décor **photographique** | un PNG 1×1 en base64 suffit |
+| Les 3 routes App Links | scopées au host `promo.echango.com`, donc 404 sur localhost | les sonder avec `-H "Host: promo.echango.com"` |
+| Les routes destructives (`DELETE /commercant/me`, `/admin/commercant/:id/delete`) | consomment un compte à chaque passage, et l'inscription est plafonnée | comptes dédiés à emails stables, remis d'aplomb par `reactivate` plutôt que recréés |
+
+⚠️ `dev_profile_switcher_screen.dart` est le **seul écran exclu** de la cible :
+c'est un outil de développement, pas une surface produit.
 
 ---
 
@@ -271,7 +318,7 @@ cas), plus une mutation du vrai fichier.
 **C'est l'étape la plus rentable** : statique, instantanée, sans base ni
 émulateur, et elle a déjà trouvé un défaut réel.
 
-### Étape 3 — Le décor et le premier parcours écran
+### Étape 3 — Le décor et les parcours écran (un par profil, au minimum)
 
 **Où** : `scripts/provision-decor.sh` et `apps/mobile/integration_test/`.
 
@@ -292,27 +339,97 @@ tromperait le plus si elle était fausse ? » :
 Ce parcours éprouve d'un coup la règle métier, le code d'erreur, sa traduction
 (D1 !) et l'affichage du compteur. Il aurait attrapé D1 tout seul.
 
+**Puis un parcours minimal par profil** — trois des quatre n'en ont aucun (T7),
+et l'admin est celui qui a le plus d'écrans (13) :
+
+| Profil | Parcours minimal | Pourquoi celui-là |
+|---|---|---|
+| Commerçant | le plafond de 5 promos | ci-dessus |
+| Admin | modérer une promo signalée depuis la file | 3 écrans traversés, une décision qui masque du contenu public |
+| Agent | créer un commerçant, puis une promo pour lui | le seul parcours agent qui écrit, et il touche l'appartenance |
+| Client | choisir une commune → liste → fiche → signaler | le parcours du seul utilisateur non authentifié |
+| Onboarding | splash → choix de rôle → localisation (les 2 écrans) | 4 écrans, premier contact, conditionne l'accès à tout le reste (T6) |
+
+⚠️ **Le parcours admin et le parcours agent partagent des écrans mais pas les
+mêmes droits.** Les jouer tous les deux n'est pas une redondance : c'est là que
+se voit, à l'écran, ce que `test-agent-appartenance` vérifie côté API.
+
 **Critère de sortie** : `flutter drive` tourne depuis une machine neuve en
 suivant uniquement ce qu'imprime le décor.
 
-### Étape 4 — Les bancs métier
+### Étape 4 — Les bancs, en couverture d'usage complète
 
-Un par règle **qui a déjà produit un défaut** — la colonne « défaut d'origine »
-vient de `docs/AUDIT_V0.md` et de l'historique git.
+**Le principe qui rend ce tableau vérifiable** : chaque route des 62 figure dans
+**au moins un** banc. Il se lit donc dans les deux sens — de gauche à droite
+pour savoir ce qu'un banc éprouve, de **droite à gauche** pour vérifier
+qu'aucune route n'est orpheline. Une version antérieure de ce plan comptait
+8 bancs choisis par défaut historique : ils couvraient 15 routes sur 62, et le
+déséquilibre entre profils ne se voyait pas.
 
-| Banc | Règle éprouvée | Défaut d'origine |
+#### Transverse — les 3 profils authentifiés
+
+| Banc | Routes exercées | Ce qu'il éprouve en propre |
 |---|---|---|
-| `test-appartenance-agent` | un agent n'agit que dans ses communes | **IDOR critique** — un agent pouvait modifier les promos de n'importe quel commerçant |
-| `test-plafond-promos` | 5 actives, **en concurrence** | race condition : deux créations simultanées passaient toutes deux. Corrigé par `pg_advisory_xact_lock`, **jamais éprouvé sous charge** |
-| `test-seuil-moderation` | 3 signalements masquent | seuil ramené de 1 à 3 le 2026-08-04 — un aller-retour non couvert |
-| `test-abus-signalement` | `X-Device-Id` ne suffit pas | masquer la promo d'un concurrent avec 3 requêtes changeant un en-tête |
-| `test-visibilite-promo` | « visible » a **une seule** définition | deux services répliquaient la règle ; un dashboard surcomptait |
-| `test-fuite-photokey` | aucune réponse ne porte `photoKey` | un spread `{...promo}` exposait l'UUID de l'agent |
-| `test-revocation-jwt` | `tokenVersion` invalide les jetons | ajouté à l'audit V1, jamais rejoué |
-| `test-cycle-commercant` | suspension ≠ suppression | la suspension doit **libérer le numéro de téléphone** |
+| `test-auth-login` | `POST /{commercant,agent,admin}/login` | le refus après 5 tentatives (c'est aussi ce qui rend tous les autres bancs coûteux) |
+| `test-revocation-jwt` | `POST /admin/me/revoke-token`, `POST /admin/agent/:id/revoke-token`, `GET /admin/me` | `tokenVersion` invalide les jetons — ajouté à l'audit V1, **jamais rejoué** |
+| `test-notifications` | `GET /notifications`, `/notifications/unread`, `/unread/count`, `POST /notifications/:id/read`, `/read-all` | **module entier sans aucune couverture** (T3) |
+| `test-storage-upload` | `POST /storage/upload` | la POST policy S3 (`content-length-range`, 5 Mo) **jamais éprouvée contre un vrai bucket** — MinIO tourne en local |
 
-**Ordre** : les deux premiers d'abord. Ce sont les seuls dont l'échec est une
-faille, pas un affichage faux.
+#### Client — 14 routes ouvertes
+
+| Banc | Routes exercées | Ce qu'il éprouve en propre |
+|---|---|---|
+| `test-client-liste` | `GET /promo`, `GET /promo/:id` | « visible » a **une seule** définition ; **aucune réponse ne porte `photoKey`** (un spread exposait l'UUID de l'agent) |
+| `test-client-carte` | `GET /promo/map` | plafond de 300 commerces, bornes de la zone visible, throttle 180/min (T5) |
+| `test-client-commune` | `GET /commune` | liste **complète**, jamais tronquée — la paginer casserait `CommuneCascadeField` (règle 15) |
+| `test-client-highlight` | `GET /highlight` | bandeau curé : 10 max, repli à 8 |
+| `test-client-fiche` | `GET /commercant/:id/public` | la projection publique — que voit un anonyme, et surtout que ne voit-il pas |
+| `test-client-applinks` | `GET /p/:id`, les 2 `.well-known` | host-scopées : à sonder avec `-H "Host: promo.echango.com"` |
+| `test-abus-signalement` | `POST /report` | `X-Device-Id` déclaratif — masquer la promo d'un concurrent en changeant un en-tête |
+
+#### Commerçant — 17 routes
+
+| Banc | Routes exercées | Ce qu'il éprouve en propre |
+|---|---|---|
+| `test-promo-plafond` | `POST /promo` | 5 actives **en concurrence** : le `pg_advisory_xact_lock` n'a jamais été éprouvé sous charge. Probabiliste, plusieurs tours |
+| `test-promo-cycle` | `PATCH /promo/:id`, `POST /promo/:id/publish`, `/stop`, `GET /promo/me/all` | plafond quotidien (5), cooldown de republication (24 h), durée maximale |
+| `test-commercant-profil` | `GET`/`PATCH /commercant/me`, `PATCH /commercant/me/pin` | le PIN 4-6 chiffres |
+| `test-commercant-registre` | `POST /commercant/register`, `POST /commercant/me/registre` | demande un décor **photographique** |
+| `test-commercant-dashboard` | `GET /commercant/me/dashboard` | le surcompte de promos actives, défaut historique |
+| `test-commercant-autosuppression` | `DELETE /commercant/me` | **action irréversible, aucun test aujourd'hui** (T4) |
+
+#### Agent — 26 routes
+
+| Banc | Routes exercées | Ce qu'il éprouve en propre |
+|---|---|---|
+| **`test-agent-appartenance`** ⚠️ | **les 14 routes `/admin/*`** + `PATCH /promo/:id` + `POST /promo/agent/:commercantId` | **Le banc le plus important du lot** (T1). Un agent hors de ses communes doit être refusé sur *chacune* — suspendre, supprimer, valider un registre, réinitialiser un PIN, modérer. L'IDOR corrigé à l'audit V0 ne portait que sur les promos : la surface réelle est **sept fois plus grande** |
+| `test-agent-creation` | `POST /agent/commercant`, `GET /agent/me` | le commerçant créé tombe dans une commune de l'agent |
+| `test-agent-promo` | `POST /promo/agent/:commercantId` | l'exemption agent/admin des plafonds anti-abus |
+
+#### Admin — 35 routes
+
+| Banc | Routes exercées | Ce qu'il éprouve en propre |
+|---|---|---|
+| `test-admin-registre` | `GET /admin/commercant`, `POST …/registre/{valider,rejeter}`, `…/profile/valider`, `…/reset-pin` | le cycle de validation |
+| `test-admin-cycle-commercant` | `POST …/suspend`, `/reactivate`, `/delete` | suspension ≠ suppression, et la suspension **libère le numéro de téléphone** |
+| `test-admin-moderation` | `GET /admin/moderation/queue`, `POST …/{masquer,verifier-ok,avertir}` | seuil de 3 signalements, fenêtre d'ignore de 30 jours |
+| `test-admin-dashboard` | `GET /admin/dashboard`, `GET /admin/promo` | le surcompte, et les filtres wilaya/commune |
+| `test-admin-agents` | `POST`/`GET /admin/agent`, `PATCH /admin/agent/:id/communes`, `POST /admin/agent/transfer-communes`, `…/reset-password` | le transfert de communes — **exactement ce que l'`AuditLogModule` devait tracer** (T2) |
+| `test-admin-audit-log` | `GET /admin/audit-log` | module resté **non branché depuis le premier commit** ; les actions ci-dessus doivent y laisser une trace |
+| `test-admin-highlight` | `GET`/`POST /admin/highlight`, `PATCH`/`DELETE /admin/highlight/:id`, `POST /admin/highlight/reorder` | plafond de 10, réordonnancement, image importée. **Livré fin juillet, jamais éprouvé**, et porte le `HIGHLIGHT_CAP_REACHED` non traduit de P1 (T2) |
+
+**Total : 27 bancs, 62 routes sur 62.**
+
+**Ordre d'écriture** — par ce dont l'échec est une **faille**, puis par ce dont
+l'échec est une **perte de données**, puis le reste :
+
+1. `test-agent-appartenance` — seul banc dont l'échec est une faille d'accès
+   sur 16 routes à la fois.
+2. `test-promo-plafond` — une correction jamais rejouée, sur une règle d'argent.
+3. `test-admin-cycle-commercant` et `test-commercant-autosuppression` — les
+   actions irréversibles.
+4. Le reste, par profil, en commençant par `admin` (35 routes, 3 bancs partiels
+   aujourd'hui).
 
 ---
 
@@ -405,6 +522,15 @@ admin@echango.local            (seed:admin)
    l'utilisateur aujourd'hui.
 2. **Étape 2** — déplacer `check-sync.dart` dans `apps/mobile/tool/`, l'éprouver
    par mutation. C'est ce qui empêche D1 de revenir.
-3. **Étape 1** — le banc de refus et le banc d'appartenance.
-4. **Étape 3** — le décor, puis le parcours « plafond de 5 promos ».
-5. **Étape 4** — les deux premiers bancs métier.
+3. **Étape 1** — le banc de refus (48 routes d'un coup, par construction).
+4. **`test-agent-appartenance`** — hors ordre, et volontairement. C'est le seul
+   banc dont l'échec serait une **faille d'accès sur 16 routes à la fois**, et
+   la surface concernée n'a jamais été éprouvée (T1).
+5. **Étape 3** — le décor, puis le parcours « plafond de 5 promos ».
+6. **Étape 4** — le reste des 27 bancs, dans l'ordre du §6.
+
+**La cible est 100 %** sur la couverture d'accès et sur la couverture d'usage
+(§4). Ce n'est pas un objectif de principe : les deux se comptent honnêtement,
+la première est atteinte par construction, et la seconde est bornée à 62 routes.
+Seule la couverture comportementale reste pilotée par le risque, parce qu'elle
+n'a pas de dénominateur.
