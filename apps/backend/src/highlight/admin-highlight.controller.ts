@@ -3,11 +3,11 @@ import {
   Controller,
   Delete,
   Get,
-  Param,
   Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { UuidParam } from '../common/decorators/uuid-param.decorator';
 import { Throttle } from '@nestjs/throttler';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { AuditActorType } from '../audit-log/entities/audit-log.entity';
@@ -144,7 +144,7 @@ export class AdminHighlightController {
   @Patch(':id')
   async update(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') id: string,
+    @UuidParam('id') id: string,
     @Body() dto: UpdateHighlightDto,
   ) {
     const highlight = await this.highlightService.update(id, dto);
@@ -158,7 +158,10 @@ export class AdminHighlightController {
 
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @Delete(':id')
-  async remove(@CurrentUser() user: AuthTokenPayload, @Param('id') id: string) {
+  async remove(
+    @CurrentUser() user: AuthTokenPayload,
+    @UuidParam('id') id: string,
+  ) {
     await this.highlightService.remove(id);
     await this.record(user, 'highlight.delete', id);
     return { deleted: true };

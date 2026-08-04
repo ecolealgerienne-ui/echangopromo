@@ -2,12 +2,12 @@ import {
   Body,
   Controller,
   Get,
-  Param,
   Patch,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { UuidParam } from '../common/decorators/uuid-param.decorator';
 import { Throttle } from '@nestjs/throttler';
 import { AgentService } from '../agent/agent.service';
 import { AssignCommunesDto } from '../agent/dto/assign-communes.dto';
@@ -120,7 +120,7 @@ export class AdminController {
   @Roles('admin')
   @Patch('agent/:id/communes')
   async assignCommunes(
-    @Param('id') agentId: string,
+    @UuidParam('id') agentId: string,
     @Body() dto: AssignCommunesDto,
   ) {
     return this.agentService.assignCommunes(agentId, dto.communeIds);
@@ -133,7 +133,7 @@ export class AdminController {
   @Post('agent/:id/revoke-token')
   async revokeAgentToken(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') agentId: string,
+    @UuidParam('id') agentId: string,
   ) {
     await this.agentService.revokeTokens(agentId);
     await this.auditLogService.record({
@@ -158,7 +158,7 @@ export class AdminController {
   @Post('agent/:id/reset-password')
   async resetAgentPassword(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') agentId: string,
+    @UuidParam('id') agentId: string,
     @Body() dto: ResetAgentPasswordDto,
   ) {
     await this.agentService.resetPassword(agentId, dto.newPassword);
@@ -314,7 +314,7 @@ export class AdminController {
   @Post('moderation/:promoId/masquer')
   async masquer(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('promoId') promoId: string,
+    @UuidParam('promoId') promoId: string,
   ) {
     await this.assertCanModerate(user, promoId);
     await this.moderationService.masquer(
@@ -331,7 +331,7 @@ export class AdminController {
   @Post('moderation/:promoId/verifier-ok')
   async verifierOk(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('promoId') promoId: string,
+    @UuidParam('promoId') promoId: string,
   ) {
     await this.assertCanModerate(user, promoId);
     await this.moderationService.verifierOk(
@@ -348,7 +348,7 @@ export class AdminController {
   @Post('moderation/:promoId/avertir')
   async avertir(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('promoId') promoId: string,
+    @UuidParam('promoId') promoId: string,
   ) {
     await this.assertCanModerate(user, promoId);
     await this.moderationService.avertir(
@@ -445,7 +445,7 @@ export class AdminController {
   @Post('commercant/:id/suspend')
   async suspendCommercant(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
+    @UuidParam('id') commercantId: string,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.suspend(commercantId);
@@ -466,7 +466,7 @@ export class AdminController {
   @Post('commercant/:id/reactivate')
   async reactivateCommercant(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
+    @UuidParam('id') commercantId: string,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.unsuspend(commercantId);
@@ -492,7 +492,7 @@ export class AdminController {
   @Post('commercant/:id/delete')
   async deleteCommercant(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
+    @UuidParam('id') commercantId: string,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.deleteCommercant(commercantId);
@@ -512,7 +512,7 @@ export class AdminController {
   @Post('commercant/:id/registre/valider')
   async validerRegistre(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
+    @UuidParam('id') commercantId: string,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.resolveRegistreVerification(
@@ -541,7 +541,7 @@ export class AdminController {
   @Post('commercant/:id/profile/valider')
   async validerProfil(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
+    @UuidParam('id') commercantId: string,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.validateProfile(commercantId);
@@ -569,7 +569,7 @@ export class AdminController {
   @Post('commercant/:id/reset-pin')
   async resetPin(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
+    @UuidParam('id') commercantId: string,
     @Body() dto: ResetCommercantPinDto,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
@@ -590,7 +590,7 @@ export class AdminController {
   @Post('commercant/:id/registre/rejeter')
   async rejeterRegistre(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
+    @UuidParam('id') commercantId: string,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.resolveRegistreVerification(

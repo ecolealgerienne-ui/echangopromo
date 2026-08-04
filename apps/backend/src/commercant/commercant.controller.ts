@@ -3,11 +3,11 @@ import {
   Controller,
   Delete,
   Get,
-  Param,
   Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { UuidParam } from '../common/decorators/uuid-param.decorator';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -71,7 +71,10 @@ export class CommercantController {
 
   /** Fiche publique consultée depuis le détail d'une promo (specs §3.1). */
   @Get(':id/public')
-  async publicProfile(@Param('id') id: string, @DeviceId() deviceId: string) {
+  async publicProfile(
+    @UuidParam('id') id: string,
+    @DeviceId() deviceId: string,
+  ) {
     const commercant = await this.commercantService.findPublicProfile(id);
     await this.commercantService.recordProfileView(id, deviceId);
     return {

@@ -2,12 +2,12 @@ import {
   Body,
   Controller,
   Get,
-  Param,
   Patch,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { UuidParam } from '../common/decorators/uuid-param.decorator';
 import { Throttle } from '@nestjs/throttler';
 import { AgentService } from '../agent/agent.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -161,7 +161,7 @@ export class PromoController {
    * `findActiveForClient`, appliquée ici au lieu de diverger.
    */
   @Get(':id')
-  async detail(@Param('id') id: string, @DeviceId() deviceId: string) {
+  async detail(@UuidParam('id') id: string, @DeviceId() deviceId: string) {
     const promo = await this.promoService.findByIdOrFail(id);
     if (!VISIBLE_MODERATION_STATUSES.includes(promo.moderationStatus)) {
       throw new NotFoundAppException(
@@ -220,7 +220,7 @@ export class PromoController {
   @Post('agent/:commercantId')
   async createByAgent(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('commercantId') commercantId: string,
+    @UuidParam('commercantId') commercantId: string,
     @Body() dto: CreatePromoDto,
   ) {
     if (user.role === 'agent') {
@@ -243,7 +243,7 @@ export class PromoController {
   @Patch(':id')
   async update(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') id: string,
+    @UuidParam('id') id: string,
     @Body() dto: UpdatePromoDto,
   ) {
     const promo = await this.promoService.findByIdOrFail(id);
@@ -262,7 +262,7 @@ export class PromoController {
   @Post(':id/publish')
   async publish(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') id: string,
+    @UuidParam('id') id: string,
   ) {
     const promo = await this.promoService.findByIdOrFail(id);
     await this.assertCanManage(user, promo);
@@ -276,7 +276,10 @@ export class PromoController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('commercant', 'agent')
   @Post(':id/stop')
-  async stop(@CurrentUser() user: AuthTokenPayload, @Param('id') id: string) {
+  async stop(
+    @CurrentUser() user: AuthTokenPayload,
+    @UuidParam('id') id: string,
+  ) {
     const promo = await this.promoService.findByIdOrFail(id);
     await this.assertCanManage(user, promo);
     return this.promoService.stop(id);
