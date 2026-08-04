@@ -77,10 +77,16 @@ describe('AppLinksController', () => {
       const controller = new AppLinksController(
         configWith({ IOS_TEAM_ID: 'TEAM123', IOS_BUNDLE_ID: 'com.echango.promo' }),
       );
+      // ⚠️ `/p/*`, jamais `/promo/*`. Le chemin de partage est volontairement
+      // distinct de l'API JSON `GET /promo/:id` (voir l'en-tête du
+      // contrôleur) : déclarer `/promo/*` ici ferait tenter à iOS d'ouvrir
+      // l'app sur des URL d'API. Ce test attendait l'ancien chemin et
+      // échouait depuis le renommage — trouvé au premier `npm test` de la
+      // session du 2026-08-05.
       expect(controller.appleAppSiteAssociation()).toEqual({
         applinks: {
           apps: [],
-          details: [{ appID: 'TEAM123.com.echango.promo', paths: ['/promo/*'] }],
+          details: [{ appID: 'TEAM123.com.echango.promo', paths: ['/p/*'] }],
         },
       });
     });
