@@ -103,6 +103,7 @@
   "allCategoriesChip": "الكل",
   "noActivePromos": "لا يوجد أي عرض نشط حاليًا.",
   "loadMoreButtonLabel": "عرض المزيد",
+  "promoDensityTooltip": "تغيير طريقة العرض",
   "filtersSortTooltip": "التصنيف والترتيب",
   "filtersSortTitle": "التصنيف والترتيب",
   "favoritesOnlyLabel": "العروض المفضلة",

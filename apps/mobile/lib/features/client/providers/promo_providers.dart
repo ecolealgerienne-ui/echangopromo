@@ -30,6 +30,37 @@ final searchQueryProvider = StateProvider.autoDispose<String>((ref) => '');
 /// filtres existants.
 final listExpandedProvider = StateProvider.autoDispose<bool>((ref) => false);
 
+/// Nombre de promos par rangée dans le fil (demande 2026-08-04). Un seul
+/// bouton fait tourner les trois valeurs, dans cet ordre.
+enum PromoDensity {
+  /// Une par rangée : la ligne détaillée (photo, commerce, prix, badge).
+  list(1),
+
+  /// Deux par rangée : carte verticale, photo au-dessus du texte.
+  grid(2),
+
+  /// Six par rangée : mosaïque de photos avec la seule remise en incrustation.
+  /// À cette largeur (~50 dp sur un téléphone courant) aucun texte n'est
+  /// lisible — c'est un mode de survol visuel, pas de lecture.
+  mosaic(6);
+
+  const PromoDensity(this.columns);
+
+  /// Nombre de colonnes de la grille. `list` vaut 1 mais reste une `ListView`
+  /// : la ligne détaillée n'a pas de hauteur fixe, une grille l'obligerait à
+  /// un ratio unique alors que le badge « expire bientôt » la fait varier.
+  final int columns;
+
+  /// Valeur suivante dans le cycle, en boucle.
+  PromoDensity get next => PromoDensity.values[(index + 1) % PromoDensity.values.length];
+}
+
+/// Préférence d'affichage, pas un filtre : volontairement absente de
+/// `_resetToHome` (promo_list_screen.dart), qui ne remet à zéro que ce qui
+/// restreint les résultats. Sans `autoDispose`, pour survivre à un aller-
+/// retour vers la carte ou la fiche d'une promo.
+final promoDensityProvider = StateProvider<PromoDensity>((ref) => PromoDensity.list);
+
 enum PromoSort { expireBientot, plusGrosseReduction, nouveautes }
 
 /// `nouveautes` reproduit le tri par défaut déjà appliqué côté backend
