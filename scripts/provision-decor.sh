@@ -215,7 +215,10 @@ PROMO_ID="$(api GET "/promo/me/all?limit=1" '' "$COMMERCANT_TOKEN" \
 
 if [ -z "$PROMO_ID" ]; then
   info "Aucune — création"
-  fin="$(date -u -d '+20 days' +%Y-%m-%dT%H:%M:%S.000Z)"
+  # ⚠️ La durée est plafonnée côté serveur (PROMO_MAX_DURATION_DAYS, 7 jours par
+  # défaut). On reste dessous — et on ne recopie pas le plafond : 5 jours vaut
+  # pour toute valeur de configuration supérieure ou égale à 5.
+  fin="$(date -u -d '+5 days' +%Y-%m-%dT%H:%M:%S.000Z)"
   out="$(api POST /promo "$(jq -n --arg f "$fin" \
     '{description:"Promo du décor", prixAvant:1000, prixApres:700,
       categorie:"alimentation", photoKeys:["promo-photos/decor/decor.jpg"], dateFin:$f}')" \
