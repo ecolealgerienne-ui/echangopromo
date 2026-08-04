@@ -72,7 +72,7 @@ step "1. Admin aux identifiants connus"
 
 admin_login() {
   api POST /admin/login "$(jq -n --arg e "$D_ADMIN_EMAIL" --arg p "$D_ADMIN_PASSWORD" \
-    '{email:$e, password:$p}')" | jq -r '.token // empty'
+    '{email:$e, password:$p}')" | jq -r '.accessToken // empty'
 }
 
 ADMIN_TOKEN="$(admin_login)"
@@ -101,7 +101,7 @@ step "3. Agent rattaché à cette commune"
 
 agent_login() {
   api POST /agent/login "$(jq -n --arg e "$D_AGENT_EMAIL" --arg p "$D_AGENT_PASSWORD" \
-    '{email:$e, password:$p}')" | jq -r '.token // empty'
+    '{email:$e, password:$p}')" | jq -r '.accessToken // empty'
 }
 
 sleep "$PACE"
@@ -123,7 +123,7 @@ step "4. Commerçant actif, registre validé"
 
 commercant_login() {
   api POST /commercant/login "$(jq -n --arg t "$D_COMMERCANT_TEL" --arg p "$D_COMMERCANT_PIN" \
-    '{telephone:$t, pin:$p}')" | jq -r '.token // empty'
+    '{telephone:$t, pin:$p}')" | jq -r '.accessToken // empty'
 }
 
 sleep "$PACE"

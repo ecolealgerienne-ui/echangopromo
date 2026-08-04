@@ -232,9 +232,16 @@ def jetons():
                                      data=json.dumps(corps).encode(), method="POST")
         req.add_header("Content-Type", "application/json")
         with urllib.request.urlopen(req, timeout=20) as r:
-            jeton = json.loads(r.read()).get("token")
+            reponse = json.loads(r.read())
+        # ⚠️ Le champ s'appelle `accessToken`. Une première version lisait
+        # `token` : la connexion réussissait, le jeton ressortait vide, et le
+        # banc accusait les identifiants. Un champ absent n'est pas un refus —
+        # d'où le nom du champ dans le message, pour que l'erreur soit lisible
+        # le jour où le contrat change.
+        jeton = reponse.get("accessToken")
         if not jeton:
-            print("❌ connexion %s : aucun jeton dans la réponse." % quoi)
+            print("❌ connexion %s : pas de champ `accessToken` dans la réponse." % quoi)
+            print("   Champs reçus : %s" % sorted(reponse.keys()))
             sys.exit(2)
         time.sleep(PACE)
         return jeton
