@@ -20,24 +20,53 @@ class AppRadii {
 const kAppTransitionDuration = Duration(milliseconds: 180);
 
 /// Couleurs sémantiques absentes du `ColorScheme` Material (qui n'a que
-/// `error`) — succès et attention, déclinées clair/sombre.
+/// `error`) — succès, attention et favori, déclinées clair/sombre.
 @immutable
 class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
-  const AppSemanticColors({required this.success, required this.warning});
+  const AppSemanticColors({
+    required this.success,
+    required this.warning,
+    required this.favorite,
+  });
 
   final Color success;
   final Color warning;
+
+  /// Le cœur d'un favori.
+  ///
+  /// ⚠️ **Ni `colorScheme.error`, ni un rouge en dur.** `error` serait
+  /// sémantiquement faux — mettre en favori n'est pas une erreur — et le
+  /// `Colors.redAccent` qui occupait cette place (`promo_card.dart`, corrigé le
+  /// 2026-08-04) ne suivait pas le basculement clair/sombre : il cohabitait sur
+  /// la même ligne avec `colorScheme.onSurfaceVariant` pour l'autre branche,
+  /// une moitié suivant le thème et l'autre non.
+  ///
+  /// Variante sombre plus claire et moins saturée : un rouge franc sur fond
+  /// sombre « vibre » et attire l'œil plus que l'information ne le mérite.
+  final Color favorite;
 
   /// `warning` en ambre franc et non plus en ambre foncé (`0xFFB45309`) :
   /// les bandeaux d'alerte l'affichent à ~13 % d'opacité sur blanc, et un
   /// ambre trop sombre y produisait un beige — exactement le rendu « marron »
   /// qu'on cherchait à supprimer.
-  static const light = AppSemanticColors(success: Color(0xFF2F9E62), warning: Color(0xFFD97706));
-  static const dark = AppSemanticColors(success: Color(0xFF4ADE80), warning: Color(0xFFFBBF24));
+  static const light = AppSemanticColors(
+    success: Color(0xFF2F9E62),
+    warning: Color(0xFFD97706),
+    favorite: Color(0xFFE11D48),
+  );
+  static const dark = AppSemanticColors(
+    success: Color(0xFF4ADE80),
+    warning: Color(0xFFFBBF24),
+    favorite: Color(0xFFFB7185),
+  );
 
   @override
-  AppSemanticColors copyWith({Color? success, Color? warning}) {
-    return AppSemanticColors(success: success ?? this.success, warning: warning ?? this.warning);
+  AppSemanticColors copyWith({Color? success, Color? warning, Color? favorite}) {
+    return AppSemanticColors(
+      success: success ?? this.success,
+      warning: warning ?? this.warning,
+      favorite: favorite ?? this.favorite,
+    );
   }
 
   @override
@@ -46,6 +75,7 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
     return AppSemanticColors(
       success: Color.lerp(success, other.success, t)!,
       warning: Color.lerp(warning, other.warning, t)!,
+      favorite: Color.lerp(favorite, other.favorite, t)!,
     );
   }
 }

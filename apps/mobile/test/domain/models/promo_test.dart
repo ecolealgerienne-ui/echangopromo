@@ -2,6 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:echango_promo/domain/enums/categorie.dart';
 import 'package:echango_promo/domain/models/promo.dart';
 
+/// ⚠️ **`createdAt` est obligatoire côté modèle** (`Promo.fromJson` le caste
+/// sans repli). Son absence ici a cassé les cinq tests de ce fichier pendant
+/// trois semaines, depuis le commit `publishedAt` du 2026-07-14 — sans que
+/// personne le voie, le SDK Flutter n'étant pas installable dans
+/// l'environnement de l'époque. Trouvé le 2026-08-04, au premier
+/// `flutter test` réel.
 Promo _promo({required String lifecycleStatus, DateTime? dateFin}) => Promo.fromJson({
       'id': 'p1',
       'commercantId': 'c1',
@@ -13,6 +19,7 @@ Promo _promo({required String lifecycleStatus, DateTime? dateFin}) => Promo.from
       'lifecycleStatus': lifecycleStatus,
       'moderationStatus': 'normale',
       'photoUrl': null,
+      'createdAt': DateTime(2026, 7, 1).toIso8601String(),
     });
 
 void main() {

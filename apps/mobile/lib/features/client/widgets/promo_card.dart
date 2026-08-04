@@ -94,7 +94,9 @@ class PromoCard extends StatelessWidget {
                               isFavorite ? Icons.favorite : Icons.favorite_border,
                               size: 16,
                               color: isFavorite
-                                  ? Colors.redAccent
+                                  ? Theme.of(context)
+                                      .extension<AppSemanticColors>()!
+                                      .favorite
                                   : colorScheme.onSurfaceVariant,
                             ),
                           ),
