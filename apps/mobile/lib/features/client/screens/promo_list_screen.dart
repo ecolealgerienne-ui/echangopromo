@@ -439,14 +439,12 @@ class _CategoryCircles extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return AnimatedContainer(
-      duration: kAppTransitionDuration,
-      curve: Curves.easeOut,
-      // Hauteurs calées sur le contenu réel : diamètre + 4 d'écart + les
-      // lignes de libellé (~16 px chacune en `labelSmall`) + 4 de marge
-      // haute. Une seule ligne en mode filtré, pour que la bande reste
-      // discrète face à la liste.
-      height: compact ? 78 : 92,
+    // Hauteur fixe dans les deux états : le libellé tient sur deux lignes
+    // partout — en arabe comme en français, les noms composés
+    // (« التجميل / النظافة », « maison / ameublement ») ne tiennent pas sur
+    // une seule. Seul le diamètre du rond s'anime, à l'intérieur.
+    return Container(
+      height: 92,
       padding: const EdgeInsets.only(top: 4),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
@@ -459,7 +457,6 @@ class _CategoryCircles extends ConsumerWidget {
             categorie: categorie,
             isSelected: selected == categorie,
             diameter: compact ? 42 : 56,
-            labelMaxLines: compact ? 1 : 2,
             // Recliquer la catégorie active la désélectionne : c'est le
             // second moyen de revenir à l'accueil, avec le glissement.
             onTap: () => ref.read(categoryFilterProvider.notifier).state =
@@ -476,17 +473,12 @@ class _CategoryCircle extends StatelessWidget {
     required this.categorie,
     required this.isSelected,
     required this.diameter,
-    required this.labelMaxLines,
     required this.onTap,
   });
 
   final Categorie categorie;
   final bool isSelected;
   final double diameter;
-
-  /// Le libellé est toujours affiché ; seul le nombre de lignes varie. Les
-  /// noms longs (« maison / ameublement ») sont tronqués en mode filtré.
-  final int labelMaxLines;
   final VoidCallback onTap;
 
   static const _icons = <Categorie, IconData>{
@@ -555,7 +547,7 @@ class _CategoryCircle extends StatelessWidget {
             Flexible(
               child: Text(
                 categorieLabel(context, categorie),
-                maxLines: labelMaxLines,
+                maxLines: 2,
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
                 style: textTheme.labelSmall?.copyWith(
