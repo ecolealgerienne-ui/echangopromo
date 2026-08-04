@@ -28,6 +28,8 @@ const Map<String, String> errorMessagesEn = {
   'HIGHLIGHT_NOT_FOUND': 'Featured card not found.',
   'HIGHLIGHT_EMPTY_CONTENT':
       'A featured card must target a promo or carry an uploaded image.',
+  'HIGHLIGHT_CAP_REACHED':
+      'The home banner has reached its limit. Remove a featured card to add a new one.',
   'HIGHLIGHT_REORDER_MISMATCH':
       'The submitted order no longer matches the existing featured cards. Reload the list.',
 

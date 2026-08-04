@@ -26,6 +26,8 @@ const Map<String, String> errorMessagesAr = {
 
   'HIGHLIGHT_NOT_FOUND': 'الإبراز غير موجود.',
   'HIGHLIGHT_EMPTY_CONTENT': 'يجب أن يستهدف الإبراز عرضًا أو أن يحمل صورة مستوردة.',
+  'HIGHLIGHT_CAP_REACHED':
+      'بلغ شريط الصفحة الرئيسية حدّه الأقصى. احذف إبرازًا لإضافة إبراز جديد.',
   'HIGHLIGHT_REORDER_MISMATCH':
       'الترتيب المُرسَل لم يعد مطابقًا للإبرازات الموجودة. أعد تحميل القائمة.',
 

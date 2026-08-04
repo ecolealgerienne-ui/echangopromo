@@ -110,14 +110,19 @@ l'auto-test refuse une exclusion sans justification.
 disant **non**. Un faux positif qui accuse à tort se paie en confiance perdue —
 c'est ainsi que les contrôles finissent désactivés.
 
-**Ce qu'il reste à faire** — bien plus petit que ce qui était annoncé :
+**État** :
 
-1. Trancher sur `HIGHLIGHT_CAP_REACHED` — le traduire dans les 3 tables, ou
-   l'épingler dans `_exclusions` avec sa raison.
-2. Faire pointer le commentaire d'en-tête de `error_messages_fr.dart` vers
+1. ✅ **`HIGHLIGHT_CAP_REACHED` traduit** dans les 3 tables (décision du
+   2026-08-04). ⚠️ **Sans recopier le plafond** : le message backend interpole
+   `HIGHLIGHT_MAX_SLIDES`, et reproduire ce nombre côté app dupliquerait une
+   constante serveur — l'app mentirait le jour où elle change (règle 7 de
+   `CLAUDE.md`). La formulation retenue porte le **geste à faire**, qui ne
+   dépend pas du nombre : « supprimez une mise en avant pour en ajouter une
+   nouvelle ». Le contrôle est vert : 38 clés dans chaque table.
+2. ⬜ Faire pointer le commentaire d'en-tête de `error_messages_fr.dart` vers
    `tool/check_error_codes.dart`, pour qu'il n'y ait **qu'une seule** source de
-   vérité sur les exclusions. ⚠️ C'est une **modification** de fichier existant
-   — à arbitrer avec la règle « ajout seulement ».
+   vérité sur les exclusions. ⚠️ Modification d'un fichier existant — arbitrage
+   A1.
 
 ### D2 — Huit clés d'environnement absentes du `.env` local ⚠️ à vérifier
 

@@ -93,10 +93,17 @@ l'auto-test **refuse une exclusion sans justification**. C'est le mode M5 du
 générique appliqué à une liste d'exceptions — et l'illustration qu'**un contrôle
 peut aussi mentir en disant non**.
 
-**Débloqué par** : trancher sur `HIGHLIGHT_CAP_REACHED` (le traduire, ou
-l'épingler avec sa raison), et faire pointer le commentaire de
-`error_messages_fr.dart` vers le vérificateur pour qu'il n'y ait qu'une source
-de vérité. ⚠️ Le second point modifie un fichier existant — voir A1.
+**✅ Fermé le 2026-08-04.** Décision : `HIGHLIGHT_CAP_REACHED` **traduit** dans
+les 3 tables. ⚠️ **Sans recopier le plafond** — le message backend interpole
+`HIGHLIGHT_MAX_SLIDES`, et reproduire ce nombre côté app dupliquerait une
+constante serveur (règle 7). La formulation porte le **geste à faire**, qui ne
+dépend pas du nombre. Le vérificateur est vert : 38 clés par table.
+
+**Reste ouvert, mineur** : le commentaire d'en-tête de `error_messages_fr.dart`
+décrit toujours les exclusions, alors que la liste fait foi dans
+`tool/check_error_codes.dart`. Deux sources de vérité tant que le commentaire
+ne pointe pas vers le vérificateur. ⚠️ Modification d'un fichier existant —
+voir A1.
 
 ### P2 — Aucun contrôle exécuté ne tient les couples serveur ↔ app
 
@@ -372,7 +379,14 @@ et surtout **5 mutations des vrais fichiers, 5 refus** :
 
 La cinquième est la plus importante : un contrôle qui **conclut à l'accord**
 quand il ne trouve pas sa source est le mode de panne le plus dangereux de
-cette famille. Fichiers restaurés à l'identique après chaque mutation.
+cette famille.
+
+> ⚠️ **Une leçon d'exploitation, apprise en se brûlant.** Le lanceur de
+> mutations restaure par `git checkout -- .`, ce qui **balaie aussi le travail
+> non commité**. Lancé sur un arbre sale, il a effacé les trois traductions qui
+> venaient d'être écrites. L'ordre est donc : **committer d'abord, muter
+> ensuite** — et un lanceur de mutations devrait refuser de démarrer sur un
+> arbre sale, ou ne restaurer que les fichiers qu'il a lui-même touchés.
 
 **Ce que ce vérificateur a coûté en confiance, et pourquoi c'est instructif.**
 Sa première version a produit un faux positif à quatre entrées (voir P1) parce

@@ -42,6 +42,11 @@ const Map<String, String> errorMessagesFr = {
   'HIGHLIGHT_NOT_FOUND': 'Mise en avant introuvable.',
   'HIGHLIGHT_EMPTY_CONTENT':
       'Une mise en avant doit cibler une promo ou porter une image importée.',
+  // Le message backend interpole le plafond (`HIGHLIGHT_MAX_SLIDES`). On ne le
+  // recopie pas ici : ce serait dupliquer une constante serveur, et l'app
+  // mentirait le jour où elle change. Le geste à faire ne dépend pas du nombre.
+  'HIGHLIGHT_CAP_REACHED':
+      "Le bandeau d'accueil a atteint sa limite. Supprimez une mise en avant pour en ajouter une nouvelle.",
   'HIGHLIGHT_REORDER_MISMATCH':
       "L'ordre envoyé ne correspond plus aux mises en avant existantes. Rechargez la liste.",
 
