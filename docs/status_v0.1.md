@@ -664,6 +664,46 @@ Aucun n'a levé au bon endroit. C'est exactement ce que la méthode reproche aux
 valeurs par défaut, appliqué à des expressions `jq` et à des arguments de
 fonction — **le pire endroit pour un repli reste un script de décor**.
 
+### 2026-08-04 (fin) — Concurrence prouvée, base peuplée
+
+**Banc de concurrence** : `test-plafond-promos.sh`, 5 tours × 4 créations
+simultanées, **1 seul gagnant à chaque tour**. Prouvé par mutation — verrou
+rendu non sérialisant → **4 créations sur 4 réussissent**. Voir P4.
+
+**`scripts/seed-demo.sh`** peuple la base pour qu'on puisse *regarder*
+l'application, là où `provision-decor.sh` ne pose que le minimum des bancs.
+Les deux sont séparés : un banc doit tourner sur un décor prévisible, pas sur
+vingt promos de démonstration.
+
+État après peuplement :
+
+| | |
+|---|---|
+| Commerces actifs | **10** — 4 communes, 7 catégories |
+| Promos publiées | **44** |
+| Mises en avant | **3** |
+| Modération | 1 promo masquée (3 signalements), 1 à 2 signalements |
+| Carte | 8 commerces géolocalisés, `truncated: false` |
+
+**Tout passe par l'agent**, et c'est ce qui rend le script praticable : un
+commerçant créé par un agent est `confirme_agent` — il échappe à la garde du
+registre — et l'agent est un `trustedActor` exempté des plafonds anti-abus. Par
+l'inscription directe, il aurait fallu deux gestes admin et une connexion par
+commerçant, contre un plafond de 5 connexions par minute.
+
+**Deux défauts de ma part, tous deux du même genre que ceux déjà consignés :**
+
+- **la cadence.** Toutes les écritures partagent un seau de 20/min ; à 0,3 s
+  d'intervalle le peuplement mourait sur `RATE_LIMITED`. L'enrobage `ecrire`
+  nomme désormais le 429 et patiente, au lieu de le confondre avec un refus
+  métier ;
+- **la file de modération restait vide.** Je posais deux signalements « pour la
+  peupler », alors que le seuil est à **3** et que la file n'affiche que ce qui
+  l'a atteint. Le tableau de bord le disait — `signalementsEnAttente: 0` — sans
+  que je l'écoute. Les deux états sont désormais posés, parce que les deux
+  existent en production. **Un décor qui n'illustre pas ce qu'il prétend
+  illustrer est un décor qui rassure.**
+
 ---
 
 ## Comment tenir ce fichier
