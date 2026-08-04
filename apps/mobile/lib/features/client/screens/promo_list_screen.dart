@@ -422,9 +422,15 @@ class _TopPromoCard extends StatelessWidget {
   }
 }
 
-/// Catégories en ronds. En mode filtré les ronds rétrécissent et le libellé
-/// disparaît : la bande passe de vitrine à barre de filtre, sans changer de
-/// place ni de nature.
+/// Catégories en ronds. En mode filtré les ronds rétrécissent, mais le
+/// libellé reste : la bande passe de vitrine à barre de filtre sans changer
+/// de place ni de nature.
+///
+/// Le libellé était masqué en mode filtré jusqu'au 2026-08-04. Une image
+/// seule n'identifie pas sa catégorie de façon fiable — pour savoir laquelle
+/// était « beauté / hygiène », il fallait replier la liste, lire, puis
+/// recliquer. La bande sert précisément à changer de catégorie sans revenir
+/// en arrière : sans libellé elle ne remplit plus ce rôle.
 class _CategoryCircles extends ConsumerWidget {
   const _CategoryCircles({required this.selected, required this.compact});
 
@@ -436,7 +442,11 @@ class _CategoryCircles extends ConsumerWidget {
     return AnimatedContainer(
       duration: kAppTransitionDuration,
       curve: Curves.easeOut,
-      height: compact ? 58 : 92,
+      // Hauteurs calées sur le contenu réel : diamètre + 4 d'écart + les
+      // lignes de libellé (~16 px chacune en `labelSmall`) + 4 de marge
+      // haute. Une seule ligne en mode filtré, pour que la bande reste
+      // discrète face à la liste.
+      height: compact ? 78 : 92,
       padding: const EdgeInsets.only(top: 4),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
@@ -449,7 +459,7 @@ class _CategoryCircles extends ConsumerWidget {
             categorie: categorie,
             isSelected: selected == categorie,
             diameter: compact ? 42 : 56,
-            showLabel: !compact,
+            labelMaxLines: compact ? 1 : 2,
             // Recliquer la catégorie active la désélectionne : c'est le
             // second moyen de revenir à l'accueil, avec le glissement.
             onTap: () => ref.read(categoryFilterProvider.notifier).state =
@@ -466,14 +476,17 @@ class _CategoryCircle extends StatelessWidget {
     required this.categorie,
     required this.isSelected,
     required this.diameter,
-    required this.showLabel,
+    required this.labelMaxLines,
     required this.onTap,
   });
 
   final Categorie categorie;
   final bool isSelected;
   final double diameter;
-  final bool showLabel;
+
+  /// Le libellé est toujours affiché ; seul le nombre de lignes varie. Les
+  /// noms longs (« maison / ameublement ») sont tronqués en mode filtré.
+  final int labelMaxLines;
   final VoidCallback onTap;
 
   static const _icons = <Categorie, IconData>{
@@ -494,7 +507,9 @@ class _CategoryCircle extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return SizedBox(
-      width: showLabel ? 64 : 46,
+      // Largeur dictée par le libellé, pas par le rond : même en mode filtré
+      // il faut la place d'écrire « électroménager ».
+      width: 64,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadii.pill),
@@ -536,26 +551,36 @@ class _CategoryCircle extends StatelessWidget {
                 ),
               ),
             ),
-            if (showLabel) ...[
-              const SizedBox(height: 4),
-              Flexible(
-                child: Text(
-                  categorieLabel(context, categorie),
-                  maxLines: 2,
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.labelSmall?.copyWith(
-                    color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant,
-                    fontWeight: isSelected ? FontWeight.w600 : null,
-                  ),
+            const SizedBox(height: 4),
+            Flexible(
+              child: Text(
+                categorieLabel(context, categorie),
+                maxLines: labelMaxLines,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.labelSmall?.copyWith(
+                  color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                  fontWeight: isSelected ? FontWeight.w600 : null,
                 ),
               ),
-            ],
+            ),
           ],
         ),
       ),
     );
   }
+}
+
+/// Ramène l'accueil : la liste se replie et tous les filtres retombent.
+///
+/// Au niveau du fichier plutôt que dans `_ListHeader` : l'onglet « Accueil »
+/// de la barre du bas doit produire exactement le même effet, et deux copies
+/// de cette liste de providers divergeraient au premier filtre ajouté.
+void _resetToHome(WidgetRef ref) {
+  ref.read(listExpandedProvider.notifier).state = false;
+  ref.read(categoryFilterProvider.notifier).state = null;
+  ref.read(favoritesOnlyFilterProvider.notifier).state = false;
+  ref.read(searchQueryProvider.notifier).state = '';
 }
 
 /// Titre de la liste, plus une poignée de glissement en mode filtré : tirer
@@ -572,14 +597,6 @@ class _ListHeader extends ConsumerWidget {
   final Categorie? categorie;
   final bool favoritesOnly;
   final int count;
-
-  /// Ramène l'accueil : la liste se replie et tous les filtres retombent.
-  void _reset(WidgetRef ref) {
-    ref.read(listExpandedProvider.notifier).state = false;
-    ref.read(categoryFilterProvider.notifier).state = null;
-    ref.read(favoritesOnlyFilterProvider.notifier).state = false;
-    ref.read(searchQueryProvider.notifier).state = '';
-  }
 
   /// Vitesse minimale, en pixels par seconde, pour qu'un glissement compte.
   /// En dessous, c'est un frôlement en tentant de faire défiler la liste, pas
@@ -604,7 +621,7 @@ class _ListHeader extends ConsumerWidget {
       onVerticalDragEnd: (details) {
         final velocity = details.primaryVelocity ?? 0;
         if (velocity > _dragVelocityThreshold) {
-          if (focused) _reset(ref);
+          if (focused) _resetToHome(ref);
         } else if (velocity < -_dragVelocityThreshold) {
           if (!focused) ref.read(listExpandedProvider.notifier).state = true;
         }
@@ -638,7 +655,7 @@ class _ListHeader extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsetsDirectional.only(start: 4),
                     child: InkWell(
-                      onTap: () => _reset(ref),
+                      onTap: () => _resetToHome(ref),
                       borderRadius: BorderRadius.circular(AppRadii.pill),
                       child: Padding(
                         padding: const EdgeInsets.all(4),
@@ -672,7 +689,13 @@ class _ClientTabBar extends ConsumerWidget {
       onDestinationSelected: (index) {
         switch (index) {
           case 0:
-            ref.read(favoritesOnlyFilterProvider.notifier).state = false;
+            // Retour à l'accueil complet, pas seulement sortie des favoris :
+            // une fois la liste déployée en « Toutes les promos », le seul
+            // moyen de revenir était de tirer l'en-tête vers le bas ou de
+            // trouver la croix — deux gestes que personne ne devine. Le
+            // bouton Accueil est l'endroit où on va instinctivement
+            // (retour terrain, 2026-08-04).
+            _resetToHome(ref);
           case 1:
             context.push('/carte');
           case 2:
