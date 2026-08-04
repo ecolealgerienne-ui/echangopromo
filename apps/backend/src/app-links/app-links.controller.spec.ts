@@ -40,7 +40,7 @@ function fakeResponse(): FakeResponse {
 
 describe('AppLinksController', () => {
   describe('assetlinks', () => {
-    it('retourne un tableau vide tant que le package/l\'empreinte ne sont pas configurés', () => {
+    it("retourne un tableau vide tant que le package/l'empreinte ne sont pas configurés", () => {
       const controller = new AppLinksController(configWith({}));
       expect(controller.assetlinks()).toEqual([]);
     });
@@ -75,7 +75,10 @@ describe('AppLinksController', () => {
 
     it('retourne le appID une fois configuré', () => {
       const controller = new AppLinksController(
-        configWith({ IOS_TEAM_ID: 'TEAM123', IOS_BUNDLE_ID: 'com.echango.promo' }),
+        configWith({
+          IOS_TEAM_ID: 'TEAM123',
+          IOS_BUNDLE_ID: 'com.echango.promo',
+        }),
       );
       // ⚠️ `/p/*`, jamais `/promo/*`. Le chemin de partage est volontairement
       // distinct de l'API JSON `GET /promo/:id` (voir l'en-tête du
@@ -103,11 +106,18 @@ describe('AppLinksController', () => {
 
     it('redirige vers PLAY_STORE_URL pour un user-agent Android', () => {
       const controller = new AppLinksController(
-        configWith({ PLAY_STORE_URL: 'https://play.google.com/store/apps/details?id=x' }),
+        configWith({
+          PLAY_STORE_URL: 'https://play.google.com/store/apps/details?id=x',
+        }),
       );
       const res = fakeResponse();
-      controller.redirectToStore('Mozilla/5.0 (Linux; Android 14)', res as never);
-      expect(res.redirectedTo).toBe('302 https://play.google.com/store/apps/details?id=x');
+      controller.redirectToStore(
+        'Mozilla/5.0 (Linux; Android 14)',
+        res as never,
+      );
+      expect(res.redirectedTo).toBe(
+        '302 https://play.google.com/store/apps/details?id=x',
+      );
     });
 
     it('redirige vers APP_STORE_URL pour un user-agent iPhone', () => {
@@ -115,7 +125,10 @@ describe('AppLinksController', () => {
         configWith({ APP_STORE_URL: 'https://apps.apple.com/app/id123' }),
       );
       const res = fakeResponse();
-      controller.redirectToStore('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)', res as never);
+      controller.redirectToStore(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)',
+        res as never,
+      );
       expect(res.redirectedTo).toBe('302 https://apps.apple.com/app/id123');
     });
   });

@@ -8,7 +8,10 @@ import {
   NotFoundAppException,
 } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
-import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
+import {
+  PaginatedResult,
+  toPaginatedResult,
+} from '../common/pagination/paginated-result';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { Agent } from './entities/agent.entity';
 
@@ -69,7 +72,10 @@ export class AgentService {
       relations: ['communes'],
     });
     if (!agent) {
-      throw new NotFoundAppException(ErrorCode.AGENT_NOT_FOUND, 'Agent introuvable');
+      throw new NotFoundAppException(
+        ErrorCode.AGENT_NOT_FOUND,
+        'Agent introuvable',
+      );
     }
     return agent;
   }
@@ -133,8 +139,12 @@ export class AgentService {
     }
 
     const transferredIds = new Set(communeIds);
-    const communesToTransfer = fromAgent.communes.filter((c) => transferredIds.has(c.id));
-    fromAgent.communes = fromAgent.communes.filter((c) => !transferredIds.has(c.id));
+    const communesToTransfer = fromAgent.communes.filter((c) =>
+      transferredIds.has(c.id),
+    );
+    fromAgent.communes = fromAgent.communes.filter(
+      (c) => !transferredIds.has(c.id),
+    );
     const toAgentCommuneIds = new Set(toAgent.communes.map((c) => c.id));
     toAgent.communes = [
       ...toAgent.communes,

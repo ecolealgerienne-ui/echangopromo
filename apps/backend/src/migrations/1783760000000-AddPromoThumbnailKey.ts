@@ -9,7 +9,9 @@ export class AddPromoThumbnailKey1783760000000 implements MigrationInterface {
   name = 'AddPromoThumbnailKey1783760000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "promo" ADD "thumbnailKey" character varying`);
+    await queryRunner.query(
+      `ALTER TABLE "promo" ADD "thumbnailKey" character varying`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

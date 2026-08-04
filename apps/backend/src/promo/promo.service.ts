@@ -20,7 +20,10 @@ import {
   NotFoundAppException,
 } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
-import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
+import {
+  PaginatedResult,
+  toPaginatedResult,
+} from '../common/pagination/paginated-result';
 import {
   NotificationRecipientType,
   NotificationType,
@@ -90,7 +93,8 @@ export class PromoService {
     const now = Date.now();
     const max = new Date(now + this.maxDureeJours() * 24 * 60 * 60 * 1000);
     const dateFin =
-      requested ?? new Date(now + this.defaultDureeJours() * 24 * 60 * 60 * 1000);
+      requested ??
+      new Date(now + this.defaultDureeJours() * 24 * 60 * 60 * 1000);
 
     if (dateFin.getTime() <= now) {
       throw new BadRequestAppException(
@@ -182,11 +186,15 @@ export class PromoService {
    * création/édition d'une promo — `PromoController.toClientJson` retombe
    * sur la photo complète si `null` (échec réseau S3 transitoire par ex.).
    */
-  private async tryGenerateThumbnail(sourceKey: string): Promise<string | null> {
+  private async tryGenerateThumbnail(
+    sourceKey: string,
+  ): Promise<string | null> {
     try {
       return await this.storageService.generateThumbnail(sourceKey);
     } catch (error) {
-      this.logger.warn(`Échec de génération de la miniature pour ${sourceKey} : ${error}`);
+      this.logger.warn(
+        `Échec de génération de la miniature pour ${sourceKey} : ${error}`,
+      );
       return null;
     }
   }
@@ -227,7 +235,8 @@ export class PromoService {
     dto: CreatePromoDto,
     options?: { trustedActor?: boolean },
   ): Promise<Promo> {
-    const commercant = await this.commercantService.findByIdOrFail(commercantId);
+    const commercant =
+      await this.commercantService.findByIdOrFail(commercantId);
     this.commercantService.assertRegistreValidated(commercant);
     this.commercantService.assertProfileValidated(commercant);
     this.assertPriceOrder(dto.prixAvant, dto.prixApres);
@@ -287,7 +296,10 @@ export class PromoService {
    * `trustedActor` : même exemption que `create` ci-dessus, pour l'agent
    * qui republie pour le compte d'un commerçant.
    */
-  async publish(promoId: string, options?: { trustedActor?: boolean }): Promise<Promo> {
+  async publish(
+    promoId: string,
+    options?: { trustedActor?: boolean },
+  ): Promise<Promo> {
     const promo = await this.findByIdOrFail(promoId);
     if (promo.lifecycleStatus === PromoLifecycleStatus.PUBLIEE) {
       throw new BadRequestAppException(
@@ -298,7 +310,9 @@ export class PromoService {
     if (!options?.trustedActor) {
       this.assertRepublishCooldown(promo);
     }
-    const commercant = await this.commercantService.findByIdOrFail(promo.commercantId);
+    const commercant = await this.commercantService.findByIdOrFail(
+      promo.commercantId,
+    );
     this.commercantService.assertRegistreValidated(commercant);
     this.commercantService.assertProfileValidated(commercant);
 
@@ -447,7 +461,9 @@ export class PromoService {
         .andWhere('commercant.suspendedAt IS NULL');
 
     const commercantsQb = visiblePromoConditions(
-      this.promos.createQueryBuilder('promo').innerJoin('promo.commercant', 'commercant'),
+      this.promos
+        .createQueryBuilder('promo')
+        .innerJoin('promo.commercant', 'commercant'),
     )
       .andWhere('commercant.latitude IS NOT NULL')
       .andWhere('commercant.longitude IS NOT NULL')
@@ -472,8 +488,11 @@ export class PromoService {
 
     const rows = await commercantsQb.getRawMany<{ id: string }>();
     const truncated = rows.length > MAX_MAP_COMMERCANTS;
-    const commercantIds = rows.slice(0, MAX_MAP_COMMERCANTS).map((row) => row.id);
-    if (commercantIds.length === 0) return { commercants: [], truncated: false };
+    const commercantIds = rows
+      .slice(0, MAX_MAP_COMMERCANTS)
+      .map((row) => row.id);
+    if (commercantIds.length === 0)
+      return { commercants: [], truncated: false };
 
     const promosQb = visiblePromoConditions(
       this.promos
@@ -491,7 +510,10 @@ export class PromoService {
 
     const promos = await promosQb.getMany();
 
-    const grouped = new Map<string, { commercant: Commercant; promos: Promo[] }>();
+    const grouped = new Map<
+      string,
+      { commercant: Commercant; promos: Promo[] }
+    >();
     for (const promo of promos) {
       const entry = grouped.get(promo.commercantId);
       if (entry) {
@@ -534,15 +556,22 @@ export class PromoService {
       );
     }
     if (query.communeId) {
-      qb.andWhere('commercant.communeId = :communeId', { communeId: query.communeId });
-    }
-    if (query.wilaya) {
-      qb.innerJoin('commercant.commune', 'commune').andWhere('commune.wilaya = :wilaya', {
-        wilaya: query.wilaya,
+      qb.andWhere('commercant.communeId = :communeId', {
+        communeId: query.communeId,
       });
     }
+    if (query.wilaya) {
+      qb.innerJoin('commercant.commune', 'commune').andWhere(
+        'commune.wilaya = :wilaya',
+        {
+          wilaya: query.wilaya,
+        },
+      );
+    }
     if (query.categorie) {
-      qb.andWhere('promo.categorie = :categorie', { categorie: query.categorie });
+      qb.andWhere('promo.categorie = :categorie', {
+        categorie: query.categorie,
+      });
     }
     if (query.lifecycleStatus) {
       qb.andWhere('promo.lifecycleStatus = :lifecycleStatus', {
@@ -555,7 +584,9 @@ export class PromoService {
       });
     }
     if (scopedCommuneIds) {
-      qb.andWhere('commercant.communeId IN (:...scopedCommuneIds)', { scopedCommuneIds });
+      qb.andWhere('commercant.communeId IN (:...scopedCommuneIds)', {
+        scopedCommuneIds,
+      });
     }
     qb.skip((query.page - 1) * query.limit).take(query.limit);
 
@@ -569,7 +600,10 @@ export class PromoService {
       relations: { commercant: true },
     });
     if (!promo) {
-      throw new NotFoundAppException(ErrorCode.PROMO_NOT_FOUND, 'Promo introuvable');
+      throw new NotFoundAppException(
+        ErrorCode.PROMO_NOT_FOUND,
+        'Promo introuvable',
+      );
     }
     return promo;
   }
@@ -693,7 +727,10 @@ export class PromoService {
       where: {
         lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
         moderationStatus: In(VISIBLE_MODERATION_STATUSES),
-        dateFin: Between(new Date(), new Date(Date.now() + 24 * 60 * 60 * 1000)),
+        dateFin: Between(
+          new Date(),
+          new Date(Date.now() + 24 * 60 * 60 * 1000),
+        ),
       },
     });
 
@@ -728,7 +765,10 @@ export class PromoService {
   async resolveVerifieOk(promoId: string): Promise<void> {
     await this.promos.update(
       { id: promoId },
-      { moderationStatus: PromoModerationStatus.VERIFIEE_OK, verifiedOkAt: new Date() },
+      {
+        moderationStatus: PromoModerationStatus.VERIFIEE_OK,
+        verifiedOkAt: new Date(),
+      },
     );
   }
 
@@ -796,7 +836,9 @@ export class PromoService {
     // devient orpheline dans S3 si on ne la supprime pas ici (`buildKey`
     // génère toujours une nouvelle clé UUID, jamais un remplacement en place).
     if (dto.photoKeys) {
-      const removedKeys = previousPhotoKeys.filter((key) => !dto.photoKeys!.includes(key));
+      const removedKeys = previousPhotoKeys.filter(
+        (key) => !dto.photoKeys!.includes(key),
+      );
       for (const key of removedKeys) {
         await this.storageService.deleteObject(key);
       }

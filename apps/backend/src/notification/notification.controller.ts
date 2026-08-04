@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  Post,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -84,7 +77,11 @@ export class NotificationController {
     @Param('id') notificationId: string,
   ) {
     const recipientType = this.roleToRecipientType(user.role);
-    await this.notificationService.markAsRead(notificationId, recipientType, user.sub);
+    await this.notificationService.markAsRead(
+      notificationId,
+      recipientType,
+      user.sub,
+    );
     return { ok: true };
   }
 

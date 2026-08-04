@@ -6,7 +6,10 @@ import { Promo } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
 import { ReportService } from '../report/report.service';
 import { NotificationService } from '../notification/notification.service';
-import { NotificationRecipientType, NotificationType } from '../notification/entities/notification.entity';
+import {
+  NotificationRecipientType,
+  NotificationType,
+} from '../notification/entities/notification.entity';
 
 /** Orchestration modération (file d'attente + résolutions) — extrait d'AdminController (audit). */
 @Injectable()
@@ -35,11 +38,17 @@ export class ModerationService {
       reasonBreakdown: Record<string, number>;
     }>
   > {
-    const pending = await this.reportService.listPendingModeration(page, limit, communeIds, filter);
+    const pending = await this.reportService.listPendingModeration(
+      page,
+      limit,
+      communeIds,
+      filter,
+    );
     const promoIds = pending.items.map(({ promoId }) => promoId);
     const promos = await this.promoService.findByIds(promoIds);
     const promoById = new Map(promos.map((promo) => [promo.id, promo]));
-    const reasonBreakdownByPromoId = await this.reportService.getReasonBreakdown(promoIds);
+    const reasonBreakdownByPromoId =
+      await this.reportService.getReasonBreakdown(promoIds);
     const items = pending.items
       .filter(({ promoId }) => promoById.has(promoId))
       .map(({ promoId, activeReportCount }) => ({
@@ -51,7 +60,11 @@ export class ModerationService {
   }
 
   /** Le rôle agent modère aussi désormais (scopé communes, vérifié en amont dans AdminController). */
-  async masquer(actorType: AuditActorType, actorId: string, promoId: string): Promise<void> {
+  async masquer(
+    actorType: AuditActorType,
+    actorId: string,
+    promoId: string,
+  ): Promise<void> {
     const promo = await this.promoService.findByIdOrFail(promoId);
     await this.promoService.resolveMasquer(promoId);
     await this.notificationService.create(
@@ -67,7 +80,11 @@ export class ModerationService {
     await this.record(actorType, actorId, 'moderation_masquer', promoId);
   }
 
-  async verifierOk(actorType: AuditActorType, actorId: string, promoId: string): Promise<void> {
+  async verifierOk(
+    actorType: AuditActorType,
+    actorId: string,
+    promoId: string,
+  ): Promise<void> {
     const promo = await this.promoService.findByIdOrFail(promoId);
     await this.promoService.resolveVerifieOk(promoId);
     await this.notificationService.create(
@@ -83,7 +100,11 @@ export class ModerationService {
     await this.record(actorType, actorId, 'moderation_verifier_ok', promoId);
   }
 
-  async avertir(actorType: AuditActorType, actorId: string, promoId: string): Promise<void> {
+  async avertir(
+    actorType: AuditActorType,
+    actorId: string,
+    promoId: string,
+  ): Promise<void> {
     const promo = await this.promoService.findByIdOrFail(promoId);
     await this.promoService.resolveAvertir(promoId);
     await this.notificationService.create(

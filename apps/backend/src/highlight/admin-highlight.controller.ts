@@ -68,12 +68,11 @@ export class AdminHighlightController {
       promoDescription: promo?.description ?? null,
       prixAvant: promo?.prixAvant ?? null,
       prixApres: promo?.prixApres ?? null,
-      promoPhotoUrl:
-        promo?.thumbnailKey
-          ? this.storageService.buildPublicUrl(promo.thumbnailKey)
-          : (promo?.photoKeys[0]
-              ? this.storageService.buildPublicUrl(promo.photoKeys[0])
-              : null),
+      promoPhotoUrl: promo?.thumbnailKey
+        ? this.storageService.buildPublicUrl(promo.thumbnailKey)
+        : promo?.photoKeys[0]
+          ? this.storageService.buildPublicUrl(promo.photoKeys[0])
+          : null,
       promoVisible,
       commercantNom: promo?.commercant?.nom ?? null,
       createdAt: highlight.createdAt,

@@ -1,7 +1,17 @@
-import { IsBoolean, IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 import { Transform } from 'class-transformer';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
-import { CommercantAccountState, RegistreStatus } from '../entities/commercant.entity';
+import {
+  CommercantAccountState,
+  RegistreStatus,
+} from '../entities/commercant.entity';
 
 /** Vue admin (plan de correction, Phase 2) : recherche nom/téléphone sur l'ensemble des commerçants. */
 export class ListCommercantQueryDto extends PaginationQueryDto {

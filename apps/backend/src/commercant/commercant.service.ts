@@ -9,7 +9,10 @@ import {
   NotFoundAppException,
 } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
-import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
+import {
+  PaginatedResult,
+  toPaginatedResult,
+} from '../common/pagination/paginated-result';
 import {
   NotificationRecipientType,
   NotificationType,
@@ -68,8 +71,12 @@ export class CommercantService {
    * libère (décision produit 2026-07-14, suspension et suppression sont deux
    * états distincts).
    */
-  private async findVivantByTelephone(telephone: string): Promise<Commercant | null> {
-    return this.commercants.findOne({ where: { telephone, deletedAt: IsNull() } });
+  private async findVivantByTelephone(
+    telephone: string,
+  ): Promise<Commercant | null> {
+    return this.commercants.findOne({
+      where: { telephone, deletedAt: IsNull() },
+    });
   }
 
   private async assertPhoneAvailable(telephone: string): Promise<void> {
@@ -185,9 +192,16 @@ export class CommercantService {
    * vérification d'identité, sans OTP. Distinct de `resetPin` ci-dessus
    * (PIN vraiment oublié, admin/agent seuls).
    */
-  async changePin(commercantId: string, oldPin: string, newPin: string): Promise<void> {
+  async changePin(
+    commercantId: string,
+    oldPin: string,
+    newPin: string,
+  ): Promise<void> {
     const commercant = await this.findByIdOrFail(commercantId);
-    if (!commercant.pinHash || !(await this.authService.compare(oldPin, commercant.pinHash))) {
+    if (
+      !commercant.pinHash ||
+      !(await this.authService.compare(oldPin, commercant.pinHash))
+    ) {
       throw new BadRequestAppException(
         ErrorCode.COMMERCANT_OLD_PIN_MISMATCH,
         "L'ancien PIN ne correspond pas",
@@ -211,9 +225,15 @@ export class CommercantService {
    * suppression.
    */
   async deleteAccount(commercantId: string): Promise<void> {
-    await this.commercants.update({ id: commercantId }, { deletedAt: new Date() });
+    await this.commercants.update(
+      { id: commercantId },
+      { deletedAt: new Date() },
+    );
     await this.commercants.increment({ id: commercantId }, 'tokenVersion', 1);
-    await this.promos.update({ commercantId }, { lifecycleStatus: PromoLifecycleStatus.SUPPRIMEE });
+    await this.promos.update(
+      { commercantId },
+      { lifecycleStatus: PromoLifecycleStatus.SUPPRIMEE },
+    );
   }
 
   /**
@@ -278,7 +298,10 @@ export class CommercantService {
   async findByIdOrFail(id: string): Promise<Commercant> {
     const commercant = await this.commercants.findOne({ where: { id } });
     if (!commercant) {
-      throw new NotFoundAppException(ErrorCode.COMMERCANT_NOT_FOUND, 'Commerçant introuvable');
+      throw new NotFoundAppException(
+        ErrorCode.COMMERCANT_NOT_FOUND,
+        'Commerçant introuvable',
+      );
     }
     return commercant;
   }
@@ -290,7 +313,10 @@ export class CommercantService {
     // celui-ci est atteignable par n'importe quel client à partir d'un id
     // mémorisé avant (favoris, lien de partage) — vérification explicite.
     if (commercant.deletedAt || commercant.suspendedAt) {
-      throw new NotFoundAppException(ErrorCode.COMMERCANT_NOT_FOUND, 'Commerçant introuvable');
+      throw new NotFoundAppException(
+        ErrorCode.COMMERCANT_NOT_FOUND,
+        'Commerçant introuvable',
+      );
     }
     return commercant;
   }
@@ -359,12 +385,14 @@ export class CommercantService {
     // était de rouvrir le dashboard — pourtant l'événement le plus bloquant
     // pour un commerçant auto-inscrit (audit fonctionnel 2026-07-11).
     await this.notificationService.create(
-      approve ? NotificationType.REGISTRE_VALIDATED : NotificationType.REGISTRE_REJECTED,
+      approve
+        ? NotificationType.REGISTRE_VALIDATED
+        : NotificationType.REGISTRE_REJECTED,
       NotificationRecipientType.COMMERCANT,
       commercantId,
       approve
         ? 'Votre registre de commerce a été validé — vous pouvez maintenant publier vos promos.'
-        : "Votre registre de commerce a été rejeté. Vérifiez la photo envoyée et renvoyez-la depuis votre espace commerçant.",
+        : 'Votre registre de commerce a été rejeté. Vérifiez la photo envoyée et renvoyez-la depuis votre espace commerçant.',
     );
   }
 
@@ -455,12 +483,17 @@ export class CommercantService {
       qb.andWhere('commercant.communeId IN (:...communeIds)', { communeIds });
     }
     if (query.communeId) {
-      qb.andWhere('commercant.communeId = :filterCommuneId', { filterCommuneId: query.communeId });
+      qb.andWhere('commercant.communeId = :filterCommuneId', {
+        filterCommuneId: query.communeId,
+      });
     }
     if (query.wilaya) {
-      qb.innerJoin('commercant.commune', 'commune').andWhere('commune.wilaya = :wilaya', {
-        wilaya: query.wilaya,
-      });
+      qb.innerJoin('commercant.commune', 'commune').andWhere(
+        'commune.wilaya = :wilaya',
+        {
+          wilaya: query.wilaya,
+        },
+      );
     }
     if (query.search) {
       qb.andWhere(
@@ -501,7 +534,10 @@ export class CommercantService {
    */
   async suspend(commercantId: string): Promise<void> {
     await this.findByIdOrFail(commercantId);
-    await this.commercants.update({ id: commercantId }, { suspendedAt: new Date() });
+    await this.commercants.update(
+      { id: commercantId },
+      { suspendedAt: new Date() },
+    );
     await this.commercants.increment({ id: commercantId }, 'tokenVersion', 1);
     await this.promos.update(
       { commercantId, lifecycleStatus: PromoLifecycleStatus.PUBLIEE },
@@ -532,9 +568,15 @@ export class CommercantService {
    */
   async deleteCommercant(commercantId: string): Promise<void> {
     await this.findByIdOrFail(commercantId);
-    await this.commercants.update({ id: commercantId }, { deletedAt: new Date() });
+    await this.commercants.update(
+      { id: commercantId },
+      { deletedAt: new Date() },
+    );
     await this.commercants.increment({ id: commercantId }, 'tokenVersion', 1);
-    await this.promos.update({ commercantId }, { lifecycleStatus: PromoLifecycleStatus.SUPPRIMEE });
+    await this.promos.update(
+      { commercantId },
+      { lifecycleStatus: PromoLifecycleStatus.SUPPRIMEE },
+    );
   }
 
   /** Garde IDOR : un agent ne peut agir que sur les commerçants de ses propres communes. */
@@ -563,7 +605,8 @@ export class CommercantService {
    */
   assertRegistreValidated(commercant: Commercant): void {
     if (
-      commercant.originVerification === CommercantOriginVerification.AUTO_INSCRIT &&
+      commercant.originVerification ===
+        CommercantOriginVerification.AUTO_INSCRIT &&
       commercant.registreStatus !== RegistreStatus.VALIDE
     ) {
       throw new ForbiddenAppException(

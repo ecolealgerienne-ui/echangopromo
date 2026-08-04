@@ -35,7 +35,9 @@ export class CreateHighlight1783820000000 implements MigrationInterface {
     );
     // PostgreSQL n'indexe pas automatiquement une clé étrangère (CLAUDE.md
     // #12) — cette colonne sert de jointure à chaque chargement.
-    await queryRunner.query(`CREATE INDEX "IDX_highlight_promo" ON "highlight" ("promoId")`);
+    await queryRunner.query(
+      `CREATE INDEX "IDX_highlight_promo" ON "highlight" ("promoId")`,
+    );
     // Requête de l'accueil : actives, triées par position.
     await queryRunner.query(
       `CREATE INDEX "IDX_highlight_active_position" ON "highlight" ("active", "position")`,

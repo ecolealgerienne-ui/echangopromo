@@ -17,7 +17,10 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
 import { DeviceId } from '../common/decorators/device-id.decorator';
-import { ForbiddenAppException, NotFoundAppException } from '../common/errors/app-exception';
+import {
+  ForbiddenAppException,
+  NotFoundAppException,
+} from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { MAP_THROTTLE, SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
@@ -52,7 +55,9 @@ export class PromoController {
    * les réuploader, sans jamais les exposer publiquement.
    */
   private toClientJson(promo: Promo, options?: { includeKeys?: boolean }) {
-    const photoUrls = promo.photoKeys.map((key) => this.storageService.buildPublicUrl(key));
+    const photoUrls = promo.photoKeys.map((key) =>
+      this.storageService.buildPublicUrl(key),
+    );
     return {
       id: promo.id,
       commercantId: promo.commercantId,
@@ -106,7 +111,10 @@ export class PromoController {
   @Get()
   async list(@Query() query: ListPromoQueryDto) {
     const result = await this.promoService.findActiveForClient(query);
-    return { ...result, items: result.items.map((promo) => this.toClientJson(promo)) };
+    return {
+      ...result,
+      items: result.items.map((promo) => this.toClientJson(promo)),
+    };
   }
 
   /**
@@ -122,7 +130,8 @@ export class PromoController {
   @Throttle(MAP_THROTTLE)
   @Get('map')
   async map(@Query() query: ListPromoMapQueryDto) {
-    const { commercants, truncated } = await this.promoService.findActiveForMap(query);
+    const { commercants, truncated } =
+      await this.promoService.findActiveForMap(query);
     return {
       truncated,
       items: commercants.map(({ commercant, promos }) => ({
@@ -155,7 +164,10 @@ export class PromoController {
   async detail(@Param('id') id: string, @DeviceId() deviceId: string) {
     const promo = await this.promoService.findByIdOrFail(id);
     if (!VISIBLE_MODERATION_STATUSES.includes(promo.moderationStatus)) {
-      throw new NotFoundAppException(ErrorCode.PROMO_NOT_FOUND, 'Promo introuvable');
+      throw new NotFoundAppException(
+        ErrorCode.PROMO_NOT_FOUND,
+        'Promo introuvable',
+      );
     }
     await this.promoService.recordView(id, deviceId);
     return this.toClientJson(promo);
@@ -254,7 +266,9 @@ export class PromoController {
   ) {
     const promo = await this.promoService.findByIdOrFail(id);
     await this.assertCanManage(user, promo);
-    return this.promoService.publish(id, { trustedActor: user.role === 'agent' });
+    return this.promoService.publish(id, {
+      trustedActor: user.role === 'agent',
+    });
   }
 
   /** Arrêt volontaire (ex. rupture de stock) — libère un slot sur le plafond de 5. */

@@ -69,7 +69,9 @@ async function main() {
   let created = 0;
 
   for (const nom of COMMUNES_DJELFA) {
-    const existing = await repository.findOne({ where: { nom, wilaya: WILAYA } });
+    const existing = await repository.findOne({
+      where: { nom, wilaya: WILAYA },
+    });
     if (!existing) {
       await repository.save(repository.create({ nom, wilaya: WILAYA }));
       created += 1;

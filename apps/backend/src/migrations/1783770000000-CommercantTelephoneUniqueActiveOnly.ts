@@ -8,9 +8,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * 2026-07-13). Remplacé par un index unique partiel, actif uniquement
  * parmi les comptes non supprimés.
  */
-export class CommercantTelephoneUniqueActiveOnly1783770000000
-  implements MigrationInterface
-{
+export class CommercantTelephoneUniqueActiveOnly1783770000000 implements MigrationInterface {
   name = 'CommercantTelephoneUniqueActiveOnly1783770000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

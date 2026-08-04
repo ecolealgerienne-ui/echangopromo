@@ -68,7 +68,8 @@ export class HighlightService {
       take: HIGHLIGHT_MAX_SLIDES,
     });
 
-    const slides = curated.length > 0 ? await this.keepDisplayable(curated) : [];
+    const slides =
+      curated.length > 0 ? await this.keepDisplayable(curated) : [];
     if (slides.length > 0) return slides;
 
     return this.buildFallbackSlides(communeIds);
@@ -84,12 +85,16 @@ export class HighlightService {
    * Une seule requête pour toutes les promos ciblées (CLAUDE.md règle #14),
    * jamais une vérification par diapositive.
    */
-  private async keepDisplayable(curated: Highlight[]): Promise<HighlightSlide[]> {
+  private async keepDisplayable(
+    curated: Highlight[],
+  ): Promise<HighlightSlide[]> {
     const promoIds = curated
       .map((highlight) => highlight.promoId)
       .filter((id): id is string => id !== null);
     const visiblePromos = await this.promoService.findVisibleByIds(promoIds);
-    const visibleById = new Map(visiblePromos.map((promo) => [promo.id, promo]));
+    const visibleById = new Map(
+      visiblePromos.map((promo) => [promo.id, promo]),
+    );
 
     const displayable: HighlightSlide[] = [];
     for (const highlight of curated) {
@@ -116,7 +121,9 @@ export class HighlightService {
   }
 
   /** Comportement d'avant la curation : les plus fortes réductions. */
-  private async buildFallbackSlides(communeIds?: string[]): Promise<HighlightSlide[]> {
+  private async buildFallbackSlides(
+    communeIds?: string[],
+  ): Promise<HighlightSlide[]> {
     const result = await this.promoService.findActiveForClient({
       page: 1,
       limit: HIGHLIGHT_FALLBACK_LIMIT,
@@ -147,7 +154,9 @@ export class HighlightService {
    *
    * Une seule requête de vérification pour toute la liste (CLAUDE.md #14).
    */
-  async findAllForAdmin(): Promise<{ highlight: Highlight; promoVisible: boolean }[]> {
+  async findAllForAdmin(): Promise<
+    { highlight: Highlight; promoVisible: boolean }[]
+  > {
     const highlights = await this.highlights.find({
       relations: { promo: { commercant: true } },
       order: { position: 'ASC', createdAt: 'ASC' },
@@ -162,7 +171,8 @@ export class HighlightService {
       highlight,
       // Une diapositive sans promo ciblée (bandeau image seule) est toujours
       // affichable : rien à invalider.
-      promoVisible: highlight.promoId === null || visibleIds.has(highlight.promoId),
+      promoVisible:
+        highlight.promoId === null || visibleIds.has(highlight.promoId),
     }));
   }
 
@@ -192,7 +202,8 @@ export class HighlightService {
     const highlight = await this.findByIdOrFail(id);
     const promoVisible =
       highlight.promoId === null ||
-      (await this.promoService.findVisibleByIds([highlight.promoId])).length > 0;
+      (await this.promoService.findVisibleByIds([highlight.promoId])).length >
+        0;
     return { highlight, promoVisible };
   }
 
@@ -212,9 +223,10 @@ export class HighlightService {
     await this.assertPromoExists(dto.promoId ?? null);
 
     return this.highlights.manager.transaction(async (manager) => {
-      await manager.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [
-        'highlight-cap',
-      ]);
+      await manager.query(
+        'SELECT pg_advisory_xact_lock(hashtext($1)::bigint)',
+        ['highlight-cap'],
+      );
 
       const total = await manager.count(Highlight);
       if (total >= HIGHLIGHT_MAX_SLIDES) {
@@ -355,7 +367,10 @@ export class HighlightService {
 
   // --- Gardes ---
 
-  private assertHasContent(imageKey: string | null, promoId: string | null): void {
+  private assertHasContent(
+    imageKey: string | null,
+    promoId: string | null,
+  ): void {
     if (!imageKey && !promoId) {
       throw new BadRequestAppException(
         ErrorCode.HIGHLIGHT_EMPTY_CONTENT,
@@ -382,8 +397,9 @@ export class HighlightService {
     try {
       await this.storageService.deleteObject(key);
     } catch (error) {
-      this.logger.warn(`Suppression de l'image de mise en avant ${key} échouée: ${error}`);
+      this.logger.warn(
+        `Suppression de l'image de mise en avant ${key} échouée: ${error}`,
+      );
     }
   }
-
 }

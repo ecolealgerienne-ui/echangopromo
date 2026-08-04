@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddCommercantProfilePendingReview1783730000000
-  implements MigrationInterface
-{
+export class AddCommercantProfilePendingReview1783730000000 implements MigrationInterface {
   name = 'AddCommercantProfilePendingReview1783730000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -12,6 +10,8 @@ export class AddCommercantProfilePendingReview1783730000000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "commercant" DROP COLUMN "profilePendingReview"`);
+    await queryRunner.query(
+      `ALTER TABLE "commercant" DROP COLUMN "profilePendingReview"`,
+    );
   }
 }

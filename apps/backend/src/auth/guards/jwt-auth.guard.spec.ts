@@ -10,7 +10,9 @@ function makeContext(authHeader?: string): ExecutionContext {
   } as unknown as ExecutionContext;
 }
 
-async function errorCode(promise: Promise<unknown>): Promise<string | undefined> {
+async function errorCode(
+  promise: Promise<unknown>,
+): Promise<string | undefined> {
   try {
     await promise;
     return undefined;
@@ -58,7 +60,11 @@ describe('JwtAuthGuard', () => {
   });
 
   it('rejette un token dont le tokenVersion ne correspond plus au compte (AUTH_TOKEN_REVOKED)', async () => {
-    jwtService.verify.mockReturnValue({ sub: 'agent-1', role: 'agent', tokenVersion: 0 });
+    jwtService.verify.mockReturnValue({
+      sub: 'agent-1',
+      role: 'agent',
+      tokenVersion: 0,
+    });
     agents.findOne.mockResolvedValue({ id: 'agent-1', tokenVersion: 1 });
     expect(await errorCode(guard.canActivate(makeContext('Bearer abc')))).toBe(
       'AUTH_TOKEN_REVOKED',
@@ -78,8 +84,14 @@ describe('JwtAuthGuard', () => {
   });
 
   it('accepte un token valide dont le tokenVersion correspond', async () => {
-    jwtService.verify.mockReturnValue({ sub: 'admin-1', role: 'admin', tokenVersion: 2 });
+    jwtService.verify.mockReturnValue({
+      sub: 'admin-1',
+      role: 'admin',
+      tokenVersion: 2,
+    });
     admins.findOne.mockResolvedValue({ id: 'admin-1', tokenVersion: 2 });
-    await expect(guard.canActivate(makeContext('Bearer abc'))).resolves.toBe(true);
+    await expect(guard.canActivate(makeContext('Bearer abc'))).resolves.toBe(
+      true,
+    );
   });
 });

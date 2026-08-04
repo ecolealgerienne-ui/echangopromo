@@ -177,7 +177,10 @@ export class StorageService {
     }
     const endpoint = this.configService.get<string>('S3_ENDPOINT', '');
     const useVirtualHostedStyle =
-      this.configService.get<string>('S3_PUBLIC_URL_VIRTUAL_HOSTED', 'false') === 'true';
+      this.configService.get<string>(
+        'S3_PUBLIC_URL_VIRTUAL_HOSTED',
+        'false',
+      ) === 'true';
     if (useVirtualHostedStyle) {
       const host = endpoint.replace(/^https?:\/\//, '').replace(/\/$/, '');
       return `https://${this.bucket}.${host}/${key}`;

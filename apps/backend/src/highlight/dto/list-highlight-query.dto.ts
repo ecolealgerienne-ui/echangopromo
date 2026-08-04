@@ -1,5 +1,11 @@
 import { Transform } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsOptional, IsUUID } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsOptional,
+  IsUUID,
+} from 'class-validator';
 
 /**
  * Les diapositives curées sont **globales** : l'admin met en avant une

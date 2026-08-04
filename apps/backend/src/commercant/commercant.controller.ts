@@ -126,7 +126,10 @@ export class CommercantController {
     @CurrentUser() user: AuthTokenPayload,
     @Body() dto: UpdateCommercantDto,
   ) {
-    const commercant = await this.commercantService.updateProfile(user.sub, dto);
+    const commercant = await this.commercantService.updateProfile(
+      user.sub,
+      dto,
+    );
     return this.toMeJson(commercant);
   }
 

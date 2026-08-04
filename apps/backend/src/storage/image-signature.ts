@@ -10,7 +10,10 @@ export function detectImageFormat(bytes: Buffer): ImageFormat | null {
   if (isJpeg) return 'jpeg';
 
   const isPng =
-    bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47;
   if (isPng) return 'png';
 
   const isWebp =

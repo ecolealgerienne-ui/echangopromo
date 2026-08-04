@@ -21,7 +21,10 @@ export class RolesGuard implements CanActivate {
       .switchToHttp()
       .getRequest<Request & { user?: AuthTokenPayload }>();
     if (!request.user || !requiredRoles.includes(request.user.role)) {
-      throw new ForbiddenAppException(ErrorCode.AUTH_FORBIDDEN_ROLE, 'Accès refusé pour ce rôle');
+      throw new ForbiddenAppException(
+        ErrorCode.AUTH_FORBIDDEN_ROLE,
+        'Accès refusé pour ce rôle',
+      );
     }
     return true;
   }

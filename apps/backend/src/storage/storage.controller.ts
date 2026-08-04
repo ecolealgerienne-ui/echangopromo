@@ -84,7 +84,11 @@ export class StorageController {
           : dto.purpose === 'highlight'
             ? 'highlight-images'
             : 'promo-photos';
-    const key = await this.storageService.uploadPhoto(user.sub, file.buffer, folder);
+    const key = await this.storageService.uploadPhoto(
+      user.sub,
+      file.buffer,
+      folder,
+    );
     return { key };
   }
 }

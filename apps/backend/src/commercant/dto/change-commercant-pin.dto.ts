@@ -1,5 +1,10 @@
 import { Matches } from 'class-validator';
-import { PIN_SET_MESSAGE, PIN_SET_PATTERN, PIN_VERIFY_MESSAGE, PIN_VERIFY_PATTERN } from '../pin.constants';
+import {
+  PIN_SET_MESSAGE,
+  PIN_SET_PATTERN,
+  PIN_VERIFY_MESSAGE,
+  PIN_VERIFY_PATTERN,
+} from '../pin.constants';
 
 /**
  * Le commerçant se souvient encore de son PIN actuel mais veut le changer

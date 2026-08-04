@@ -1,5 +1,8 @@
 import { HttpException } from '@nestjs/common';
-import { PromoLifecycleStatus, PromoModerationStatus } from '../promo/entities/promo.entity';
+import {
+  PromoLifecycleStatus,
+  PromoModerationStatus,
+} from '../promo/entities/promo.entity';
 import type { Promo } from '../promo/entities/promo.entity';
 import { UpdateHighlightDto } from './dto/update-highlight.dto';
 import type { Highlight } from './entities/highlight.entity';
@@ -42,7 +45,7 @@ function makeHighlight(overrides: Partial<Highlight> = {}): Highlight {
     ...overrides,
     // `as unknown as` assumé : ces doubles ne portent que les champs dont
     // les règles testées se servent, pas l'entité complète.
-  } as unknown as Highlight;
+  };
 }
 
 function makePromo(overrides: Partial<Promo> = {}): Promo {
@@ -61,7 +64,9 @@ function makePromo(overrides: Partial<Promo> = {}): Promo {
   } as unknown as Promo;
 }
 
-async function errorCode(promise: Promise<unknown>): Promise<string | undefined> {
+async function errorCode(
+  promise: Promise<unknown>,
+): Promise<string | undefined> {
   try {
     await promise;
     return undefined;
@@ -137,7 +142,7 @@ describe('HighlightService', () => {
       expect(storageService.deleteObject).not.toHaveBeenCalled();
     });
 
-    it('retire la promo ciblée sur `clearPromo`, sans toucher à l\'image', async () => {
+    it("retire la promo ciblée sur `clearPromo`, sans toucher à l'image", async () => {
       highlights.findOne.mockResolvedValue(makeHighlight());
 
       const dto = Object.assign(new UpdateHighlightDto(), { clearPromo: true });
@@ -172,13 +177,15 @@ describe('HighlightService', () => {
       highlights.findOne.mockResolvedValue(makeHighlight({ imageKey: null }));
 
       const dto = Object.assign(new UpdateHighlightDto(), { clearPromo: true });
-      expect(await errorCode(service.update('h1', dto))).toBe('HIGHLIGHT_EMPTY_CONTENT');
+      expect(await errorCode(service.update('h1', dto))).toBe(
+        'HIGHLIGHT_EMPTY_CONTENT',
+      );
       expect(highlights.save).not.toHaveBeenCalled();
     });
   });
 
   describe('findForClient', () => {
-    it('retombe sur le classement calculé quand aucune curation n\'existe', async () => {
+    it("retombe sur le classement calculé quand aucune curation n'existe", async () => {
       highlights.find.mockResolvedValue([]);
       promoService.findActiveForClient.mockResolvedValue({
         items: [makePromo()],
@@ -195,7 +202,7 @@ describe('HighlightService', () => {
       expect(slides[0].id).toBe('auto-p1');
     });
 
-    it('écarte une diapositive dont la promo n\'est plus visible, et bascule sur le repli si plus rien ne reste', async () => {
+    it("écarte une diapositive dont la promo n'est plus visible, et bascule sur le repli si plus rien ne reste", async () => {
       highlights.find.mockResolvedValue([makeHighlight({ imageKey: null })]);
       promoService.findVisibleByIds.mockResolvedValue([]);
       promoService.findActiveForClient.mockResolvedValue({
@@ -211,7 +218,7 @@ describe('HighlightService', () => {
       expect(slides[0].curated).toBe(false);
     });
 
-    it('garde une affiche sans promo tant qu\'elle porte une image', async () => {
+    it("garde une affiche sans promo tant qu'elle porte une image", async () => {
       highlights.find.mockResolvedValue([
         makeHighlight({ promoId: null, titre: 'Ramadan' }),
       ]);

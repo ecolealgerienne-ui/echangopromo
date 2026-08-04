@@ -30,11 +30,11 @@ export class HighlightController {
   private toClientJson(slide: HighlightSlide) {
     const promo = slide.promo;
     const promoImageUrl = promo
-      ? (promo.thumbnailKey
-          ? this.storageService.buildPublicUrl(promo.thumbnailKey)
-          : (promo.photoKeys[0]
-              ? this.storageService.buildPublicUrl(promo.photoKeys[0])
-              : null))
+      ? promo.thumbnailKey
+        ? this.storageService.buildPublicUrl(promo.thumbnailKey)
+        : promo.photoKeys[0]
+          ? this.storageService.buildPublicUrl(promo.photoKeys[0])
+          : null
       : null;
 
     return {

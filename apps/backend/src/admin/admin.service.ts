@@ -40,7 +40,10 @@ export class AdminService {
   async findByIdOrFail(id: string): Promise<Admin> {
     const admin = await this.admins.findOne({ where: { id } });
     if (!admin) {
-      throw new NotFoundAppException(ErrorCode.ADMIN_NOT_FOUND, 'Admin introuvable');
+      throw new NotFoundAppException(
+        ErrorCode.ADMIN_NOT_FOUND,
+        'Admin introuvable',
+      );
     }
     return admin;
   }

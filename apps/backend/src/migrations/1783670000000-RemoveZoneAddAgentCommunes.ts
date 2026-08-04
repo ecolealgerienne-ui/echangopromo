@@ -13,9 +13,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * (une Zone ne correspondait à aucune Commune précise, specs §5.2) — à
  * refaire manuellement côté admin après déploiement.
  */
-export class RemoveZoneAddAgentCommunes1783670000000
-  implements MigrationInterface
-{
+export class RemoveZoneAddAgentCommunes1783670000000 implements MigrationInterface {
   name = 'RemoveZoneAddAgentCommunes1783670000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
