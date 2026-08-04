@@ -47,17 +47,33 @@ export class CommercantService {
   ) {}
 
   /**
-   * Ne regarde que les comptes non supprimés (`deletedAt IS NULL`) — un
-   * compte suspendu (`suspendedAt`) bloque toujours son numéro, seule une
-   * suppression le libère (bug trouvé 2026-07-13, précisé 2026-07-14 :
-   * suspension et suppression sont deux états distincts depuis, voir
-   * `Commercant.suspendedAt`). Même filtre que l'index partiel posé en
-   * base, voir `Commercant.telephone`.
+   * **Le seul endroit qui sait comment retrouver un compte par son numéro.**
+   *
+   * Un numéro n'identifie un compte que parmi les **non supprimés** : la
+   * suppression est douce (`deletedAt`), la ligne reste en base, et le numéro
+   * redevient attribuable — plusieurs lignes peuvent donc porter le même
+   * numéro, dont une seule vivante. C'est le filtre de l'index partiel posé en
+   * base (voir `Commercant.telephone`).
+   *
+   * ⚠️ **Pourquoi une méthode et non un filtre recopié.** Ce filtre a vécu
+   * deux fois : appliqué dans `assertPhoneAvailable`, oublié dans `login`. Le
+   * commentaire disait pourtant « même filtre que l'index partiel » — une
+   * phrase ne tient pas un invariant. Conséquence, trouvée le 2026-08-04 :
+   * après un cycle suppression → réinscription, `login` retrouvait la ligne
+   * **supprimée**, voyait son `deletedAt` et refusait — le repreneur du numéro
+   * ne pouvait **jamais** se connecter, alors que son inscription avait
+   * réussi. Un seul endroit désormais (CLAUDE.md règle 30).
+   *
+   * ⚠️ Un compte **suspendu** garde son numéro : seule la suppression le
+   * libère (décision produit 2026-07-14, suspension et suppression sont deux
+   * états distincts).
    */
+  private async findVivantByTelephone(telephone: string): Promise<Commercant | null> {
+    return this.commercants.findOne({ where: { telephone, deletedAt: IsNull() } });
+  }
+
   private async assertPhoneAvailable(telephone: string): Promise<void> {
-    const existing = await this.commercants.findOne({
-      where: { telephone, deletedAt: IsNull() },
-    });
+    const existing = await this.findVivantByTelephone(telephone);
     if (existing) {
       throw new ConflictAppException(
         ErrorCode.COMMERCANT_PHONE_TAKEN,
@@ -122,12 +138,13 @@ export class CommercantService {
   }
 
   async login(telephone: string, pin: string): Promise<Commercant> {
-    const commercant = await this.commercants.findOne({ where: { telephone } });
-    // Un compte supprimé OU suspendu (soft, `deletedAt`/`suspendedAt`) est
-    // traité comme des identifiants invalides plutôt qu'un message dédié —
-    // évite de confirmer à un tiers que ce numéro a un jour eu un compte,
-    // et bloque effectivement la connexion pendant une suspension.
-    if (!commercant?.pinHash || commercant.deletedAt || commercant.suspendedAt) {
+    const commercant = await this.findVivantByTelephone(telephone);
+    // Un compte suspendu (`suspendedAt`) est traité comme des identifiants
+    // invalides plutôt qu'un message dédié — évite de confirmer à un tiers que
+    // ce numéro a un jour eu un compte, et bloque effectivement la connexion
+    // pendant une suspension. Les comptes supprimés, eux, ne sont même pas
+    // retrouvés : `findVivantByTelephone` les exclut.
+    if (!commercant?.pinHash || commercant.suspendedAt) {
       throw new BadRequestAppException(
         ErrorCode.AUTH_INVALID_CREDENTIALS,
         'Identifiants invalides',
