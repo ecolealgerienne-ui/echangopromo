@@ -197,16 +197,35 @@ C'est la liste de départ des bancs de l'étape 4 : **une règle, un banc**.
 
 ### Les données à double vie — cibles de l'étape 2
 
-Chaque ligne est un couple qui doit rester d'accord, aujourd'hui tenu par rien.
+Chaque ligne est un couple qui doit rester d'accord. État au 2026-08-04 :
 
-| Couple | Serveur | Application |
-|---|---|---|
-| Codes d'erreur | `common/errors/error-code.enum.ts` (42) | `error_messages_{fr,en,ar}.dart` |
-| Catégories | `common/enums/categorie.enum.ts` (7, dont `restauration`) | `domain/enums/categorie.dart` |
-| Cycle de vie promo | `lifecycleStatus` | `promo_lifecycle_status.dart` |
-| Statut de modération | `moderationStatus` | — |
-| État de compte commerçant | `CommercantAccountState` | ⚠️ comparé par **chaîne littérale** dans plusieurs écrans (règle 19 de `CLAUDE.md`) |
-| Bornes de validation | décorateurs des DTO | constantes de formulaire |
+| Couple | Serveur | Application | Tenu par |
+|---|---|---|---|
+| Codes d'erreur | `common/errors/error-code.enum.ts` (42) | `error_messages_{fr,en,ar}.dart` (38 clés) | ✅ `tool/check_error_codes.dart` |
+| Catégories (7) | `common/enums/categorie.enum.ts` | `domain/enums/categorie.dart` | ✅ `tool/check_enums.dart` |
+| Cycle de vie promo (5) | `promo.entity.ts` | `promo_lifecycle_status.dart` | ✅ idem |
+| Modération promo (4) | `promo.entity.ts` | `promo_moderation_status.dart` | ✅ idem |
+| État de compte commerçant (2) | `commercant.entity.ts` | `commercant_account_state.dart` | ✅ idem |
+| Vérification d'origine (2) | `commercant.entity.ts` | `commercant_origin_verification.dart` | ✅ idem |
+| Statut du registre (3) | `commercant.entity.ts` | `registre_status.dart` | ✅ idem |
+| Motif de signalement (4) | `report.entity.ts` | `report_reason.dart` | ✅ idem |
+| Type d'acteur (audit) (2) | `audit-log.entity.ts` | `audit_actor_type.dart` | ✅ idem |
+| **Bornes de validation** | décorateurs des DTO | constantes de formulaire | ⬜ **rien** |
+
+> ⚠️ **Ce que ces contrôles ne couvrent PAS, et c'est la règle 19 qui reste
+> ouverte.** Ils garantissent que les *valeurs* d'un miroir sont les bonnes ;
+> ils ne garantissent pas que les écrans **utilisent** le miroir. Plusieurs
+> comparent encore `CommercantAccountState` par **chaîne littérale**
+> (`status == 'autonome'`) : le miroir existe, il est juste, et il est
+> contourné. Un contrôle du même esprit — refuser une comparaison littérale sur
+> une valeur d'enum connue — reste à écrire.
+
+> ⚠️ **Et 5 miroirs sur 8 avalent une valeur inconnue** (`orElse` dans
+> `fromValue`) : catégorie, cycle de vie, modération, état de compte, motif de
+> signalement. Une valeur ajoutée côté serveur y devient silencieusement autre
+> chose — pour le cycle de vie, une promo inconnue serait traitée comme
+> **expirée**. `check_enums.dart` le signale sans bloquer : c'est un choix à
+> rendre, pas un défaut à corriger d'office.
 
 ---
 
@@ -251,8 +270,10 @@ Couverture COMPORTEMENTALE            0 / 8 règles chiffrées   ← étape 4
   (le plafond de 5 est protégé par un verrou consultatif
    Postgres, jamais éprouvé en concurrence)
 
-Couples serveur ↔ app                 0 / 6 tenus        ← étape 2
-  dont 1 DÉJÀ désynchronisé (D1)
+Couples serveur ↔ app                 9 / 10 tenus       ← étape 2, quasi close
+  codes d'erreur .............   ✅ éprouvé par 5 mutations
+  8 enums miroirs ............   ✅ éprouvé par 4 mutations
+  bornes de validation .......   ⬜ reste à faire
 
 Écrans (*_screen.dart)                0 / 34 ouverts     ← étape 3
   admin 13 · commercant 7 · client 4 · onboarding 4
@@ -335,24 +356,34 @@ disjointes.
 **Critère de sortie** : prouvé par mutation — retirer un `@UseGuards` fait passer
 le banc au rouge, et retirer un `assertZoneMatches` aussi.
 
-### Étape 2 — Les vérificateurs de synchronisation
+### Étape 2 — Les vérificateurs de synchronisation ✅ *quasi close*
 
-**Où** : `apps/mobile/tool/check_error_codes.dart` et
-`apps/mobile/tool/check_enums.dart`, copiés de `docs/methode-test/check-sync.dart`.
+**Où** : `apps/mobile/tool/`, lancés depuis `apps/mobile` (ils résolvent la
+racine du dépôt eux-mêmes, donc le dossier courant n'a pas d'importance).
 
-**Déjà fonctionnel** : le squelette tourne sur les vrais fichiers et trouve D1.
-Il ne reste qu'à le déplacer dans `tool/` et à le brancher.
+```bash
+dart run tool/check_error_codes.dart --self-test && dart run tool/check_error_codes.dart
+dart run tool/check_enums.dart       --self-test && dart run tool/check_enums.dart
+```
 
-**À ajouter ensuite** : le miroir des catégories (7 valeurs) et de
-`CommercantAccountState` — ce dernier étant aujourd'hui comparé par chaîne
-littérale dans plusieurs écrans, un renommage backend ne produirait **aucune
-erreur de compilation**.
+| Vérificateur | Ce qu'il tient | Auto-test | Mutations |
+|---|---|---|---|
+| `check_error_codes.dart` | 42 codes serveur ↔ 3 tables (38 clés) | 14 cas, **7 refus** | **5/5** |
+| `check_enums.dart` | 8 enums miroirs, 29 valeurs | 11 cas, **6 refus** | **4/4** |
 
-**Critère de sortie** : `--self-test` bloquant (13 cas, dont 6 refus — déjà le
-cas), plus une mutation du vrai fichier.
+**Ce que les mutations ont prouvé** — c'est ça, le critère de sortie, pas le
+vert : membre bidon ajouté, clé retirée d'une seule table, doublon, clé
+inconnue, valeur changée d'un seul côté, et surtout **fichier de source
+renommé** → le contrôle échoue sur source introuvable au lieu de conclure à
+l'accord. C'est le mode de panne le plus dangereux de cette famille.
+
+**Reste à faire pour clore l'étape** : les **bornes de validation** (décorateurs
+`@MinLength`/`@Min`/`@Max` des DTO ↔ constantes de formulaire). Aucun contrôle
+ne les tient aujourd'hui.
 
 **C'est l'étape la plus rentable** : statique, instantanée, sans base ni
-émulateur, et elle a déjà trouvé un défaut réel.
+émulateur — et elle a trouvé un vrai défaut (`HIGHLIGHT_CAP_REACHED`) plus deux
+observations de conception (les replis silencieux, les comparaisons littérales).
 
 ### Étape 3 — Le décor et les parcours écran (un par profil, au minimum)
 

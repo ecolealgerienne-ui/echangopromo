@@ -153,6 +153,38 @@ par route**) fait que **la route qu'on oublie est ouverte**.
 
 **Débloqué par** : étape 1 de `docs/TEST_PROMO.md`, banc d'appartenance.
 
+### P7 — Cinq miroirs d'enum avalent une valeur inconnue 🆕
+
+**Trouvé le 2026-08-04** par `tool/check_enums.dart`, qui le signale sans
+bloquer.
+
+Cinq `fromValue` sur huit portent un `orElse` : **Catégorie**, **Cycle de vie
+promo**, **Modération promo**, **État de compte commerçant**, **Motif de
+signalement**. Une valeur ajoutée côté serveur y devient silencieusement autre
+chose — sans erreur, sans journal.
+
+Le cas le plus lourd : `PromoLifecycleStatus.fromValue` retombe sur
+**`expiree`**. Un nouveau statut serveur ferait donc disparaître les promos
+concernées de l'affichage client, et le diagnostic partirait chercher une
+panne de données.
+
+Les trois autres (`RegistreStatus`, `AuditActorType`,
+`CommercantOriginVerification`) lèvent — comportement plus bruyant, donc plus
+sûr.
+
+**C'est un choix à rendre, pas un défaut à corriger d'office** : un repli peut
+être délibéré. Mais aujourd'hui rien ne dit lequel l'est.
+
+### P8 — La règle 19 est contournée dans les écrans 🆕
+
+Les vérificateurs garantissent que les *valeurs* des miroirs sont justes ; ils
+ne garantissent pas que les écrans **s'en servent**. Plusieurs comparent encore
+`CommercantAccountState` par **chaîne littérale** (`status == 'autonome'`) : le
+miroir existe, il est correct, et il est contourné.
+
+**Débloqué par** un contrôle du même esprit — refuser une comparaison littérale
+portant sur une valeur d'enum connue. Reste à écrire.
+
 ### P6 — Dette mineure, non bloquante
 
 - `apps/mobile/lib/features/commercant/screens/commercant_login_screen.dart:4` —
@@ -291,7 +323,7 @@ Le détail de chaque étape, avec son critère de sortie, est dans
 | — | Méthode générique + 5 squelettes | ✅ écrits, auto-tests au vert (16/16 et 13/13) |
 | — | Plan spécifique Promo | ✅ écrit |
 | **1** | Banc de refus (48 routes, par construction) | ⬜ non commencé |
-| **2** | Vérificateurs de synchronisation | 🔶 **codes d'erreur : fait et éprouvé** (`tool/check_error_codes.dart`, auto-test 14/14 dont 7 refus, **5/5 mutations refusées**). Reste les enums miroirs (catégories, `CommercantAccountState`) |
+| **2** | Vérificateurs de synchronisation | 🔶 **quasi close** — `check_error_codes.dart` (14 cas dont 7 refus, **5/5 mutations**) et `check_enums.dart` (11 cas dont 6 refus, **4/4 mutations**). Reste les **bornes de validation** des DTO |
 | **3** | Décor + 4 parcours écran + onboarding | ⬜ non commencé |
 | **4** | Bancs, couverture d'usage complète (**27 bancs, 62/62 routes**) | ⬜ non commencé |
 
@@ -303,7 +335,7 @@ couvertures distinctes, trois cibles :
 | **Accès** (qui a le droit d'appeler quoi) | 0 / 62 | **100 %** — atteinte par construction, le banc énumère depuis la source |
 | **Usage** (chaque route appelée au moins une fois) | 0 / 62 | **100 %** — bornée à 62 routes |
 | **Comportement** (chaque règle fait ce qu'elle doit) | 0 / 8 règles chiffrées | **piloté par le risque** — non bornée, un pourcentage y serait inventé |
-| Couples serveur ↔ app | **1 / 6** — codes d'erreur, éprouvé par mutation | 6 |
+| Couples serveur ↔ app | **9 / 10** — codes d'erreur + 8 enums miroirs, tous éprouvés par mutation | 10 (reste les bornes de DTO) |
 | Écrans | 0 / 34 | 33 (`dev_profile_switcher` exclu, outil de développement) |
 
 ---
@@ -395,6 +427,30 @@ accuse à tort se paie plus cher qu'un contrôle absent : c'est ainsi qu'ils
 finissent désactivés. La correction n'a pas été de désactiver le contrôle mais
 de **déplacer la liste d'exclusions du commentaire vers la donnée**, avec
 obligation de justification — l'auto-test refuse une exclusion sans raison.
+
+### 2026-08-04 (fin) — Étape 2 quasi close, deux constats de conception
+
+`tool/check_enums.dart` tient les **8 enums miroirs**, 29 valeurs, comparés sur
+la **valeur réseau** et non sur le nom du membre — les deux langages nomment
+différemment (`VETEMENTS_TEXTILE` / `vetementsTextile`). Tous d'accord.
+
+Auto-test 11 cas dont 6 refus, et **4 mutations sur 4 refusées** : valeur
+ajoutée côté serveur, valeur retirée du miroir, valeur changée d'un seul côté,
+fichier de miroir renommé (→ sortie 2, jamais « tout est d'accord »).
+
+**Le piège d'extraction, qui est devenu un cas d'auto-test** : le corps d'un
+enum Dart amélioré s'arrête au premier `;`. Au-delà vivent le constructeur, les
+champs et les méthodes — sans cette borne, les chaînes de `fromValue` seraient
+comptées comme des valeurs d'énumération.
+
+**Le lanceur de mutations refuse désormais de démarrer sur un arbre sale**, et
+ne restaure que les fichiers qu'il a touchés — correction directe de la leçon
+apprise plus haut dans la journée.
+
+Deux constats sont sortis du contrôle sans qu'on les cherche : **P7** (cinq
+miroirs avalent une valeur inconnue) et **P8** (la règle 19 est contournée dans
+les écrans). Aucun des deux n'est traité : ce sont des décisions, pas des
+corrections évidentes.
 
 ---
 
