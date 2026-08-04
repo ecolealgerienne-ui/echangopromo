@@ -173,10 +173,30 @@ pass "Commerçant connecté ($D_COMMERCANT_TEL)"
 # Validation du registre — geste d'administration, pas geste d'utilisateur.
 CID="$(api GET "/admin/commercant?limit=100" '' "$ADMIN_TOKEN" \
   | jq -r --arg t "$D_COMMERCANT_TEL" '(.items // .)[] | select(.telephone==$t) | .id' | head -1)"
-if [ -n "$CID" ]; then
-  api POST "/admin/commercant/$CID/registre/valider" '{}' "$ADMIN_TOKEN" >/dev/null 2>&1 || true
-  info "Registre validé (ou déjà validé) — id $CID"
+[ -n "$CID" ] || fail "Commerçant introuvable côté admin après inscription"
+
+# ⚠️ **Deux gestes, pas un.** Le commerçant SOUMET son registre, l'admin le
+# VALIDE. Une première version n'appelait que la validation, et masquait son
+# échec derrière `|| true` : le décor annonçait « registre validé » sur un
+# refus `COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION`, et la création de promo
+# échouait trois étapes plus loin en accusant autre chose. Le pire endroit pour
+# un repli est un script de décor.
+ETAT="$(api GET "/admin/commercant?limit=200" '' "$ADMIN_TOKEN" \
+  | jq -r --arg t "$D_COMMERCANT_TEL" '(.items // .)[] | select(.telephone==$t) | .registreStatus // "null"')"
+
+if [ "$ETAT" != "valide" ]; then
+  # La clé doit porter le préfixe posé par StorageService.buildKey, sinon
+  # COMMERCANT_REGISTRE_KEY_MISMATCH (garde d'appartenance sur le document).
+  out="$(api POST /commercant/me/registre \
+    "$(jq -n --arg k "registre-documents/$CID/decor.jpg" '{registreKey:$k}')" '' "$COMMERCANT_TOKEN")"
+  echo "$out" | est_erreur && fail "Soumission du registre refusée" \
+    "$(echo "$out" | jq -c '{code,message}')"
+
+  out="$(api POST "/admin/commercant/$CID/registre/valider" '{}' "$ADMIN_TOKEN")"
+  echo "$out" | est_erreur && fail "Validation du registre refusée" \
+    "$(echo "$out" | jq -c '{code,message}')"
 fi
+pass "Registre validé — commerçant $CID"
 
 # ─────────────────────────────────────────────────────────────────────────────
 step "5. Une promo appartenant à ce commerçant"
