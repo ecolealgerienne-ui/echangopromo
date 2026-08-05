@@ -571,12 +571,55 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
    ~~`test-notifications`~~ **écrit le 2026-08-05** — 8 contrôles, 0 échec, et
    **un défaut trouvé à son premier passage** (`markAsRead` rendait 201 sur un
    geste sans effet). ~~`test-admin-audit-log`~~ **écrit le 2026-08-05** —
-   7 contrôles, 0 échec, et une sonde corrigée après mutation. Restent 20
-   bancs de la matrice §6.
+   7 contrôles, 0 échec, et une sonde corrigée après mutation.
+   ~~`test-storage-upload`~~ **écrit le 2026-08-05** — 6 contrôles, 0 échec,
+   l'upload atteint enfin un vrai bucket. Restent 19 bancs de la matrice §6.
 
 ---
 
 ## Journal
+
+### 2026-08-05 (nuit) — `test-storage-upload` : l'upload atteint enfin un vrai bucket
+
+Quatrième banc métier. L'upload n'avait **jamais été éprouvé contre un vrai
+bucket**, alors que MinIO tourne en local depuis le début — c'était la dette la
+plus ancienne encore ouverte de l'audit V0.
+
+**Verdict : 6 contrôles, 0 échec.** Auto-test 14 cas dont 10 refus.
+
+L'envoi légitime traverse réellement la chaîne et rend
+`promo-photos/<commercantId>/<uuid>.jpg` — la clé porte bien l'identifiant du
+compte, ce qui est **la condition pour que `assertPhotoKeysOwned` ait quelque
+chose à vérifier**. Sans ça, le garde posé le matin même sur la création de
+promo n'aurait protégé rien du tout.
+
+**La sonde qui compte** envoie un fichier texte en le déclarant `image/jpeg` :
+c'est la règle 5 mise à l'épreuve — *un `Content-Type` déclaré n'engage à
+rien*. Refusé en `400 STORAGE_INVALID_IMAGE`, sur les octets réels.
+
+**Les deux bornes de taille rendent le même code**, et c'est ce qui était en
+question : au-delà de 500 Ko c'est le service qui refuse (`400`), au-delà du
+filet Multer (×4) la requête est coupée avant de l'atteindre et
+`AllExceptionsFilter` rattache le `413`. Les deux sortent en
+`STORAGE_FILE_TOO_LARGE` — ce rattachement date du matin même ; sans lui le
+mobile affichait un message générique pour un cas parfaitement identifiable.
+
+**Prouvé par mutation** : en faisant retomber `detectImageFormat` sur `'jpeg'`
+quand il ne reconnaît rien — le serveur croit alors le client — **seule** la
+sonde n°2 tombe, avec « ACCEPTÉ alors qu'un refus était dû ». Les cinq autres
+restent vertes : la mutation ne touche qu'une règle, et le banc ne dénonce
+qu'elle.
+
+⚠️ **Non éprouvé, et déclaré** : que l'objet soit ensuite lisible dans le
+bucket. Il faudrait les identifiants MinIO, que ce banc n'a pas. La clé rendue
+suffit aux questions posées ici, et la lecture effective est constatée à
+l'écran (l'app affiche les photos).
+
+⚠️ Ce banc écrit un objet de 125 octets par passage sous
+`promo-photos/<commercantId>/`, rattaché à aucune promo — la purge de rétention
+le balaiera.
+
+---
 
 ### 2026-08-05 (nuit) — `test-admin-audit-log`, et la sonde qui regardait le passé
 
