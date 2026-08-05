@@ -260,12 +260,48 @@ Future<void> ouvrirLien(WidgetTester tester, String chemin) async {
   await tester.pump(const Duration(milliseconds: 800));
 }
 
+/// Fait défiler l'écran jusqu'à ce qu'une condition soit vraie.
+///
+/// ⚠️ **Un formulaire plus long qu'un écran n'est pas entièrement construit.**
+/// Une `ListView` ne bâtit que ce qui est visible (plus une marge) : chercher
+/// un champ qui n'a jamais été affiché revient à chercher un widget qui
+/// n'existe pas. *Trouvé le 2026-08-05 sur l'inscription commerçant : « Champ
+/// de rang 3 absent » alors que le formulaire en compte cinq — les deux
+/// derniers étaient sous la ligne de flottaison.*
+///
+/// ⚠️ **Et défiler change les rangs** : ce qui sort par le haut peut être
+/// détruit. Après un défilement, désigner un champ par `.at(3)` ne veut plus
+/// rien dire — compter ce qui est visible, ou viser `.last`.
+Future<void> defilerJusquaVrai(
+  WidgetTester tester,
+  bool Function() condition, {
+  required String raison,
+  int essais = 12,
+}) async {
+  for (var i = 0; i < essais; i++) {
+    if (condition()) return;
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -280));
+    await tester.pump(const Duration(milliseconds: 250));
+  }
+  if (condition()) return;
+  fail('$raison — non atteint après $essais défilements.\n'
+      'à l\'écran : ${textesRendus()}');
+}
+
 /// Tape un élément après s'être assuré qu'il est visible.
 ///
 /// ⚠️ Taper l'icône ne suffit pas : un bandeau peut la recouvrir, ou l'écran
 /// peut ne pas avoir fini de se reconstruire. Le tap part alors dans le vide,
 /// et l'assertion suivante attend trente secondes avant d'accuser l'écran.
 Future<void> taper(WidgetTester tester, Finder cible) async {
+  // ⚠️ Sans ce contrôle, un élément absent rend « Bad state: No element » —
+  // une erreur Dart qui ne dit ni quoi, ni où. On préfère nommer la cible et
+  // montrer l'écran (2026-08-05, inscription commerçant : la case à cocher
+  // était repassée sous la ligne de flottaison quand la photo l'a poussée).
+  if (cible.evaluate().isEmpty) {
+    fail('rien à taper pour $cible.\n'
+        'à l\'écran : ${textesRendus()}');
+  }
   await tester.ensureVisible(cible.first);
   await tester.pump(const Duration(milliseconds: 200));
   await tester.tap(cible.first);

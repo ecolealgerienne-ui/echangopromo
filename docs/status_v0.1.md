@@ -712,6 +712,41 @@ C'est la démonstration de l'avertissement que ce fichier porte en tête : *un
 état périmé est pire qu'aucun état, il fait conclure*. Ici il a fait écrire un
 test qui éprouvait un chemin que personne n'emprunte.
 
+#### L'inscription commerçant — le premier contact avec le produit
+
+Huitième parcours. Jusqu'ici **aucun commerçant n'avait jamais été inscrit
+depuis l'app** : tous venaient du décor, c'est-à-dire d'un `POST` direct.
+L'écran qui porte l'entrée dans le produit n'était éprouvé par rien.
+
+C'est aussi la plus longue chaîne d'appels du dépôt : créer le compte, **se
+connecter avec le jeton rendu**, envoyer la photo du registre, demander sa
+vérification. L'ordre est imposé — `/storage/upload` exige une session
+commerçant qui n'existe pas encore au moment de l'inscription.
+
+**La contre-mesure vaut mieux que « on est arrivé sur le tableau de bord »** :
+le script vérifie que la connexion avec ces identifiants rend un jeton, **et**
+que `registreStatus` vaut `en_attente`. Le second n'est vrai que si l'upload a
+abouti ET que la demande a suivi ; un écran qui atterrirait sur le tableau de
+bord en ayant silencieusement sauté ces deux appels afficherait exactement la
+même chose.
+
+⚠️ **Deux leçons de harnais, toutes deux sur le même écran.**
+
+**Un formulaire plus long qu'un écran n'est pas entièrement construit.** Une
+`ListView` ne bâtit que ce qu'elle affiche : le premier passage a rendu « champ
+de rang 3 absent » sur un formulaire qui en compte cinq — les deux derniers
+étaient sous la ligne de flottaison. D'où `defilerJusquaVrai` dans le harnais.
+Et **défiler change les rangs** : ce qui sort par le haut peut être détruit, donc
+on compte ce qui est visible ou on vise `.last`, jamais `.at(3)` après un
+défilement.
+
+**Une photo qui s'affiche pousse le reste dehors.** Après le choix de la photo
+du registre, son aperçu allonge le formulaire et la case à cocher — visible
+deux étapes plus tôt — sort de l'arbre. Le parcours redescend donc avant de
+cocher. Au passage, `taper` dit désormais *ce qu'il cherchait et ce qu'il y
+avait à l'écran* plutôt que de laisser filer un `Bad state: No element`, qui ne
+nomme ni le quoi ni le où.
+
 #### Le parcours client — l'accueil et la fiche, enfin éprouvés
 
 Septième parcours, et celui qui couvre **ce que voient 95 % des utilisateurs** :

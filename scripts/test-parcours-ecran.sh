@@ -31,6 +31,9 @@
 #                      serveur.
 #   agent              le même écran, avec le périmètre de l'agent — ses
 #                      compteurs ne sont PAS ceux de l'admin.
+#   inscription        un commerçant s'inscrit DEPUIS L'APP : formulaire,
+#                      photo du registre, conditions — puis le script vérifie
+#                      que le compte existe et que son registre est en attente.
 #   client             l'accueil et la fiche : une promo fabriquée pour ce
 #                      passage est retrouvée par la recherche, ouverte, et son
 #                      COMPTEUR DE VUES monte côté serveur.
@@ -69,10 +72,10 @@ DEVICE_ID="parcours-ecran-0001"
 
 CHOIX="${1:-tous}"
 case "$CHOIX" in
-  tous|premier-lancement|plafond|creation|admin|agent|moderation|client) ;;
+  tous|premier-lancement|plafond|creation|admin|agent|moderation|client|inscription) ;;
   *) echo "❌ Parcours inconnu : « $CHOIX »."
      echo "   Attendu : premier-lancement | plafond | creation | admin | agent"
-     echo "             | moderation | client"
+     echo "             | moderation | client | inscription"
      echo "             (rien = tous)"
      exit 2 ;;
 esac
@@ -81,7 +84,9 @@ esac
 # décor pour rien — ou pire, d'en poser un qui consomme des connexions sur un
 # plafond de 5/min avant un parcours qui n'en avait pas besoin.
 BESOIN_COMMERCANT=non
-case "$CHOIX" in tous|plafond|creation|client) BESOIN_COMMERCANT=oui ;; esac
+# `inscription` a besoin du décor UNIQUEMENT pour mesurer le plafond auprès du
+# serveur — le compte qu'il crée, lui, est neuf.
+case "$CHOIX" in tous|plafond|creation|client|inscription) BESOIN_COMMERCANT=oui ;; esac
 BESOIN_PRO=non
 case "$CHOIX" in tous|admin|agent|moderation) BESOIN_PRO=oui ;; esac
 
@@ -460,6 +465,50 @@ fi
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent" ]; then
   jouer parcours_espace_pro_test.dart "espace pro — agent"     --dart-define=TEST_PRO_ROLE=agent     --dart-define=TEST_PRO_EMAIL="$AGENT_EMAIL"     --dart-define=TEST_PRO_PASSWORD="$AGENT_PASSWORD"     --dart-define=TEST_PRO_STATS="$STATS_AGENT"
   noter "espace pro — agent ($STATS_AGENT)" $?
+  echo
+fi
+
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "inscription" ]; then
+  # Un numéro NEUF : l'inscription refuse un téléphone déjà pris, et c'est
+  # justement ce qu'on ne veut pas éprouver ici.
+  NOUVEAU_TEL="+213556$(date +%H%M%S)"
+  NOUVEAU_PIN="246813"
+  echo "── inscription : compte à créer $NOUVEAU_TEL ──"
+  jouer parcours_inscription_commercant_test.dart "inscription commerçant"     --dart-define=TEST_COMMERCANT_TEL="$NOUVEAU_TEL"     --dart-define=TEST_COMMERCANT_PIN="$NOUVEAU_PIN"     --dart-define=TEST_PLAFOND="$PLAFOND"
+  CODE_INSCRIPTION=$?
+  noter "inscription commerçant ($NOUVEAU_TEL)" $CODE_INSCRIPTION
+
+  # ── Contre-mesure : le compte existe-t-il, et son registre est-il parti ? ─
+  #
+  # Deux choses qu'un écran ne peut pas prouver seul. La seconde est la plus
+  # intéressante : `registreStatus` ne vaut « en attente » que si l'upload de
+  # la photo a abouti ET que la demande de vérification a suivi. Un écran qui
+  # atterrirait sur le tableau de bord en ayant sauté ces deux appels
+  # afficherait exactement la même chose.
+  if [ "$CODE_INSCRIPTION" -eq 0 ]; then
+    echo
+    echo "── contre-mesure : le compte créé, vu du serveur ──"
+    JETON_NEUF="$(curl -s -X POST "$API_URL/commercant/login"       -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"       -d "{\"telephone\":\"$NOUVEAU_TEL\",\"pin\":\"$NOUVEAU_PIN\"}"       | lire_champ accessToken)"
+    if [ -z "$JETON_NEUF" ]; then
+      echo "❌ connexion impossible avec le compte censé venir d'être créé."
+      echo "   ⚠️ Un 429 se déguise en « identifiants incorrects » — register et"
+      echo "      login partagent le seau strict (5/min)."
+      noter "contre-mesure inscription" 1
+    else
+      ETAT_REGISTRE="$(curl -s "$API_URL/commercant/me"         -H "Authorization: Bearer $JETON_NEUF" -H "X-Device-Id: $DEVICE_ID"         | lire_champ registreStatus)"
+      if [ -z "$ETAT_REGISTRE" ]; then
+        echo "⚠️  registreStatus illisible — la contre-mesure n'a PAS eu lieu."
+        noter "contre-mesure inscription (non concluante)" 1
+      elif [ "$ETAT_REGISTRE" = "aucun" ] || [ "$ETAT_REGISTRE" = "null" ]; then
+        echo "❌ le compte existe mais son registre n'a jamais été soumis"
+        echo "   (registreStatus = $ETAT_REGISTRE) : la photo n'est pas partie."
+        noter "contre-mesure inscription" 1
+      else
+        echo "✅ compte créé, registreStatus = $ETAT_REGISTRE"
+        noter "contre-mesure inscription" 0
+      fi
+    fi
+  fi
   echo
 fi
 
