@@ -743,6 +743,36 @@ c'est un défaut de cette machine, pas du produit — qui porte le cache des
 versions dynamiques à un an. Le remède de fond reste d'importer la racine de
 l'antivirus dans les `cacerts` de la JVM.
 
+#### ⚠️ Un parcours passait pour une raison qui n'avait rien à voir avec lui
+
+Découvert en rejouant les trois d'affilée **sur un émulateur remis à neuf** (le
+disque était plein — `INSTALL_FAILED_INSUFFICIENT_STORAGE`, 93 % occupés, et ce
+n'était pas notre app qui le remplissait). Sur un appareil vierge, le parcours
+du compteur — vert une heure plus tôt — **échoue**.
+
+Pas sur une assertion : sur une **image**. Le décor pose des promos dont la
+`photoKey` désigne `promo-photos/demo/photo.jpg`, un objet qui **n'existe pas**
+dans MinIO. Le tableau de bord tente de l'afficher, reçoit un 404, et
+`flutter_test` fait échouer tout test où une exception est signalée — même
+asynchrone, même sans rapport. Jusque-là, l'image était **en cache sur
+l'émulateur** depuis un passage précédent : l'app n'allait jamais la chercher.
+
+C'est le mode de défaillance le plus désagréable qui soit : un vert qui ne
+mesurait pas ce qu'on croyait, et qui ne se serait révélé que sur un appareil
+neuf — c'est-à-dire chez quelqu'un d'autre.
+
+Traité **étroitement** dans le harnais (`ignorerErreursDeChargementDImage`) :
+seules les exceptions du service de résolution d'images sont avalées, toutes
+les autres continuent d'échouer le parcours via le gestionnaire précédent qu'on
+rappelle. Le prix est nul aujourd'hui — aucun parcours n'affirme quoi que ce
+soit sur les photos, et celui qui en publie une la vérifie par la création
+côté serveur, pas par son affichage.
+
+**Reste ouvert** : `provision-decor.sh` annonce une photo qui n'existe pas. Ce
+n'est pas gênant pour les bancs HTTP (aucun ne lit l'objet), mais c'est une
+donnée de décor qui ment, et le prochain parcours qui regardera une image
+tombera dessus.
+
 #### Ce qui a été mutualisé, et ce qui est déclaré non couvert
 
 `textesRendus()` et la normalisation des espaces (Flutter rend des insécables

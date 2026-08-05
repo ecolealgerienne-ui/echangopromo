@@ -71,6 +71,39 @@ Future<void> reinitialiserAppareil() async {
   await prefs.clear();
 }
 
+/// Laisse passer les échecs de **chargement d'image**, et rien d'autre.
+///
+/// ── Pourquoi c'est nécessaire ────────────────────────────────────────────
+///
+/// `flutter_test` fait échouer un test dès qu'une exception est signalée,
+/// **même asynchrone et sans rapport avec ce qu'il éprouve**. Or le décor pose
+/// des promos dont la `photoKey` désigne un objet qui n'existe pas dans MinIO
+/// (`promo-photos/demo/photo.jpg`) : le tableau de bord tente de l'afficher,
+/// reçoit un 404, et le parcours du compteur échoue en accusant le compteur.
+///
+/// ⚠️ **Et ça ne se voyait pas**, parce que l'image était en cache sur
+/// l'émulateur depuis un passage précédent : l'app n'allait jamais la
+/// chercher. Découvert le 2026-08-05 en repartant d'un appareil vierge — le
+/// parcours passait pour une raison qui n'avait rien à voir avec lui.
+///
+/// ── Ce que ça ne fait PAS ────────────────────────────────────────────────
+///
+/// Ça n'avale pas « les erreurs » : **uniquement** celles émises par le
+/// service de résolution d'images. Toute autre exception continue d'échouer le
+/// parcours, par le gestionnaire précédent qu'on rappelle. Un `catch` large
+/// ici transformerait le harnais en machine à rassurer (règle #28).
+///
+/// Le prix est assumé et il est nul aujourd'hui : aucun parcours n'affirme
+/// quoi que ce soit sur les photos, et celui qui en publie une la vérifie par
+/// la création côté serveur, pas par son affichage.
+void ignorerErreursDeChargementDImage() {
+  final precedent = FlutterError.onError;
+  FlutterError.onError = (details) {
+    if (details.library == 'image resource service') return;
+    precedent?.call(details);
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Attente
 // ─────────────────────────────────────────────────────────────────────────────

@@ -53,6 +53,10 @@ void main() {
     });
 
     await reinitialiserAppareil();
+    // Le décor pose des promos dont la photo n'existe pas dans MinIO ; leur
+    // 404 ferait échouer ce parcours en accusant le compteur (voir le harnais).
+    ignorerErreursDeChargementDImage();
+
     // L'onboarding est déclaré fait : voir l'en-tête de ce fichier.
     (await SharedPreferences.getInstance())
         .setBool('onboarding_completed', true);
