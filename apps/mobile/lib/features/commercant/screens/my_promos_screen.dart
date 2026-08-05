@@ -92,7 +92,14 @@ class MyPromosScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add),
-        label: Text(atCap ? l10n.capReachedLabel : l10n.newPromoTitle),
+        // Le plafond affiché vient du serveur (`slots.plafond`) : il était
+        // écrit en dur dans les trois `.arb`, et mentait dès que
+        // `PROMO_ACTIVE_CAP` bougeait (2026-08-05).
+        label: Text(
+          slots != null && slots.auPlafond
+              ? l10n.capReachedLabel(slots.plafond)
+              : l10n.newPromoTitle,
+        ),
         onPressed: atCap
             ? null
             : () async {
@@ -115,35 +122,45 @@ class MyPromosScreen extends ConsumerWidget {
               // Le plafond rappelé en tête, comme sur le tableau de bord :
               // c'est ici qu'on décide d'arrêter une promo pour en publier
               // une autre, la contrainte doit être sous les yeux.
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        l10n.activeCountLabel(slots?.enLigne ?? 0),
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                    ),
-                    for (var i = 0; i < (slots?.plafond ?? 0); i++)
-                      Padding(
-                        padding: const EdgeInsetsDirectional.only(start: 4),
-                        child: Container(
-                          width: 14,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: i < (slots?.enLigne ?? 0)
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(AppRadii.pill),
-                          ),
+              //
+              // ⚠️ Rien n'est affiché tant que `GET /promo/me/slots` n'a pas
+              // répondu — ou s'il a échoué. Les replis `?? 0` d'ici
+              // annonçaient « 0 / 5 promos actives » et cinq barres vides,
+              // c'est-à-dire des emplacements libres, sans rien en savoir ; et
+              // le `5` venait d'une chaîne traduite, pas du serveur. Le
+              // tableau de bord avait déjà écarté ce repli (`_QuotaCard`),
+              // celui-ci l'avait gardé (règles #29 et #32, 2026-08-05).
+              if (slots != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          l10n.activeCountLabel(slots.enLigne, slots.plafond),
+                          style: Theme.of(context).textTheme.titleSmall,
                         ),
                       ),
-                  ],
+                      for (var i = 0; i < slots.plafond; i++)
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(start: 4),
+                          child: Container(
+                            width: 14,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: i < slots.enLigne
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                              borderRadius:
+                                  BorderRadius.circular(AppRadii.pill),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
               Expanded(
                 child: ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),

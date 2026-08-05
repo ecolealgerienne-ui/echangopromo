@@ -15,6 +15,7 @@ import {
 } from 'typeorm';
 import { CommercantService } from '../commercant/commercant.service';
 import { Commercant } from '../commercant/entities/commercant.entity';
+import { configNumber } from '../common/config/config-number';
 import {
   BadRequestAppException,
   NotFoundAppException,
@@ -43,7 +44,17 @@ import {
   VISIBLE_MODERATION_STATUSES,
 } from './entities/promo.entity';
 
-const MAX_PROMOS_ACTIVES = 5;
+/**
+ * ⚠️ **Le plafond n'est plus une constante** (2026-08-05). Il était le seul de
+ * la famille à exiger un redéploiement pour bouger, alors que ses quatre
+ * voisines immédiates — durée par défaut, durée maximale, plafond quotidien,
+ * cooldown de republication — se règlent toutes par variable d'environnement.
+ * Voir `activeCap()`, et `PROMO_ACTIVE_CAP` dans `.env.example`.
+ *
+ * Il n'est **pas** recopié côté app : `GET /promo/me/slots` le sert avec le
+ * décompte (`getSlotUsage`), de sorte qu'un changement de plafond ne demande
+ * aucune recompilation mobile.
+ */
 
 /**
  * Fenêtre « expire bientôt », alignée sur la cadence quotidienne du cron :
@@ -80,26 +91,66 @@ export class PromoService {
     private readonly notificationService: NotificationService,
   ) {}
 
+  /**
+   * ⚠️ Toutes les lectures numériques passent par `configNumber`, jamais par
+   * `get<number>` : cette annotation ne convertit rien, et une variable
+   * définie dans `.env` arrive donc en **chaîne**. Inoffensif tant que l'usage
+   * est arithmétique (JavaScript coerce), fatal dès que la valeur sort en JSON
+   * — voir `configNumber` et son banc.
+   */
   private defaultDureeJours(): number {
-    return this.configService.get<number>('PROMO_DEFAULT_DURATION_DAYS', 5);
+    return configNumber(
+      this.configService.get('PROMO_DEFAULT_DURATION_DAYS'),
+      5,
+      'PROMO_DEFAULT_DURATION_DAYS',
+    );
   }
 
   private maxDureeJours(): number {
-    return this.configService.get<number>('PROMO_MAX_DURATION_DAYS', 7);
+    return configNumber(
+      this.configService.get('PROMO_MAX_DURATION_DAYS'),
+      7,
+      'PROMO_MAX_DURATION_DAYS',
+    );
   }
 
   private imageRetentionDays(): number {
-    return this.configService.get<number>('IMAGE_RETENTION_DAYS', 30);
+    return configNumber(
+      this.configService.get('IMAGE_RETENTION_DAYS'),
+      30,
+      'IMAGE_RETENTION_DAYS',
+    );
   }
 
   /** Anti-abus (retour terrain 2026-07-14) — voir `assertUnderDailyCreationCap`. */
   private dailyCreationCap(): number {
-    return this.configService.get<number>('PROMO_DAILY_CREATION_CAP', 5);
+    return configNumber(
+      this.configService.get('PROMO_DAILY_CREATION_CAP'),
+      5,
+      'PROMO_DAILY_CREATION_CAP',
+    );
   }
 
   /** Anti-abus (retour terrain 2026-07-14) — voir `assertRepublishCooldown`. */
   private republishCooldownHours(): number {
-    return this.configService.get<number>('PROMO_REPUBLISH_COOLDOWN_HOURS', 24);
+    return configNumber(
+      this.configService.get('PROMO_REPUBLISH_COOLDOWN_HOURS'),
+      24,
+      'PROMO_REPUBLISH_COOLDOWN_HOURS',
+    );
+  }
+
+  /**
+   * Nombre de promos simultanément en ligne autorisées par commerçant
+   * (specs §3.2). Servi tel quel à l'app par `getSlotUsage` — c'est cette
+   * valeur, et non une copie compilée, qui remplit le compteur d'emplacements.
+   */
+  private activeCap(): number {
+    return configNumber(
+      this.configService.get('PROMO_ACTIVE_CAP'),
+      5,
+      'PROMO_ACTIVE_CAP',
+    );
   }
 
   /**
@@ -219,10 +270,10 @@ export class PromoService {
         dateFin: MoreThan(new Date()),
       },
     });
-    if (activeCount >= MAX_PROMOS_ACTIVES) {
+    if (activeCount >= this.activeCap()) {
       throw new BadRequestAppException(
         ErrorCode.PROMO_ACTIVE_CAP_REACHED,
-        `Plafond de ${MAX_PROMOS_ACTIVES} promos actives atteint pour ce commerçant`,
+        `Plafond de ${this.activeCap()} promos actives atteint pour ce commerçant`,
       );
     }
   }
@@ -813,7 +864,7 @@ export class PromoService {
         dateFin: MoreThan(new Date()),
       },
     });
-    return { enLigne, plafond: MAX_PROMOS_ACTIVES };
+    return { enLigne, plafond: this.activeCap() };
   }
 
   async listByCommercant(

@@ -182,7 +182,16 @@ class CommercantDashboardScreen extends ConsumerWidget {
         icon: Icon(atCap ? Icons.block : Icons.add),
         // Désactivé plutôt que masqué au plafond : sa disparition laisserait
         // croire à un bug, alors que le message explique la limite.
-        label: Text(atCap ? l10n.capReachedLabel : l10n.newPromoTitle),
+        //
+        // Le chiffre vient de `slots.plafond`, donc du serveur : il était écrit
+        // en toutes lettres dans les trois `.arb` (« Plafond de 5 promos
+        // atteint »), si bien qu'un changement de `PROMO_ACTIVE_CAP` faisait
+        // annoncer 5 à une app qui en autorisait déjà 8 (2026-08-05).
+        label: Text(
+          slots != null && slots.auPlafond
+              ? l10n.capReachedLabel(slots.plafond)
+              : l10n.newPromoTitle,
+        ),
       ),
     );
   }

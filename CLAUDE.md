@@ -396,6 +396,18 @@ permet de reconnaître un cas nouveau relevant de la même règle.
     ou n'est pas recopiée du tout : `HIGHLIGHT_CAP_REACHED` est traduit sans
     reprendre le plafond, la phrase portant le geste à faire.
 
+    ⚠️ **Un fichier `.arb` est le dernier endroit où l'on pense à chercher une
+    règle métier, et c'est pour ça qu'elle y survit.** Une valeur écrite au
+    milieu d'une phrase traduite échappe à tout : elle n'est ni une constante
+    qu'on grep, ni un littéral que `check_server_rules` sait lire, et elle
+    existe en autant d'exemplaires qu'il y a de langues. *Trouvé le
+    2026-08-05 : `« Plafond de 5 promos atteint »` et `« {count} / 5 promos
+    actives »` dans les trois `.arb`, alors que `PromoSlots.plafond` venait
+    déjà du serveur. Le calcul suivait donc le serveur et le **texte** ne le
+    suivait pas : porter le plafond à 8 aurait autorisé 8 publications tout en
+    affichant « 7 / 5 ».* Le remède est un **placeholder**, jamais un chiffre :
+    `capReachedLabel(plafond)`, alimenté par la réponse serveur.
+
 33. **La polarité de protection est une décision, pas un détail.** Ici, chaque
     route pose son propre `@UseGuards` ; le seul garde global est le
     `ThrottlerGuard`. **La route qu'on oublie est donc OUVERTE**, et l'oubli ne
@@ -445,6 +457,24 @@ permet de reconnaître un cas nouveau relevant de la même règle.
     d'entrée non éprouvé ne compte pas** : `create-promo.dto.spec.ts` porte
     autant de cas qui doivent échouer que de cas qui passent, et le `@Max` y a
     été prouvé par mutation (règle 28).
+
+    ⚠️ **Et l'entrée ne vient pas que du réseau : `configService.get<number>`
+    ne convertit rien.** Le `<number>` est une assertion TypeScript, effacée à
+    la compilation — exactement le piège du `@Body` typé en ligne, transposé à
+    la configuration. `ConfigModule` est monté sans conversion, donc toute
+    variable définie dans `.env` arrive en **chaîne**. *Trouvé le 2026-08-05 :
+    les cinq lectures numériques de `PromoService` recevaient `'5'`, `'7'`,
+    `'30'`… et personne ne l'avait vu parce que tous les usages étaient
+    arithmétiques et que JavaScript coerce (`'5' * 86400000` marche,
+    `count >= '5'` aussi). Le masque tombait au premier de ces nombres à
+    **sortir en JSON** : `GET /promo/me/slots` allait servir `{"plafond":"5"}`
+    à un mobile qui fait `as int` — un plantage de désérialisation, pas un
+    mauvais chiffre.* Toute lecture numérique passe donc par `configNumber`
+    (`common/config/`), qui vérifie le type **avant** `Number()` — celui-ci est
+    bien trop accueillant pour servir de garde : `Number(true)` vaut 1,
+    `Number([5])` vaut 5, `Number('')` et `Number(' ')` valent 0. Son repli est
+    assumé contre la règle 29 **parce qu'il est journalisé** : l'information
+    d'absence n'est pas détruite, elle est déplacée.
 
 35. **Une couleur sémantique vient du thème ; les espacements sont recensés,
     pas encore normés.** L'app bascule clair/sombre depuis fin juillet 2026 —

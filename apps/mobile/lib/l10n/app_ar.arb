@@ -135,9 +135,9 @@
   "historyNotificationsTab": "السجل",
 
   "myPromosTitle": "عروضي",
-  "capReachedLabel": "تم بلوغ الحد الأقصى (5 عروض)",
+  "capReachedLabel": "تم بلوغ الحد الأقصى ({plafond} عروض)",
   "noPromosYet": "لا يوجد أي عرض حاليًا.",
-  "activeCountLabel": "{count} / 5 عروض نشطة",
+  "activeCountLabel": "{count} / {plafond} عروض نشطة",
   "untilDate": "إلى غاية {date}",
   "notPublishedYet": "لم يُنشر بعد",
   "myPromosViewsCount": "{count, plural, one{مشاهدة واحدة} two{مشاهدتان} few{{count} مشاهدات} many{{count} مشاهدة} other{{count} مشاهدة}}",

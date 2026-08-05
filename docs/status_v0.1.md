@@ -537,6 +537,74 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
 
 ## Journal
 
+### 2026-08-05 (suite) — Le plafond de 5 sort du binaire, et un piège de configuration
+
+**La question posée** : « le plafond de 5 promos est figé dans l'app, si je le
+change demain je dois recompiler ?». Inventaire fait — la réponse était *à
+moitié*, et la moitié restante était pire que prévu.
+
+**Ce qui allait déjà.** `GET /promo/me/slots` sert `plafond` depuis la revue de
+la veille : le **calcul** (`auPlafond`, `restants`, les barres d'emplacements)
+suivait donc le serveur.
+
+**Ce qui n'allait pas.** Le chiffre était écrit en toutes lettres dans les trois
+`.arb` — `« Plafond de 5 promos atteint »`, `« {count} / 5 promos actives »`.
+Le calcul suivait le serveur, le **texte** non : passer le plafond à 8 aurait
+autorisé 8 publications en affichant « 7 / 5 ». Corrigé par un placeholder
+`{plafond}` alimenté par `slots.plafond` (règle 32, amendée).
+Au passage, `my_promos_screen` gardait les replis `?? 0` que `_QuotaCard` avait
+déjà écartés : il annonçait « 0 / 5 » et cinq barres vides — des emplacements
+libres — quand `slots` n'avait pas répondu. Le décompte n'est plus affiché du
+tout tant que la mesure manque (règle 29).
+
+**Côté serveur**, `MAX_PROMOS_ACTIVES` était le seul de sa famille à exiger un
+redéploiement, alors que ses quatre voisines immédiates (durées, plafond
+quotidien, cooldown) se règlent par variable d'environnement. Devenu
+`PROMO_ACTIVE_CAP`.
+
+**Le piège découvert en chemin, et c'est le vrai butin.**
+`configService.get<number>('CLE', 5)` **ne convertit rien** : le `<number>` est
+une assertion TypeScript, effacée à la compilation — le même piège que le
+`@Body` typé en ligne, transposé à la configuration. `ConfigModule` est monté
+sans conversion, donc les cinq lectures numériques de `PromoService` recevaient
+`'5'`, `'7'`, `'30'`… depuis `.env`. Invisible parce que tous les usages étaient
+arithmétiques et que JavaScript coerce. Le masque serait tombé exactement sur
+le changement du jour : `plafond` **sort en JSON**, et `{"plafond":"5"}` fait
+planter le `as int` du mobile. Toutes les lectures passent désormais par
+`configNumber`, qui vérifie le type avant `Number()` — celui-ci acceptant
+`true` (→ 1), `[5]` (→ 5) et `''` (→ 0), il ne peut pas servir de garde.
+
+**Ce qui le tient** : `config-number.spec.ts`, 10 cas dont 6 refus ;
+`check_server_rules.dart` mis à jour pour lire la nouvelle forme d'appel, avec
+un cas d'auto-test qui **refuse explicitement l'ancienne** (22 cas, 11 refus) ;
+et une mutation réelle de `promoMaxDureeJours` (7 → 9) vérifiée : `exit=1`,
+« serveur 7, app [9] ».
+
+**Vérifications** : `flutter analyze` 0 · `flutter test` 14 · `check_all` 4/4 ·
+`dart format` 0 · `tsc` propre · `npx jest` **43 tests** (33 avant). Les 13
+erreurs eslint et la suite `highlight.service.spec.ts` qui ne charge pas restent
+les défauts préexistants de `node_modules` sous Windows (`sharp`,
+`@aws-sdk/s3-request-presigner`, `compression`).
+
+**Ce qui n'est pas fait, et c'est délibéré** — le reste de l'inventaire des
+valeurs recopiées, chiffré mais non traité :
+- `maxPhotos = 3` (`multi_photo_picker_field.dart`) ↔ `@ArrayMaxSize(3)` :
+  recopié, tenu par rien ;
+- `_pageSize = 100` (`admin_api`, `commune_api`, `promo_api`) ↔ `MAX_PAGE_SIZE` :
+  **couplage dur, pas une divergence** — baisser `MAX_PAGE_SIZE` ferait partir
+  chaque appel de liste en `400`. Le remède n'est pas de descendre la borne
+  jusqu'à l'app mais qu'elle cesse de demander le maximum autorisé ;
+- un `GET /config/client` pour ce qui doit être connu *avant* la requête
+  (longueurs de champ, nombre de photos, motif de PIN) — à trancher après le
+  rejeu des bancs, pas avant.
+
+Faussement suspectes, à ne pas recompter : `maxLength: 12` sur les téléphones
+(le serveur valide par `@IsPhoneNumber('DZ')`, ce n'est pas une copie) et
+`_targetBytes = 250 Ko` vs `MAX_UPLOAD_BYTES = 500 Ko` (volontairement
+différents, documentés).
+
+---
+
 ### 2026-08-05 — Revue multi-agents par spécialité, et ses correctifs
 
 **La revue.** Six spécialistes (sécurité, architecture, métier, mobile, qualité,

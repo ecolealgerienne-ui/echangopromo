@@ -51,7 +51,8 @@ class Borne {
 }
 
 /// Une borne serveur qui ne vit pas dans un décorateur de DTO mais dans un
-/// **défaut de configuration** (`configService.get<number>('X', 7)`).
+/// **défaut de configuration**
+/// (`configNumber(this.configService.get('X'), 7, 'X')`).
 ///
 /// ⚠️ Ajoutée le 2026-08-05 : le vérificateur ne savait lire que les
 /// décorateurs, si bien que les durées de promo — recopiées en **trois**
@@ -105,14 +106,23 @@ int? constanteServeur(String source, String nom) {
   return m == null ? null : int.parse(m.group(1)!);
 }
 
-/// Le **défaut** d'un `configService.get<number>('CLE', 7)`.
+/// Le **défaut** d'un `configNumber(this.configService.get('CLE'), 7, 'CLE')`.
 ///
 /// C'est bien le défaut qu'on compare, pas la valeur déployée : l'app ne peut
 /// connaître que celui-là. Une variable d'environnement qui s'en écarte en
 /// production reste hors de portée de ce contrôle — dit ici plutôt que laissé
 /// croire couvert.
+///
+/// ⚠️ **La forme lue a changé le 2026-08-05** : elle était
+/// `configService.get<number>('CLE', 7)`, dont l'annotation `<number>` ne
+/// convertissait rien (une variable définie dans `.env` arrivait en chaîne).
+/// Le motif est **ancré sur la forme d'appel complète** et non sur le seul nom
+/// de clé, parce que celui-ci apparaît désormais deux fois dans le même appel
+/// — s'ancrer sur lui rendrait la lecture ambiguë au lieu de la rendre
+/// tolérante.
 int? borneConfigServeur(String source, String cle) {
-  final m = RegExp("get<number>\\(\\s*['\"]$cle['\"]\\s*,\\s*(\\d+)\\s*\\)")
+  final m = RegExp(
+          "configNumber\\(\\s*this\\.configService\\.get\\(\\s*['\"]$cle['\"]\\s*\\)\\s*,\\s*(\\d+)")
       .firstMatch(_sansCommentaires(source));
   return m == null ? null : int.parse(m.group(1)!);
 }
@@ -342,20 +352,47 @@ export class D {
   _verifie(
       'défaut de configuration lu',
       borneConfigServeur(
-          "return this.configService.get<number>('PROMO_MAX_DURATION_DAYS', 7);",
+          "return configNumber(this.configService.get('PROMO_MAX_DURATION_DAYS'), 7, 'PROMO_MAX_DURATION_DAYS');",
           'PROMO_MAX_DURATION_DAYS'),
       7);
+  // La forme réellement écrite dans le service après passage de Prettier :
+  // repliée sur quatre lignes. Un motif qui ne tolérerait pas les sauts de
+  // ligne passerait l'auto-test et échouerait sur le vrai fichier.
+  _verifie('défaut de configuration replié sur plusieurs lignes',
+      borneConfigServeur('''
+    return configNumber(
+      this.configService.get('PROMO_DEFAULT_DURATION_DAYS'),
+      5,
+      'PROMO_DEFAULT_DURATION_DAYS',
+    );
+''', 'PROMO_DEFAULT_DURATION_DAYS'), 5);
   _verifie(
       'clé de configuration absente → null',
-      borneConfigServeur("this.configService.get<number>('AUTRE', 7);",
+      borneConfigServeur("configNumber(this.configService.get('AUTRE'), 7);",
           'PROMO_MAX_DURATION_DAYS'),
       null);
   _verifie(
       'défaut de configuration en commentaire ignoré',
       borneConfigServeur(
-          "// this.configService.get<number>('PROMO_MAX_DURATION_DAYS', 7);",
+          "// configNumber(this.configService.get('PROMO_MAX_DURATION_DAYS'), 7);",
           'PROMO_MAX_DURATION_DAYS'),
       null);
+  // ⚠️ L'ancienne forme ne doit PLUS être reconnue : elle rendait une chaîne
+  // là où un nombre était annoncé. La laisser passer ferait juger conforme un
+  // service qu'on vient justement de corriger.
+  _verifie(
+      'ancienne forme get<number> refusée',
+      borneConfigServeur(
+          "this.configService.get<number>('PROMO_MAX_DURATION_DAYS', 7);",
+          'PROMO_MAX_DURATION_DAYS'),
+      null);
+  // Le nom de clé apparaît deux fois dans l'appel : la seconde occurrence (le
+  // libellé de journalisation) ne doit pas être lue comme une borne.
+  _verifie(
+      'libellé de journalisation non confondu avec la borne',
+      borneConfigServeur(
+          "configNumber(this.configService.get('CLE'), 42, 'CLE'), 99", 'CLE'),
+      42);
   _verifie(
       'constante serveur lue',
       constanteServeur('const EXPIRING_SOON_WINDOW_HOURS = 24;',
@@ -371,7 +408,7 @@ export class D {
           'EXPIRING_SOON_WINDOW_HOURS'),
       null);
 
-  const casRefus = 10;
+  const casRefus = 11;
   final total = _ok + _echecs.length;
   stdout.writeln('auto-test : $total cas, dont $casRefus refus');
   for (final e in _echecs) {

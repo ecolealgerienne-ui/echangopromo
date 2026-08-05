@@ -135,9 +135,9 @@
   "historyNotificationsTab": "History",
 
   "myPromosTitle": "My promos",
-  "capReachedLabel": "Cap of 5 promos reached",
+  "capReachedLabel": "Cap of {plafond} promos reached",
   "noPromosYet": "No promo yet.",
-  "activeCountLabel": "{count} / 5 active promos",
+  "activeCountLabel": "{count} / {plafond} active promos",
   "untilDate": "until {date}",
   "notPublishedYet": "not published yet",
   "myPromosViewsCount": "{count, plural, one{{count} view} other{{count} views}}",
