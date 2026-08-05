@@ -13,5 +13,6 @@ class SelectedCommuneStore {
 
   List<String> get() => _prefs.getStringList(_key) ?? const [];
 
-  Future<void> set(List<String> communeIds) => _prefs.setStringList(_key, communeIds);
+  Future<void> set(List<String> communeIds) =>
+      _prefs.setStringList(_key, communeIds);
 }

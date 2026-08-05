@@ -19,7 +19,8 @@ import '../../shared/validators/pin_validator.dart';
 import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/status_chip.dart';
 
-final _communesProvider = FutureProvider.autoDispose((ref) => ref.watch(communeApiProvider).list());
+final _communesProvider =
+    FutureProvider.autoDispose((ref) => ref.watch(communeApiProvider).list());
 
 /// Fiche commerçant côté admin — la liste (`AdminCommercantsScreen`)
 /// n'affichait que nom/téléphone tronqués. `GET /admin/commercant` charge
@@ -45,7 +46,8 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
       if (popOnSuccess) {
         Navigator.of(context).pop(true);
       } else if (successMessage != null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(successMessage)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(successMessage)));
       }
     } catch (error) {
       if (context.mounted) {
@@ -84,6 +86,67 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
     );
   }
 
+  /// Fixe — ou libère — le plafond de promos actives de ce commerçant.
+  ///
+  /// ⚠️ **Le champ vide n'est pas zéro.** Il remet le commerçant sur le
+  /// réglage global, ce qu'aucun chiffre ne saurait dire : écrire « 5 » pour
+  /// signifier « comme tout le monde » figerait ce commerçant le jour où le
+  /// global changerait. Zéro, lui, reste saisissable et signifie « ne peut
+  /// plus publier » — une mesure graduée, sans suspendre le compte.
+  Future<void> _modifierPlafond(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context)!;
+    final controller =
+        TextEditingController(text: item.promoActiveCap?.toString() ?? '');
+
+    final saisie = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.promoCapDialogTitle),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.promoCapDialogBody),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: l10n.promoCapFieldLabel),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l10n.commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: Text(l10n.commonConfirm),
+          ),
+        ],
+      ),
+    );
+    if (saisie == null || !context.mounted) return;
+
+    // Le serveur borne à 0..50 et refuse le reste ; on ne recopie pas ces
+    // bornes ici (règle #32) — on se contente de distinguer « vide » de
+    // « nombre », la seule chose que l'écran doit décider.
+    final plafond = saisie.isEmpty ? null : int.tryParse(saisie);
+    if (saisie.isNotEmpty && plafond == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(l10n.commonInvalid)));
+      return;
+    }
+
+    await _act(
+      context,
+      ref,
+      () => ref.read(adminApiProvider).setPromoActiveCap(item.id, plafond),
+      popOnSuccess: true,
+    );
+  }
+
   Future<String?> _promptForNewPin(
     BuildContext context, {
     required String title,
@@ -115,7 +178,9 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(l10n.commonCancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(l10n.commonCancel)),
           FilledButton(
             onPressed: () {
               if (!formKey.currentState!.validate()) return;
@@ -146,15 +211,18 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
     // l'agent (AgentPromoFormScreen), pas de garde de commune côté backend
     // pour ce rôle (vue globale).
     final role = ref.read(authControllerProvider).value?.role;
-    final newPromoPath =
-        role == AppRole.agent ? '/agent/promo/new/${item.id}' : '/admin/promo/new/${item.id}';
+    final newPromoPath = role == AppRole.agent
+        ? '/agent/promo/new/${item.id}'
+        : '/admin/promo/new/${item.id}';
     final dateFormat = DateFormat('dd/MM/yyyy');
     // Décode à la largeur physique réellement affichée plutôt que la pleine
     // résolution source — sans effet si ça dépasse l'original (~1200px max),
     // `memCacheWidth` ne fait jamais remonter au-dessus.
     final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
-    final screenWidthPx = (MediaQuery.sizeOf(context).width * devicePixelRatio).round();
-    final paddedWidthPx = (MediaQuery.sizeOf(context).width - 32) * devicePixelRatio;
+    final screenWidthPx =
+        (MediaQuery.sizeOf(context).width * devicePixelRatio).round();
+    final paddedWidthPx =
+        (MediaQuery.sizeOf(context).width - 32) * devicePixelRatio;
 
     return Scaffold(
       appBar: AppBar(
@@ -182,18 +250,23 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                   runSpacing: 8,
                   children: [
                     if (item.suspended)
-                      StatusChip(label: l10n.suspendedBadge, color: colorScheme.error),
+                      StatusChip(
+                          label: l10n.suspendedBadge, color: colorScheme.error),
                     if (item.deleted)
-                      StatusChip(label: l10n.deletedBadge, color: colorScheme.error),
+                      StatusChip(
+                          label: l10n.deletedBadge, color: colorScheme.error),
                     if (item.originVerification != null)
                       StatusChip(
-                        label: commercantOriginVerificationLabel(context, item.originVerification!),
+                        label: commercantOriginVerificationLabel(
+                            context, item.originVerification!),
                         color: colorScheme.secondary,
                       ),
                     if (item.profilePendingReview)
                       StatusChip(
                         label: l10n.profilePendingReviewBadgeLabel,
-                        color: Theme.of(context).extension<AppSemanticColors>()!.warning,
+                        color: Theme.of(context)
+                            .extension<AppSemanticColors>()!
+                            .warning,
                       ),
                   ],
                 ),
@@ -202,11 +275,13 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                     item.originVerification != null ||
                     item.profilePendingReview)
                   const SizedBox(height: 12),
-                Text(categorieLabel(context, item.categorie), style: Theme.of(context).textTheme.titleMedium),
+                Text(categorieLabel(context, item.categorie),
+                    style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Icon(Icons.phone_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+                    Icon(Icons.phone_outlined,
+                        size: 18, color: colorScheme.onSurfaceVariant),
                     const SizedBox(width: 8),
                     Text(item.telephone),
                   ],
@@ -216,7 +291,8 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.home_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+                      Icon(Icons.home_outlined,
+                          size: 18, color: colorScheme.onSurfaceVariant),
                       const SizedBox(width: 8),
                       Expanded(child: Text(item.adresse!)),
                     ],
@@ -226,7 +302,8 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.place_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+                      Icon(Icons.place_outlined,
+                          size: 18, color: colorScheme.onSurfaceVariant),
                       const SizedBox(width: 8),
                       Text(communeName),
                     ],
@@ -235,9 +312,11 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Icon(Icons.calendar_today_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+                    Icon(Icons.calendar_today_outlined,
+                        size: 18, color: colorScheme.onSurfaceVariant),
                     const SizedBox(width: 8),
-                    Text('${l10n.memberSinceLabel} ${dateFormat.format(item.createdAt)}'),
+                    Text(
+                        '${l10n.memberSinceLabel} ${dateFormat.format(item.createdAt)}'),
                   ],
                 ),
                 if (item.latitude != null && item.longitude != null) ...[
@@ -245,12 +324,37 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                   OutlinedButton.icon(
                     icon: const Icon(Icons.directions_outlined),
                     label: Text(l10n.itineraryButton),
-                    onPressed: () => openMapsAt(item.latitude!, item.longitude!),
+                    onPressed: () =>
+                        openMapsAt(item.latitude!, item.longitude!),
                   ),
                 ],
-                if (item.originVerification == CommercantOriginVerification.autoInscrit) ...[
+                const Divider(height: 40),
+                Text(l10n.promoCapSectionLabel,
+                    style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                // ⚠️ Deux textes distincts, jamais un chiffre dans les deux
+                // cas : « suit le réglage global » et « 8 » ne veulent pas
+                // dire la même chose, et les confondre ferait perdre
+                // l'information qui compte — ce commerçant a-t-il été réglé ?
+                Text(
+                  item.promoActiveCap == null
+                      ? l10n.promoCapGlobalLabel
+                      : l10n.promoCapCustomLabel(item.promoActiveCap!),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.tune),
+                  label: Text(l10n.promoCapEditLabel),
+                  onPressed: () => _modifierPlafond(context, ref),
+                ),
+                if (item.originVerification ==
+                    CommercantOriginVerification.autoInscrit) ...[
                   const Divider(height: 40),
-                  Text(l10n.registreSectionLabel, style: Theme.of(context).textTheme.titleMedium),
+                  Text(l10n.registreSectionLabel,
+                      style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 12),
                   if (item.registreStatus == null)
                     Text(l10n.registreNotSentLabel,
@@ -284,23 +388,29 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                       runSpacing: 8,
                       children: [
                         FilledButton(
-                          onPressed: item.registreStatus == RegistreStatus.valide
-                              ? null
-                              : () => _act(
-                                    context,
-                                    ref,
-                                    () => ref.read(adminApiProvider).validerRegistre(item.id),
-                                  ),
+                          onPressed:
+                              item.registreStatus == RegistreStatus.valide
+                                  ? null
+                                  : () => _act(
+                                        context,
+                                        ref,
+                                        () => ref
+                                            .read(adminApiProvider)
+                                            .validerRegistre(item.id),
+                                      ),
                           child: Text(l10n.validerLabel),
                         ),
                         OutlinedButton(
-                          onPressed: item.registreStatus == RegistreStatus.rejete
-                              ? null
-                              : () => _act(
-                                    context,
-                                    ref,
-                                    () => ref.read(adminApiProvider).rejeterRegistre(item.id),
-                                  ),
+                          onPressed:
+                              item.registreStatus == RegistreStatus.rejete
+                                  ? null
+                                  : () => _act(
+                                        context,
+                                        ref,
+                                        () => ref
+                                            .read(adminApiProvider)
+                                            .rejeterRegistre(item.id),
+                                      ),
                           child: Text(l10n.rejeterLabel),
                         ),
                       ],
@@ -317,7 +427,8 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                       label: Text(l10n.newPromoTitle),
                       onPressed: (item.suspended || item.deleted)
                           ? null
-                          : () => context.push(newPromoPath, extra: item.categorie),
+                          : () =>
+                              context.push(newPromoPath, extra: item.categorie),
                     ),
                     if (!item.deleted) ...[
                       item.suspended
@@ -325,7 +436,9 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                               onPressed: () => _act(
                                 context,
                                 ref,
-                                () => ref.read(adminApiProvider).reactivateCommercant(item.id),
+                                () => ref
+                                    .read(adminApiProvider)
+                                    .reactivateCommercant(item.id),
                               ),
                               child: Text(l10n.reactivateLabel),
                             )
@@ -335,7 +448,8 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                             ),
                       OutlinedButton(
                         onPressed: () => _confirmAndDelete(context, ref),
-                        style: OutlinedButton.styleFrom(foregroundColor: colorScheme.error),
+                        style: OutlinedButton.styleFrom(
+                            foregroundColor: colorScheme.error),
                         child: Text(l10n.deleteCommercantLabel),
                       ),
                       OutlinedButton(
@@ -353,7 +467,8 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                         onPressed: () => _act(
                           context,
                           ref,
-                          () => ref.read(adminApiProvider).validerProfil(item.id),
+                          () =>
+                              ref.read(adminApiProvider).validerProfil(item.id),
                         ),
                         child: Text(l10n.validerProfilLabel),
                       ),
@@ -375,13 +490,18 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
         title: Text(l10n.suspendConfirmTitle),
         content: Text(l10n.suspendConfirmMessage),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.commonCancel)),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(l10n.suspendLabel)),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.commonCancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(l10n.suspendLabel)),
         ],
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    await _act(context, ref, () => ref.read(adminApiProvider).suspendCommercant(item.id));
+    await _act(context, ref,
+        () => ref.read(adminApiProvider).suspendCommercant(item.id));
   }
 
   /// Suppression logique par l'admin/agent (2026-07-14) — distincte de la
@@ -395,7 +515,9 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
         title: Text(l10n.deleteCommercantConfirmTitle),
         content: Text(l10n.deleteCommercantConfirmMessage),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.commonCancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.commonCancel)),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child: Text(
@@ -407,6 +529,7 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    await _act(context, ref, () => ref.read(adminApiProvider).deleteCommercant(item.id));
+    await _act(context, ref,
+        () => ref.read(adminApiProvider).deleteCommercant(item.id));
   }
 }

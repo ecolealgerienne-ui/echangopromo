@@ -1,6 +1,7 @@
 import '../enums/categorie.dart';
 import '../enums/promo_lifecycle_status.dart';
 import '../enums/promo_moderation_status.dart';
+import '../promo_rules.dart';
 
 class Promo {
   const Promo({
@@ -30,18 +31,25 @@ class Promo {
         prixAvant: double.parse(json['prixAvant'].toString()),
         prixApres: double.parse(json['prixApres'].toString()),
         categorie: Categorie.fromValue(json['categorie'] as String),
-        dateFin: json['dateFin'] != null ? DateTime.parse(json['dateFin'] as String) : null,
-        lifecycleStatus: PromoLifecycleStatus.fromValue(json['lifecycleStatus'] as String),
-        moderationStatus: PromoModerationStatus.fromValue(json['moderationStatus'] as String),
+        dateFin: json['dateFin'] != null
+            ? DateTime.parse(json['dateFin'] as String)
+            : null,
+        lifecycleStatus:
+            PromoLifecycleStatus.fromValue(json['lifecycleStatus'] as String),
+        moderationStatus:
+            PromoModerationStatus.fromValue(json['moderationStatus'] as String),
         photoUrls: (json['photoUrls'] as List<dynamic>? ?? const [])
             .map((e) => e as String)
             .toList(),
         thumbnailUrl: json['thumbnailUrl'] as String?,
-        photoKeys: (json['photoKeys'] as List<dynamic>?)?.map((e) => e as String).toList(),
+        photoKeys: (json['photoKeys'] as List<dynamic>?)
+            ?.map((e) => e as String)
+            .toList(),
         viewCount: json['viewCount'] as int?,
         createdAt: DateTime.parse(json['createdAt'] as String),
-        publishedAt:
-            json['publishedAt'] != null ? DateTime.parse(json['publishedAt'] as String) : null,
+        publishedAt: json['publishedAt'] != null
+            ? DateTime.parse(json['publishedAt'] as String)
+            : null,
       );
 
   final String id;
@@ -90,13 +98,21 @@ class Promo {
   bool get isStopped => lifecycleStatus == PromoLifecycleStatus.arretee;
   bool get isDeleted => lifecycleStatus == PromoLifecycleStatus.supprimee;
   bool get isExpired =>
-      lifecycleStatus == PromoLifecycleStatus.expiree ||
-      (dateFin != null && dateFin!.isBefore(DateTime.now()));
+      promoEstExpiree(lifecycleStatus: lifecycleStatus, dateFin: dateFin);
 
-  /// Même fenêtre que `PromoService.notifyExpiringSoonCron` côté backend —
-  /// une seule définition de "bientôt" dans tout le produit.
+  /// Copie de `EXPIRING_SOON_WINDOW_HOURS` (`PromoService`, backend), qui pilote
+  /// la notification « expire bientôt ».
+  ///
+  /// ⚠️ Le commentaire disait « une seule définition de "bientôt" dans tout le
+  /// produit ». Il y en avait deux, et **une phrase ne tient pas un
+  /// invariant** : changer la cadence du cron aurait allumé ce badge sans
+  /// notification correspondante (revue 2026-08-05, règle #30). Les deux
+  /// valeurs sont nommées et comparées par `tool/check_server_rules.dart`.
   bool get isExpiringSoon =>
-      !isExpired && dateFin != null && dateFin!.isBefore(DateTime.now().add(const Duration(hours: 24)));
+      !isExpired &&
+      dateFin != null &&
+      dateFin!.isBefore(
+          DateTime.now().add(const Duration(hours: promoExpiringSoonHours)));
 
   double get discountPercent => (prixAvant - prixApres) / prixAvant * 100;
 }

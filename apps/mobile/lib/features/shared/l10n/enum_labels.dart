@@ -35,7 +35,8 @@ String categorieLabel(BuildContext context, Categorie categorie) {
   }
 }
 
-String promoLifecycleLabel(BuildContext context, PromoLifecycleStatus status, {required bool isExpired}) {
+String promoLifecycleLabel(BuildContext context, PromoLifecycleStatus status,
+    {required bool isExpired}) {
   final l10n = AppLocalizations.of(context)!;
   switch (status) {
     case PromoLifecycleStatus.brouillon:
@@ -54,7 +55,8 @@ String promoLifecycleLabel(BuildContext context, PromoLifecycleStatus status, {r
 /// Couleur du badge de statut affiché dans "Mes promos" — dérivée du thème
 /// (`AppSemanticColors`/`colorScheme`) pour rester calibrée en mode sombre,
 /// plutôt que des `Colors.*` fixes (audit design 2026-07-11).
-Color promoLifecycleColor(BuildContext context, PromoLifecycleStatus status, {required bool isExpired}) {
+Color promoLifecycleColor(BuildContext context, PromoLifecycleStatus status,
+    {required bool isExpired}) {
   final colorScheme = Theme.of(context).colorScheme;
   if (isExpired) return colorScheme.onSurfaceVariant;
   final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
@@ -72,7 +74,8 @@ Color promoLifecycleColor(BuildContext context, PromoLifecycleStatus status, {re
   }
 }
 
-String moderationStatusLabel(BuildContext context, PromoModerationStatus status) {
+String moderationStatusLabel(
+    BuildContext context, PromoModerationStatus status) {
   final l10n = AppLocalizations.of(context)!;
   switch (status) {
     case PromoModerationStatus.normale:
@@ -88,7 +91,8 @@ String moderationStatusLabel(BuildContext context, PromoModerationStatus status)
 
 /// Couleur du badge de statut de modération — même logique dérivée du
 /// thème que `promoLifecycleColor`.
-Color moderationStatusColor(BuildContext context, PromoModerationStatus status) {
+Color moderationStatusColor(
+    BuildContext context, PromoModerationStatus status) {
   final colorScheme = Theme.of(context).colorScheme;
   final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
   switch (status) {

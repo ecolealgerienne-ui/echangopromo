@@ -3,15 +3,24 @@ import {
   CreateDateColumn,
   Entity,
   Index,
-  JoinColumn,
-  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
-import { Commercant } from '../../commercant/entities/commercant.entity';
-import { Agent } from '../../agent/entities/agent.entity';
-import { Admin } from '../../admin/entities/admin.entity';
+
+/**
+ * ⚠️ **Pas de `@ManyToOne` vers le destinataire, et c'est voulu.** Une
+ * notification vise indifféremment un commerçant, un agent ou un admin : le
+ * couple (`recipientType`, `recipientId`) est **polymorphe**, ce qu'une clé
+ * étrangère TypeORM ne sait pas exprimer sans trois colonnes nullables et
+ * trois relations dont deux seraient toujours vides.
+ *
+ * Les imports `ManyToOne`, `JoinColumn`, `Commercant`, `Agent` et `Admin`
+ * traînaient ici sans usage, restes d'une conception antérieure — retirés le
+ * 2026-08-05, au premier `npm run lint` de la session. Ne pas les remettre :
+ * l'index composite ci-dessous couvre l'accès, la contrainte référentielle
+ * n'existe pas et ne peut pas exister.
+ */
 
 export enum NotificationType {
   PROMO_WARNED = 'promo_warned', // Admin a averti sur une promo signalée
@@ -30,7 +39,19 @@ export enum NotificationRecipientType {
 }
 
 @Entity()
-@Index(['recipientType', 'recipientId', 'readAt'])
+// ⚠️ **Nommé, et nommé EXACTEMENT comme en base** (2026-08-05). Sans nom
+// explicite, TypeORM en calcule un par hachage, ne reconnaît plus l'index posé
+// par `1783680000000-CreateNotificationEntity` et propose de le supprimer pour
+// le recréer sous son propre nom. Inoffensif pris isolément — mais c'est ce
+// bruit, répété sur cinq index, qui a masqué pendant des semaines un
+// `DROP INDEX "UQ_commercant_telephone_active"` sans recréation dans le même
+// diff. Une sortie de `migration:generate` qu'on parcourt en diagonale est une
+// sortie qu'on ne lit pas.
+@Index('IDX_notification_recipientType_recipientId_readAt', [
+  'recipientType',
+  'recipientId',
+  'readAt',
+])
 export class Notification {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -41,12 +62,29 @@ export class Notification {
   @Column({ type: 'enum', enum: NotificationRecipientType })
   recipientType: NotificationRecipientType;
 
-  @Index()
-  @Column()
+  /**
+   * ⚠️ **Types explicites, et pas d'`@Index()` : l'entité doit décrire la
+   * base telle qu'elle est.** `synchronize` est coupé — le schéma ne vient
+   * que des migrations — donc un décorateur absent de
+   * `1783680000000-CreateNotificationEntity` ne crée rien : c'est un
+   * commentaire déguisé en index. Pire, il rendait le prochain
+   * `migration:generate` **destructeur** : il aurait émis les `CREATE INDEX`
+   * manquants *et*, `@CreateDateColumn()` valant `TIMESTAMP` sans fuseau
+   * par défaut alors que la table est en `timestamptz`, un `ALTER COLUMN
+   * "createdAt" TYPE TIMESTAMP` — perte du fuseau sur tout l'historique,
+   * glissée dans une migration qu'on aurait crue purement additive (revue
+   * 2026-08-05, règle #12).
+   *
+   * Les deux `@Index()` retirés plutôt que créés par migration : **aucune
+   * requête ne les emprunterait.** Les six accès de `NotificationService`
+   * filtrent tous sur `recipientType` + `recipientId` ensemble, couverts par
+   * l'index composite ci-dessus, et rien ne lit jamais par `promoId` seul.
+   * `report.entity.ts:38` est le jumeau déjà aligné.
+   */
+  @Column({ type: 'uuid' })
   recipientId: string; // commercantId, agentId, or adminId selon recipientType
 
-  @Column({ nullable: true })
-  @Index()
+  @Column({ type: 'uuid', nullable: true })
   promoId?: string; // NULL si la notification n'est pas liée à une promo
 
   @Column()
@@ -59,9 +97,9 @@ export class Notification {
   @Column({ type: 'timestamptz', nullable: true })
   readAt: Date | null;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }

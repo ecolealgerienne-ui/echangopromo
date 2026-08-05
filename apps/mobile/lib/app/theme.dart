@@ -20,24 +20,54 @@ class AppRadii {
 const kAppTransitionDuration = Duration(milliseconds: 180);
 
 /// Couleurs sémantiques absentes du `ColorScheme` Material (qui n'a que
-/// `error`) — succès et attention, déclinées clair/sombre.
+/// `error`) — succès, attention et favori, déclinées clair/sombre.
 @immutable
 class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
-  const AppSemanticColors({required this.success, required this.warning});
+  const AppSemanticColors({
+    required this.success,
+    required this.warning,
+    required this.favorite,
+  });
 
   final Color success;
   final Color warning;
+
+  /// Le cœur d'un favori.
+  ///
+  /// ⚠️ **Ni `colorScheme.error`, ni un rouge en dur.** `error` serait
+  /// sémantiquement faux — mettre en favori n'est pas une erreur — et le
+  /// `Colors.redAccent` qui occupait cette place (`promo_card.dart`, corrigé le
+  /// 2026-08-04) ne suivait pas le basculement clair/sombre : il cohabitait sur
+  /// la même ligne avec `colorScheme.onSurfaceVariant` pour l'autre branche,
+  /// une moitié suivant le thème et l'autre non.
+  ///
+  /// Variante sombre plus claire et moins saturée : un rouge franc sur fond
+  /// sombre « vibre » et attire l'œil plus que l'information ne le mérite.
+  final Color favorite;
 
   /// `warning` en ambre franc et non plus en ambre foncé (`0xFFB45309`) :
   /// les bandeaux d'alerte l'affichent à ~13 % d'opacité sur blanc, et un
   /// ambre trop sombre y produisait un beige — exactement le rendu « marron »
   /// qu'on cherchait à supprimer.
-  static const light = AppSemanticColors(success: Color(0xFF2F9E62), warning: Color(0xFFD97706));
-  static const dark = AppSemanticColors(success: Color(0xFF4ADE80), warning: Color(0xFFFBBF24));
+  static const light = AppSemanticColors(
+    success: Color(0xFF2F9E62),
+    warning: Color(0xFFD97706),
+    favorite: Color(0xFFE11D48),
+  );
+  static const dark = AppSemanticColors(
+    success: Color(0xFF4ADE80),
+    warning: Color(0xFFFBBF24),
+    favorite: Color(0xFFFB7185),
+  );
 
   @override
-  AppSemanticColors copyWith({Color? success, Color? warning}) {
-    return AppSemanticColors(success: success ?? this.success, warning: warning ?? this.warning);
+  AppSemanticColors copyWith(
+      {Color? success, Color? warning, Color? favorite}) {
+    return AppSemanticColors(
+      success: success ?? this.success,
+      warning: warning ?? this.warning,
+      favorite: favorite ?? this.favorite,
+    );
   }
 
   @override
@@ -46,6 +76,7 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
     return AppSemanticColors(
       success: Color.lerp(success, other.success, t)!,
       warning: Color.lerp(warning, other.warning, t)!,
+      favorite: Color.lerp(favorite, other.favorite, t)!,
     );
   }
 }
@@ -70,6 +101,7 @@ class AppTheme {
 
   static const _terracotta = Color(0xFFE8571E);
   static const _safran = Color(0xFFF2A93B);
+
   /// Orange plus clair sur fond sombre : le terracotta manque de contraste
   /// une fois posé sur du noir.
   static const _terracottaDark = Color(0xFFFF7A45);
@@ -188,7 +220,8 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
-        titleTextStyle: textTheme.titleLarge?.copyWith(color: colorScheme.onSurface),
+        titleTextStyle:
+            textTheme.titleLarge?.copyWith(color: colorScheme.onSurface),
         iconTheme: IconThemeData(color: colorScheme.primary),
         actionsIconTheme: IconThemeData(color: colorScheme.primary),
       ),
@@ -217,15 +250,18 @@ class AppTheme {
         ),
       ),
       chipTheme: ChipThemeData(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.sm)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadii.sm)),
         side: BorderSide(color: outline),
         selectedColor: colorScheme.primary,
         backgroundColor: colorScheme.surface,
         labelStyle: textTheme.labelLarge,
-        secondaryLabelStyle: textTheme.labelLarge?.copyWith(color: colorScheme.onPrimary),
+        secondaryLabelStyle:
+            textTheme.labelLarge?.copyWith(color: colorScheme.onPrimary),
       ),
       inputDecorationTheme: InputDecorationTheme(
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadii.md)),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadii.md)),
         filled: true,
         fillColor: colorScheme.surface,
       ),
@@ -235,7 +271,8 @@ class AppTheme {
           foregroundColor: colorScheme.onPrimary,
           textStyle: textTheme.labelLarge,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.md)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.md)),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -244,7 +281,8 @@ class AppTheme {
           foregroundColor: colorScheme.onPrimary,
           textStyle: textTheme.labelLarge,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.md)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.md)),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -253,7 +291,8 @@ class AppTheme {
           side: BorderSide(color: outline),
           textStyle: textTheme.labelLarge,
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.md)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.md)),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -266,7 +305,8 @@ class AppTheme {
   }
 
   static TextTheme _textTheme(ColorScheme colorScheme) {
-    TextStyle title(double size, double lineHeight, FontWeight weight) => GoogleFonts.cairo(
+    TextStyle title(double size, double lineHeight, FontWeight weight) =>
+        GoogleFonts.cairo(
           fontSize: size,
           height: lineHeight / size,
           fontWeight: weight,

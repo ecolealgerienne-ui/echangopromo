@@ -17,6 +17,8 @@ export class AddCommercantSuspendedAt1783780000000 implements MigrationInterface
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "commercant" DROP COLUMN "suspendedAt"`);
+    await queryRunner.query(
+      `ALTER TABLE "commercant" DROP COLUMN "suspendedAt"`,
+    );
   }
 }

@@ -49,7 +49,8 @@ class MapShop {
     for (final promo in promos) {
       if (promo.prixAvant <= 0 || promo.prixApres >= promo.prixAvant) continue;
       final percent =
-          (((promo.prixAvant - promo.prixApres) / promo.prixAvant) * 100).round();
+          (((promo.prixAvant - promo.prixApres) / promo.prixAvant) * 100)
+              .round();
       if (best == null || percent > best) best = percent;
     }
     return best;

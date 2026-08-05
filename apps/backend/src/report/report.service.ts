@@ -1,20 +1,20 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Commercant } from '../commercant/entities/commercant.entity';
 import { Commune } from '../commune/entities/commune.entity';
 import { ConflictAppException } from '../common/errors/app-exception';
+import { configNumber } from '../common/config/config-number';
 import { ErrorCode } from '../common/errors/error-code.enum';
-import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
+import {
+  PaginatedResult,
+  toPaginatedResult,
+} from '../common/pagination/paginated-result';
 import { Promo, PromoModerationStatus } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
 import { Report, ReportReason } from './entities/report.entity';
 
-// Remis à 3 (specs §5.4) le 2026-07-14 — avait été temporairement abaissé à
-// 1 le 2026-07-12 pour une phase de test, ce qui laissait un seul
-// signalement (X-Device-Id jamais vérifié côté serveur, trivialement
-// rejouable) suffire à masquer la promo d'un concurrent.
-const MODERATION_THRESHOLD = 3;
 const IGNORE_WINDOW_DAYS = 30;
 
 @Injectable()
@@ -27,10 +27,42 @@ export class ReportService {
     // CommercantModule pour la même raison, voir commercant.module.ts).
     @InjectRepository(Promo) private readonly promos: Repository<Promo>,
     private readonly promoService: PromoService,
+    private readonly configService: ConfigService,
   ) {}
 
-  /** 1 signalement par device par promo, seuil de 3 devices distincts (specs §5.4). */
-  async createReport(promoId: string, deviceId: string, reason: ReportReason): Promise<void> {
+  /**
+   * Nombre d'appareils distincts qui doivent avoir signalé une promo pour
+   * qu'elle entre en file de modération (specs §5.4).
+   *
+   * ⚠️ **Un plancher à 2, et il n'est pas décoratif.** Le seuil avait été
+   * abaissé à 1 le 2026-07-12 pour une phase de test : un seul signalement
+   * suffisait alors à masquer la promo d'un concurrent, `X-Device-Id` n'étant
+   * jamais vérifié côté serveur et donc trivialement rejouable. Remis à 3 le
+   * 2026-07-14. Le rendre réglable sans borne rendrait ce réglage possible
+   * **depuis un fichier**, sans revue — d'où le minimum, qui refuse et
+   * journalise.
+   *
+   * ⚠️ Le seuil est évalué **à la lecture**, pas au moment du signalement :
+   * l'abaisser fait entrer en file, rétroactivement, toutes les promos qui
+   * atteignent déjà la nouvelle valeur. C'est voulu — le contraire
+   * demanderait de figer le seuil sur chaque signalement — mais ça se décide
+   * en connaissance de cause.
+   */
+  private seuilModeration(): number {
+    return configNumber(
+      this.configService.get('MODERATION_REPORT_THRESHOLD'),
+      3,
+      'MODERATION_REPORT_THRESHOLD',
+      { minimum: 2 },
+    );
+  }
+
+  /** 1 signalement par device par promo ; le seuil vient de `seuilModeration()`. */
+  async createReport(
+    promoId: string,
+    deviceId: string,
+    reason: ReportReason,
+  ): Promise<void> {
     await this.promoService.findByIdOrFail(promoId);
 
     const already = await this.reports.findOne({
@@ -46,7 +78,7 @@ export class ReportService {
     await this.reports.save(this.reports.create({ promoId, deviceId, reason }));
 
     const activeCount = await this.countActiveReports(promoId);
-    if (activeCount >= MODERATION_THRESHOLD) {
+    if (activeCount >= this.seuilModeration()) {
       await this.promoService.markSignalee(promoId);
     }
   }
@@ -130,23 +162,30 @@ export class ReportService {
       )
       .groupBy('report.promoId')
       .having('COUNT(DISTINCT report.deviceId) >= :threshold', {
-        threshold: MODERATION_THRESHOLD,
+        threshold: this.seuilModeration(),
       });
 
     if (communeIds || filter?.communeId || filter?.wilaya) {
-      qb.innerJoin(Commercant, 'commercant', 'commercant.id = promo.commercantId');
+      qb.innerJoin(
+        Commercant,
+        'commercant',
+        'commercant.id = promo.commercantId',
+      );
     }
     if (communeIds) {
       qb.andWhere('commercant.communeId IN (:...communeIds)', { communeIds });
     }
     if (filter?.communeId) {
-      qb.andWhere('commercant.communeId = :filterCommuneId', { filterCommuneId: filter.communeId });
+      qb.andWhere('commercant.communeId = :filterCommuneId', {
+        filterCommuneId: filter.communeId,
+      });
     }
     if (filter?.wilaya) {
-      qb.innerJoin(Commune, 'commune', 'commune.id = commercant.communeId').andWhere(
-        'commune.wilaya = :wilaya',
-        { wilaya: filter.wilaya },
-      );
+      qb.innerJoin(
+        Commune,
+        'commune',
+        'commune.id = commercant.communeId',
+      ).andWhere('commune.wilaya = :wilaya', { wilaya: filter.wilaya });
     }
     return qb;
   }
@@ -176,13 +215,37 @@ export class ReportService {
     return toPaginatedResult(items, total, page, limit);
   }
 
-  /** Nombre total de promos en attente de modération (stat dashboard, pas de pagination). */
+  /**
+   * Nombre total de **promos** en attente de modération (stat dashboard et
+   * `total` de pagination).
+   *
+   * ⚠️ **Jamais `.getCount()` sur ce builder.** Il est groupé par promo avec
+   * un `HAVING`, et `getCount()` remplace le SELECT, **efface les `groupBy`
+   * et conserve le `HAVING`** : la valeur rendue devenait un nombre de
+   * *signalements*, pas de promos — 2 promos signalées par 3 appareils
+   * chacune affichaient `6`, et `listPendingModeration` rendait `total: 6`
+   * pour 2 items, faisant paginer le mobile sur des pages vides. Symétrique
+   * et plus vicieux : sous le seuil global, le `HAVING` sans groupe rend
+   * **0** sur une file non vide (revue 2026-08-05).
+   *
+   * Compter les lignes du groupement depuis une sous-requête garde le
+   * décompte côté base (pas de transfert des lignes), contrairement à un
+   * `getRawMany().length`.
+   */
   async countPendingModeration(
     communeIds?: string[],
     filter?: { communeId?: string; wilaya?: string },
   ): Promise<number> {
     if (communeIds && communeIds.length === 0) return 0;
-    return this.pendingModerationQueryBuilder(communeIds, filter).getCount();
+    const [sql, parameters] = this.pendingModerationQueryBuilder(
+      communeIds,
+      filter,
+    ).getQueryAndParameters();
+    const rows = await this.reports.manager.query<{ count: number }[]>(
+      `SELECT COUNT(*)::int AS count FROM (${sql}) AS grouped`,
+      parameters,
+    );
+    return rows[0].count;
   }
 
   /**
@@ -191,7 +254,9 @@ export class ReportService {
    * jamais un `count()` par promo dans une boucle (règle CLAUDE.md #14).
    * Même logique de fenêtre d'ignore que `pendingModerationQueryBuilder`.
    */
-  async getReasonBreakdown(promoIds: string[]): Promise<Record<string, Record<string, number>>> {
+  async getReasonBreakdown(
+    promoIds: string[],
+  ): Promise<Record<string, Record<string, number>>> {
     if (promoIds.length === 0) return {};
 
     const rows = await this.reports
@@ -209,7 +274,11 @@ export class ReportService {
       )
       .groupBy('report.promoId')
       .addGroupBy('report.reason')
-      .getRawMany<{ promoId: string; reason: ReportReason | null; count: string }>();
+      .getRawMany<{
+        promoId: string;
+        reason: ReportReason | null;
+        count: string;
+      }>();
 
     const breakdown: Record<string, Record<string, number>> = {};
     for (const row of rows) {

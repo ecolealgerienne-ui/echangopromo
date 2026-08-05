@@ -32,12 +32,15 @@ class _PromoFilterSheetContent extends ConsumerWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(l10n.filtersSortTitle, style: Theme.of(context).textTheme.titleMedium),
+                  child: Text(l10n.filtersSortTitle,
+                      style: Theme.of(context).textTheme.titleMedium),
                 ),
                 TextButton(
                   onPressed: () {
-                    ref.read(favoritesOnlyFilterProvider.notifier).state = false;
-                    ref.read(promoSortProvider.notifier).state = PromoSort.nouveautes;
+                    ref.read(favoritesOnlyFilterProvider.notifier).state =
+                        false;
+                    ref.read(promoSortProvider.notifier).state =
+                        PromoSort.nouveautes;
                   },
                   child: Text(l10n.resetFiltersLabel),
                 ),
@@ -48,7 +51,8 @@ class _PromoFilterSheetContent extends ConsumerWidget {
             title: Text(l10n.favoritesOnlyLabel),
             secondary: const Icon(Icons.favorite_outline),
             value: favoritesOnly,
-            onChanged: (v) => ref.read(favoritesOnlyFilterProvider.notifier).state = v,
+            onChanged: (v) =>
+                ref.read(favoritesOnlyFilterProvider.notifier).state = v,
           ),
           const Divider(height: 1),
           Padding(
@@ -57,10 +61,8 @@ class _PromoFilterSheetContent extends ConsumerWidget {
               alignment: AlignmentDirectional.centerStart,
               child: Text(
                 l10n.sortByLabel,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelLarge
-                    ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
             ),
           ),

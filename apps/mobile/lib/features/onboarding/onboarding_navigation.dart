@@ -20,7 +20,8 @@ const kDestinationWithoutLocation = '/';
 /// redemander, seulement d'ouvrir les réglages). C'est aussi pour ça qu'on
 /// ne repropose jamais l'écran de seconde chance après un refus système :
 /// le bouton « Activer » n'aurait alors plus aucun effet.
-Future<void> requestLocationAndFinish(BuildContext context, WidgetRef ref) async {
+Future<void> requestLocationAndFinish(
+    BuildContext context, WidgetRef ref) async {
   // Le store est résolu avant tout `await` : plus aucune lecture de `ref`
   // une fois le widget potentiellement démonté (audit règle #20).
   final store = ref.read(onboardingStoreProvider);

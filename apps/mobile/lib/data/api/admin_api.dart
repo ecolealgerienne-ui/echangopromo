@@ -15,7 +15,8 @@ class AdminApi {
 
   final Dio _dio;
 
-  Future<String> login({required String email, required String password}) async {
+  Future<String> login(
+      {required String email, required String password}) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/admin/login',
       data: {'email': email, 'password': password},
@@ -49,7 +50,8 @@ class AdminApi {
 
   // --- Modération ---
 
-  Future<List<ModerationItem>> moderationQueue({String? communeId, String? wilaya}) async {
+  Future<List<ModerationItem>> moderationQueue(
+      {String? communeId, String? wilaya}) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/moderation/queue',
       queryParameters: {
@@ -59,7 +61,9 @@ class AdminApi {
       },
     );
     final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => ModerationItem.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => ModerationItem.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> masquerPromo(String promoId) async {
@@ -92,7 +96,9 @@ class AdminApi {
       },
     );
     final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => ModerationItem.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => ModerationItem.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   // --- Commerçants (plan de correction, Phase 2) ---
@@ -110,13 +116,16 @@ class AdminApi {
         'limit': _pageSize,
         if (search != null && search.isNotEmpty) 'search': search,
         if (registreStatus != null) 'registreStatus': registreStatus.value,
-        if (profilePendingReview != null) 'profilePendingReview': profilePendingReview,
+        if (profilePendingReview != null)
+          'profilePendingReview': profilePendingReview,
         if (communeId != null) 'communeId': communeId,
         if (wilaya != null) 'wilaya': wilaya,
       },
     );
     final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => AdminCommercantItem.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => AdminCommercantItem.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> suspendCommercant(String commercantId) async {
@@ -125,6 +134,18 @@ class AdminApi {
 
   Future<void> reactivateCommercant(String commercantId) async {
     await _dio.post<void>('/admin/commercant/$commercantId/reactivate');
+  }
+
+  /// Fixe le plafond de promos actives propre à ce commerçant.
+  ///
+  /// `null` le remet sur le réglage global du serveur — ce n'est pas « zéro »,
+  /// et c'est pour ça que le paramètre est nullable plutôt qu'un `int` avec
+  /// une valeur sentinelle.
+  Future<void> setPromoActiveCap(String commercantId, int? plafond) async {
+    await _dio.patch<void>(
+      '/admin/commercant/$commercantId/plafond-promos',
+      data: {'plafond': plafond},
+    );
   }
 
   /// Suppression logique (2026-07-14) — distincte de la suspension, libère
@@ -173,7 +194,8 @@ class AdminApi {
     required String nom,
     List<String>? communeIds,
   }) async {
-    final response = await _dio.post<Map<String, dynamic>>('/admin/agent', data: {
+    final response =
+        await _dio.post<Map<String, dynamic>>('/admin/agent', data: {
       'email': email,
       'password': password,
       'nom': nom,
@@ -182,12 +204,28 @@ class AdminApi {
     return Agent.fromJson(response.data!);
   }
 
-  Future<void> assignCommunes({required String agentId, required List<String> communeIds}) async {
-    await _dio.patch<void>('/admin/agent/$agentId/communes', data: {'communeIds': communeIds});
+  Future<void> assignCommunes(
+      {required String agentId, required List<String> communeIds}) async {
+    await _dio.patch<void>('/admin/agent/$agentId/communes',
+        data: {'communeIds': communeIds});
   }
 
   Future<void> revokeAgentToken(String agentId) async {
     await _dio.post<void>('/admin/agent/$agentId/revoke-token');
+  }
+
+  /// Révoque **toutes** les sessions de l'admin connecté — appareil perdu ou
+  /// volé (audit V1 §1).
+  ///
+  /// ⚠️ La session courante en fait partie : l'appelant doit enchaîner sur une
+  /// déconnexion, sinon l'écran suivant se heurtera à `AUTH_TOKEN_REVOKED`.
+  ///
+  /// ⚠️ Cette route existait côté backend depuis l'audit V1 et **n'avait aucun
+  /// appelant** — capacité écrite, testée, documentée, et injoignable depuis
+  /// l'application (trouvé par l'audit du 2026-08-04, règle 31). L'admin
+  /// pouvait révoquer un agent, jamais lui-même.
+  Future<void> revokeOwnSessions() async {
+    await _dio.post<void>('/admin/me/revoke-token');
   }
 
   /// Mot de passe agent oublié/perdu — l'agent ne peut pas le changer
@@ -220,6 +258,8 @@ class AdminApi {
       queryParameters: {'limit': _pageSize},
     );
     final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => AuditLogEntry.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => AuditLogEntry.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }

@@ -22,7 +22,9 @@ class HighlightApi {
       },
     );
     final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => Highlight.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => Highlight.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   // --- Admin ---
@@ -31,7 +33,9 @@ class HighlightApi {
   Future<List<Highlight>> listForAdmin() async {
     final response = await _dio.get<Map<String, dynamic>>('/admin/highlight');
     final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => Highlight.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => Highlight.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<Highlight> create({
@@ -41,7 +45,8 @@ class HighlightApi {
     String? sousTitre,
     bool? active,
   }) async {
-    final response = await _dio.post<Map<String, dynamic>>('/admin/highlight', data: {
+    final response =
+        await _dio.post<Map<String, dynamic>>('/admin/highlight', data: {
       if (promoId != null) 'promoId': promoId,
       if (imageKey != null) 'imageKey': imageKey,
       if (titre != null && titre.isNotEmpty) 'titre': titre,
@@ -67,9 +72,16 @@ class HighlightApi {
     bool clearPromo = false,
     bool clearImage = false,
   }) async {
-    final response = await _dio.patch<Map<String, dynamic>>('/admin/highlight/$id', data: {
-      if (clearPromo) 'clearPromo': true else if (promoId != null) 'promoId': promoId,
-      if (clearImage) 'clearImage': true else if (imageKey != null) 'imageKey': imageKey,
+    final response =
+        await _dio.patch<Map<String, dynamic>>('/admin/highlight/$id', data: {
+      if (clearPromo)
+        'clearPromo': true
+      else if (promoId != null)
+        'promoId': promoId,
+      if (clearImage)
+        'clearImage': true
+      else if (imageKey != null)
+        'imageKey': imageKey,
       if (titre != null) 'titre': titre,
       if (sousTitre != null) 'sousTitre': sousTitre,
       if (active != null) 'active': active,
@@ -89,6 +101,8 @@ class HighlightApi {
       data: {'ids': ids},
     );
     final items = response.data!['items'] as List<dynamic>;
-    return items.map((e) => Highlight.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => Highlight.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }

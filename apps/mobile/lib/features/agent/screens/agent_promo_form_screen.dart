@@ -9,15 +9,14 @@ import '../../shared/widgets/loading_button.dart';
 import '../../shared/widgets/multi_photo_picker_field.dart';
 import '../../shared/widgets/promo_form_fields.dart';
 import '../../../providers/core_providers.dart';
-
-const _defaultDureeJours = 5;
-const _maxDureeJours = 7;
+import '../../../domain/promo_rules.dart';
 
 /// Création/mise à jour d'une promo par l'agent. Photo obligatoirement
 /// prise dans l'app (pas de galerie), avec horodatage côté serveur — preuve
 /// minimale de passage, sans géolocalisation (specs §3.3/§5.5).
 class AgentPromoFormScreen extends ConsumerStatefulWidget {
-  const AgentPromoFormScreen({super.key, required this.commercantId, this.defaultCategorie});
+  const AgentPromoFormScreen(
+      {super.key, required this.commercantId, this.defaultCategorie});
 
   final String commercantId;
 
@@ -26,7 +25,8 @@ class AgentPromoFormScreen extends ConsumerStatefulWidget {
   final Categorie? defaultCategorie;
 
   @override
-  ConsumerState<AgentPromoFormScreen> createState() => _AgentPromoFormScreenState();
+  ConsumerState<AgentPromoFormScreen> createState() =>
+      _AgentPromoFormScreenState();
 }
 
 class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
@@ -35,7 +35,7 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
   final _prixAvantController = TextEditingController();
   final _prixApresController = TextEditingController();
   Categorie? _categorie;
-  int _dureeJours = _defaultDureeJours;
+  int _dureeJours = promoDefaultDureeJours;
   List<PhotoSlotItem> _photoItems = [];
   bool _loading = false;
   String? _error;
@@ -95,7 +95,7 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
             prixApres: double.parse(_prixApresController.text.trim()),
             categorie: _categorie!,
             photoKeys: photoKeys,
-            dateFin: DateTime.now().add(Duration(days: _dureeJours)),
+            dureeJours: _dureeJours,
           );
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
@@ -125,7 +125,8 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
             children: [
               PromoFormFields(
                 photoItems: _photoItems,
-                onPhotoItemsChanged: (items) => setState(() => _photoItems = items),
+                onPhotoItemsChanged: (items) =>
+                    setState(() => _photoItems = items),
                 cameraOnly: true,
                 descriptionController: _descriptionController,
                 prixAvantController: _prixAvantController,
@@ -134,12 +135,16 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
                 categorie: _categorie,
                 onCategorieChanged: (v) => setState(() => _categorie = v),
                 dureeJours: _dureeJours,
-                maxDureeJours: _maxDureeJours,
-                onDureeJoursChanged: (v) => setState(() => _dureeJours = v ?? _defaultDureeJours),
+                maxDureeJours: promoMaxDureeJours,
+                onDureeJoursChanged: (v) =>
+                    setState(() => _dureeJours = v ?? promoDefaultDureeJours),
               ),
               ErrorText(_error),
               const SizedBox(height: 16),
-              LoadingButton(loading: _loading, onPressed: _submit, label: l10n.publishLabel),
+              LoadingButton(
+                  loading: _loading,
+                  onPressed: _submit,
+                  label: l10n.publishLabel),
             ],
           ),
         ),

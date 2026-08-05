@@ -60,7 +60,8 @@ class PromoGridCard extends StatelessWidget {
                     child: PromoDiscountBadge(
                       prixAvant: promo.prixAvant,
                       prixApres: promo.prixApres,
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       textStyle: textTheme.labelSmall,
                     ),
                   ),
@@ -72,7 +73,8 @@ class PromoGridCard extends StatelessWidget {
                         // Fond translucide : sur une photo claire, un cœur
                         // blanc devient invisible.
                         style: IconButton.styleFrom(
-                          backgroundColor: colorScheme.surface.withValues(alpha: 0.7),
+                          backgroundColor:
+                              colorScheme.surface.withValues(alpha: 0.7),
                           minimumSize: const Size(28, 28),
                           padding: EdgeInsets.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -81,7 +83,9 @@ class PromoGridCard extends StatelessWidget {
                         onPressed: onToggleFavorite,
                         icon: Icon(
                           isFavorite ? Icons.favorite : Icons.favorite_border,
-                          color: isFavorite ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                          color: isFavorite
+                              ? colorScheme.primary
+                              : colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -98,7 +102,8 @@ class PromoGridCard extends StatelessWidget {
                   children: [
                     Text(
                       promo.description,
-                      style: textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                      style: textTheme.bodySmall
+                          ?.copyWith(fontWeight: FontWeight.w600),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),

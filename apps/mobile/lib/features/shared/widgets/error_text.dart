@@ -14,7 +14,8 @@ class ErrorText extends StatelessWidget {
     if (message == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: 8),
-      child: Text(message!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+      child: Text(message!,
+          style: TextStyle(color: Theme.of(context).colorScheme.error)),
     );
   }
 }

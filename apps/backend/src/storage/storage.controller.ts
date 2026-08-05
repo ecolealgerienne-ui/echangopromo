@@ -29,9 +29,15 @@ import { MAX_UPLOAD_BYTES, StorageService } from './storage.service';
  *
  * Limite Multer volontairement plus haute (×4) que `MAX_UPLOAD_BYTES` : un
  * simple filet de sécurité mémoire contre un payload extrême, la vraie
- * règle métier (5 Mo) est appliquée explicitement dans `StorageService`
- * pour renvoyer une erreur applicative propre (`AppException`) plutôt
- * qu'une erreur Multer brute.
+ * règle métier (500 Ko, voir `MAX_UPLOAD_BYTES` — le commentaire disait
+ * encore « 5 Mo », valeur abandonnée le 2026-07-12) est appliquée
+ * explicitement dans `StorageService` pour renvoyer une erreur applicative
+ * propre (`AppException`) plutôt qu'une erreur Multer brute.
+ *
+ * Au-delà du filet Multer, en revanche, la requête est coupée avant
+ * d'atteindre `StorageService` : c'est `AllExceptionsFilter` qui rattache le
+ * `413` à `STORAGE_FILE_TOO_LARGE`, pour que le mobile affiche la même chose
+ * dans les deux cas.
  */
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('commercant', 'agent', 'admin')
@@ -84,7 +90,11 @@ export class StorageController {
           : dto.purpose === 'highlight'
             ? 'highlight-images'
             : 'promo-photos';
-    const key = await this.storageService.uploadPhoto(user.sub, file.buffer, folder);
+    const key = await this.storageService.uploadPhoto(
+      user.sub,
+      file.buffer,
+      folder,
+    );
     return { key };
   }
 }

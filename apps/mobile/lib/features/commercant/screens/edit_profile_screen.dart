@@ -61,7 +61,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     try {
       String? photoKey;
       if (_photo != null) {
-        photoKey = await ref.read(storageApiProvider).uploadPhoto(_photo!, purpose: 'commercant');
+        photoKey = await ref
+            .read(storageApiProvider)
+            .uploadPhoto(_photo!, purpose: 'commercant');
       }
       await ref.read(commercantApiProvider).updateProfile(
             nom: _nomController.text.trim(),
@@ -124,7 +126,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.commonCancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.commonCancel)),
           FilledButton(
             onPressed: () {
               if (!formKey.currentState!.validate()) return;
@@ -148,7 +152,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         builder: (context) => AlertDialog(
           content: Text(l10n.changePinSuccessMessage),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: Text(l10n.commonUnderstood)),
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(l10n.commonUnderstood)),
           ],
         ),
       );
@@ -262,8 +268,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _nomController,
-                    decoration: InputDecoration(labelText: l10n.nomCommerceLabel),
-                    validator: (v) => (v == null || v.isEmpty) ? l10n.nomRequired : null,
+                    decoration:
+                        InputDecoration(labelText: l10n.nomCommerceLabel),
+                    validator: (v) =>
+                        (v == null || v.isEmpty) ? l10n.nomRequired : null,
                   ),
                   const SizedBox(height: 12),
                   CategoryDropdown(
@@ -358,7 +366,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           top: false,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-            child: LoadingButton(loading: _loading, onPressed: _submit, label: l10n.saveLabel),
+            child: LoadingButton(
+                loading: _loading, onPressed: _submit, label: l10n.saveLabel),
           ),
         ),
       ),

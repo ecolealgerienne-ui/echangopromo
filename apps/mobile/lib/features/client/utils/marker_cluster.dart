@@ -74,6 +74,7 @@ _ProjectedPoint _project(double lat, double lng, double worldPx) {
   final clampedLat = lat.clamp(-85.05112878, 85.05112878);
   final sinLat = math.sin(clampedLat * math.pi / 180);
   final x = (lng + 180) / 360 * worldPx;
-  final y = (0.5 - math.log((1 + sinLat) / (1 - sinLat)) / (4 * math.pi)) * worldPx;
+  final y =
+      (0.5 - math.log((1 + sinLat) / (1 - sinLat)) / (4 * math.pi)) * worldPx;
   return _ProjectedPoint(x, y);
 }

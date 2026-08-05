@@ -2,12 +2,12 @@ import {
   Body,
   Controller,
   Get,
-  Param,
   Patch,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { UuidParam } from '../common/decorators/uuid-param.decorator';
 import { Throttle } from '@nestjs/throttler';
 import { AgentService } from '../agent/agent.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -17,16 +17,17 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
 import { DeviceId } from '../common/decorators/device-id.decorator';
-import { ForbiddenAppException, NotFoundAppException } from '../common/errors/app-exception';
+import { ForbiddenAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { MAP_THROTTLE, SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
 import { ListPromoMapQueryDto } from './dto/list-promo-map-query.dto';
+import { MapCenterQueryDto } from './dto/map-center-query.dto';
 import { ListPromoQueryDto } from './dto/list-promo-query.dto';
 import { UpdatePromoDto } from './dto/update-promo.dto';
-import { Promo, VISIBLE_MODERATION_STATUSES } from './entities/promo.entity';
+import { Promo } from './entities/promo.entity';
 import { PromoService } from './promo.service';
 
 @Controller('promo')
@@ -52,7 +53,9 @@ export class PromoController {
    * les réuploader, sans jamais les exposer publiquement.
    */
   private toClientJson(promo: Promo, options?: { includeKeys?: boolean }) {
-    const photoUrls = promo.photoKeys.map((key) => this.storageService.buildPublicUrl(key));
+    const photoUrls = promo.photoKeys.map((key) =>
+      this.storageService.buildPublicUrl(key),
+    );
     return {
       id: promo.id,
       commercantId: promo.commercantId,
@@ -106,7 +109,10 @@ export class PromoController {
   @Get()
   async list(@Query() query: ListPromoQueryDto) {
     const result = await this.promoService.findActiveForClient(query);
-    return { ...result, items: result.items.map((promo) => this.toClientJson(promo)) };
+    return {
+      ...result,
+      items: result.items.map((promo) => this.toClientJson(promo)),
+    };
   }
 
   /**
@@ -122,7 +128,8 @@ export class PromoController {
   @Throttle(MAP_THROTTLE)
   @Get('map')
   async map(@Query() query: ListPromoMapQueryDto) {
-    const { commercants, truncated } = await this.promoService.findActiveForMap(query);
+    const { commercants, truncated } =
+      await this.promoService.findActiveForMap(query);
     return {
       truncated,
       items: commercants.map(({ commercant, promos }) => ({
@@ -142,21 +149,42 @@ export class PromoController {
   }
 
   /**
-   * Route publique, non authentifiée (accessible via lien partagé/App
-   * Links `/p/:id`) — `findByIdOrFail` ne filtre par construction aucun
-   * statut (utilisé aussi par les flux commerçant/agent qui doivent
-   * pouvoir accéder à leurs propres promos quel que soit leur statut). Sans
-   * ce filtre ici, une promo masquée par un modérateur restait pourtant
-   * intégralement consultable par quiconque connaissait son id, simplement
-   * absente du fil — `VISIBLE_MODERATION_STATUSES` est la même règle que
-   * `findActiveForClient`, appliquée ici au lieu de diverger.
+   * Où centrer la carte quand le client n'a pas de position GPS mais a choisi
+   * ses communes. Publique et bornée par `MAP_THROTTLE`, comme `GET
+   * /promo/map` dont elle n'est qu'un préalable — elle n'expose rien de plus
+   * que ce que cette route rend déjà (des positions de commerces publics),
+   * et sous une forme moins précise puisque agrégée.
+   *
+   * `{ center: null }` quand aucun commerçant positionné n'a de promo visible
+   * dans ces communes : l'app garde alors son propre repli. Un objet plutôt
+   * qu'un `204` — le corps distingue « je sais qu'il n'y a pas de centre » de
+   * « la requête n'a pas abouti », que l'app traite différemment.
+   *
+   * Deux segments (`map/center`), donc aucun conflit avec `@Get(':id')` — mais
+   * déclarée ici, près de `@Get('map')`, parce que c'est la même surface.
+   */
+  @Throttle(MAP_THROTTLE)
+  @Get('map/center')
+  async mapCenter(@Query() query: MapCenterQueryDto) {
+    return {
+      center: await this.promoService.findMapCenterForCommunes(
+        query.communeIds,
+      ),
+    };
+  }
+
+  /**
+   * Route publique, non authentifiée (accessible via lien partagé/App Links
+   * `/p/:id`). Le filtre de visibilité était réécrit ici et ne reprenait
+   * qu'une des cinq conditions (`VISIBLE_MODERATION_STATUSES`) : une promo
+   * arrêtée, expirée, en brouillon, ou d'un commerçant suspendu restait
+   * intégralement consultable par quiconque avait le lien. La règle vit
+   * maintenant dans `PromoService.applyVisibleConditions` et nulle part
+   * ailleurs (revue 2026-08-05, règles #8 et #30).
    */
   @Get(':id')
-  async detail(@Param('id') id: string, @DeviceId() deviceId: string) {
-    const promo = await this.promoService.findByIdOrFail(id);
-    if (!VISIBLE_MODERATION_STATUSES.includes(promo.moderationStatus)) {
-      throw new NotFoundAppException(ErrorCode.PROMO_NOT_FOUND, 'Promo introuvable');
-    }
+  async detail(@UuidParam('id') id: string, @DeviceId() deviceId: string) {
+    const promo = await this.promoService.findVisibleByIdOrFail(id);
     await this.promoService.recordView(id, deviceId);
     return this.toClientJson(promo);
   }
@@ -170,6 +198,21 @@ export class PromoController {
     @Body() dto: CreatePromoDto,
   ) {
     return this.promoService.create(user.sub, dto);
+  }
+
+  /**
+   * Occupation du plafond de promos actives — servie ici plutôt que dans
+   * `GET /commercant/me` : `CommercantController` n'injecte pas `PromoService`,
+   * et l'y injecter fermerait un cycle de modules (`PromoModule` importe déjà
+   * `CommercantModule`). Recopier la règle du plafond côté commerçant serait
+   * exactement ce que la règle #9 interdit — c'est le propriétaire de la règle
+   * qui la sert.
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('commercant')
+  @Get('me/slots')
+  async mySlots(@CurrentUser() user: AuthTokenPayload) {
+    return this.promoService.getSlotUsage(user.sub);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -208,7 +251,7 @@ export class PromoController {
   @Post('agent/:commercantId')
   async createByAgent(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('commercantId') commercantId: string,
+    @UuidParam('commercantId') commercantId: string,
     @Body() dto: CreatePromoDto,
   ) {
     if (user.role === 'agent') {
@@ -221,7 +264,13 @@ export class PromoController {
     // Exempté des plafonds anti-abus (2026-07-14) : agent/admin agissent
     // via un canal audité, pas l'auto-service commerçant que ces plafonds
     // visent (voir `PromoService.create`).
-    return this.promoService.create(commercantId, dto, { trustedActor: true });
+    // `actorId` : les clés S3 uploadées par un agent portent SON `sub`
+    // (`StorageController.upload`), pas celui du commerçant — sans ça la
+    // garde d'appartenance refuserait la promo que l'agent vient de saisir.
+    return this.promoService.create(commercantId, dto, {
+      trustedActor: true,
+      actorId: user.sub,
+    });
   }
 
   /** Édition ouverte au commerçant propriétaire, en plus de l'agent (auparavant agent uniquement). */
@@ -231,12 +280,12 @@ export class PromoController {
   @Patch(':id')
   async update(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') id: string,
+    @UuidParam('id') id: string,
     @Body() dto: UpdatePromoDto,
   ) {
     const promo = await this.promoService.findByIdOrFail(id);
     await this.assertCanManage(user, promo);
-    return this.promoService.update(id, dto);
+    return this.promoService.update(id, dto, { actorId: user.sub });
   }
 
   /**
@@ -250,11 +299,13 @@ export class PromoController {
   @Post(':id/publish')
   async publish(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') id: string,
+    @UuidParam('id') id: string,
   ) {
     const promo = await this.promoService.findByIdOrFail(id);
     await this.assertCanManage(user, promo);
-    return this.promoService.publish(id, { trustedActor: user.role === 'agent' });
+    return this.promoService.publish(id, {
+      trustedActor: user.role === 'agent',
+    });
   }
 
   /** Arrêt volontaire (ex. rupture de stock) — libère un slot sur le plafond de 5. */
@@ -262,7 +313,10 @@ export class PromoController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('commercant', 'agent')
   @Post(':id/stop')
-  async stop(@CurrentUser() user: AuthTokenPayload, @Param('id') id: string) {
+  async stop(
+    @CurrentUser() user: AuthTokenPayload,
+    @UuidParam('id') id: string,
+  ) {
     const promo = await this.promoService.findByIdOrFail(id);
     await this.assertCanManage(user, promo);
     return this.promoService.stop(id);

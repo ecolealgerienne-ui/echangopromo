@@ -9,7 +9,12 @@ class AuthSessionStore {
 
   static const _roleKey = 'auth_role';
   static const _tokenKey = 'auth_token';
-  static const _userIdKey = 'auth_user_id';
+
+  /// Clé d'une session d'avant le 2026-08-05 (voir [AuthSession]). Plus jamais
+  /// écrite, mais toujours **effacée** : sans ça, l'`userId` d'un compte
+  /// précédent resterait indéfiniment dans le stockage sécurisé des appareils
+  /// déjà installés, sans plus aucun code pour l'expliquer.
+  static const _legacyUserIdKey = 'auth_user_id';
 
   final FlutterSecureStorage _storage;
 
@@ -17,12 +22,10 @@ class AuthSessionStore {
     final values = await Future.wait([
       _storage.read(key: _roleKey),
       _storage.read(key: _tokenKey),
-      _storage.read(key: _userIdKey),
     ]);
     return AuthSession.fromStorageMap({
       'role': values[0],
       'token': values[1],
-      'userId': values[2],
     });
   }
 
@@ -31,7 +34,7 @@ class AuthSessionStore {
     await Future.wait([
       _storage.write(key: _roleKey, value: map['role']),
       _storage.write(key: _tokenKey, value: map['token']),
-      _storage.write(key: _userIdKey, value: map['userId']),
+      _storage.delete(key: _legacyUserIdKey),
     ]);
   }
 
@@ -39,7 +42,7 @@ class AuthSessionStore {
     await Future.wait([
       _storage.delete(key: _roleKey),
       _storage.delete(key: _tokenKey),
-      _storage.delete(key: _userIdKey),
+      _storage.delete(key: _legacyUserIdKey),
     ]);
   }
 }

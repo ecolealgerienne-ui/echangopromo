@@ -68,5 +68,31 @@ bool _isFreshEnough(Position position) =>
 /// la position du client pour un simple affichage.
 double? distanceTo(LatLng? from, double? latitude, double? longitude) {
   if (from == null || latitude == null || longitude == null) return null;
-  return Geolocator.distanceBetween(from.latitude, from.longitude, latitude, longitude);
+  return Geolocator.distanceBetween(
+      from.latitude, from.longitude, latitude, longitude);
+}
+
+/// Vrai quand la localisation peut encore être **demandée** — service activé
+/// et permission simplement `denied`.
+///
+/// ⚠️ `deniedForever` rend `false` **exprès** : à ce stade, `requestPermission`
+/// ne fait plus rien. Proposer un bouton qui n'a aucun effet, c'est le même
+/// défaut que la carte évite déjà pour « me localiser » — *« un bouton présent
+/// mais inerte laisse croire à une panne »*. Mieux vaut ne rien montrer.
+final peutDemanderLocalisationProvider = FutureProvider<bool>((ref) async {
+  if (!await Geolocator.isLocationServiceEnabled()) return false;
+  return await Geolocator.checkPermission() == LocationPermission.denied;
+});
+
+/// Demande la permission et rend `true` si elle est accordée.
+///
+/// Sans navigation : contrairement à l'onboarding, l'appelant est déjà sur
+/// l'écran qui en a besoin et n'a nulle part où aller.
+Future<bool> demanderPermissionLocalisation() async {
+  var permission = await Geolocator.checkPermission();
+  if (permission == LocationPermission.denied) {
+    permission = await Geolocator.requestPermission();
+  }
+  return permission == LocationPermission.whileInUse ||
+      permission == LocationPermission.always;
 }

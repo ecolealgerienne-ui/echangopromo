@@ -14,16 +14,19 @@ import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/status_chip.dart';
 import '../widgets/commune_filter_bar.dart';
 
-final _commercantSearchProvider = StateProvider.autoDispose<String>((ref) => '');
+final _commercantSearchProvider =
+    StateProvider.autoDispose<String>((ref) => '');
 
 /// Filtre "en attente de validation registre" — remplace l'ancienne file
 /// dédiée (`/admin/registre`, retirée le 2026-07-11), la fiche commerçant
 /// affiche désormais le registre et permet de le valider/rejeter.
-final _registrePendingFilterProvider = StateProvider.autoDispose<bool>((ref) => false);
+final _registrePendingFilterProvider =
+    StateProvider.autoDispose<bool>((ref) => false);
 
 /// Filtre commune/wilaya (retour terrain 2026-07-14), en plus de la recherche.
 final _wilayaFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
-final _communeFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
+final _communeFilterProvider =
+    StateProvider.autoDispose<String?>((ref) => null);
 
 /// Même pattern que `ModerationQueueScreen._inFlightProvider` (audit UX 2026-07-11).
 final _inFlightProvider = StateProvider.autoDispose<Set<String>>((ref) => {});
@@ -46,7 +49,8 @@ final _commercantsProvider = FutureProvider.autoDispose((ref) {
 class AdminCommercantsScreen extends ConsumerWidget {
   const AdminCommercantsScreen({super.key});
 
-  Future<void> _confirmAndSuspend(BuildContext context, WidgetRef ref, String commercantId) async {
+  Future<void> _confirmAndSuspend(
+      BuildContext context, WidgetRef ref, String commercantId) async {
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -54,8 +58,12 @@ class AdminCommercantsScreen extends ConsumerWidget {
         title: Text(l10n.suspendConfirmTitle),
         content: Text(l10n.suspendConfirmMessage),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.commonCancel)),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(l10n.suspendLabel)),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.commonCancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(l10n.suspendLabel)),
         ],
       ),
     );
@@ -71,7 +79,8 @@ class AdminCommercantsScreen extends ConsumerWidget {
   /// Suppression logique par l'admin/agent (2026-07-14) — distincte de la
   /// suspension : libère le numéro de téléphone et "supprime" les promos,
   /// pas de restauration prévue (contrairement à la suspension).
-  Future<void> _confirmAndDelete(BuildContext context, WidgetRef ref, String commercantId) async {
+  Future<void> _confirmAndDelete(
+      BuildContext context, WidgetRef ref, String commercantId) async {
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -79,7 +88,9 @@ class AdminCommercantsScreen extends ConsumerWidget {
         title: Text(l10n.deleteCommercantConfirmTitle),
         content: Text(l10n.deleteCommercantConfirmMessage),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.commonCancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.commonCancel)),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child: Text(
@@ -106,7 +117,9 @@ class AdminCommercantsScreen extends ConsumerWidget {
     Future<void> Function() action,
   ) async {
     final l10n = AppLocalizations.of(context)!;
-    ref.read(_inFlightProvider.notifier).update((ids) => {...ids, commercantId});
+    ref
+        .read(_inFlightProvider.notifier)
+        .update((ids) => {...ids, commercantId});
     try {
       await action();
       ref.invalidate(_commercantsProvider);
@@ -123,7 +136,9 @@ class AdminCommercantsScreen extends ConsumerWidget {
         );
       }
     } finally {
-      ref.read(_inFlightProvider.notifier).update((ids) => {...ids}..remove(commercantId));
+      ref
+          .read(_inFlightProvider.notifier)
+          .update((ids) => {...ids}..remove(commercantId));
     }
   }
 
@@ -136,7 +151,9 @@ class AdminCommercantsScreen extends ConsumerWidget {
     // Même pattern que AdminPromosScreen/ModerationQueueScreen (écran
     // partagé admin/agent, décision produit 2026-07-12).
     final role = ref.read(authControllerProvider).value?.role;
-    final detailPath = role == AppRole.agent ? '/agent/commercants/detail' : '/admin/commercants/detail';
+    final detailPath = role == AppRole.agent
+        ? '/agent/commercants/detail'
+        : '/admin/commercants/detail';
 
     return Scaffold(
       appBar: AppBar(
@@ -152,7 +169,8 @@ class AdminCommercantsScreen extends ConsumerWidget {
               icon: const Icon(Icons.add_business_outlined),
               label: Text(l10n.newCommercantLabel),
               onPressed: () async {
-                final created = await context.push<bool>('/agent/commercant/new');
+                final created =
+                    await context.push<bool>('/agent/commercant/new');
                 if (created == true) ref.invalidate(_commercantsProvider);
               },
             )
@@ -168,7 +186,8 @@ class AdminCommercantsScreen extends ConsumerWidget {
                 border: const OutlineInputBorder(),
                 isDense: true,
               ),
-              onChanged: (value) => ref.read(_commercantSearchProvider.notifier).state = value,
+              onChanged: (value) =>
+                  ref.read(_commercantSearchProvider.notifier).state = value,
             ),
           ),
           Padding(
@@ -176,8 +195,10 @@ class AdminCommercantsScreen extends ConsumerWidget {
             child: CommuneFilterBar(
               wilaya: ref.watch(_wilayaFilterProvider),
               communeId: ref.watch(_communeFilterProvider),
-              onWilayaChanged: (value) => ref.read(_wilayaFilterProvider.notifier).state = value,
-              onCommuneChanged: (value) => ref.read(_communeFilterProvider.notifier).state = value,
+              onWilayaChanged: (value) =>
+                  ref.read(_wilayaFilterProvider.notifier).state = value,
+              onCommuneChanged: (value) =>
+                  ref.read(_communeFilterProvider.notifier).state = value,
             ),
           ),
           Padding(
@@ -187,7 +208,8 @@ class AdminCommercantsScreen extends ConsumerWidget {
               child: FilterChip(
                 label: Text(l10n.pendingRegistreFilterLabel),
                 selected: pendingOnly,
-                onSelected: (v) => ref.read(_registrePendingFilterProvider.notifier).state = v,
+                onSelected: (v) =>
+                    ref.read(_registrePendingFilterProvider.notifier).state = v,
               ),
             ),
           ),
@@ -207,8 +229,11 @@ class AdminCommercantsScreen extends ConsumerWidget {
                       final item = items[index];
                       return ListTile(
                         onTap: () async {
-                          final changed = await context.push<bool>(detailPath, extra: item);
-                          if (changed == true) ref.invalidate(_commercantsProvider);
+                          final changed =
+                              await context.push<bool>(detailPath, extra: item);
+                          if (changed == true) {
+                            ref.invalidate(_commercantsProvider);
+                          }
                         },
                         title: Text(item.nom),
                         // Statut visible d'un coup d'œil dans la liste — avant, seul
@@ -225,8 +250,10 @@ class AdminCommercantsScreen extends ConsumerWidget {
                               Text(item.telephone),
                               if (item.registreStatus != null)
                                 StatusChip(
-                                  label: registreStatusLabel(context, item.registreStatus!),
-                                  color: registreStatusColor(context, item.registreStatus!),
+                                  label: registreStatusLabel(
+                                      context, item.registreStatus!),
+                                  color: registreStatusColor(
+                                      context, item.registreStatus!),
                                 ),
                               if (item.suspended)
                                 StatusChip(
@@ -241,7 +268,9 @@ class AdminCommercantsScreen extends ConsumerWidget {
                               if (item.profilePendingReview)
                                 StatusChip(
                                   label: l10n.profilePendingReviewBadgeLabel,
-                                  color: Theme.of(context).extension<AppSemanticColors>()!.warning,
+                                  color: Theme.of(context)
+                                      .extension<AppSemanticColors>()!
+                                      .warning,
                                 ),
                             ],
                           ),
@@ -254,7 +283,8 @@ class AdminCommercantsScreen extends ConsumerWidget {
                             ? const SizedBox(
                                 height: 20,
                                 width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : item.deleted
                                 ? null
@@ -262,7 +292,8 @@ class AdminCommercantsScreen extends ConsumerWidget {
                                     onSelected: (action) {
                                       switch (action) {
                                         case 'suspend':
-                                          _confirmAndSuspend(context, ref, item.id);
+                                          _confirmAndSuspend(
+                                              context, ref, item.id);
                                         case 'reactivate':
                                           _act(
                                             context,
@@ -273,23 +304,30 @@ class AdminCommercantsScreen extends ConsumerWidget {
                                                 .reactivateCommercant(item.id),
                                           );
                                         case 'delete':
-                                          _confirmAndDelete(context, ref, item.id);
+                                          _confirmAndDelete(
+                                              context, ref, item.id);
                                       }
                                     },
                                     itemBuilder: (context) => [
                                       item.suspended
                                           ? PopupMenuItem(
-                                              value: 'reactivate', child: Text(l10n.reactivateLabel))
+                                              value: 'reactivate',
+                                              child: Text(l10n.reactivateLabel))
                                           : PopupMenuItem(
-                                              value: 'suspend', child: Text(l10n.suspendLabel)),
+                                              value: 'suspend',
+                                              child: Text(l10n.suspendLabel)),
                                       PopupMenuItem(
-                                          value: 'delete', child: Text(l10n.deleteCommercantLabel)),
+                                          value: 'delete',
+                                          child:
+                                              Text(l10n.deleteCommercantLabel)),
                                     ],
                                   ),
                         leading: item.deleted
-                            ? Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error)
+                            ? Icon(Icons.delete_outline,
+                                color: Theme.of(context).colorScheme.error)
                             : item.suspended
-                                ? Icon(Icons.block, color: Theme.of(context).colorScheme.error)
+                                ? Icon(Icons.block,
+                                    color: Theme.of(context).colorScheme.error)
                                 : const Icon(Icons.storefront_outlined),
                       );
                     },

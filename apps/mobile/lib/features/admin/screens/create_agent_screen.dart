@@ -83,21 +83,24 @@ class _CreateAgentScreenState extends ConsumerState<CreateAgentScreen> {
               TextFormField(
                 controller: _nomController,
                 decoration: InputDecoration(labelText: l10n.nomLabel),
-                validator: (v) => (v == null || v.isEmpty) ? l10n.nomRequired : null,
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? l10n.nomRequired : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _emailController,
                 decoration: InputDecoration(labelText: l10n.emailLabel),
                 keyboardType: TextInputType.emailAddress,
-                validator: (v) => (v == null || !v.contains('@')) ? l10n.emailInvalid : null,
+                validator: (v) =>
+                    (v == null || !v.contains('@')) ? l10n.emailInvalid : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _passwordController,
                 decoration: InputDecoration(labelText: l10n.passwordLabel),
                 obscureText: true,
-                validator: (v) => (v == null || v.length < 8) ? l10n.passwordRequired : null,
+                validator: (v) =>
+                    (v == null || v.length < 8) ? l10n.passwordRequired : null,
               ),
               const SizedBox(height: 12),
               communesAsync.when(
@@ -111,7 +114,8 @@ class _CreateAgentScreenState extends ConsumerState<CreateAgentScreen> {
               ),
               ErrorText(_error),
               const SizedBox(height: 16),
-              LoadingButton(loading: _loading, onPressed: _submit, label: l10n.saveLabel),
+              LoadingButton(
+                  loading: _loading, onPressed: _submit, label: l10n.saveLabel),
             ],
           ),
         ),

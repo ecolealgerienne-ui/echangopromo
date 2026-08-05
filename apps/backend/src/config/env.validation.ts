@@ -10,7 +10,9 @@ export function validateEnv(
 ): Record<string, unknown> {
   const jwtSecret = env.JWT_SECRET as string | undefined;
   if (!jwtSecret) {
-    throw new Error('JWT_SECRET manquant — définir une valeur dans .env avant de démarrer.');
+    throw new Error(
+      'JWT_SECRET manquant — définir une valeur dans .env avant de démarrer.',
+    );
   }
   // La valeur par défaut ('change-me') reste tolérée en dev/pilote (le
   // .env.example la fournit pour démarrer sans friction) mais est rejetée

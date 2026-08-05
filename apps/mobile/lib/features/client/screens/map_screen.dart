@@ -11,6 +11,7 @@ import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/models/map_shop.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../providers/location_providers.dart';
 import '../providers/map_providers.dart';
@@ -46,6 +47,13 @@ class MapScreen extends ConsumerStatefulWidget {
 }
 
 class _MapScreenState extends ConsumerState<MapScreen> {
+  /// L'invitation à activer la localisation a-t-elle été écartée ?
+  ///
+  /// Lue une fois au démarrage de l'écran : le magasin est synchrone, mais on
+  /// veut aussi pouvoir la masquer immédiatement après un geste, sans relire.
+  late bool _invitationEcartee =
+      ref.read(locationInviteStoreProvider).isDismissed();
+
   final MapController _map = MapController();
 
   /// Zone **chargée**, volontairement plus large que l'écran — pas la zone
@@ -73,6 +81,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   /// la caméra une fois. Ce drapeau évite de la ramener sur l'utilisateur à
   /// chaque reconstruction, ce qui empêcherait toute exploration manuelle.
   bool _centeredOnUser = false;
+
+  /// Drapeau **distinct** de `_centeredOnUser`, et c'est délibéré : un GPS qui
+  /// arrive après le centrage sur la commune doit reprendre la main. Un seul
+  /// drapeau partagé aurait figé la carte sur le centre approximatif alors
+  /// que la position exacte était devenue disponible.
+  bool _centeredOnCommune = false;
 
   @override
   void dispose() {
@@ -172,6 +186,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final shopsAsync =
         bounds == null ? null : ref.watch(mapShopsProvider(bounds));
     final userPosition = ref.watch(userPositionProvider).valueOrNull;
+    final communeCenter = ref.watch(mapCenterForCommunesProvider).valueOrNull;
+    // `?? false` : tant qu'on ne sait pas, on ne propose rien — une invitation
+    // affichée puis retirée est plus déroutante qu'une invitation tardive.
+    final peutDemander =
+        ref.watch(peutDemanderLocalisationProvider).valueOrNull ?? false;
 
     // Premier centrage sur l'utilisateur dès que sa position est connue —
     // après le premier rendu, sinon `MapController` n'est pas encore relié
@@ -180,6 +199,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _centeredOnUser = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _recenterOn(userPosition, zoom: 15);
+      });
+    } else if (userPosition == null &&
+        communeCenter != null &&
+        !_centeredOnCommune) {
+      // Pas de GPS, mais des communes choisies : on ouvre là plutôt que sur
+      // `_fallbackCenter` (Djelfa, en dur), qui envoyait tout client d'ailleurs
+      // regarder une ville qui n'est pas la sienne — vue comme vide, sans rien
+      // pour le lui dire (2026-08-05).
+      //
+      // Zoom volontairement plus large que pour le GPS : ce centre est le
+      // barycentre des commerces d'une commune, pas une position. L'afficher
+      // au même zoom lui donnerait une précision qu'il n'a pas.
+      _centeredOnCommune = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _recenterOn(
+            LatLng(communeCenter.latitude, communeCenter.longitude),
+            zoom: _initialZoom,
+          );
+        }
       });
     }
 
@@ -249,7 +288,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       height: cluster.isSingle ? 40 : 64,
                       child: _ClusterMarker(
                         cluster: cluster,
-                        isSelected: cluster.isSingle && cluster.single.id == _selected?.id,
+                        isSelected: cluster.isSingle &&
+                            cluster.single.id == _selected?.id,
                         onTap: () => _openCluster(cluster),
                       ),
                     ),
@@ -331,7 +371,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 onColor: colorScheme.onErrorContainer,
               ),
             )
-          else if ((shopsAsync?.valueOrNull?.truncated ?? false) && _selected == null)
+          else if ((shopsAsync?.valueOrNull?.truncated ?? false) &&
+              _selected == null)
             Positioned(
               left: 16,
               right: 16,
@@ -340,6 +381,42 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 message: l10n.mapTooManyShops,
                 color: colorScheme.secondaryContainer,
                 onColor: colorScheme.onSecondaryContainer,
+              ),
+            ),
+
+          // ── L'invitation à activer la localisation ────────────────────
+          //
+          // ⚠️ **Ici, et nulle part avant.** Cette proposition vivait dans
+          // l'onboarding, juste après un premier refus : Apple l'a refusée le
+          // 2026-08-05 (5.1.1(iv), « encourages users to allow »). Elle est
+          // désormais faite là où la fonction ne marche pas sans position —
+          // ce qu'Apple suggère explicitement dans sa réponse.
+          //
+          // Trois conditions, et chacune compte : la permission doit être
+          // encore DEMANDABLE (voir `peutDemanderLocalisationProvider` — un
+          // `deniedForever` rendrait le bouton inerte), aucune fiche ne doit
+          // être ouverte, et l'utilisateur ne doit pas l'avoir déjà écartée.
+          // Sans cette dernière, l'invitation reviendrait à chaque ouverture
+          // de la carte : la même proposition répétée n'est plus une
+          // proposition.
+          if (peutDemander && _selected == null && !_invitationEcartee)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 24,
+              child: _InvitationLocalisation(
+                onActiver: () async {
+                  final accorde = await demanderPermissionLocalisation();
+                  if (!context.mounted) return;
+                  ref.invalidate(userPositionProvider);
+                  ref.invalidate(peutDemanderLocalisationProvider);
+                  if (accorde) setState(() => _invitationEcartee = true);
+                },
+                onEcarter: () async {
+                  await ref.read(locationInviteStoreProvider).markDismissed();
+                  if (!context.mounted) return;
+                  setState(() => _invitationEcartee = true);
+                },
               ),
             ),
 
@@ -427,7 +504,8 @@ class _ClusterMarker extends StatelessWidget {
 
     // Le rond grossit avec le nombre de commerces qu'il regroupe — le halo
     // reprend le code visuel universel du clustering cartographique.
-    final size = cluster.count >= 20 ? 60.0 : (cluster.count >= 8 ? 52.0 : 44.0);
+    final size =
+        cluster.count >= 20 ? 60.0 : (cluster.count >= 8 ? 52.0 : 44.0);
     return GestureDetector(
       onTap: onTap,
       child: Center(
@@ -501,7 +579,8 @@ class _ClusterPicker extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-            child: Text(l10n.mapShopsHere(shops.length), style: textTheme.titleMedium),
+            child: Text(l10n.mapShopsHere(shops.length),
+                style: textTheme.titleMedium),
           ),
           // `Flexible` + `shrinkWrap` : la feuille s'ajuste à deux commerces
           // comme à dix, sans occuper l'écran entier pour rien.
@@ -528,14 +607,15 @@ class _ClusterPicker extends StatelessWidget {
                           : CachedNetworkImage(
                               imageUrl: shop.photoUrl!,
                               fit: BoxFit.cover,
-                              placeholder: (context, url) =>
-                                  Container(color: colorScheme.surfaceContainerHighest),
-                              errorWidget: (context, url, error) =>
-                                  Container(color: colorScheme.surfaceContainerHighest),
+                              placeholder: (context, url) => Container(
+                                  color: colorScheme.surfaceContainerHighest),
+                              errorWidget: (context, url, error) => Container(
+                                  color: colorScheme.surfaceContainerHighest),
                             ),
                     ),
                   ),
-                  title: Text(shop.nom, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  title: Text(shop.nom,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(
                     '${categorieLabel(context, shop.categorie)} · '
                     '${l10n.promoCount(shop.promos.length)}',
@@ -644,7 +724,8 @@ class _CategoryChip extends StatelessWidget {
 }
 
 class _RoundButton extends StatelessWidget {
-  const _RoundButton({required this.icon, required this.tooltip, required this.onTap});
+  const _RoundButton(
+      {required this.icon, required this.tooltip, required this.onTap});
 
   final IconData icon;
   final String tooltip;
@@ -668,7 +749,8 @@ class _RoundButton extends StatelessWidget {
 }
 
 class _Banner extends StatelessWidget {
-  const _Banner({required this.message, required this.color, required this.onColor});
+  const _Banner(
+      {required this.message, required this.color, required this.onColor});
 
   final String message;
   final Color color;
@@ -685,7 +767,8 @@ class _Banner extends StatelessWidget {
         child: Text(
           message,
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: onColor),
+          style:
+              Theme.of(context).textTheme.bodyMedium?.copyWith(color: onColor),
         ),
       ),
     );
@@ -707,8 +790,72 @@ class _UserDot extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 3),
         boxShadow: [
-          BoxShadow(color: blue.withValues(alpha: 0.3), blurRadius: 0, spreadRadius: 5),
+          BoxShadow(
+              color: blue.withValues(alpha: 0.3),
+              blurRadius: 0,
+              spreadRadius: 5),
         ],
+      ),
+    );
+  }
+}
+
+/// Invitation discrète à activer la localisation, posée sur la carte.
+///
+/// Un bandeau, pas un écran : la carte est déjà là, et la couvrir d'une
+/// proposition plein écran reviendrait à redemander avant de laisser voir —
+/// exactement ce qui a été refusé.
+class _InvitationLocalisation extends StatelessWidget {
+  const _InvitationLocalisation({
+    required this.onActiver,
+    required this.onEcarter,
+  });
+
+  final Future<void> Function() onActiver;
+  final Future<void> Function() onEcarter;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colorScheme.secondaryContainer,
+      borderRadius: BorderRadius.circular(AppRadii.md),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 8, 8, 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.mapLocationInvite,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSecondaryContainer,
+                        ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  color: colorScheme.onSecondaryContainer,
+                  tooltip: MaterialLocalizations.of(context).closeButtonLabel,
+                  onPressed: onEcarter,
+                ),
+              ],
+            ),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: FilledButton(
+                onPressed: onActiver,
+                child: Text(l10n.onboardingLocationEnable),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

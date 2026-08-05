@@ -39,6 +39,7 @@ export enum ErrorCode {
   STORAGE_INVALID_IMAGE = 'STORAGE_INVALID_IMAGE',
   STORAGE_FILE_TOO_LARGE = 'STORAGE_FILE_TOO_LARGE',
   STORAGE_PURPOSE_NOT_ALLOWED = 'STORAGE_PURPOSE_NOT_ALLOWED',
+  STORAGE_KEY_NOT_OWNED = 'STORAGE_KEY_NOT_OWNED',
 
   // Promo
   PROMO_NOT_FOUND = 'PROMO_NOT_FOUND',
@@ -68,4 +69,22 @@ export enum ErrorCode {
   COMMERCANT_REGISTRE_NOT_VALIDATED = 'COMMERCANT_REGISTRE_NOT_VALIDATED',
   COMMERCANT_REGISTRE_KEY_MISMATCH = 'COMMERCANT_REGISTRE_KEY_MISMATCH',
   COMMERCANT_PROFILE_PENDING_REVIEW = 'COMMERCANT_PROFILE_PENDING_REVIEW',
+  COMMERCANT_ACCOUNT_INACTIVE = 'COMMERCANT_ACCOUNT_INACTIVE',
+
+  /**
+   * Notification introuvable **pour ce destinataire** — soit elle appartient à
+   * quelqu'un d'autre, soit la purge de rétention l'a effacée.
+   *
+   * ⚠️ Les deux cas rendent le MÊME code, délibérément : distinguer « pas la
+   * tienne » de « n'existe plus » dirait à un tiers qu'un identifiant est
+   * valide. Ce qui compte pour l'appelant légitime est identique dans les deux
+   * cas — elle n'est plus là.
+   *
+   * Trouvé le 2026-08-05 par `test-notifications.sh` : `POST
+   * /notifications/:id/read` rendait `201` avec un jeton d'un autre rôle. Le
+   * `update` étant cadré par `{id, recipientType, recipientId}`, aucune ligne
+   * n'était modifiée — pas d'altération de données, mais un succès annoncé sur
+   * un geste sans effet (règle 29).
+   */
+  NOTIFICATION_NOT_FOUND = 'NOTIFICATION_NOT_FOUND',
 }

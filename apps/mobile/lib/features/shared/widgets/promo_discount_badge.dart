@@ -34,8 +34,8 @@ class PromoDiscountBadge extends StatelessWidget {
       ),
       child: Text(
         '-$discountPercent%',
-        style: (textStyle ?? Theme.of(context).textTheme.labelLarge)
-            ?.copyWith(color: colorScheme.onPrimary, fontWeight: FontWeight.w700),
+        style: (textStyle ?? Theme.of(context).textTheme.labelLarge)?.copyWith(
+            color: colorScheme.onPrimary, fontWeight: FontWeight.w700),
       ),
     );
   }

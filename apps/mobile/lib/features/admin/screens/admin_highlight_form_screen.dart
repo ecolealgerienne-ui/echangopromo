@@ -34,7 +34,8 @@ class AdminHighlightFormScreen extends ConsumerStatefulWidget {
       _AdminHighlightFormScreenState();
 }
 
-class _AdminHighlightFormScreenState extends ConsumerState<AdminHighlightFormScreen> {
+class _AdminHighlightFormScreenState
+    extends ConsumerState<AdminHighlightFormScreen> {
   late final TextEditingController _titreController =
       TextEditingController(text: widget.existing?.titre ?? '');
   late final TextEditingController _sousTitreController =
@@ -166,7 +167,8 @@ class _AdminHighlightFormScreenState extends ConsumerState<AdminHighlightFormScr
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? l10n.highlightEditTitle : l10n.highlightNewTitle),
+        title:
+            Text(_isEditing ? l10n.highlightEditTitle : l10n.highlightNewTitle),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -263,7 +265,8 @@ class _AdminHighlightFormScreenState extends ConsumerState<AdminHighlightFormScr
                 contentPadding: EdgeInsets.zero,
                 value: _active,
                 onChanged: (value) => setState(() => _active = value),
-                title: Text(l10n.highlightActiveLabel, style: textTheme.bodyLarge),
+                title:
+                    Text(l10n.highlightActiveLabel, style: textTheme.bodyLarge),
                 subtitle: Text(
                   l10n.highlightActiveHint,
                   style: textTheme.bodySmall
@@ -274,7 +277,8 @@ class _AdminHighlightFormScreenState extends ConsumerState<AdminHighlightFormScr
           ),
           ErrorText(_error),
           const SizedBox(height: 20),
-          LoadingButton(loading: _saving, onPressed: _submit, label: l10n.saveLabel),
+          LoadingButton(
+              loading: _saving, onPressed: _submit, label: l10n.saveLabel),
         ],
       ),
     );
@@ -282,7 +286,8 @@ class _AdminHighlightFormScreenState extends ConsumerState<AdminHighlightFormScr
 }
 
 class _SelectedPromoCard extends StatelessWidget {
-  const _SelectedPromoCard({required this.label, required this.shop, required this.photoUrl});
+  const _SelectedPromoCard(
+      {required this.label, required this.shop, required this.photoUrl});
 
   final String? label;
   final String? shop;
@@ -311,13 +316,17 @@ class _SelectedPromoCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (label != null)
-                Text(label!, maxLines: 2, overflow: TextOverflow.ellipsis, style: textTheme.titleSmall),
+                Text(label!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.titleSmall),
               if (shop != null)
                 Text(
                   shop!,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                  style: textTheme.bodySmall
+                      ?.copyWith(color: colorScheme.onSurfaceVariant),
                 ),
             ],
           ),
@@ -378,7 +387,8 @@ class _PromoPickerSheetState extends ConsumerState<_PromoPickerSheet> {
 
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: SizedBox(
           height: MediaQuery.of(context).size.height * 0.8,
           child: Column(
@@ -388,7 +398,8 @@ class _PromoPickerSheetState extends ConsumerState<_PromoPickerSheet> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(l10n.highlightSearchPromoTitle, style: textTheme.titleMedium),
+                      child: Text(l10n.highlightSearchPromoTitle,
+                          style: textTheme.titleMedium),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
@@ -433,14 +444,16 @@ class _PromoPickerSheetState extends ConsumerState<_PromoPickerSheet> {
                             child: photo == null
                                 ? const Icon(Icons.image_outlined)
                                 : ClipRRect(
-                                    borderRadius: BorderRadius.circular(AppRadii.sm),
+                                    borderRadius:
+                                        BorderRadius.circular(AppRadii.sm),
                                     child: CachedNetworkImage(
                                       imageUrl: photo,
                                       fit: BoxFit.cover,
                                     ),
                                   ),
                           ),
-                          title: Text(item.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+                          title: Text(item.description,
+                              maxLines: 2, overflow: TextOverflow.ellipsis),
                           subtitle: Text(item.commercantNom),
                           onTap: () => Navigator.pop(context, item),
                         );

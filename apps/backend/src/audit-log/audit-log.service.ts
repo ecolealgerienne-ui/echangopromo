@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
+import {
+  PaginatedResult,
+  toPaginatedResult,
+} from '../common/pagination/paginated-result';
 import { AuditActorType, AuditLog } from './entities/audit-log.entity';
 
 export interface AuditLogEntry {

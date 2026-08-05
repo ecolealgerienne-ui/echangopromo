@@ -17,8 +17,8 @@ class NotificationsPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final notificationsAsync =
-        ref.watch(history ? notificationHistoryProvider : notificationsProvider);
+    final notificationsAsync = ref
+        .watch(history ? notificationHistoryProvider : notificationsProvider);
     final controller = ref.watch(notificationControllerProvider);
 
     return notificationsAsync.when(
@@ -65,7 +65,8 @@ class NotificationsPanel extends ConsumerWidget {
 /// bandeau du dashboard (CLAUDE.md #21 : extraire dès la 2e duplication).
 /// Couleurs dérivées du thème (audit design 2026-07-11) plutôt que des
 /// `Colors.*` fixes, non calibrées pour le fond sombre.
-Color notificationIconColor(BuildContext context, domain.NotificationType type) {
+Color notificationIconColor(
+    BuildContext context, domain.NotificationType type) {
   final colorScheme = Theme.of(context).colorScheme;
   final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
   switch (type) {
@@ -83,6 +84,57 @@ Color notificationIconColor(BuildContext context, domain.NotificationType type) 
       return colorScheme.error;
     case domain.NotificationType.profileValidated:
       return semanticColors.success;
+    // Type inconnu du miroir : couleur neutre, aucune sémantique inventée.
+    case domain.NotificationType.unknown:
+      return colorScheme.onSurfaceVariant;
+  }
+}
+
+/// **Compose la phrase d'une notification dans la langue courante.**
+///
+/// Le serveur ne connaît pas la langue du destinataire : il envoyait une phrase
+/// française, affichée telle quelle dans une app fr/en/ar — un commerçant
+/// arabophone la lisait en français, en mise en page RTL (revue 2026-08-05,
+/// règle #27). Il envoie désormais le couple (`type`, `promoDescription`) ; la
+/// phrase se compose ici.
+///
+/// Le `message` serveur reste le **dernier recours**, et seulement pour un type
+/// que le miroir Dart ne connaît pas encore : mieux vaut une phrase française
+/// qu'une notification vide. C'est aussi pour ça que
+/// [domain.NotificationType.unknown] existe plutôt qu'une exception.
+String notificationLabel(
+  BuildContext context,
+  domain.Notification notification,
+) {
+  final l10n = AppLocalizations.of(context)!;
+  // `promoDescription` peut manquer sur une notification créée avant le
+  // 2026-08-05 : on retombe alors sur le message serveur, qui la contient.
+  final promo = notification.promoDescription;
+  switch (notification.type) {
+    case domain.NotificationType.promoWarned:
+      return promo == null
+          ? notification.message
+          : l10n.notificationPromoWarned(promo);
+    case domain.NotificationType.promoHidden:
+      return promo == null
+          ? notification.message
+          : l10n.notificationPromoHidden(promo);
+    case domain.NotificationType.promoVerified:
+      return promo == null
+          ? notification.message
+          : l10n.notificationPromoVerified(promo);
+    case domain.NotificationType.promoExpiringSoon:
+      return promo == null
+          ? notification.message
+          : l10n.notificationPromoExpiringSoon(promo);
+    case domain.NotificationType.registreValidated:
+      return l10n.notificationRegistreValidated;
+    case domain.NotificationType.registreRejected:
+      return l10n.notificationRegistreRejected;
+    case domain.NotificationType.profileValidated:
+      return l10n.notificationProfileValidated;
+    case domain.NotificationType.unknown:
+      return notification.message;
   }
 }
 
@@ -102,6 +154,8 @@ IconData notificationIcon(domain.NotificationType type) {
       return Icons.assignment_late_rounded;
     case domain.NotificationType.profileValidated:
       return Icons.person_search_rounded;
+    case domain.NotificationType.unknown:
+      return Icons.notifications_rounded;
   }
 }
 
@@ -124,8 +178,9 @@ class _NotificationTile extends ConsumerWidget {
           notificationIcon(notification.type),
           color: notificationIconColor(context, notification.type),
         ),
-        title: Text(notification.message),
-        subtitle: Text(notificationRelativeDate(context, notification.createdAt)),
+        title: Text(notificationLabel(context, notification)),
+        subtitle:
+            Text(notificationRelativeDate(context, notification.createdAt)),
         trailing: !notification.isRead
             ? IconButton(
                 icon: const Icon(Icons.check),
@@ -136,7 +191,9 @@ class _NotificationTile extends ConsumerWidget {
         // `colorScheme.primaryContainer` plutôt qu'un gris fixe : ce dernier
         // restait clair en mode sombre alors que le texte du ListTile suit
         // le thème (clair sur fond sombre) — contraste cassé.
-        tileColor: notification.isRead ? null : Theme.of(context).colorScheme.primaryContainer,
+        tileColor: notification.isRead
+            ? null
+            : Theme.of(context).colorScheme.primaryContainer,
       ),
     );
   }

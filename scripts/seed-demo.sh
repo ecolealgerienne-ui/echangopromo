@@ -1,0 +1,303 @@
+#!/usr/bin/env bash
+#
+# Peuple la base locale d'un jeu de données réaliste — commerçants, promos,
+# mises en avant, signalements.
+#
+# ── Ce script n'est ni un décor, ni un banc ─────────────────────────────────
+#
+# `provision-decor.sh` pose le strict minimum que les bancs exigent, et rien de
+# plus. Celui-ci remplit l'application pour qu'on puisse la REGARDER : parcourir
+# la liste client, voir la carte peuplée, ouvrir la file de modération.
+#
+# Les deux sont séparés parce qu'ils ont des durées de vie différentes : un banc
+# doit pouvoir tourner sur un décor minimal et prévisible, sans être perturbé
+# par vingt promos de démonstration.
+#
+# ── ⚠️ Pourquoi tout passe par l'AGENT ──────────────────────────────────────
+#
+# Trois plafonds rendraient l'inscription directe impraticable :
+#   - connexion et inscription sont limitées à 5/min/IP ;
+#   - un commerçant est limité à 5 créations de promo par 24 h ;
+#   - un commerçant AUTO-INSCRIT ne peut publier qu'après validation de son
+#     registre par un admin (deux gestes de plus par commerçant).
+#
+# Un commerçant créé par un agent est `confirme_agent` : il échappe à la garde
+# du registre (`assertRegistreValidated`), et l'agent est un `trustedActor`
+# exempté des plafonds anti-abus. Un seul jeu de connexions suffit donc.
+#
+# ── Usage ───────────────────────────────────────────────────────────────────
+#
+#   ./scripts/provision-decor.sh     # pose l'admin et l'agent
+#   ./scripts/seed-demo.sh           # remplit
+#
+#   COMMERCES=8 PROMOS_PAR_COMMERCE=3 ./scripts/seed-demo.sh
+#
+# Idempotent : un commerçant dont le numéro existe déjà est ignoré.
+
+set -uo pipefail
+
+API_URL="${API_URL:-http://localhost:3000}"
+COMMERCES="${COMMERCES:-8}"
+PROMOS_PAR_COMMERCE="${PROMOS_PAR_COMMERCE:-3}"
+# ⚠️ **Toutes les écritures partagent un même seau** (`SENSITIVE_ACTION_THROTTLE`,
+# 20/min/IP) : créations de commerçant, de promo et de mise en avant y puisent
+# ensemble. 3,2 s les espacent juste assez. Plus bas, des `RATE_LIMITED`
+# apparaissent au milieu du peuplement — `ecrire` les nomme et patiente, plutôt
+# que de les compter comme un refus métier.
+PACE="${PACE_SECONDS:-3.2}"
+
+ADMIN_EMAIL="${ADMIN_EMAIL:-decor-admin@echango.local}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-decor-admin-2026}"
+AGENT_EMAIL="${AGENT_EMAIL:-decor-agent@echango.local}"
+AGENT_PASSWORD="${AGENT_PASSWORD:-decor-agent-2026}"
+
+command -v jq >/dev/null 2>&1 || { echo "❌ jq requis."; exit 2; }
+
+pass() { echo "✅ $1"; }
+info() { echo "   $1"; }
+step() { echo; echo "── $1 ──"; }
+fail() { echo "❌ $1" >&2; [ -n "${2:-}" ] && echo "   Réponse : $2" >&2; exit 2; }
+est_erreur() { jq -e 'type == "object" and ((.statusCode | type) == "number")' >/dev/null 2>&1; }
+
+api() { # METHODE CHEMIN [CORPS] [JETON] [ENTETE_SUP]
+  local m="$1" p="$2" body="${3:-}" tok="${4:-}" sup="${5:-}"
+  local args=(-sS -X "$m" "$API_URL$p" -H 'Content-Type: application/json')
+  [ -n "$body" ] && args+=(-d "$body")
+  [ -n "$tok" ] && args+=(-H "Authorization: Bearer $tok")
+  [ -n "$sup" ] && args+=(-H "$sup")
+  curl "${args[@]}"
+}
+
+# Écriture avec une reprise unique sur plafond de requêtes.
+#
+# ⚠️ Un 429 n'est pas un refus métier : le confondre avec un refus enverrait
+# chercher un bug là où il suffit d'attendre. On le nomme, on patiente une
+# fenêtre, on rejoue une fois — et si ça recommence, l'appelant le verra.
+ecrire() { # METHODE CHEMIN CORPS JETON [ENTETE_SUP]
+  local out
+  out="$(api "$1" "$2" "${3:-}" "${4:-}" "${5:-}")"
+  if [ "$(echo "$out" | jq -r '.code // empty' 2>/dev/null)" = "RATE_LIMITED" ]; then
+    echo "   ⏳ plafond de requêtes atteint — pause de 60 s puis reprise" >&2
+    sleep 60
+    out="$(api "$1" "$2" "${3:-}" "${4:-}" "${5:-}")"
+  fi
+  printf '%s' "$out"
+}
+
+# ── Le catalogue de démonstration ───────────────────────────────────────────
+#
+# Noms plausibles pour Djelfa, une catégorie chacun. L'ordre est stable : le
+# commerce n°3 sera toujours le même, ce qui rend une capture d'écran
+# comparable d'une exécution à l'autre.
+NOMS=(
+  "Alimentation El Baraka|alimentation|Rue des Frères Bouchama"
+  "Rôtisserie Es-Salam|restauration|Avenue de l'ALN"
+  "Boutique Nour Textile|vetements_textile|Rue Larbi Ben M'hidi"
+  "Électro Djelfa|electromenager|Cité 5 Juillet"
+  "Parfumerie El Yasmine|beaute_hygiene|Rue de Palestine"
+  "Meubles Ouled Naïl|maison_ameublement|Route de Laghouat"
+  "Supérette Ain Chouhada|alimentation|Centre-ville"
+  "Café-Pâtisserie Zenith|restauration|Boulevard Emir Abdelkader"
+  "Prêt-à-porter Amel|vetements_textile|Marché couvert"
+  "Droguerie El Anwar|autre|Rue de l'Indépendance"
+)
+
+# Libellés de promo par catégorie — pour que la liste client ait l'air vraie.
+libelle_promo() {
+  case "$1" in
+    alimentation)        echo "Huile 5L, sucre et semoule en lot" ;;
+    restauration)        echo "Menu complet du midi, boisson incluse" ;;
+    vetements_textile)   echo "Collection d'hiver, deuxième article offert" ;;
+    electromenager)      echo "Réfrigérateur 300L, garantie 2 ans" ;;
+    beaute_hygiene)      echo "Coffret soin visage et parfum" ;;
+    maison_ameublement)  echo "Salon 3 places en tissu, livraison comprise" ;;
+    *)                   echo "Déstockage sur une sélection d'articles" ;;
+  esac
+}
+
+echo "════════════════════════════════════════════════════════════════"
+echo "  Peuplement de démonstration — $API_URL"
+echo "════════════════════════════════════════════════════════════════"
+
+step "1. Sessions"
+ADMIN_TOKEN="$(api POST /admin/login "$(jq -n --arg e "$ADMIN_EMAIL" --arg p "$ADMIN_PASSWORD" \
+  '{email:$e, password:$p}')" | jq -r '.accessToken // empty')"
+[ -n "$ADMIN_TOKEN" ] || fail "Connexion admin impossible" "lancer ./scripts/provision-decor.sh"
+sleep 2
+AGENT_TOKEN="$(api POST /agent/login "$(jq -n --arg e "$AGENT_EMAIL" --arg p "$AGENT_PASSWORD" \
+  '{email:$e, password:$p}')" | jq -r '.accessToken // empty')"
+[ -n "$AGENT_TOKEN" ] || fail "Connexion agent impossible" "plafond de 5/min ? réessayer dans une minute"
+pass "Admin et agent connectés"
+
+step "2. L'agent couvre plusieurs communes"
+# Sans ça, tous les commerces tomberaient dans la même commune et la carte
+# comme les filtres wilaya/commune n'auraient rien à montrer.
+COMMUNES="$(api GET /commune | jq -c '[.items[] | {id, nom}]')"
+NB_COMMUNES="$(echo "$COMMUNES" | jq 'length')"
+[ "$NB_COMMUNES" -ge 3 ] || fail "Moins de 3 communes en base" "lancer npm run seed:communes"
+
+# ⚠️ Pas de `(.items // .)` : sur un objet d'erreur `{statusCode, code,
+# message}`, ce repli fait itérer l'erreur elle-même au lieu d'échouer — le
+# script continuait alors sur des données qu'il n'avait jamais reçues (revue
+# 2026-08-05, règle #29). On exige la réponse paginée, ou on s'arrête.
+agents="$(api GET /admin/agent '' "$ADMIN_TOKEN")"
+echo "$agents" | est_erreur && fail "Liste des agents refusée" \
+  "$(echo "$agents" | jq -c '{code,message}')"
+AGENT_ID="$(echo "$agents" \
+  | jq -r --arg e "$AGENT_EMAIL" '.items[] | select(.email==$e) | .id' | head -1)"
+[ -n "$AGENT_ID" ] || fail "Agent introuvable côté admin"
+
+CIBLES="$(echo "$COMMUNES" | jq -c '[.[0:4][].id]')"
+out="$(api PATCH "/admin/agent/$AGENT_ID/communes" "$(jq -n --argjson c "$CIBLES" '{communeIds:$c}')" \
+  "$ADMIN_TOKEN")"
+echo "$out" | est_erreur && fail "Assignation des communes refusée" "$(echo "$out" | jq -c '{code,message}')"
+pass "Agent rattaché à $(echo "$CIBLES" | jq 'length') communes"
+
+step "3. Commerces"
+CREES=0; EXISTANTS=0
+IDS=()
+for i in $(seq 0 $((COMMERCES - 1))); do
+  [ "$i" -lt "${#NOMS[@]}" ] || break
+  IFS='|' read -r nom cat adresse <<< "${NOMS[$i]}"
+  tel="$(printf '+2135550002%02d' "$i")"
+  cid_commune="$(echo "$CIBLES" | jq -r ".[$((i % 4))]")"
+  # Position dispersée autour de Djelfa, pour que la carte ait du relief.
+  lat="$(awk -v i="$i" 'BEGIN{printf "%.5f", 34.6714 + (i%4)*0.012 - 0.018}')"
+  lng="$(awk -v i="$i" 'BEGIN{printf "%.5f", 3.2630 + (i%3)*0.015 - 0.015}')"
+
+  out="$(ecrire POST /agent/commercant "$(jq -n --arg t "$tel" --arg n "$nom" --arg a "$adresse" \
+    --arg c "$cat" --arg u "$cid_commune" --argjson la "$lat" --argjson lo "$lng" \
+    '{telephone:$t, nom:$n, pin:"246810", adresse:$a, categorie:$c, communeId:$u,
+      latitude:$la, longitude:$lo}')" "$AGENT_TOKEN")"
+
+  if echo "$out" | est_erreur; then
+    code="$(echo "$out" | jq -r '.code')"
+    if [ "$code" = "COMMERCANT_PHONE_TAKEN" ]; then
+      EXISTANTS=$((EXISTANTS + 1))
+    else
+      fail "Création de « $nom » refusée" "$(echo "$out" | jq -c '{code,message}')"
+    fi
+  else
+    CREES=$((CREES + 1))
+  fi
+  sleep "$PACE"
+done
+
+# On relit la liste : elle fait foi, qu'on vienne de créer ou non.
+LISTE="$(api GET "/admin/commercant?limit=100" '' "$ADMIN_TOKEN")"
+echo "$LISTE" | est_erreur && fail "Liste des commerçants refusée"
+mapfile -t IDS < <(echo "$LISTE" | jq -r '.items[] | select(.telephone | startswith("+21355500020")) | .id')
+pass "$CREES créé(s), $EXISTANTS déjà présent(s) — ${#IDS[@]} commerces de démonstration"
+
+step "4. Promos"
+FIN="$(date -u -d '+5 days' +%Y-%m-%dT%H:%M:%S.000Z)"
+NB_PROMOS=0
+PREMIERE_PROMO=""
+# ── Une VRAIE photo, envoyée une fois pour toutes ──────────────────────────
+#
+# ⚠️ Ce script annonçait `promo-photos/demo/photo.jpg`, une clé à laquelle
+# aucun objet ne correspond : toutes les promos de démonstration s'affichaient
+# avec une image en 404. On envoie donc un vrai fichier — l'icône de l'app —
+# et on réutilise la clé rendue pour toutes les promos. Un seul objet suffit :
+# ce qui compte est qu'il EXISTE.
+#
+# ⚠️ Envoyée avec le jeton de l'AGENT, qui crée ces promos : la garde
+# d'appartenance rattache la clé à son émetteur.
+FICHIER_PHOTO="${FICHIER_PHOTO:-$(cd "$(dirname "$0")/.." && pwd)/apps/mobile/assets/images/brand/icon-master-terracotta-1024.png}"
+[ -f "$FICHIER_PHOTO" ] || fail "Photo de démonstration introuvable" "$FICHIER_PHOTO"
+PHOTO_KEY="$(curl -s -X POST "$API_URL/storage/upload" \
+  -H "Authorization: Bearer $AGENT_TOKEN" -H "X-Device-Id: seed-demo-0001" \
+  -F "purpose=promo" -F "file=@$FICHIER_PHOTO" | jq -r '.key // empty')"
+[ -n "$PHOTO_KEY" ] || fail "Envoi de la photo de démonstration impossible" \
+  "un décor ne doit pas annoncer des photos qui n'existent pas"
+
+for idx in "${!IDS[@]}"; do
+  cid="${IDS[$idx]}"
+  cat="$(echo "$LISTE" | jq -r --arg i "$cid" '.items[] | select(.id==$i) | .categorie')"
+  base="$(libelle_promo "$cat")"
+  for p in $(seq 1 "$PROMOS_PAR_COMMERCE"); do
+    avant=$(( (RANDOM % 40 + 10) * 100 ))
+    apres=$(( avant - (avant * (RANDOM % 30 + 15) / 100) ))
+    out="$(ecrire POST "/promo/agent/$cid" "$(jq -n --arg d "$base" --argjson a "$avant" \
+      --argjson b "$apres" --arg c "$cat" --arg f "$FIN" --arg k "$PHOTO_KEY" \
+      '{description:$d, prixAvant:$a, prixApres:$b, categorie:$c,
+        photoKeys:[$k], dateFin:$f}')" "$AGENT_TOKEN")"
+    if echo "$out" | est_erreur; then
+      code="$(echo "$out" | jq -r '.code')"
+      [ "$code" = "PROMO_ACTIVE_CAP_REACHED" ] && break   # plafond atteint : normal
+      fail "Création de promo refusée" "$(echo "$out" | jq -c '{code,message}')"
+    fi
+    [ -z "$PREMIERE_PROMO" ] && PREMIERE_PROMO="$(echo "$out" | jq -r '.id')"
+    NB_PROMOS=$((NB_PROMOS + 1))
+    sleep "$PACE"
+  done
+done
+pass "$NB_PROMOS promos publiées"
+
+step "5. Bandeau « Top promos »"
+# ⚠️ Même piège, en pire : `(.items // .) | length` sur un objet d'erreur à
+# trois champs rendait **3**, et le script imprimait « 3 mises en avant déjà
+# présentes — inchangé » avant de sauter toute l'étape 5. Le décor annonçait
+# un bandeau qu'il n'avait jamais posé. Et `${DEJA:-0}` achevait le travail en
+# transformant une sortie vide en « zéro », c'est-à-dire en verdict.
+highlights="$(api GET /admin/highlight '' "$ADMIN_TOKEN")"
+echo "$highlights" | est_erreur && fail "Liste des mises en avant refusée" \
+  "$(echo "$highlights" | jq -c '{code,message}')"
+# `has("items")` et pas `.items | length` : en jq, `null | length` vaut **0**.
+# Une réponse sans « items » rendrait donc « aucune mise en avant » — le zéro
+# de l'absence, indiscernable du zéro mesuré.
+echo "$highlights" | jq -e 'has("items")' >/dev/null 2>&1 \
+  || fail "Réponse /admin/highlight sans « items »" \
+    "$(echo "$highlights" | head -c 200)"
+DEJA="$(echo "$highlights" | jq -r '.items | length')"
+if [ "$DEJA" -gt 0 ]; then
+  info "$DEJA mise(s) en avant déjà présente(s) — inchangé"
+else
+  mapfile -t TOP < <(api GET "/promo?limit=3" | jq -r '.items[].id')
+  [ "${#TOP[@]}" -gt 0 ] || fail "Aucune promo à mettre en avant" \
+    "l'étape 4 aurait dû en publier"
+  poses=0
+  for pid in "${TOP[@]}"; do
+    out="$(ecrire POST /admin/highlight "$(jq -n --arg p "$pid" '{promoId:$p}')" "$ADMIN_TOKEN")"
+    # `info` sur un refus laissait le décor annoncer « 3 mises en avant » sur
+    # zéro posée : un message n'est pas un verdict. On compte ce qui a
+    # réellement abouti, et le compte final doit correspondre.
+    if echo "$out" | est_erreur; then
+      fail "Mise en avant refusée" "$(echo "$out" | jq -c '{code,message}')"
+    fi
+    poses=$((poses + 1))
+    sleep "$PACE"
+  done
+  pass "$poses mises en avant"
+fi
+
+step "6. Signalements — les DEUX états"
+# ⚠️ Le seuil de masquage est à 3, et la file de modération n'affiche que ce qui
+# l'a ATTEINT. Une première version posait deux signalements « pour peupler la
+# file » : elle laissait la file vide, exactement l'inverse de son intention.
+#
+# On peuple donc les deux états, parce que les deux existent en production :
+#   - une promo à 3 signalements → masquée, PRÉSENTE dans la file ;
+#   - une promo à 2 signalements → encore visible, invisible dans la file.
+mapfile -t A_SIGNALER < <(api GET "/promo?limit=2" | jq -r '.items[].id')
+if [ "${#A_SIGNALER[@]}" -ge 2 ]; then
+  for d in 1 2 3; do
+    out="$(ecrire POST /report "$(jq -n --arg p "${A_SIGNALER[0]}" \
+      '{promoId:$p, reason:"perime"}')" '' "X-Device-Id: demo-seuil-atteint-$d")"
+    echo "$out" | est_erreur && info "signalement $d : $(echo "$out" | jq -r '.code')"
+    sleep 1
+  done
+  for d in 1 2; do
+    out="$(ecrire POST /report "$(jq -n --arg p "${A_SIGNALER[1]}" \
+      '{promoId:$p, reason:"arnaque"}')" '' "X-Device-Id: demo-sous-seuil-$d")"
+    echo "$out" | est_erreur && info "signalement $d : $(echo "$out" | jq -r '.code')"
+    sleep 1
+  done
+  pass "3 signalements sur ${A_SIGNALER[0]} (masquée) · 2 sur ${A_SIGNALER[1]} (visible)"
+fi
+
+echo
+echo "════════════════════════════════════════════════════════════════"
+api GET /admin/dashboard '' "$ADMIN_TOKEN" | jq -c '.' 2>/dev/null | head -c 400
+echo
+echo "════════════════════════════════════════════════════════════════"

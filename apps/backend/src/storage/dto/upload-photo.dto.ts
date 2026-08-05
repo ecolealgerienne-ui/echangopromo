@@ -1,6 +1,11 @@
 import { IsIn, IsOptional } from 'class-validator';
 
-const ALLOWED_PURPOSES = ['promo', 'commercant', 'registre', 'highlight'] as const;
+const ALLOWED_PURPOSES = [
+  'promo',
+  'commercant',
+  'registre',
+  'highlight',
+] as const;
 
 export class UploadPhotoDto {
   /** Détermine le préfixe de la clé S3 — 'promo' par défaut (compat. existant). */

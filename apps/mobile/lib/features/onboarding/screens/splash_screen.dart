@@ -2,17 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/launch_state.dart';
-import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../shared/widgets/echango_wordmark.dart';
 import '../../../providers/core_providers.dart';
 
 /// Écran d'ouverture animé, affiché à chaque lancement à froid de l'app.
 ///
-/// Le soulignement safran et le badge de réduction reprennent volontairement
-/// le langage visuel de l'affiche commerçant (support papier posé en
-/// vitrine) : l'app et l'affiche partagent la même signature, c'est ce qui
-/// fait reconnaître l'une depuis l'autre.
+/// Le soulignement safran reprend volontairement le langage visuel de
+/// l'affiche commerçant (support papier posé en vitrine) : l'app et l'affiche
+/// partagent la même signature, c'est ce qui fait reconnaître l'une depuis
+/// l'autre.
+///
+/// ⚠️ **Une pastille « −30% » accompagnait ce soulignement jusqu'au
+/// 2026-08-05.** Le chiffre était écrit en dur — le seul littéral de ce genre
+/// du dépôt — et ne venait d'aucune donnée : ni spec, ni asset, ni calcul. Il
+/// se trouvait valoir la médiane des remises du moment, par accident, et
+/// aurait dérivé sans que personne ne s'en aperçoive. Sur l'écran vu à chaque
+/// lancement d'une app dont le sujet EST le taux de remise, un chiffre qui
+/// ressemble à une donnée sans en être une est une promesse qu'on ne tient
+/// pas. Retiré plutôt que remplacé : aucune valeur ne pouvait être à la fois
+/// juste et disponible ici — le splash s'affiche avant tout appel réseau.
 ///
 /// C'est ici, et pas dans la redirection du routeur, qu'on décide de la
 /// suite : l'onboarding n'a de sens qu'une fois l'animation terminée.
@@ -27,11 +36,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
-  /// Séquence : le mot-marque monte, le soulignement se dessine, le badge
-  /// apparaît, la baseline s'affiche — puis on enchaîne sur le choix du rôle.
+  /// Séquence : le mot-marque monte, le soulignement se dessine, la baseline
+  /// s'affiche — puis on enchaîne sur le choix du rôle.
+  ///
+  /// La baseline démarre à 0,60 et non 0,72 depuis le retrait de la pastille :
+  /// sans ce recalage, la séquence porterait un temps mort là où le badge
+  /// apparaissait.
   late final Animation<double> _wordmark;
   late final Animation<double> _underline;
-  late final Animation<double> _badge;
   late final Animation<double> _tagline;
 
   @override
@@ -42,7 +54,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       duration: const Duration(milliseconds: 1600),
     );
 
-    Animation<double> phase(double begin, double end, {Curve curve = Curves.easeOutCubic}) {
+    Animation<double> phase(double begin, double end,
+        {Curve curve = Curves.easeOutCubic}) {
       return CurvedAnimation(
         parent: _controller,
         curve: Interval(begin, end, curve: curve),
@@ -51,8 +64,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     _wordmark = phase(0.0, 0.34);
     _underline = phase(0.30, 0.60, curve: Curves.easeOut);
-    _badge = phase(0.52, 0.80, curve: Curves.easeOutBack);
-    _tagline = phase(0.72, 1.0);
+    _tagline = phase(0.60, 1.0);
 
     _controller.forward();
     _controller.addStatusListener(_onAnimationDone);
@@ -102,27 +114,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   ),
                 ),
                 const SizedBox(height: 20),
-                Opacity(
-                  opacity: _badge.value.clamp(0.0, 1.0),
-                  child: Transform.scale(
-                    scale: 0.7 + 0.3 * _badge.value.clamp(0.0, 1.0),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: colorScheme.onSurface,
-                        borderRadius: BorderRadius.circular(AppRadii.pill),
-                      ),
-                      child: Text(
-                        '−30%',
-                        style: textTheme.labelLarge?.copyWith(
-                          color: colorScheme.surface,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
                 Opacity(
                   opacity: _tagline.value,
                   child: Text(

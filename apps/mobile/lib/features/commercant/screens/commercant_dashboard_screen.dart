@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../data/api/promo_api.dart';
 import '../../../app/theme.dart';
 import '../../../domain/enums/commercant_origin_verification.dart';
 import '../../../domain/enums/promo_lifecycle_status.dart';
@@ -40,8 +41,11 @@ class CommercantDashboardScreen extends ConsumerWidget {
     final profileViewsAsync = ref.watch(commercantProfileViewsProvider);
 
     final promos = promosAsync.valueOrNull ?? const <Promo>[];
-    final activeCount = countActivePromos(promos);
-    final atCap = activeCount >= kMaxPromosActives;
+    // Le compte d'emplacements vient du serveur, pas d'un filtre sur la page
+    // de promos : celle-ci est plafonnee a 100, tous statuts confondus.
+    final slotsAsync = ref.watch(promoSlotsProvider);
+    final slots = slotsAsync.valueOrNull;
+    final atCap = slots?.auPlafond ?? false;
 
     return Scaffold(
       appBar: AppBar(
@@ -68,7 +72,8 @@ class CommercantDashboardScreen extends ConsumerWidget {
             onSelected: (action) async {
               switch (action) {
                 case 'editProfile':
-                  final updated = await context.push<bool>('/commercant/profile/edit');
+                  final updated =
+                      await context.push<bool>('/commercant/profile/edit');
                   if (updated == true) ref.invalidate(commercantMeProvider);
                 case 'logout':
                   await ref.read(authControllerProvider.notifier).logout();
@@ -79,7 +84,8 @@ class CommercantDashboardScreen extends ConsumerWidget {
               // Modifier sa fiche passe en menu : un commerçant le fait deux
               // fois par an, publier une promo dix fois par mois. Les deux
               // partageaient jusqu'ici le même poids visuel.
-              PopupMenuItem(value: 'editProfile', child: Text(l10n.editProfileLabel)),
+              PopupMenuItem(
+                  value: 'editProfile', child: Text(l10n.editProfileLabel)),
               PopupMenuItem(value: 'logout', child: Text(l10n.logoutTooltip)),
             ],
           ),
@@ -88,7 +94,7 @@ class CommercantDashboardScreen extends ConsumerWidget {
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(commercantMeProvider);
-          ref.invalidate(myPromosProvider);
+          invalidateAfterPromoChange(ref);
           ref.invalidate(commercantProfileViewsProvider);
         },
         child: ListView(
@@ -102,12 +108,13 @@ class CommercantDashboardScreen extends ConsumerWidget {
                 children: [
                   _ShopHeader(commercant: commercant),
                   _RegistreStatusBanner(commercant: commercant),
-                  if (commercant.profilePendingReview) const _ProfilePendingReviewBanner(),
+                  if (commercant.profilePendingReview)
+                    const _ProfilePendingReviewBanner(),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-            _QuotaCard(activeCount: activeCount, loading: promosAsync.isLoading),
+            _QuotaCard(slots: slots, loading: slotsAsync.isLoading),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -123,7 +130,9 @@ class CommercantDashboardScreen extends ConsumerWidget {
                 Expanded(
                   child: _StatTile(
                     label: l10n.dashboardPromoViewsLabel,
-                    value: promosAsync.valueOrNull == null ? null : totalPromoViews(promos),
+                    value: promosAsync.valueOrNull == null
+                        ? null
+                        : totalPromoViews(promos),
                     loading: promosAsync.isLoading,
                     icon: Icons.visibility_outlined,
                   ),
@@ -138,7 +147,8 @@ class CommercantDashboardScreen extends ConsumerWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(l10n.myPromosLabel, style: Theme.of(context).textTheme.titleSmall),
+                  child: Text(l10n.myPromosLabel,
+                      style: Theme.of(context).textTheme.titleSmall),
                 ),
                 TextButton(
                   onPressed: () => context.push('/commercant/promos'),
@@ -163,13 +173,38 @@ class CommercantDashboardScreen extends ConsumerWidget {
       // Une seule action mise en avant, fixée en bas : publier est ce qu'un
       // commerçant vient faire, tout le reste en découle.
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: atCap ? null : () => context.push('/commercant/promos/new'),
-        backgroundColor: atCap ? Theme.of(context).colorScheme.surfaceContainerHighest : null,
-        foregroundColor: atCap ? Theme.of(context).colorScheme.onSurfaceVariant : null,
+        // ⚠️ `await` puis invalidation, jamais un `push` sec : sans ça l'écran
+        // reste sur son chiffre d'avant après la publication — le serveur
+        // compte 2 promos en ligne, le tableau de bord affiche « 1 / 5 » et
+        // « il vous reste 4 emplacements ». Trouvé par le parcours de création
+        // le 2026-08-05.
+        onPressed: atCap
+            ? null
+            : () async {
+                final created =
+                    await context.push<bool>('/commercant/promos/new');
+                if (created == true && context.mounted) {
+                  invalidateAfterPromoChange(ref);
+                }
+              },
+        backgroundColor: atCap
+            ? Theme.of(context).colorScheme.surfaceContainerHighest
+            : null,
+        foregroundColor:
+            atCap ? Theme.of(context).colorScheme.onSurfaceVariant : null,
         icon: Icon(atCap ? Icons.block : Icons.add),
         // Désactivé plutôt que masqué au plafond : sa disparition laisserait
         // croire à un bug, alors que le message explique la limite.
-        label: Text(atCap ? l10n.capReachedLabel : l10n.newPromoTitle),
+        //
+        // Le chiffre vient de `slots.plafond`, donc du serveur : il était écrit
+        // en toutes lettres dans les trois `.arb` (« Plafond de 5 promos
+        // atteint »), si bien qu'un changement de `PROMO_ACTIVE_CAP` faisait
+        // annoncer 5 à une app qui en autorisait déjà 8 (2026-08-05).
+        label: Text(
+          slots != null && slots.auPlafond
+              ? l10n.capReachedLabel(slots.plafond)
+              : l10n.newPromoTitle,
+        ),
       ),
     );
   }
@@ -182,11 +217,15 @@ class _ShopHeader extends StatelessWidget {
   final Commercant commercant;
 
   String get _initials {
-    final words =
-        commercant.nom.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    final words = commercant.nom
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
     if (words.isEmpty) return '?';
     if (words.length == 1) return words.first.characters.first.toUpperCase();
-    return (words[0].characters.first + words[1].characters.first).toUpperCase();
+    return (words[0].characters.first + words[1].characters.first)
+        .toUpperCase();
   }
 
   @override
@@ -207,7 +246,8 @@ class _ShopHeader extends StatelessWidget {
                   width: 46,
                   height: 46,
                   fit: BoxFit.cover,
-                  errorWidget: (context, url, error) => _InitialsBox(initials: _initials),
+                  errorWidget: (context, url, error) =>
+                      _InitialsBox(initials: _initials),
                 )
               : _InitialsBox(initials: _initials),
         ),
@@ -236,7 +276,8 @@ class _ShopHeader extends StatelessWidget {
                   ),
                   if (verified) ...[
                     const SizedBox(width: 6),
-                    Icon(Icons.verified, size: 15, color: semanticColors.success),
+                    Icon(Icons.verified,
+                        size: 15, color: semanticColors.success),
                     const SizedBox(width: 2),
                     Text(
                       l10n.verifiedBadge,
@@ -291,9 +332,13 @@ class _InitialsBox extends StatelessWidget {
 /// règle serveur appliquée à tout le monde ; l'afficher évite au commerçant
 /// de ne le découvrir qu'au moment d'un refus de publication.
 class _QuotaCard extends StatelessWidget {
-  const _QuotaCard({required this.activeCount, required this.loading});
+  const _QuotaCard({required this.slots, required this.loading});
 
-  final int activeCount;
+  /// `null` tant que `GET /promo/me/slots` n'a pas repondu — ou s'il a
+  /// echoue. Le decompte n'est alors PAS affiche : un « 0 / 5 » de repli
+  /// dirait au commercant que ses emplacements sont libres alors qu'on n'en
+  /// sait rien (regle #29).
+  final PromoSlots? slots;
   final bool loading;
 
   @override
@@ -301,7 +346,11 @@ class _QuotaCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final remaining = kMaxPromosActives - activeCount;
+    // `slots` reste nul tant que la mesure serveur n'est pas là — chargement
+    // en cours, ou échec. Dans les deux cas on n'affiche pas de décompte :
+    // un « 0 / 5 » de repli annoncerait des emplacements libres sans rien en
+    // savoir (règle #29).
+    final mesure = slots;
 
     return Container(
       decoration: BoxDecoration(
@@ -329,7 +378,7 @@ class _QuotaCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    if (loading)
+                    if (mesure == null)
                       const SizedBox(
                         height: 28,
                         width: 28,
@@ -341,13 +390,13 @@ class _QuotaCard extends StatelessWidget {
                     else
                       Text.rich(
                         TextSpan(
-                          text: '$activeCount',
+                          text: '${mesure.enLigne}',
                           style: textTheme.headlineMedium,
                           children: [
                             TextSpan(
-                              text: ' / $kMaxPromosActives',
-                              style: textTheme.titleMedium
-                                  ?.copyWith(color: colorScheme.onSurfaceVariant),
+                              text: ' / ${mesure.plafond}',
+                              style: textTheme.titleMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant),
                             ),
                           ],
                         ),
@@ -355,28 +404,31 @@ class _QuotaCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (!loading)
+              if (mesure != null)
                 Flexible(
                   child: Text(
-                    l10n.dashboardSlotsLeft(remaining),
+                    l10n.dashboardSlotsLeft(mesure.restants),
                     textAlign: TextAlign.end,
-                    style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                    style: textTheme.bodySmall
+                        ?.copyWith(color: colorScheme.onSurfaceVariant),
                   ),
                 ),
             ],
           ),
           const SizedBox(height: 12),
           // Une barre par emplacement : le commerçant compte d'un regard,
-          // sans lire le chiffre.
+          // sans lire le chiffre. Le nombre de barres vient du plafond
+          // serveur — aucune barre tant qu'il est inconnu, plutôt que cinq
+          // barres vides qui affirmeraient un plafond non mesuré.
           Row(
             children: [
-              for (var i = 0; i < kMaxPromosActives; i++) ...[
+              for (var i = 0; i < (mesure?.plafond ?? 0); i++) ...[
                 if (i > 0) const SizedBox(width: 5),
                 Expanded(
                   child: Container(
                     height: 7,
                     decoration: BoxDecoration(
-                      color: i < activeCount
+                      color: i < mesure!.enLigne
                           ? colorScheme.primary
                           : colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(AppRadii.pill),
@@ -435,7 +487,8 @@ class _StatTile extends StatelessWidget {
             ),
           Text(
             label,
-            style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+            style: textTheme.bodySmall
+                ?.copyWith(color: colorScheme.onSurfaceVariant),
           ),
         ],
       ),
@@ -475,10 +528,10 @@ class _PromoPreviewList extends StatelessWidget {
 
     // En ligne d'abord : c'est ce qui est visible des clients maintenant.
     final sorted = [...promos]..sort((a, b) {
-      final aLive = a.lifecycleStatus == PromoLifecycleStatus.publiee ? 0 : 1;
-      final bLive = b.lifecycleStatus == PromoLifecycleStatus.publiee ? 0 : 1;
-      return aLive.compareTo(bLive);
-    });
+        final aLive = a.lifecycleStatus == PromoLifecycleStatus.publiee ? 0 : 1;
+        final bLive = b.lifecycleStatus == PromoLifecycleStatus.publiee ? 0 : 1;
+        return aLive.compareTo(bLive);
+      });
 
     return Column(
       children: [
@@ -503,7 +556,8 @@ class _PromoPreviewRow extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final photo = promo.thumbnailUrl ?? promo.photoUrl;
-    final isExpired = promo.dateFin != null && promo.dateFin!.isBefore(DateTime.now());
+    final isExpired =
+        promo.dateFin != null && promo.dateFin!.isBefore(DateTime.now());
 
     return InkWell(
       onTap: () => context.push('/commercant/promos'),
@@ -526,8 +580,8 @@ class _PromoPreviewRow extends StatelessWidget {
                     : CachedNetworkImage(
                         imageUrl: photo,
                         fit: BoxFit.cover,
-                        errorWidget: (context, url, error) =>
-                            Container(color: colorScheme.surfaceContainerHighest),
+                        errorWidget: (context, url, error) => Container(
+                            color: colorScheme.surfaceContainerHighest),
                       ),
               ),
             ),
@@ -541,7 +595,8 @@ class _PromoPreviewRow extends StatelessWidget {
                     promo.description,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    style: textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 4),
                   Row(
@@ -630,7 +685,8 @@ class _UnreadNotificationsBannerState
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    final unread = ref.watch(notificationsProvider).valueOrNull?.items ?? const [];
+    final unread =
+        ref.watch(notificationsProvider).valueOrNull?.items ?? const [];
     if (unread.isEmpty) return const SizedBox.shrink();
 
     // La page courante peut dépasser après un "marquer comme lu" : la liste
@@ -642,7 +698,8 @@ class _UnreadNotificationsBannerState
       children: [
         Row(
           children: [
-            Icon(Icons.notifications_active_outlined, size: 17, color: colorScheme.primary),
+            Icon(Icons.notifications_active_outlined,
+                size: 17, color: colorScheme.primary),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
@@ -673,7 +730,8 @@ class _UnreadNotificationsBannerState
               return Padding(
                 // Laisse deviner la carte suivante : sans ce décalage, rien
                 // n'indique qu'on peut faire glisser.
-                padding: EdgeInsetsDirectional.only(end: i == unread.length - 1 ? 0 : 8),
+                padding: EdgeInsetsDirectional.only(
+                    end: i == unread.length - 1 ? 0 : 8),
                 child: _AlertCard(
                   notification: notification,
                   onOpen: () => context.push('/commercant/promos'),
@@ -696,7 +754,9 @@ class _UnreadNotificationsBannerState
                     width: i == index ? 16 : 6,
                     height: 6,
                     decoration: BoxDecoration(
-                      color: i == index ? colorScheme.primary : colorScheme.outlineVariant,
+                      color: i == index
+                          ? colorScheme.primary
+                          : colorScheme.outlineVariant,
                       borderRadius: BorderRadius.circular(AppRadii.pill),
                     ),
                   ),
@@ -740,11 +800,12 @@ class _AlertCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(notificationIcon(notification.type), color: color, size: 19),
+                Icon(notificationIcon(notification.type),
+                    color: color, size: 19),
                 const SizedBox(width: 9),
                 Expanded(
                   child: Text(
-                    notification.message,
+                    notificationLabel(context, notification),
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: textTheme.bodySmall,
@@ -791,7 +852,8 @@ class _RegistreStatusBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (commercant.originVerification != CommercantOriginVerification.autoInscrit) {
+    if (commercant.originVerification !=
+        CommercantOriginVerification.autoInscrit) {
       return const SizedBox.shrink();
     }
     if (commercant.registreStatus == RegistreStatus.valide) {
@@ -805,9 +867,12 @@ class _RegistreStatusBanner extends ConsumerWidget {
     // Seul le cas rejeté propose une action (`RegistreResendScreen`) : un
     // "en attente" n'a rien de plus à faire qu'attendre la décision admin.
     final isRejected = commercant.registreStatus == RegistreStatus.rejete;
-    final title = isRejected ? l10n.registreRejectedBannerTitle : l10n.registrePendingBannerTitle;
-    final message =
-        isRejected ? l10n.registreRejectedBannerMessage : l10n.registrePendingBannerMessage;
+    final title = isRejected
+        ? l10n.registreRejectedBannerTitle
+        : l10n.registrePendingBannerTitle;
+    final message = isRejected
+        ? l10n.registreRejectedBannerMessage
+        : l10n.registrePendingBannerMessage;
     final color = isRejected ? colorScheme.error : semanticColors.warning;
 
     return Padding(
@@ -820,8 +885,11 @@ class _RegistreStatusBanner extends ConsumerWidget {
             ? _AlertAction(
                 label: l10n.registreResendSubmit,
                 onPressed: () async {
-                  final sent = await context.push<bool>('/commercant/registre/resend');
-                  if (sent == true && context.mounted) ref.invalidate(commercantMeProvider);
+                  final sent =
+                      await context.push<bool>('/commercant/registre/resend');
+                  if (sent == true && context.mounted) {
+                    ref.invalidate(commercantMeProvider);
+                  }
                 },
               )
             : null,

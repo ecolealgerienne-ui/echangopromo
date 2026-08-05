@@ -20,27 +20,37 @@ export class JwtAuthGuard implements CanActivate {
     // (révocation, règle #6).
     @InjectRepository(Agent) private readonly agents: Repository<Agent>,
     @InjectRepository(Admin) private readonly admins: Repository<Admin>,
-    @InjectRepository(Commercant) private readonly commercants: Repository<Commercant>,
+    @InjectRepository(Commercant)
+    private readonly commercants: Repository<Commercant>,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
     const token = this.extractToken(request);
     if (!token) {
-      throw new UnauthorizedAppException(ErrorCode.AUTH_TOKEN_MISSING, 'Token manquant');
+      throw new UnauthorizedAppException(
+        ErrorCode.AUTH_TOKEN_MISSING,
+        'Token manquant',
+      );
     }
 
     let payload: AuthTokenPayload;
     try {
       payload = this.jwtService.verify<AuthTokenPayload>(token);
     } catch {
-      throw new UnauthorizedAppException(ErrorCode.AUTH_TOKEN_INVALID, 'Token invalide ou expiré');
+      throw new UnauthorizedAppException(
+        ErrorCode.AUTH_TOKEN_INVALID,
+        'Token invalide ou expiré',
+      );
     }
 
     const repo = this.repositoryFor(payload.role);
     const account = await repo.findOne({ where: { id: payload.sub } });
     if (!account || account.tokenVersion !== payload.tokenVersion) {
-      throw new UnauthorizedAppException(ErrorCode.AUTH_TOKEN_REVOKED, 'Token révoqué');
+      throw new UnauthorizedAppException(
+        ErrorCode.AUTH_TOKEN_REVOKED,
+        'Token révoqué',
+      );
     }
 
     (request as Request & { user: AuthTokenPayload }).user = payload;

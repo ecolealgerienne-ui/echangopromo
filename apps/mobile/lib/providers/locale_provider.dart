@@ -9,7 +9,8 @@ const supportedAppLocales = [Locale('fr'), Locale('en'), Locale('ar')];
 
 const _defaultLocale = Locale('fr');
 
-final localeStoreProvider = Provider((ref) => LocaleStore(ref.watch(sharedPreferencesProvider)));
+final localeStoreProvider =
+    Provider((ref) => LocaleStore(ref.watch(sharedPreferencesProvider)));
 
 class LocaleController extends StateNotifier<Locale> {
   LocaleController(this._store) : super(_initialLocale(_store));

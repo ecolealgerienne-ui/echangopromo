@@ -20,7 +20,9 @@ class OnboardingStore {
 
   Future<void> markCompleted() => _prefs.setBool(_completedKey, true);
 
-  OnboardingRole? getRole() => OnboardingRole.fromName(_prefs.getString(_roleKey));
+  OnboardingRole? getRole() =>
+      OnboardingRole.fromName(_prefs.getString(_roleKey));
 
-  Future<void> setRole(OnboardingRole role) => _prefs.setString(_roleKey, role.name);
+  Future<void> setRole(OnboardingRole role) =>
+      _prefs.setString(_roleKey, role.name);
 }

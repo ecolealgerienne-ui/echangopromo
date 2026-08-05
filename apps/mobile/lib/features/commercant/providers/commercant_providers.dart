@@ -1,15 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../domain/enums/promo_lifecycle_status.dart';
+
 import '../../../domain/enums/registre_status.dart';
 import '../../../domain/models/commercant.dart';
 import '../../../domain/models/promo.dart';
 import '../../../providers/core_providers.dart';
 
-/// Plafond de promos actives simultanées, imposé côté backend
-/// (`MAX_PROMOS_ACTIVES`, `PromoService`) pour tout le monde — agent et admin
-/// compris. Répété ici pour l'afficher au commerçant : il ne découvrait son
-/// existence qu'en se faisant refuser une publication.
-const kMaxPromosActives = 5;
+/// Occupation du plafond de promos actives — **mesurée par le serveur**
+/// (`GET /promo/me/slots`), plafond compris.
+///
+/// Remplace `kMaxPromosActives = 5` et `countActivePromos(promos)`, qui
+/// recopiaient la règle et la calculaient sur une page de 100 promos tous
+/// statuts confondus : au-delà, le tableau de bord annonçait des emplacements
+/// libres pendant que le serveur refusait en `PROMO_ACTIVE_CAP_REACHED`. Et il
+/// comptait une promo expirée non encore basculée par le cron, qui n'occupe
+/// plus rien (revue 2026-08-05, règles #29 et #32).
+final promoSlotsProvider = FutureProvider.autoDispose(
+    (ref) => ref.watch(promoApiProvider).fetchSlots());
 
 /// Fiche du commerçant connecté. Partagée entre le tableau de bord et tout
 /// écran ayant besoin de son nom, de son statut de registre ou de sa photo.
@@ -28,11 +34,27 @@ final commercantProfileViewsProvider = FutureProvider.autoDispose(
 final myPromosProvider =
     FutureProvider.autoDispose((ref) => ref.watch(promoApiProvider).listMine());
 
-/// Promos actuellement en ligne — la seule mesure qui compte face au plafond.
-/// `PromoLifecycleStatus.publiee` uniquement : un brouillon ou une promo
-/// arrêtée n'occupe pas d'emplacement, exactement comme côté backend.
-int countActivePromos(List<Promo> promos) =>
-    promos.where((promo) => promo.lifecycleStatus == PromoLifecycleStatus.publiee).length;
+/// À appeler après **toute** action qui change le nombre de promos actives :
+/// création, publication d'un brouillon, arrêt, suppression, édition.
+///
+/// ── Pourquoi une fonction et pas deux `invalidate` sur place ─────────────
+///
+/// La liste des promos et le compteur d'emplacements décrivent **le même
+/// fait**. Les invalider séparément, c'est tenir deux listes à la main dans
+/// six écrans : celui qu'on oublie affiche un chiffre périmé, sans erreur ni
+/// journal (règle #30 — si l'un change, l'autre doit changer, donc un seul
+/// endroit).
+///
+/// *Trouvé le 2026-08-05 par `parcours_creation_promo_test.dart`, à son
+/// premier passage : `promoSlotsProvider` n'était invalidé **nulle part**.
+/// Après publication depuis le tableau de bord, le serveur comptait 2 promos
+/// en ligne et l'écran affichait toujours « 1 / 5 » et « il vous reste 4
+/// emplacements ». Il n'était juste que parce qu'`autoDispose` le recharge
+/// quand l'écran est reconstruit de zéro — jamais après un simple retour.*
+void invalidateAfterPromoChange(WidgetRef ref) {
+  ref.invalidate(myPromosProvider);
+  ref.invalidate(promoSlotsProvider);
+}
 
 /// Somme des vues de toutes les promos. `viewCount` n'est renseigné que par
 /// `GET /promo/me/all` (propriétaire authentifié) — d'où le repli à zéro.

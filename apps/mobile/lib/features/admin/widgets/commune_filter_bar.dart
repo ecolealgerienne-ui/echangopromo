@@ -4,7 +4,8 @@ import '../../../domain/models/commune.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 
-final _communesProvider = FutureProvider.autoDispose((ref) => ref.watch(communeApiProvider).list());
+final _communesProvider =
+    FutureProvider.autoDispose((ref) => ref.watch(communeApiProvider).list());
 
 /// Filtre wilaya → commune pour les écrans de liste admin/agent (retour
 /// terrain 2026-07-14 : "il faut ajouter des filtres, wilaya, commune...").
@@ -36,8 +37,9 @@ class CommuneFilterBar extends ConsumerWidget {
       error: (_, __) => const SizedBox.shrink(),
       data: (communes) {
         final wilayas = communes.map((c) => c.wilaya).toSet().toList()..sort();
-        final communesForWilaya =
-            wilaya == null ? const <Commune>[] : communes.where((c) => c.wilaya == wilaya).toList();
+        final communesForWilaya = wilaya == null
+            ? const <Commune>[]
+            : communes.where((c) => c.wilaya == wilaya).toList();
 
         return Row(
           children: [
@@ -50,8 +52,10 @@ class CommuneFilterBar extends ConsumerWidget {
                   border: const OutlineInputBorder(),
                 ),
                 items: [
-                  DropdownMenuItem(value: null, child: Text(l10n.filterAllOption)),
-                  for (final w in wilayas) DropdownMenuItem(value: w, child: Text(w)),
+                  DropdownMenuItem(
+                      value: null, child: Text(l10n.filterAllOption)),
+                  for (final w in wilayas)
+                    DropdownMenuItem(value: w, child: Text(w)),
                 ],
                 onChanged: (value) {
                   onWilayaChanged(value);
@@ -69,8 +73,10 @@ class CommuneFilterBar extends ConsumerWidget {
                   border: const OutlineInputBorder(),
                 ),
                 items: [
-                  DropdownMenuItem(value: null, child: Text(l10n.filterAllOption)),
-                  for (final c in communesForWilaya) DropdownMenuItem(value: c.id, child: Text(c.nom)),
+                  DropdownMenuItem(
+                      value: null, child: Text(l10n.filterAllOption)),
+                  for (final c in communesForWilaya)
+                    DropdownMenuItem(value: c.id, child: Text(c.nom)),
                 ],
                 onChanged: wilaya == null ? null : onCommuneChanged,
               ),

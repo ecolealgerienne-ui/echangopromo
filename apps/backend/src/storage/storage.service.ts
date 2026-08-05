@@ -9,7 +9,10 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
-import { BadRequestAppException } from '../common/errors/app-exception';
+import {
+  BadRequestAppException,
+  ForbiddenAppException,
+} from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import { detectImageFormat } from './image-signature';
 
@@ -104,6 +107,44 @@ export class StorageService {
   }
 
   /**
+   * **Rattache une clé S3 revenue du client à celui qui l'a uploadée.**
+   *
+   * `buildKey` namespace déjà chaque objet (`<dossier>/<uploaderId>/<uuid>`),
+   * mais rien ne vérifiait ce préfixe quand une clé **revient** du client
+   * dans un DTO — et les clés d'autrui sont publiques : `GET /promo` et
+   * `GET /commercant/:id/public`, deux routes non authentifiées, servent
+   * l'URL complète, donc la clé littérale. Un `PATCH` portant la clé d'un
+   * tiers la faisait supprimer de S3 au `PATCH` suivant (`removedKeys` /
+   * `previousPhotoKey`), définitivement, sans erreur, sans entrée d'audit et
+   * sans notification — et l'affichait sur la fiche de l'attaquant entre les
+   * deux (usurpation de visuel). Revue multi-agents du 2026-08-05 ; c'est le
+   * cas de la règle #10 dans sa forme pure, la garde existant déjà à
+   * l'identique dans `CommercantService.requestRegistreVerification` sans
+   * avoir jamais été appliquée aux deux autres champs de clé.
+   *
+   * `allowedOwnerIds` au **pluriel**, et c'est le piège du correctif :
+   * `StorageController.upload` préfixe avec le `sub` de l'**acteur**, pas du
+   * commerçant cible. La photo d'une promo créée par un agent porte donc
+   * l'UUID de l'agent, pas celui du commerçant — les deux préfixes sont
+   * légitimes et doivent être passés tous les deux.
+   */
+  assertKeyOwnedBy(
+    key: string,
+    folder: UploadFolder,
+    allowedOwnerIds: readonly string[],
+  ): void {
+    const owned = allowedOwnerIds.some((ownerId) =>
+      key.startsWith(`${folder}/${ownerId}/`),
+    );
+    if (!owned) {
+      throw new ForbiddenAppException(
+        ErrorCode.STORAGE_KEY_NOT_OWNED,
+        "Ce fichier n'a pas été envoyé par ce compte",
+      );
+    }
+  }
+
+  /**
    * Upload proxifié par le backend (pas de POST policy S3 pré-signée) : OVH
    * (le S3 utilisé en prod) renvoie `501 Not Implemented — "POST Object is
    * disabled on this deployment"` sur cette API — découvert au premier test
@@ -177,7 +218,10 @@ export class StorageService {
     }
     const endpoint = this.configService.get<string>('S3_ENDPOINT', '');
     const useVirtualHostedStyle =
-      this.configService.get<string>('S3_PUBLIC_URL_VIRTUAL_HOSTED', 'false') === 'true';
+      this.configService.get<string>(
+        'S3_PUBLIC_URL_VIRTUAL_HOSTED',
+        'false',
+      ) === 'true';
     if (useVirtualHostedStyle) {
       const host = endpoint.replace(/^https?:\/\//, '').replace(/\/$/, '');
       return `https://${this.bucket}.${host}/${key}`;
@@ -224,6 +268,19 @@ export class StorageService {
    * une version périmée.
    */
   async generateThumbnail(sourceKey: string): Promise<string> {
+    // L'ACL était `public-read` en dur quelle que soit la source, alors que
+    // `uploadPhoto` la dérive de `PRIVATE_FOLDERS` : une clé de
+    // `registre-documents/` passée ici faisait republier le justificatif
+    // d'identité en JPEG public permanent (`max-age=31536000, immutable`),
+    // c'est-à-dire exactement ce que l'ACL privée protège. Une vignette n'a
+    // de sens que pour une photo de promo — restreindre la source est plus
+    // sûr que dériver l'ACL, puisque ça retire aussi le téléchargement.
+    if (!sourceKey.startsWith('promo-photos/')) {
+      throw new ForbiddenAppException(
+        ErrorCode.STORAGE_KEY_NOT_OWNED,
+        'Seule une photo de promo peut donner lieu à une vignette',
+      );
+    }
     const original = await this.downloadObject(sourceKey);
     const thumbnail = await sharp(original)
       .resize(THUMBNAIL_SIZE_PX, THUMBNAIL_SIZE_PX, { fit: 'cover' })

@@ -9,9 +9,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * production aurait fait planter `NotificationService.create` avec
  * `invalid input value for enum notification_type_enum`.
  */
-export class AddRegistreNotificationTypes1783720000000
-  implements MigrationInterface
-{
+export class AddRegistreNotificationTypes1783720000000 implements MigrationInterface {
   name = 'AddRegistreNotificationTypes1783720000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

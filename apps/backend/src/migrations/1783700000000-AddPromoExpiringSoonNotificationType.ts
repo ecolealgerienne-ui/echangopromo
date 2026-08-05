@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddPromoExpiringSoonNotificationType1783700000000
-  implements MigrationInterface
-{
+export class AddPromoExpiringSoonNotificationType1783700000000 implements MigrationInterface {
   name = 'AddPromoExpiringSoonNotificationType1783700000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

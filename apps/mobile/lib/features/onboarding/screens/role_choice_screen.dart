@@ -13,7 +13,8 @@ import '../../../providers/core_providers.dart';
 class RoleChoiceScreen extends ConsumerWidget {
   const RoleChoiceScreen({super.key});
 
-  Future<void> _choose(BuildContext context, WidgetRef ref, OnboardingRole role) async {
+  Future<void> _choose(
+      BuildContext context, WidgetRef ref, OnboardingRole role) async {
     final store = ref.read(onboardingStoreProvider);
     await store.setRole(role);
 
@@ -41,7 +42,8 @@ class RoleChoiceScreen extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(l10n.onboardingWelcomeTitle, style: textTheme.headlineMedium),
+              Text(l10n.onboardingWelcomeTitle,
+                  style: textTheme.headlineMedium),
               const SizedBox(height: 8),
               Text(
                 l10n.onboardingWelcomeSubtitle,
@@ -94,7 +96,8 @@ class _RoleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final tint = tintWithSecondary ? colorScheme.secondary : colorScheme.primary;
+    final tint =
+        tintWithSecondary ? colorScheme.secondary : colorScheme.primary;
 
     return Material(
       color: colorScheme.surface,

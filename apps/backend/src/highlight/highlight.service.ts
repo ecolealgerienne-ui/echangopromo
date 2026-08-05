@@ -68,7 +68,8 @@ export class HighlightService {
       take: HIGHLIGHT_MAX_SLIDES,
     });
 
-    const slides = curated.length > 0 ? await this.keepDisplayable(curated) : [];
+    const slides =
+      curated.length > 0 ? await this.keepDisplayable(curated) : [];
     if (slides.length > 0) return slides;
 
     return this.buildFallbackSlides(communeIds);
@@ -84,12 +85,16 @@ export class HighlightService {
    * Une seule requête pour toutes les promos ciblées (CLAUDE.md règle #14),
    * jamais une vérification par diapositive.
    */
-  private async keepDisplayable(curated: Highlight[]): Promise<HighlightSlide[]> {
+  private async keepDisplayable(
+    curated: Highlight[],
+  ): Promise<HighlightSlide[]> {
     const promoIds = curated
       .map((highlight) => highlight.promoId)
       .filter((id): id is string => id !== null);
     const visiblePromos = await this.promoService.findVisibleByIds(promoIds);
-    const visibleById = new Map(visiblePromos.map((promo) => [promo.id, promo]));
+    const visibleById = new Map(
+      visiblePromos.map((promo) => [promo.id, promo]),
+    );
 
     const displayable: HighlightSlide[] = [];
     for (const highlight of curated) {
@@ -115,13 +120,41 @@ export class HighlightService {
     return displayable;
   }
 
-  /** Comportement d'avant la curation : les plus fortes réductions. */
-  private async buildFallbackSlides(communeIds?: string[]): Promise<HighlightSlide[]> {
+  /**
+   * Comportement d'avant la curation : les plus fortes réductions.
+   *
+   * ⚠️ **Sans commune, on ne replie pas — on ne montre rien.**
+   * `findActiveForClient` traite `communeIds` vide comme *aucun filtre*
+   * (`if (query.communeIds?.length)`), pas comme *aucune commune*. Le repli
+   * composait donc, pour un client qui n'a rien configuré, une vitrine
+   * « Top promos » tirée de **toutes** les communes — présentée en tête de son
+   * accueil comme si elle était la sienne.
+   *
+   * Le défaut ne se voyait pas, et pour deux raisons qui cessent d'être vraies
+   * en même temps : la curation admin est active, donc le repli ne se
+   * déclenche jamais ; et le pilote est mono-wilaya, donc « toutes les
+   * communes » reste plausible. À l'extension multi-wilaya, une simple
+   * expiration de diapositive suffirait à afficher des promos d'une autre
+   * wilaya (constaté le 2026-08-05, même motif que `PromoListController`).
+   *
+   * Une vitrine **vide** est le bon résultat ici : l'app la replie d'elle-même
+   * (`_TopPromosSection`), et l'accueil demande déjà au client de choisir ses
+   * communes juste en dessous. Mieux vaut ne rien montrer que montrer faux
+   * (règle #29).
+   *
+   * ⚠️ Ne concerne **que** ce repli. Les diapositives curées restent globales
+   * par décision produit — voir `ListHighlightQueryDto`.
+   */
+  private async buildFallbackSlides(
+    communeIds?: string[],
+  ): Promise<HighlightSlide[]> {
+    if (!communeIds?.length) return [];
+
     const result = await this.promoService.findActiveForClient({
       page: 1,
       limit: HIGHLIGHT_FALLBACK_LIMIT,
       sort: PromoSortOrder.DISCOUNT,
-      ...(communeIds?.length ? { communeIds } : {}),
+      communeIds,
     });
     return result.items.map((promo) => ({
       // Préfixé : cet identifiant n'est pas celui d'une ligne `highlight`,
@@ -147,7 +180,9 @@ export class HighlightService {
    *
    * Une seule requête de vérification pour toute la liste (CLAUDE.md #14).
    */
-  async findAllForAdmin(): Promise<{ highlight: Highlight; promoVisible: boolean }[]> {
+  async findAllForAdmin(): Promise<
+    { highlight: Highlight; promoVisible: boolean }[]
+  > {
     const highlights = await this.highlights.find({
       relations: { promo: { commercant: true } },
       order: { position: 'ASC', createdAt: 'ASC' },
@@ -162,7 +197,8 @@ export class HighlightService {
       highlight,
       // Une diapositive sans promo ciblée (bandeau image seule) est toujours
       // affichable : rien à invalider.
-      promoVisible: highlight.promoId === null || visibleIds.has(highlight.promoId),
+      promoVisible:
+        highlight.promoId === null || visibleIds.has(highlight.promoId),
     }));
   }
 
@@ -192,7 +228,8 @@ export class HighlightService {
     const highlight = await this.findByIdOrFail(id);
     const promoVisible =
       highlight.promoId === null ||
-      (await this.promoService.findVisibleByIds([highlight.promoId])).length > 0;
+      (await this.promoService.findVisibleByIds([highlight.promoId])).length >
+        0;
     return { highlight, promoVisible };
   }
 
@@ -212,9 +249,10 @@ export class HighlightService {
     await this.assertPromoExists(dto.promoId ?? null);
 
     return this.highlights.manager.transaction(async (manager) => {
-      await manager.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [
-        'highlight-cap',
-      ]);
+      await manager.query(
+        'SELECT pg_advisory_xact_lock(hashtext($1)::bigint)',
+        ['highlight-cap'],
+      );
 
       const total = await manager.count(Highlight);
       if (total >= HIGHLIGHT_MAX_SLIDES) {
@@ -355,7 +393,10 @@ export class HighlightService {
 
   // --- Gardes ---
 
-  private assertHasContent(imageKey: string | null, promoId: string | null): void {
+  private assertHasContent(
+    imageKey: string | null,
+    promoId: string | null,
+  ): void {
     if (!imageKey && !promoId) {
       throw new BadRequestAppException(
         ErrorCode.HIGHLIGHT_EMPTY_CONTENT,
@@ -382,8 +423,9 @@ export class HighlightService {
     try {
       await this.storageService.deleteObject(key);
     } catch (error) {
-      this.logger.warn(`Suppression de l'image de mise en avant ${key} échouée: ${error}`);
+      this.logger.warn(
+        `Suppression de l'image de mise en avant ${key} échouée: ${error}`,
+      );
     }
   }
-
 }

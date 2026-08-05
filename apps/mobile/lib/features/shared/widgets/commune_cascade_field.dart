@@ -42,7 +42,8 @@ class _CommuneCascadeFieldState extends State<CommuneCascadeField> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final wilayas = widget.communes.map((c) => c.wilaya).toSet().toList()..sort();
+    final wilayas = widget.communes.map((c) => c.wilaya).toSet().toList()
+      ..sort();
     final communesForWilaya =
         widget.communes.where((c) => c.wilaya == _wilaya).toList();
 
@@ -53,7 +54,8 @@ class _CommuneCascadeFieldState extends State<CommuneCascadeField> {
           initialValue: _wilaya,
           decoration: InputDecoration(labelText: l10n.wilayaLabel),
           items: [
-            for (final wilaya in wilayas) DropdownMenuItem(value: wilaya, child: Text(wilaya)),
+            for (final wilaya in wilayas)
+              DropdownMenuItem(value: wilaya, child: Text(wilaya)),
           ],
           onChanged: (value) {
             setState(() => _wilaya = value);

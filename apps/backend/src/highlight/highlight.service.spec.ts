@@ -1,5 +1,8 @@
 import { HttpException } from '@nestjs/common';
-import { PromoLifecycleStatus, PromoModerationStatus } from '../promo/entities/promo.entity';
+import {
+  PromoLifecycleStatus,
+  PromoModerationStatus,
+} from '../promo/entities/promo.entity';
 import type { Promo } from '../promo/entities/promo.entity';
 import { UpdateHighlightDto } from './dto/update-highlight.dto';
 import type { Highlight } from './entities/highlight.entity';
@@ -27,6 +30,12 @@ type Repo = {
   delete: jest.Mock;
 };
 
+/// ⚠️ **Pas d'`as unknown as` ici, contrairement à `makePromo` ci-dessous.**
+/// Ce littéral couvre tous les champs de `Highlight` : l'assertion y était
+/// inutile, et `npm run lint --fix` l'a retirée le 2026-08-05. Le commentaire
+/// qui la justifiait est parti avec — il aurait sinon décrit un code qui
+/// n'existe plus. `makePromo`, lui, ne couvre qu'une partie de `Promo` et
+/// garde donc la sienne : la différence n'est pas un oubli.
 function makeHighlight(overrides: Partial<Highlight> = {}): Highlight {
   return {
     id: 'h1',
@@ -40,9 +49,7 @@ function makeHighlight(overrides: Partial<Highlight> = {}): Highlight {
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
-    // `as unknown as` assumé : ces doubles ne portent que les champs dont
-    // les règles testées se servent, pas l'entité complète.
-  } as unknown as Highlight;
+  };
 }
 
 function makePromo(overrides: Partial<Promo> = {}): Promo {
@@ -61,7 +68,9 @@ function makePromo(overrides: Partial<Promo> = {}): Promo {
   } as unknown as Promo;
 }
 
-async function errorCode(promise: Promise<unknown>): Promise<string | undefined> {
+async function errorCode(
+  promise: Promise<unknown>,
+): Promise<string | undefined> {
   try {
     await promise;
     return undefined;
@@ -71,6 +80,20 @@ async function errorCode(promise: Promise<unknown>): Promise<string | undefined>
       ? (response as { code?: string }).code
       : undefined;
   }
+}
+
+/**
+ * Le premier argument du premier appel à `save`, **typé**.
+ *
+ * ⚠️ `jest.Mock.mock.calls` est `any` : l'indexer directement déclenche
+ * `no-unsafe-member-access`, et c'est ce qui faisait échouer `npm run lint` sur
+ * trois assertions de ce fichier (trouvé le 2026-08-05, au premier lancement de
+ * la commande). Un accès typé une fois vaut mieux que trois `eslint-disable`,
+ * qui seraient trois occasions d'en oublier un.
+ */
+function premierSave(repo: Repo): Highlight {
+  const appels = repo.save.mock.calls as unknown as [Highlight][];
+  return appels[0][0];
 }
 
 describe('HighlightService', () => {
@@ -114,7 +137,7 @@ describe('HighlightService', () => {
       const dto = Object.assign(new UpdateHighlightDto(), { active: false });
       await service.update('h1', dto);
 
-      const saved = highlights.save.mock.calls[0][0] as Highlight;
+      const saved = premierSave(highlights);
       expect(saved.active).toBe(false);
       expect(saved.promoId).toBe('p1');
       expect(saved.imageKey).toBe('highlight-images/a1/photo.jpg');
@@ -123,13 +146,13 @@ describe('HighlightService', () => {
       expect(storageService.deleteObject).not.toHaveBeenCalled();
     });
 
-    it('retire la promo ciblée sur `clearPromo`, sans toucher à l\'image', async () => {
+    it("retire la promo ciblée sur `clearPromo`, sans toucher à l'image", async () => {
       highlights.findOne.mockResolvedValue(makeHighlight());
 
       const dto = Object.assign(new UpdateHighlightDto(), { clearPromo: true });
       await service.update('h1', dto);
 
-      const saved = highlights.save.mock.calls[0][0] as Highlight;
+      const saved = premierSave(highlights);
       expect(saved.promoId).toBeNull();
       expect(saved.imageKey).toBe('highlight-images/a1/photo.jpg');
     });
@@ -151,20 +174,24 @@ describe('HighlightService', () => {
       const dto = Object.assign(new UpdateHighlightDto(), { titre: '   ' });
       await service.update('h1', dto);
 
-      expect((highlights.save.mock.calls[0][0] as Highlight).titre).toBeNull();
+      expect(premierSave(highlights).titre).toBeNull();
     });
 
     it('refuse une diapositive qui ne montrerait plus rien', async () => {
       highlights.findOne.mockResolvedValue(makeHighlight({ imageKey: null }));
 
       const dto = Object.assign(new UpdateHighlightDto(), { clearPromo: true });
-      expect(await errorCode(service.update('h1', dto))).toBe('HIGHLIGHT_EMPTY_CONTENT');
+      expect(await errorCode(service.update('h1', dto))).toBe(
+        'HIGHLIGHT_EMPTY_CONTENT',
+      );
       expect(highlights.save).not.toHaveBeenCalled();
     });
   });
 
   describe('findForClient', () => {
-    it('retombe sur le classement calculé quand aucune curation n\'existe', async () => {
+    const COMMUNE = ['11111111-1111-4111-8111-111111111111'];
+
+    it("retombe sur le classement calculé quand aucune curation n'existe", async () => {
       highlights.find.mockResolvedValue([]);
       promoService.findActiveForClient.mockResolvedValue({
         items: [makePromo()],
@@ -173,7 +200,7 @@ describe('HighlightService', () => {
         limit: 8,
       });
 
-      const slides = await service.findForClient();
+      const slides = await service.findForClient(COMMUNE);
 
       expect(slides).toHaveLength(1);
       expect(slides[0].curated).toBe(false);
@@ -181,7 +208,38 @@ describe('HighlightService', () => {
       expect(slides[0].id).toBe('auto-p1');
     });
 
-    it('écarte une diapositive dont la promo n\'est plus visible, et bascule sur le repli si plus rien ne reste', async () => {
+    it('transmet bien la commune au classement de repli', async () => {
+      highlights.find.mockResolvedValue([]);
+      promoService.findActiveForClient.mockResolvedValue({
+        items: [],
+        total: 0,
+        page: 1,
+        limit: 8,
+      });
+
+      await service.findForClient(COMMUNE);
+
+      const [query] = promoService.findActiveForClient.mock
+        .calls[0] as unknown as [{ communeIds?: string[] }];
+      expect(query.communeIds).toEqual(COMMUNE);
+    });
+
+    // ⚠️ Le cas fondateur (2026-08-05). `findActiveForClient` traite
+    // `communeIds` vide comme AUCUN FILTRE, pas comme AUCUNE COMMUNE : le
+    // repli composait donc une vitrine « Top promos » tirée de toutes les
+    // communes pour un client qui n'en a choisi aucune. Mieux vaut ne rien
+    // montrer que montrer faux — et l'app replie d'elle-même un bandeau vide.
+    it('ne compose AUCUN repli sans commune — une vitrine vide plutôt que fausse', async () => {
+      highlights.find.mockResolvedValue([]);
+
+      expect(await service.findForClient()).toEqual([]);
+      expect(await service.findForClient([])).toEqual([]);
+      // Décisif : la requête ne part même pas. La tester par son résultat
+      // seul laisserait passer un filtre appliqué puis ignoré.
+      expect(promoService.findActiveForClient).not.toHaveBeenCalled();
+    });
+
+    it("écarte une diapositive dont la promo n'est plus visible, et bascule sur le repli si plus rien ne reste", async () => {
       highlights.find.mockResolvedValue([makeHighlight({ imageKey: null })]);
       promoService.findVisibleByIds.mockResolvedValue([]);
       promoService.findActiveForClient.mockResolvedValue({
@@ -191,13 +249,24 @@ describe('HighlightService', () => {
         limit: 8,
       });
 
-      const slides = await service.findForClient();
+      const slides = await service.findForClient(COMMUNE);
 
       expect(slides).toHaveLength(1);
       expect(slides[0].curated).toBe(false);
     });
 
-    it('garde une affiche sans promo tant qu\'elle porte une image', async () => {
+    it('sert la curation même sans commune — elle est globale par décision produit', async () => {
+      highlights.find.mockResolvedValue([
+        makeHighlight({ promoId: null, titre: 'Ramadan' }),
+      ]);
+
+      const slides = await service.findForClient();
+
+      expect(slides).toHaveLength(1);
+      expect(slides[0].curated).toBe(true);
+    });
+
+    it("garde une affiche sans promo tant qu'elle porte une image", async () => {
       highlights.find.mockResolvedValue([
         makeHighlight({ promoId: null, titre: 'Ramadan' }),
       ]);

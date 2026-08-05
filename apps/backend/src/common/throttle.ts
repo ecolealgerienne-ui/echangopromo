@@ -15,7 +15,9 @@ export const STRICT_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
  * commerces), mais toujours en dessous de la limite globale pour qu'un
  * compte compromis ne puisse pas spammer ces routes (audit V1 §2).
  */
-export const SENSITIVE_ACTION_THROTTLE = { default: { limit: 20, ttl: 60_000 } };
+export const SENSITIVE_ACTION_THROTTLE = {
+  default: { limit: 20, ttl: 60_000 },
+};
 
 /**
  * Lecture publique intrinsèquement bavarde : explorer une carte produit

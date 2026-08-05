@@ -20,7 +20,8 @@ const Map<String, String> errorMessagesFr = {
   'AUTH_TOKEN_MISSING': 'Vous devez être connecté pour effectuer cette action.',
   'AUTH_TOKEN_INVALID': 'Votre session a expiré. Reconnectez-vous.',
   'AUTH_TOKEN_REVOKED': 'Votre session a été révoquée. Reconnectez-vous.',
-  'AUTH_FORBIDDEN_ROLE': "Vous n'avez pas les droits pour effectuer cette action.",
+  'AUTH_FORBIDDEN_ROLE':
+      "Vous n'avez pas les droits pour effectuer cette action.",
 
   'ADMIN_NOT_FOUND': 'Administrateur introuvable.',
 
@@ -33,20 +34,32 @@ const Map<String, String> errorMessagesFr = {
 
   'REPORT_ALREADY_SUBMITTED': 'Vous avez déjà signalé cette promotion.',
 
-  'DEVICE_ID_MISSING': "Identifiant d'appareil manquant. Redémarrez l'application.",
+  'DEVICE_ID_MISSING':
+      "Identifiant d'appareil manquant. Redémarrez l'application.",
 
-  'STORAGE_INVALID_IMAGE': "Le fichier envoyé n'est pas une image valide. Réessayez avec une photo.",
-  'STORAGE_FILE_TOO_LARGE': 'La photo est trop volumineuse. Réessayez avec une autre photo.',
-  'STORAGE_PURPOSE_NOT_ALLOWED': "Ce type d'upload n'est pas autorisé pour ce compte.",
+  'STORAGE_INVALID_IMAGE':
+      "Le fichier envoyé n'est pas une image valide. Réessayez avec une photo.",
+  'STORAGE_FILE_TOO_LARGE':
+      'La photo est trop volumineuse. Réessayez avec une autre photo.',
+  'STORAGE_PURPOSE_NOT_ALLOWED':
+      "Ce type d'upload n'est pas autorisé pour ce compte.",
+  'STORAGE_KEY_NOT_OWNED':
+      "Cette photo n'a pas été envoyée depuis ce compte. Renvoyez-la.",
 
   'HIGHLIGHT_NOT_FOUND': 'Mise en avant introuvable.',
   'HIGHLIGHT_EMPTY_CONTENT':
       'Une mise en avant doit cibler une promo ou porter une image importée.',
+  // Le message backend interpole le plafond (`HIGHLIGHT_MAX_SLIDES`). On ne le
+  // recopie pas ici : ce serait dupliquer une constante serveur, et l'app
+  // mentirait le jour où elle change. Le geste à faire ne dépend pas du nombre.
+  'HIGHLIGHT_CAP_REACHED':
+      "Le bandeau d'accueil a atteint sa limite. Supprimez une mise en avant pour en ajouter une nouvelle.",
   'HIGHLIGHT_REORDER_MISMATCH':
       "L'ordre envoyé ne correspond plus aux mises en avant existantes. Rechargez la liste.",
 
   'PROMO_NOT_FOUND': 'Promotion introuvable.',
-  'PROMO_NOT_OWNED_BY_COMMERCANT': "Cette promotion n'appartient pas à ce commerçant.",
+  'PROMO_NOT_OWNED_BY_COMMERCANT':
+      "Cette promotion n'appartient pas à ce commerçant.",
   'PROMO_DATE_FIN_NOT_FUTURE': 'La date de fin doit être dans le futur.',
   'PROMO_ALREADY_PUBLISHED': 'Cette promotion est déjà publiée.',
   'PROMO_NOT_PUBLISHED': 'Seule une promotion publiée peut être arrêtée.',
@@ -56,20 +69,37 @@ const Map<String, String> errorMessagesFr = {
   'COMMERCANT_PHONE_TAKEN': 'Ce numéro de téléphone est déjà enregistré.',
   'COMMERCANT_NOT_FOUND': 'Commerçant introuvable.',
   'COMMERCANT_OLD_PIN_MISMATCH': "L'ancien PIN ne correspond pas.",
-  'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION': 'Aucune demande de vérification en attente.',
-  'COMMERCANT_NOT_IN_AGENT_COMMUNES': "Ce commerçant n'est dans aucune des communes de cet agent.",
-  'COMMERCANT_TERMS_NOT_ACCEPTED': "Vous devez accepter les conditions d'utilisation pour créer un compte.",
+  'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION':
+      'Aucune demande de vérification en attente.',
+  'COMMERCANT_NOT_IN_AGENT_COMMUNES':
+      "Ce commerçant n'est dans aucune des communes de cet agent.",
+  'COMMERCANT_TERMS_NOT_ACCEPTED':
+      "Vous devez accepter les conditions d'utilisation pour créer un compte.",
   'COMMERCANT_REGISTRE_NOT_VALIDATED':
       "Votre registre de commerce doit être validé par un administrateur avant de pouvoir publier des promos.",
-  'COMMERCANT_REGISTRE_KEY_MISMATCH': "Ce document n'appartient pas à ce commerçant.",
+  'COMMERCANT_REGISTRE_KEY_MISMATCH':
+      "Ce document n'appartient pas à ce commerçant.",
   'COMMERCANT_PROFILE_PENDING_REVIEW':
       'Les modifications de votre profil doivent être validées par un administrateur avant de pouvoir publier des promos.',
+  'COMMERCANT_ACCOUNT_INACTIVE':
+      'Ce compte commerçant est suspendu ou supprimé.',
+  'NOTIFICATION_NOT_FOUND': 'Cette notification n’est plus disponible.',
 
   'RATE_LIMITED': 'Trop de tentatives. Réessayez dans quelques instants.',
   'HTTP_ERROR': 'Une erreur est survenue.',
   'INTERNAL_ERROR': 'Une erreur inattendue est survenue. Réessayez plus tard.',
 
   /// Pas un `ErrorCode` backend — utilisé par [ApiException.fromDioError]
-  /// quand la requête n'a même pas atteint le serveur (pas de réponse HTTP).
-  'NETWORK_ERROR': 'Impossible de contacter le serveur. Vérifiez votre connexion.',
+  /// quand la requête n'a même pas atteint le serveur (**aucune** réponse
+  /// HTTP). Ne doit jamais servir de fourre-tout : voir [SERVER_UNAVAILABLE].
+  'NETWORK_ERROR':
+      'Impossible de contacter le serveur. Vérifiez votre connexion.',
+
+  /// Pas un `ErrorCode` backend non plus — une réponse HTTP est bien arrivée,
+  /// mais elle ne porte pas le contrat `{statusCode, code, message}` (page
+  /// d'erreur HTML d'un frontal, 502/504 de Traefik...). Distinct de
+  /// `NETWORK_ERROR` : dire « vérifiez votre connexion » quand la connexion
+  /// marche envoie l'utilisateur chercher une panne chez lui.
+  'SERVER_UNAVAILABLE':
+      'Le serveur est momentanément indisponible. Réessayez dans un instant.',
 };

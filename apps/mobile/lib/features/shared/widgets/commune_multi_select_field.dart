@@ -38,7 +38,8 @@ class CommuneMultiSelectField extends StatefulWidget {
   final bool constrainListHeight;
 
   @override
-  State<CommuneMultiSelectField> createState() => _CommuneMultiSelectFieldState();
+  State<CommuneMultiSelectField> createState() =>
+      _CommuneMultiSelectFieldState();
 }
 
 class _CommuneMultiSelectFieldState extends State<CommuneMultiSelectField> {
@@ -47,7 +48,8 @@ class _CommuneMultiSelectFieldState extends State<CommuneMultiSelectField> {
   @override
   void initState() {
     super.initState();
-    final wilayas = widget.communes.map((c) => c.wilaya).toSet().toList()..sort();
+    final wilayas = widget.communes.map((c) => c.wilaya).toSet().toList()
+      ..sort();
     _wilaya = wilayas.isNotEmpty ? wilayas.first : null;
   }
 
@@ -70,12 +72,15 @@ class _CommuneMultiSelectFieldState extends State<CommuneMultiSelectField> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final wilayas = widget.communes.map((c) => c.wilaya).toSet().toList()..sort();
-    final communesForWilaya = widget.communes.where((c) => c.wilaya == _wilaya).toList();
+    final wilayas = widget.communes.map((c) => c.wilaya).toSet().toList()
+      ..sort();
+    final communesForWilaya =
+        widget.communes.where((c) => c.wilaya == _wilaya).toList();
     final allSelectedInWilaya = communesForWilaya.isNotEmpty &&
-        communesForWilaya.every((c) => widget.selectedCommuneIds.contains(c.id));
-    final atCap =
-        widget.maxSelection != null && widget.selectedCommuneIds.length >= widget.maxSelection!;
+        communesForWilaya
+            .every((c) => widget.selectedCommuneIds.contains(c.id));
+    final atCap = widget.maxSelection != null &&
+        widget.selectedCommuneIds.length >= widget.maxSelection!;
 
     return Column(
       // `mainAxisSize.min` — sans ça, ce Column (mainAxisSize.max par
@@ -89,7 +94,9 @@ class _CommuneMultiSelectFieldState extends State<CommuneMultiSelectField> {
         DropdownButtonFormField<String>(
           initialValue: _wilaya,
           decoration: InputDecoration(labelText: l10n.wilayaLabel),
-          items: [for (final w in wilayas) DropdownMenuItem(value: w, child: Text(w))],
+          items: [
+            for (final w in wilayas) DropdownMenuItem(value: w, child: Text(w))
+          ],
           onChanged: (v) => setState(() => _wilaya = v),
         ),
         const SizedBox(height: 4),
@@ -103,7 +110,8 @@ class _CommuneMultiSelectFieldState extends State<CommuneMultiSelectField> {
             title: Text(l10n.selectAllInWilayaLabel),
             onChanged: communesForWilaya.isEmpty
                 ? null
-                : (checked) => _toggle(communesForWilaya.map((c) => c.id), checked ?? false),
+                : (checked) => _toggle(
+                    communesForWilaya.map((c) => c.id), checked ?? false),
           ),
         if (widget.constrainListHeight)
           ConstrainedBox(
@@ -116,7 +124,8 @@ class _CommuneMultiSelectFieldState extends State<CommuneMultiSelectField> {
             // est placé dans un `AlertDialog` (celui-ci calcule une largeur
             // intrinsèque pour dimensionner le dialogue). Liste de communes
             // par wilaya de taille modeste, pas besoin de virtualisation.
-            child: SingleChildScrollView(child: _communeCheckboxes(communesForWilaya, atCap)),
+            child: SingleChildScrollView(
+                child: _communeCheckboxes(communesForWilaya, atCap)),
           )
         else
           // Pas de plafond de hauteur ni de scroll interne : l'appelant
@@ -135,9 +144,10 @@ class _CommuneMultiSelectFieldState extends State<CommuneMultiSelectField> {
             dense: true,
             value: widget.selectedCommuneIds.contains(commune.id),
             title: Text(commune.nom),
-            onChanged: (atCap && !widget.selectedCommuneIds.contains(commune.id))
-                ? null
-                : (checked) => _toggle([commune.id], checked ?? false),
+            onChanged:
+                (atCap && !widget.selectedCommuneIds.contains(commune.id))
+                    ? null
+                    : (checked) => _toggle([commune.id], checked ?? false),
           ),
       ],
     );

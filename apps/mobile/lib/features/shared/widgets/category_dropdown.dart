@@ -4,7 +4,8 @@ import '../../../l10n/app_localizations.dart';
 import '../l10n/enum_labels.dart';
 
 class CategoryDropdown extends StatelessWidget {
-  const CategoryDropdown({super.key, required this.value, required this.onChanged});
+  const CategoryDropdown(
+      {super.key, required this.value, required this.onChanged});
 
   final Categorie? value;
   final ValueChanged<Categorie?> onChanged;
@@ -23,7 +24,9 @@ class CategoryDropdown extends StatelessWidget {
       decoration: InputDecoration(labelText: l10n.categoryLabel),
       items: [
         for (final categorie in Categorie.values)
-          DropdownMenuItem(value: categorie, child: Text(categorieLabel(context, categorie))),
+          DropdownMenuItem(
+              value: categorie,
+              child: Text(categorieLabel(context, categorie))),
       ],
       onChanged: onChanged,
       validator: (value) => value == null ? l10n.categoryRequired : null,

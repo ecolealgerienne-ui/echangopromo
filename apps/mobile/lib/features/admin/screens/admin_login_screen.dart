@@ -47,11 +47,9 @@ class _AdminLoginScreenState extends ConsumerState<AdminLoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      await ref.read(authControllerProvider.notifier).loginThenResolveId(
-            role: AppRole.admin,
-            token: token,
-            fetchId: () async => (await api.me()).id,
-          );
+      await ref
+          .read(authControllerProvider.notifier)
+          .login(AuthSession(role: AppRole.admin, token: token));
       if (mounted) context.go('/admin/dashboard');
     } catch (error) {
       setState(() => _error = extractApiErrorMessage(
@@ -82,18 +80,23 @@ class _AdminLoginScreenState extends ConsumerState<AdminLoginScreen> {
                 controller: _emailController,
                 decoration: InputDecoration(labelText: l10n.emailLabel),
                 keyboardType: TextInputType.emailAddress,
-                validator: (v) => (v == null || !v.contains('@')) ? l10n.emailInvalid : null,
+                validator: (v) =>
+                    (v == null || !v.contains('@')) ? l10n.emailInvalid : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _passwordController,
                 decoration: InputDecoration(labelText: l10n.passwordLabel),
                 obscureText: true,
-                validator: (v) => (v == null || v.isEmpty) ? l10n.passwordRequired : null,
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? l10n.passwordRequired : null,
               ),
               ErrorText(_error),
               const SizedBox(height: 16),
-              LoadingButton(loading: _loading, onPressed: _submit, label: l10n.loginLabel),
+              LoadingButton(
+                  loading: _loading,
+                  onPressed: _submit,
+                  label: l10n.loginLabel),
             ],
           ),
         ),

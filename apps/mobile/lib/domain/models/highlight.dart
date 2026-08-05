@@ -38,10 +38,12 @@ class Highlight {
         imageUrl: json['imageUrl'] as String?,
         promoId: json['promoId'] as String?,
         promoDescription: json['promoDescription'] as String?,
-        prixAvant:
-            json['prixAvant'] != null ? double.parse(json['prixAvant'].toString()) : null,
-        prixApres:
-            json['prixApres'] != null ? double.parse(json['prixApres'].toString()) : null,
+        prixAvant: json['prixAvant'] != null
+            ? double.parse(json['prixAvant'].toString())
+            : null,
+        prixApres: json['prixApres'] != null
+            ? double.parse(json['prixApres'].toString())
+            : null,
         commercantNom: json['commercantNom'] as String?,
         position: json['position'] as int?,
         active: json['active'] as bool?,
@@ -99,5 +101,6 @@ class Highlight {
 
   /// Le badge de réduction n'a de sens que sur une diapositive qui cible
   /// une promo réelle avec deux prix.
-  bool get hasDiscount => prixAvant != null && prixApres != null && prixAvant! > prixApres!;
+  bool get hasDiscount =>
+      prixAvant != null && prixApres != null && prixAvant! > prixApres!;
 }

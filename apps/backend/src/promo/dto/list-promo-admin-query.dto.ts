@@ -1,7 +1,16 @@
-import { IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 import { Categorie } from '../../common/enums/categorie.enum';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
-import { PromoLifecycleStatus, PromoModerationStatus } from '../entities/promo.entity';
+import {
+  PromoLifecycleStatus,
+  PromoModerationStatus,
+} from '../entities/promo.entity';
 
 /**
  * Vue admin/agent (plan de correction, Phase 2) : liste globale de toutes

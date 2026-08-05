@@ -22,10 +22,12 @@ class CreateCommercantScreen extends ConsumerStatefulWidget {
   const CreateCommercantScreen({super.key});
 
   @override
-  ConsumerState<CreateCommercantScreen> createState() => _CreateCommercantScreenState();
+  ConsumerState<CreateCommercantScreen> createState() =>
+      _CreateCommercantScreenState();
 }
 
-class _CreateCommercantScreenState extends ConsumerState<CreateCommercantScreen> {
+class _CreateCommercantScreenState
+    extends ConsumerState<CreateCommercantScreen> {
   final _formKey = GlobalKey<FormState>();
   final _telephoneController = TextEditingController();
   final _nomController = TextEditingController();
@@ -65,7 +67,9 @@ class _CreateCommercantScreenState extends ConsumerState<CreateCommercantScreen>
     try {
       String? photoKey;
       if (_photo != null) {
-        photoKey = await ref.read(storageApiProvider).uploadPhoto(_photo!, purpose: 'commercant');
+        photoKey = await ref
+            .read(storageApiProvider)
+            .uploadPhoto(_photo!, purpose: 'commercant');
       }
       final commercant = await ref.read(agentApiProvider).createCommercant(
             telephone: _telephoneController.text.trim(),
@@ -85,8 +89,12 @@ class _CreateCommercantScreenState extends ConsumerState<CreateCommercantScreen>
             title: Text(l10n.commercantCreatedTitle),
             content: Text(l10n.addFirstPromoQuestion),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.laterLabel)),
-              FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(l10n.yesLabel)),
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: Text(l10n.laterLabel)),
+              FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: Text(l10n.yesLabel)),
             ],
           ),
         );
@@ -164,11 +172,15 @@ class _CreateCommercantScreenState extends ConsumerState<CreateCommercantScreen>
                 keyboardType: TextInputType.number,
                 obscureText: true,
                 maxLength: 12,
-                validator: (v) => (v != _pinController.text) ? l10n.pinMismatch : null,
+                validator: (v) =>
+                    (v != _pinController.text) ? l10n.pinMismatch : null,
               ),
               ErrorText(_error),
               const SizedBox(height: 16),
-              LoadingButton(loading: _loading, onPressed: _submit, label: l10n.createLabel),
+              LoadingButton(
+                  loading: _loading,
+                  onPressed: _submit,
+                  label: l10n.createLabel),
             ],
           ),
         ),

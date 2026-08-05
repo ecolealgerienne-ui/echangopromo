@@ -102,7 +102,8 @@ class MultiPhotoPickerField extends StatelessWidget {
               ? InkWell(
                   borderRadius: BorderRadius.circular(8),
                   onTap: () => _addPhoto(context),
-                  child: Icon(Icons.add_a_photo_outlined, color: colorScheme.onSurfaceVariant),
+                  child: Icon(Icons.add_a_photo_outlined,
+                      color: colorScheme.onSurfaceVariant),
                 )
               : Icon(Icons.image_outlined, color: colorScheme.outlineVariant),
         ),
@@ -118,7 +119,8 @@ class MultiPhotoPickerField extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: switch (item) {
-              ExistingPhotoItem(:final url) => Image.network(url, fit: BoxFit.cover),
+              ExistingPhotoItem(:final url) =>
+                Image.network(url, fit: BoxFit.cover),
               NewPhotoItem(:final file) => Image.file(file, fit: BoxFit.cover),
             },
           ),
@@ -157,7 +159,8 @@ class MultiPhotoPickerField extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        Text(l10n.promoPhotosHint, style: Theme.of(context).textTheme.bodySmall),
+        Text(l10n.promoPhotosHint,
+            style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }

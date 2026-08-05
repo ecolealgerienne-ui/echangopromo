@@ -15,4 +15,5 @@ export const PIN_SET_MESSAGE = 'Le code PIN doit contenir 6 à 12 chiffres';
  * des commerçants déjà actifs.
  */
 export const PIN_VERIFY_PATTERN = /^\d{4,12}$/;
-export const PIN_VERIFY_MESSAGE = 'Le code PIN doit contenir entre 4 et 12 chiffres';
+export const PIN_VERIFY_MESSAGE =
+  'Le code PIN doit contenir entre 4 et 12 chiffres';

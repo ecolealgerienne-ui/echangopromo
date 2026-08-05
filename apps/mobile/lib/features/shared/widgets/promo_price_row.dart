@@ -21,7 +21,8 @@ class PromoPriceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
+    final currency =
+        NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA', decimalDigits: 0);
 
     return Row(
       mainAxisSize: MainAxisSize.min,

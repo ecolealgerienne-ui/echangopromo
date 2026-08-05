@@ -45,7 +45,8 @@ class PromoCard extends StatelessWidget {
     // pleine résolution de l'image source (jusqu'à 1200px) — sans ça,
     // chaque vignette de la liste garde en mémoire ~150x plus de pixels
     // que ce qui est réellement montré.
-    final photoCachePx = (_photoSize * MediaQuery.of(context).devicePixelRatio).round();
+    final photoCachePx =
+        (_photoSize * MediaQuery.of(context).devicePixelRatio).round();
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -70,7 +71,8 @@ class PromoCard extends StatelessWidget {
                               memCacheWidth: photoCachePx,
                               memCacheHeight: photoCachePx,
                             )
-                          : Container(color: colorScheme.surfaceContainerHighest),
+                          : Container(
+                              color: colorScheme.surfaceContainerHighest),
                     ),
                   ),
                   // Affiché en permanence quand il est cliquable : un cœur
@@ -91,10 +93,14 @@ class PromoCard extends StatelessWidget {
                             // seraient sous le minimum atteignable au pouce.
                             padding: const EdgeInsets.all(6),
                             child: Icon(
-                              isFavorite ? Icons.favorite : Icons.favorite_border,
+                              isFavorite
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
                               size: 16,
                               color: isFavorite
-                                  ? Colors.redAccent
+                                  ? Theme.of(context)
+                                      .extension<AppSemanticColors>()!
+                                      .favorite
                                   : colorScheme.onSurfaceVariant,
                             ),
                           ),
@@ -138,7 +144,8 @@ class PromoCard extends StatelessWidget {
                         PromoDiscountBadge(
                           prixAvant: promo.prixAvant,
                           prixApres: promo.prixApres,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           textStyle: Theme.of(context).textTheme.labelSmall,
                         ),
                       ],
@@ -148,7 +155,9 @@ class PromoCard extends StatelessWidget {
                       Text(
                         l10n.expiringSoonBadgeLabel,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: Theme.of(context).extension<AppSemanticColors>()!.warning,
+                              color: Theme.of(context)
+                                  .extension<AppSemanticColors>()!
+                                  .warning,
                               fontWeight: FontWeight.w600,
                             ),
                       ),

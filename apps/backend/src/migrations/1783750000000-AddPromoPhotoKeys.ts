@@ -13,14 +13,20 @@ export class AddPromoPhotoKeys1783750000000 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "promo" ADD "photoKeys" text[] NOT NULL DEFAULT '{}'`,
     );
-    await queryRunner.query(`UPDATE "promo" SET "photoKeys" = ARRAY["photoKey"]`);
+    await queryRunner.query(
+      `UPDATE "promo" SET "photoKeys" = ARRAY["photoKey"]`,
+    );
     await queryRunner.query(`ALTER TABLE "promo" DROP COLUMN "photoKey"`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "promo" ADD "photoKey" character varying`);
+    await queryRunner.query(
+      `ALTER TABLE "promo" ADD "photoKey" character varying`,
+    );
     await queryRunner.query(`UPDATE "promo" SET "photoKey" = "photoKeys"[1]`);
-    await queryRunner.query(`ALTER TABLE "promo" ALTER COLUMN "photoKey" SET NOT NULL`);
+    await queryRunner.query(
+      `ALTER TABLE "promo" ALTER COLUMN "photoKey" SET NOT NULL`,
+    );
     await queryRunner.query(`ALTER TABLE "promo" DROP COLUMN "photoKeys"`);
   }
 }

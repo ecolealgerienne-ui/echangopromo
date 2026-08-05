@@ -60,7 +60,10 @@ export class AgentController {
         "Cette commune n'est pas rattachée à cet agent",
       );
     }
-    const commercant = await this.commercantService.createByAgent(dto, agent.id);
+    const commercant = await this.commercantService.createByAgent(
+      dto,
+      agent.id,
+    );
     await this.auditLogService.record({
       actorType: AuditActorType.AGENT,
       actorId: agent.id,

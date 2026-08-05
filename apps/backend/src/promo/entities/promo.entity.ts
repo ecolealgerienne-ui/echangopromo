@@ -10,6 +10,13 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Categorie } from '../../common/enums/categorie.enum';
+
+/**
+ * Prix maximal représentable par les colonnes `numeric(10, 2)` de cette entité
+ * — 8 chiffres avant la virgule, 2 après. Nommé ici, à côté des colonnes qu'il
+ * décrit, et importé par les DTO : la borne ne doit exister qu'une fois.
+ */
+export const PRIX_MAX = 99_999_999.99;
 import { Commercant } from '../../commercant/entities/commercant.entity';
 
 /**
@@ -76,6 +83,15 @@ export class Promo {
   @Column({ length: 140 })
   description: string;
 
+  /**
+   * ⚠️ **`PRIX_MAX` n'est pas décoratif : la colonne refuse au-delà.**
+   * `numeric(10, 2)` plafonne à 99 999 999,99 — un prix supérieur fait lever
+   * Postgres en `22003 numeric field value out of range`, qui n'est rattrapé
+   * nulle part et sort donc en `500 INTERNAL_ERROR`. Les DTO portent un
+   * `@Max(PRIX_MAX)` pour que ce soit un refus de validation, pas une panne
+   * (revue 2026-08-05, règle #34 : ce que la base refuse, l'entrée doit le
+   * refuser d'abord).
+   */
   @Column({ type: 'numeric', precision: 10, scale: 2 })
   prixAvant: string;
 
@@ -95,8 +111,18 @@ export class Promo {
    * `GET /promo/me/all` (propriétaire authentifié uniquement) pour permettre
    * l'édition sans réuploader les photos inchangées.
    */
+  /**
+   * ⚠️ `default: '{}'` déclaré parce que **la colonne le porte en base**
+   * (`1783750000000-AddPromoPhotoKeys`, où il servait à remplir les lignes
+   * existantes lors du passage de `photoKey` à `photoKeys`). Sans cette
+   * déclaration, chaque `migration:generate` proposait
+   * `ALTER COLUMN "photoKeys" DROP DEFAULT` — du bruit, mais du bruit dans
+   * lequel une ligne dangereuse peut passer inaperçue (2026-08-05).
+   *
+   * Ce défaut n'est jamais utilisé en pratique : le DTO exige 1 à 3 clés.
+   */
   @Exclude()
-  @Column('text', { array: true })
+  @Column('text', { array: true, default: () => "'{}'" })
   photoKeys: string[];
 
   /**

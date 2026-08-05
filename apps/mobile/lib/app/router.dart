@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -42,7 +43,6 @@ import '../features/commercant/screens/promo_form_screen.dart';
 import '../features/commercant/screens/registre_resend_screen.dart';
 import '../features/dev/screens/dev_profile_switcher_screen.dart';
 import '../features/onboarding/screens/location_permission_screen.dart';
-import '../features/onboarding/screens/location_second_chance_screen.dart';
 import '../features/onboarding/screens/role_choice_screen.dart';
 import '../features/onboarding/screens/splash_screen.dart';
 import '../features/shared/screens/legal_document_screen.dart';
@@ -70,29 +70,36 @@ class _AppRoute {
   }
 }
 
-Widget _unusedBuilder(BuildContext context, GoRouterState state) => const SizedBox.shrink();
+Widget _unusedBuilder(BuildContext context, GoRouterState state) =>
+    const SizedBox.shrink();
 
 final _appRoutes = <_AppRoute>[
   _AppRoute('/', (context, state) => const PromoListScreen()),
-  _AppRoute('/select-commune', (context, state) => const CommuneSelectionScreen()),
+  _AppRoute(
+      '/select-commune', (context, state) => const CommuneSelectionScreen()),
   // Carte "autour de moi" — publique comme la liste : pas de compte client.
   _AppRoute('/carte', (context, state) => const MapScreen()),
   // Premier lancement (splash → rôle → localisation). Publics : ces écrans
   // précèdent par nature toute authentification.
   _AppRoute('/onboarding', (context, state) => const SplashScreen()),
   _AppRoute('/onboarding/role', (context, state) => const RoleChoiceScreen()),
-  _AppRoute('/onboarding/location', (context, state) => const LocationPermissionScreen()),
-  _AppRoute(
-    '/onboarding/location/second-chance',
-    (context, state) => const LocationSecondChanceScreen(),
-  ),
+  _AppRoute('/onboarding/location',
+      (context, state) => const LocationPermissionScreen()),
   // Publics, sans rôle requis — accessibles depuis l'inscription commerçant
   // et un lien général (plan de correction, Phase 4).
   _AppRoute('/legal/cgu', (context, state) => const LegalDocumentScreen.cgu()),
-  _AppRoute('/legal/confidentialite', (context, state) => const LegalDocumentScreen.privacy()),
+  _AppRoute('/legal/confidentialite',
+      (context, state) => const LegalDocumentScreen.privacy()),
   // TEMPORAIRE — écran de test pour basculer entre profils, à supprimer
   // avant l'ouverture publique (voir commentaire en tête du fichier).
-  _AppRoute('/dev/profiles', (context, state) => const DevProfileSwitcherScreen()),
+  //
+  // ⚠️ `kDebugMode` plutôt qu'un commentaire « à supprimer » : la phrase
+  // existait depuis la création du fichier et n'a rien tenu — un commentaire
+  // ne peut pas échouer (règle #30). La route n'est plus **construite** en
+  // release, elle ne peut donc plus être atteinte même par URL directe.
+  if (kDebugMode)
+    _AppRoute(
+        '/dev/profiles', (context, state) => const DevProfileSwitcherScreen()),
   _AppRoute(
     '/promo/:id',
     (context, state) => PromoDetailScreen(promoId: state.pathParameters['id']!),
@@ -109,8 +116,10 @@ final _appRoutes = <_AppRoute>[
 
   // Commerçant
   _AppRoute('/commercant', (context, state) => const CommercantLoginScreen()),
-  _AppRoute('/commercant/login', (context, state) => const CommercantLoginScreen()),
-  _AppRoute('/commercant/register', (context, state) => const CommercantRegisterScreen()),
+  _AppRoute(
+      '/commercant/login', (context, state) => const CommercantLoginScreen()),
+  _AppRoute('/commercant/register',
+      (context, state) => const CommercantRegisterScreen()),
   _AppRoute(
     '/commercant/dashboard',
     (context, state) => const CommercantDashboardScreen(),
@@ -183,7 +192,8 @@ final _appRoutes = <_AppRoute>[
   // moderation/promos ci-dessus (widget partagé, backend scope par JWT).
   _AppRoute(
     '/agent/promo-detail',
-    (context, state) => AdminPromoDetailScreen(item: state.extra as ModerationItem),
+    (context, state) =>
+        AdminPromoDetailScreen(item: state.extra as ModerationItem),
     requiredRole: AppRole.agent,
   ),
   _AppRoute(
@@ -193,7 +203,8 @@ final _appRoutes = <_AppRoute>[
   ),
   _AppRoute(
     '/agent/commercants/detail',
-    (context, state) => AdminCommercantDetailScreen(item: state.extra as AdminCommercantItem),
+    (context, state) =>
+        AdminCommercantDetailScreen(item: state.extra as AdminCommercantItem),
     requiredRole: AppRole.agent,
   ),
 
@@ -220,7 +231,8 @@ final _appRoutes = <_AppRoute>[
   ),
   _AppRoute(
     '/admin/promo-detail',
-    (context, state) => AdminPromoDetailScreen(item: state.extra as ModerationItem),
+    (context, state) =>
+        AdminPromoDetailScreen(item: state.extra as ModerationItem),
     requiredRole: AppRole.admin,
   ),
   _AppRoute(
@@ -230,7 +242,8 @@ final _appRoutes = <_AppRoute>[
   ),
   _AppRoute(
     '/admin/commercants/detail',
-    (context, state) => AdminCommercantDetailScreen(item: state.extra as AdminCommercantItem),
+    (context, state) =>
+        AdminCommercantDetailScreen(item: state.extra as AdminCommercantItem),
     requiredRole: AppRole.admin,
   ),
   // Curation du bandeau « Top promos » de l'accueil client — admin seul
@@ -247,7 +260,8 @@ final _appRoutes = <_AppRoute>[
   ),
   _AppRoute(
     '/admin/highlights/edit',
-    (context, state) => AdminHighlightFormScreen(existing: state.extra as Highlight),
+    (context, state) =>
+        AdminHighlightFormScreen(existing: state.extra as Highlight),
     requiredRole: AppRole.admin,
   ),
   _AppRoute(
@@ -329,13 +343,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       // commune en tête de l'accueil y mène) — seule la redirection
       // obligatoire est suspendue.
       //
-      // Effet de bord à connaître : sans commune sélectionnée,
-      // `selectedCommunesProvider` est vide, donc `communeIds` n'est pas
-      // envoyé et le backend ne filtre pas — l'accueil affiche les promos
-      // de toutes les communes. Acceptable au volume du pilote, à
-      // réactiver avant l'extension multi-wilaya.
+      // ⚠️ **L'effet de bord décrit ici jusqu'au 2026-08-05 n'existe plus.**
+      // Il disait que sans commune sélectionnée, l'accueil affichait les
+      // promos de toutes les communes (le backend traitant `communeIds: []`
+      // comme *aucun filtre*), et jugeait ça « acceptable au volume du
+      // pilote ». Ça ne l'était pas : ce n'était pas une liste dégradée mais
+      // une liste **fausse**, présentée sans réserve sous un en-tête annonçant
+      // la zone du client.
       //
-      // Pour rétablir : décommenter le bloc ci-dessous.
+      // Résolu autrement que par cette redirection, et c'est le point : la
+      // redirection avait été coupée parce qu'elle **bloquait** l'accueil au
+      // premier lancement. `PromoListScreen` affiche désormais
+      // `_NoCommuneSelected` à la place de la seule liste — l'accueil reste
+      // atteignable, les filtres et la vitrine restent visibles, et le client
+      // voit le geste qui lui manque au lieu d'un résultat qui n'est pas le
+      // sien. La requête n'est même plus émise (`PromoListController._load`).
+      //
+      // Rétablir la redirection redeviendrait donc un choix de produit
+      // (forcer avant de laisser entrer), plus un correctif : décommenter le
+      // bloc ci-dessous.
       //
       // if (path == '/' && ref.read(selectedCommunesProvider).isEmpty) {
       //   return '/select-commune';
@@ -345,13 +371,19 @@ final routerProvider = Provider<GoRouter>((ref) {
       // connecté avec ce rôle, sinon vers l'écran de connexion — distinct
       // d'une protection de route (pas de `requiredRole` à vérifier ici).
       if (path == '/commercant') {
-        return session?.role == AppRole.commercant ? '/commercant/dashboard' : '/commercant/login';
+        return session?.role == AppRole.commercant
+            ? '/commercant/dashboard'
+            : '/commercant/login';
       }
       if (path == '/agent') {
-        return session?.role == AppRole.agent ? '/agent/dashboard' : '/agent/login';
+        return session?.role == AppRole.agent
+            ? '/agent/dashboard'
+            : '/agent/login';
       }
       if (path == '/admin') {
-        return session?.role == AppRole.admin ? '/admin/dashboard' : '/admin/login';
+        return session?.role == AppRole.admin
+            ? '/admin/dashboard'
+            : '/admin/login';
       }
 
       final requiredRole = _appRoutes
@@ -367,7 +399,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      for (final route in _appRoutes) GoRoute(path: route.path, builder: route.builder),
+      for (final route in _appRoutes)
+        GoRoute(path: route.path, builder: route.builder),
     ],
   );
 });

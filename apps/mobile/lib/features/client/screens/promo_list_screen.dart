@@ -63,12 +63,16 @@ class PromoListScreen extends ConsumerWidget {
     final search = ref.watch(searchQueryProvider);
     final expanded = ref.watch(listExpandedProvider);
     final density = ref.watch(promoDensityProvider);
+    final selectedCommunes = ref.watch(selectedCommunesProvider);
 
     // Liste en plein écran : soit le client a filtré (catégorie, recherche,
     // favoris) et cherche donc quelque chose de précis, soit il a simplement
     // tiré la liste vers le haut. Même disposition dans les deux cas — la
     // vitrine du haut n'a plus lieu d'être.
-    final focused = expanded || selectedCategorie != null || search.isNotEmpty || favoritesOnly;
+    final focused = expanded ||
+        selectedCategorie != null ||
+        search.isNotEmpty ||
+        favoritesOnly;
 
     return Scaffold(
       body: SafeArea(
@@ -94,69 +98,144 @@ class PromoListScreen extends ConsumerWidget {
               count: promos.length,
             ),
             Expanded(
-              child: switch (promoListState.status) {
-                PromoListStatus.loading => const Center(child: CircularProgressIndicator()),
-                PromoListStatus.error => Center(child: ApiErrorText(promoListState.error!)),
-                PromoListStatus.loaded => RefreshIndicator(
-                    onRefresh: () => ref.read(promoListProvider.notifier).refresh(),
-                    // `CustomScrollView` plutôt qu'une `ListView` ou une
-                    // `GridView` selon la densité : le pied de liste (bouton
-                    // « charger plus ») et le message de liste vide sont
-                    // partagés par les trois dispositions, et seul un sliver
-                    // permet de changer la grille sans les dupliquer.
-                    child: CustomScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      slivers: [
-                        if (promos.isEmpty)
-                          SliverFillRemaining(
-                            hasScrollBody: false,
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 80),
-                              child: Text(
-                                search.isEmpty
-                                    ? l10n.noActivePromos
-                                    : l10n.noSearchResults(search),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          )
-                        else
-                          SliverPadding(
-                            padding: const EdgeInsets.symmetric(horizontal: _listPadding),
-                            sliver: _PromoSliver(
-                              density: density,
-                              promos: promos,
-                              favorites: favorites,
-                            ),
+              // ⚠️ « Aucune commune choisie » n'est PAS « aucune promo », et
+              // c'est vérifié avant le statut de chargement : un client non
+              // configuré ne doit voir ni liste, ni spinner, ni erreur d'API,
+              // mais le geste qui lui manque. Seule la liste est remplacée —
+              // la barre de recherche, la vitrine et les catégories restent
+              // (demande 2026-08-05).
+              child: selectedCommunes.isEmpty
+                  ? const _NoCommuneSelected()
+                  : switch (promoListState.status) {
+                      PromoListStatus.loading =>
+                        const Center(child: CircularProgressIndicator()),
+                      PromoListStatus.error =>
+                        Center(child: ApiErrorText(promoListState.error!)),
+                      PromoListStatus.loaded => RefreshIndicator(
+                          onRefresh: () =>
+                              ref.read(promoListProvider.notifier).refresh(),
+                          // `CustomScrollView` plutôt qu'une `ListView` ou une
+                          // `GridView` selon la densité : le pied de liste (bouton
+                          // « charger plus ») et le message de liste vide sont
+                          // partagés par les trois dispositions, et seul un sliver
+                          // permet de changer la grille sans les dupliquer.
+                          child: CustomScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            slivers: [
+                              if (promos.isEmpty)
+                                SliverFillRemaining(
+                                  hasScrollBody: false,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(top: 80),
+                                    child: Text(
+                                      search.isEmpty
+                                          ? l10n.noActivePromos
+                                          : l10n.noSearchResults(search),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                )
+                              else
+                                SliverPadding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: _listPadding),
+                                  sliver: _PromoSliver(
+                                    density: density,
+                                    promos: promos,
+                                    favorites: favorites,
+                                  ),
+                                ),
+                              if (promos.isNotEmpty && promoListState.hasMore)
+                                SliverToBoxAdapter(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: _listSpacing),
+                                    child: Center(
+                                      child: promoListState.loadingMore
+                                          ? const SizedBox(
+                                              height: 24,
+                                              width: 24,
+                                              child: CircularProgressIndicator(
+                                                  strokeWidth: 2),
+                                            )
+                                          : OutlinedButton(
+                                              onPressed: () =>
+                                                  _loadMore(context, ref),
+                                              child: Text(
+                                                  l10n.loadMoreButtonLabel),
+                                            ),
+                                    ),
+                                  ),
+                                ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: _listPadding)),
+                            ],
                           ),
-                        if (promos.isNotEmpty && promoListState.hasMore)
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: _listSpacing),
-                              child: Center(
-                                child: promoListState.loadingMore
-                                    ? const SizedBox(
-                                        height: 24,
-                                        width: 24,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      )
-                                    : OutlinedButton(
-                                        onPressed: () => _loadMore(context, ref),
-                                        child: Text(l10n.loadMoreButtonLabel),
-                                      ),
-                              ),
-                            ),
-                          ),
-                        const SliverToBoxAdapter(child: SizedBox(height: _listPadding)),
-                      ],
-                    ),
-                  ),
-              },
+                        ),
+                    },
             ),
           ],
         ),
       ),
       bottomNavigationBar: const _ClientTabBar(),
+    );
+  }
+}
+
+/// Ce qu'on affiche **à la place de la liste** quand aucune commune n'est
+/// choisie — nouveau client, ou client existant dont la sélection est vide.
+///
+/// ── Pourquoi ce n'est pas un cas de liste vide ────────────────────────────
+///
+/// Le serveur ne traite pas `communeIds: []` comme « aucune commune » mais
+/// comme **aucun filtre** (`if (query.communeIds?.length)`,
+/// `PromoService.findActiveForClient`). Un client non configuré ne voyait donc
+/// pas une liste vide : il voyait **toutes les promos de toutes les communes**,
+/// présentées comme les siennes, sous un en-tête annonçant sa zone. Un résultat
+/// faux affiché avec assurance, pas une absence.
+///
+/// D'où deux messages distincts et non un seul : « aucune promo » dit qu'il
+/// n'y a rien à voir, celui-ci dit qu'il manque un réglage pour voir — l'inverse
+/// exact (règle #29, deux messages pour « vide » et « pas configuré »).
+class _NoCommuneSelected extends StatelessWidget {
+  const _NoCommuneSelected();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.location_off_outlined,
+                size: 48, color: colorScheme.onSurfaceVariant),
+            const SizedBox(height: 16),
+            Text(
+              l10n.noCommuneSelectedTitle,
+              style: textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.noCommuneSelectedBody,
+              style: textTheme.bodyMedium
+                  ?.copyWith(color: colorScheme.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: () => context.push('/select-commune'),
+              icon: const Icon(Icons.tune),
+              label: Text(l10n.noCommuneSelectedAction),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -189,7 +268,8 @@ class _PromoSliver extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     void open(Promo promo) => context.push('/promo/${promo.id}');
-    void toggle(Promo promo) => ref.read(favoritesProvider.notifier).toggle(promo.id);
+    void toggle(Promo promo) =>
+        ref.read(favoritesProvider.notifier).toggle(promo.id);
 
     // La ligne détaillée n'a pas de hauteur fixe — le badge « expire
     // bientôt » et une description sur deux lignes la font varier. Une
@@ -197,7 +277,8 @@ class _PromoSliver extends ConsumerWidget {
     if (density == PromoDensity.list) {
       return SliverList.separated(
         itemCount: promos.length,
-        separatorBuilder: (context, index) => const SizedBox(height: _listSpacing),
+        separatorBuilder: (context, index) =>
+            const SizedBox(height: _listSpacing),
         itemBuilder: (context, index) {
           final promo = promos[index];
           return PromoCard(
@@ -300,7 +381,8 @@ class _TopBarState extends ConsumerState<_TopBar> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.location_on, size: 18, color: colorScheme.primary),
+                        Icon(Icons.location_on,
+                            size: 18, color: colorScheme.primary),
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
@@ -310,7 +392,8 @@ class _TopBarState extends ConsumerState<_TopBar> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        Icon(Icons.expand_more, size: 18, color: colorScheme.onSurfaceVariant),
+                        Icon(Icons.expand_more,
+                            size: 18, color: colorScheme.onSurfaceVariant),
                       ],
                     ),
                   ),
@@ -338,7 +421,8 @@ class _TopBarState extends ConsumerState<_TopBar> {
                           )
                         : null,
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                    contentPadding: const EdgeInsets.symmetric(
+                        vertical: 12, horizontal: 12),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(AppRadii.pill),
                       borderSide: BorderSide(color: colorScheme.outlineVariant),
@@ -380,7 +464,8 @@ class _TopPromosSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final textTheme = Theme.of(context).textTheme;
-    final highlights = ref.watch(topPromosProvider).valueOrNull ?? const <Highlight>[];
+    final highlights =
+        ref.watch(topPromosProvider).valueOrNull ?? const <Highlight>[];
     if (highlights.isEmpty) return const SizedBox.shrink();
 
     return Column(
@@ -398,7 +483,8 @@ class _TopPromosSection extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: highlights.length,
             separatorBuilder: (context, index) => const SizedBox(width: 10),
-            itemBuilder: (context, index) => _TopPromoCard(highlight: highlights[index]),
+            itemBuilder: (context, index) =>
+                _TopPromoCard(highlight: highlights[index]),
           ),
         ),
         const SizedBox(height: 4),
@@ -484,15 +570,16 @@ class _TopPromoCard extends StatelessWidget {
                         titre,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: textTheme.titleSmall?.copyWith(color: Colors.white),
+                        style:
+                            textTheme.titleSmall?.copyWith(color: Colors.white),
                       ),
                     if (sousTitre != null)
                       Text(
                         sousTitre,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodySmall
-                            ?.copyWith(color: Colors.white.withValues(alpha: 0.85)),
+                        style: textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.85)),
                       ),
                   ],
                 ),
@@ -600,7 +687,9 @@ class _CategoryCircle extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: colorScheme.surfaceContainerHighest,
                 border: Border.all(
-                  color: isSelected ? colorScheme.primary : colorScheme.outlineVariant,
+                  color: isSelected
+                      ? colorScheme.primary
+                      : colorScheme.outlineVariant,
                   // L'anneau s'épaissit à la sélection plutôt que de remplir
                   // le rond : avec une image dedans, un fond plein la
                   // masquerait complètement.
@@ -620,7 +709,9 @@ class _CategoryCircle extends StatelessWidget {
                     child: Icon(
                       _icons[categorie] ?? Icons.local_offer_outlined,
                       size: diameter * 0.42,
-                      color: isSelected ? colorScheme.primary : colorScheme.onSurface,
+                      color: isSelected
+                          ? colorScheme.primary
+                          : colorScheme.onSurface,
                     ),
                   ),
                 ),
@@ -634,7 +725,9 @@ class _CategoryCircle extends StatelessWidget {
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
                 style: textTheme.labelSmall?.copyWith(
-                  color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                  color: isSelected
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
                   fontWeight: isSelected ? FontWeight.w600 : null,
                 ),
               ),
@@ -724,7 +817,8 @@ class _ListHeader extends ConsumerWidget {
                 Expanded(child: Text(title, style: textTheme.titleSmall)),
                 Text(
                   l10n.promoCount(count),
-                  style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                  style: textTheme.bodySmall
+                      ?.copyWith(color: colorScheme.onSurfaceVariant),
                 ),
                 const _DensityButton(),
                 if (focused)
@@ -735,7 +829,8 @@ class _ListHeader extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(AppRadii.pill),
                       child: Padding(
                         padding: const EdgeInsets.all(4),
-                        child: Icon(Icons.close, size: 18, color: colorScheme.onSurfaceVariant),
+                        child: Icon(Icons.close,
+                            size: 18, color: colorScheme.onSurfaceVariant),
                       ),
                     ),
                   ),
@@ -770,7 +865,8 @@ class _DensityButton extends ConsumerWidget {
     return Tooltip(
       message: l10n.promoDensityTooltip,
       child: InkWell(
-        onTap: () => ref.read(promoDensityProvider.notifier).state = density.next,
+        onTap: () =>
+            ref.read(promoDensityProvider.notifier).state = density.next,
         borderRadius: BorderRadius.circular(AppRadii.pill),
         child: Padding(
           padding: const EdgeInsets.all(4),
@@ -812,7 +908,8 @@ class _ClientTabBar extends ConsumerWidget {
           case 1:
             context.push('/carte');
           case 2:
-            ref.read(favoritesOnlyFilterProvider.notifier).state = !favoritesOnly;
+            ref.read(favoritesOnlyFilterProvider.notifier).state =
+                !favoritesOnly;
           case 3:
             context.push('/commercant');
         }
@@ -823,7 +920,8 @@ class _ClientTabBar extends ConsumerWidget {
           selectedIcon: const Icon(Icons.home),
           label: l10n.tabHome,
         ),
-        NavigationDestination(icon: const Icon(Icons.map_outlined), label: l10n.tabMap),
+        NavigationDestination(
+            icon: const Icon(Icons.map_outlined), label: l10n.tabMap),
         NavigationDestination(
           icon: const Icon(Icons.favorite_border),
           selectedIcon: const Icon(Icons.favorite),

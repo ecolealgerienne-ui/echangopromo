@@ -22,19 +22,6 @@ class AuthController extends StateNotifier<AsyncValue<AuthSession?>> {
     state = AsyncValue.data(session);
   }
 
-  /// Le login renvoie seulement un JWT (le `sub` n'est pas exposé côté
-  /// client) : on active d'abord une session avec un id vide pour que la
-  /// requête `fetchId` soit authentifiée, puis on complète l'id réel.
-  Future<void> loginThenResolveId({
-    required AppRole role,
-    required String token,
-    required Future<String> Function() fetchId,
-  }) async {
-    await login(AuthSession(role: role, token: token, userId: ''));
-    final userId = await fetchId();
-    await login(AuthSession(role: role, token: token, userId: userId));
-  }
-
   Future<void> logout() async {
     await _store.clear();
     state = const AsyncValue.data(null);

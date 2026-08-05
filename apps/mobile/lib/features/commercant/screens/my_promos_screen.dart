@@ -23,18 +23,21 @@ import '../providers/commercant_providers.dart';
 class MyPromosScreen extends ConsumerWidget {
   const MyPromosScreen({super.key});
 
-  Future<void> _editPromo(BuildContext context, WidgetRef ref, Promo promo) async {
-    final updated = await context.push<bool>('/commercant/promos/new', extra: promo);
+  Future<void> _editPromo(
+      BuildContext context, WidgetRef ref, Promo promo) async {
+    final updated =
+        await context.push<bool>('/commercant/promos/new', extra: promo);
     if (updated == true && context.mounted) {
-      ref.invalidate(myPromosProvider);
+      invalidateAfterPromoChange(ref);
     }
   }
 
-  Future<void> _publish(BuildContext context, WidgetRef ref, Promo promo) async {
+  Future<void> _publish(
+      BuildContext context, WidgetRef ref, Promo promo) async {
     final l10n = AppLocalizations.of(context)!;
     try {
       await ref.read(promoApiProvider).publish(promo.id);
-      ref.invalidate(myPromosProvider);
+      invalidateAfterPromoChange(ref);
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -54,7 +57,7 @@ class MyPromosScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     try {
       await ref.read(promoApiProvider).stop(promo.id);
-      ref.invalidate(myPromosProvider);
+      invalidateAfterPromoChange(ref);
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -75,8 +78,12 @@ class MyPromosScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final promosAsync = ref.watch(myPromosProvider);
     final dateFormat = DateFormat('dd/MM/yyyy');
-    final activeCount = promosAsync.valueOrNull?.where((p) => p.isPublished).length ?? 0;
-    final atCap = activeCount >= kMaxPromosActives;
+    // Le decompte d'emplacements vient du serveur (`GET /promo/me/slots`) :
+    // le derivait d'ici comptait les `publiee` d'une page de 100 promos tous
+    // statuts confondus, et incluait les expirees pas encore basculees par le
+    // cron (revue 2026-08-05).
+    final slots = ref.watch(promoSlotsProvider).valueOrNull;
+    final atCap = slots?.auPlafond ?? false;
 
     return Scaffold(
       appBar: AppBar(
@@ -85,14 +92,21 @@ class MyPromosScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add),
-        label: Text(atCap ? l10n.capReachedLabel : l10n.newPromoTitle),
+        // Le plafond affiché vient du serveur (`slots.plafond`) : il était
+        // écrit en dur dans les trois `.arb`, et mentait dès que
+        // `PROMO_ACTIVE_CAP` bougeait (2026-08-05).
+        label: Text(
+          slots != null && slots.auPlafond
+              ? l10n.capReachedLabel(slots.plafond)
+              : l10n.newPromoTitle,
+        ),
         onPressed: atCap
             ? null
             : () async {
                 final created =
                     await context.push<bool>('/commercant/promos/new');
                 if (created == true && context.mounted) {
-                  ref.invalidate(myPromosProvider);
+                  invalidateAfterPromoChange(ref);
                 }
               },
       ),
@@ -108,38 +122,51 @@ class MyPromosScreen extends ConsumerWidget {
               // Le plafond rappelé en tête, comme sur le tableau de bord :
               // c'est ici qu'on décide d'arrêter une promo pour en publier
               // une autre, la contrainte doit être sous les yeux.
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        l10n.activeCountLabel(activeCount),
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                    ),
-                    for (var i = 0; i < kMaxPromosActives; i++)
-                      Padding(
-                        padding: const EdgeInsetsDirectional.only(start: 4),
-                        child: Container(
-                          width: 14,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: i < activeCount
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(AppRadii.pill),
-                          ),
+              //
+              // ⚠️ Rien n'est affiché tant que `GET /promo/me/slots` n'a pas
+              // répondu — ou s'il a échoué. Les replis `?? 0` d'ici
+              // annonçaient « 0 / 5 promos actives » et cinq barres vides,
+              // c'est-à-dire des emplacements libres, sans rien en savoir ; et
+              // le `5` venait d'une chaîne traduite, pas du serveur. Le
+              // tableau de bord avait déjà écarté ce repli (`_QuotaCard`),
+              // celui-ci l'avait gardé (règles #29 et #32, 2026-08-05).
+              if (slots != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          l10n.activeCountLabel(slots.enLigne, slots.plafond),
+                          style: Theme.of(context).textTheme.titleSmall,
                         ),
                       ),
-                  ],
+                      for (var i = 0; i < slots.plafond; i++)
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(start: 4),
+                          child: Container(
+                            width: 14,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: i < slots.enLigne
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                              borderRadius:
+                                  BorderRadius.circular(AppRadii.pill),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
               Expanded(
                 child: ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
                   itemCount: promos.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 10),
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final promo = promos[index];
                     final dateLabel = promo.dateFin != null
@@ -177,7 +204,8 @@ class MyPromosScreen extends ConsumerWidget {
                                       imageUrl: photo,
                                       fit: BoxFit.cover,
                                       memCacheWidth: thumbCachePx,
-                                      errorWidget: (context, url, error) => Container(
+                                      errorWidget: (context, url, error) =>
+                                          Container(
                                         color: Theme.of(context)
                                             .colorScheme
                                             .surfaceContainerHighest,
@@ -195,7 +223,10 @@ class MyPromosScreen extends ConsumerWidget {
                                   promo.description,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
                                         fontWeight: FontWeight.w600,
                                       ),
                                 ),
@@ -223,7 +254,10 @@ class MyPromosScreen extends ConsumerWidget {
                                     ),
                                     Text(
                                       '$dateLabel · ${l10n.myPromosViewsCount(promo.viewCount ?? 0)}',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
                                             color: Theme.of(context)
                                                 .colorScheme
                                                 .onSurfaceVariant,
@@ -246,11 +280,15 @@ class MyPromosScreen extends ConsumerWidget {
                               }
                             },
                             itemBuilder: (context) => [
-                              PopupMenuItem(value: 'edit', child: Text(l10n.editItem)),
+                              PopupMenuItem(
+                                  value: 'edit', child: Text(l10n.editItem)),
                               if (promo.isPublished)
-                                PopupMenuItem(value: 'stop', child: Text(l10n.stopItem))
+                                PopupMenuItem(
+                                    value: 'stop', child: Text(l10n.stopItem))
                               else
-                                PopupMenuItem(value: 'publish', child: Text(l10n.publishLabel)),
+                                PopupMenuItem(
+                                    value: 'publish',
+                                    child: Text(l10n.publishLabel)),
                             ],
                           ),
                         ],

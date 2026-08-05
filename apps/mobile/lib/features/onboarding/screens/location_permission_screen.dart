@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../onboarding_navigation.dart';
@@ -32,15 +31,18 @@ class LocationPermissionScreen extends ConsumerWidget {
                     color: colorScheme.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(AppRadii.lg),
                   ),
-                  child: Icon(Icons.location_on_outlined, size: 30, color: colorScheme.primary),
+                  child: Icon(Icons.location_on_outlined,
+                      size: 30, color: colorScheme.primary),
                 ),
               ),
               const SizedBox(height: 20),
-              Text(l10n.onboardingLocationTitle, style: textTheme.headlineMedium),
+              Text(l10n.onboardingLocationTitle,
+                  style: textTheme.headlineMedium),
               const SizedBox(height: 10),
               Text(
                 l10n.onboardingLocationSubtitle,
-                style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+                style: textTheme.bodyMedium
+                    ?.copyWith(color: colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 24),
               _Perk(label: l10n.onboardingLocationPerkNearby),
@@ -55,8 +57,13 @@ class LocationPermissionScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               TextButton(
-                onPressed: () => context.go('/onboarding/location/second-chance'),
-                child: Text(l10n.onboardingLocationLater),
+                // ⚠️ **Ce bouton TERMINE l'onboarding.** Il menait à un
+                // second écran qui redemandait la même chose — ce qu'Apple a
+                // refusé le 2026-08-05 (5.1.1(iv) : « encourages users to
+                // allow »). La proposition existe toujours, mais là où elle a
+                // un sens : sur la carte, qui ne fonctionne pas sans position.
+                onPressed: () => skipLocationAndFinish(context, ref),
+                child: Text(l10n.onboardingLocationContinue),
               ),
             ],
           ),

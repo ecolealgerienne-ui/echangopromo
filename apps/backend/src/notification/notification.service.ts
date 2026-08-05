@@ -2,7 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository, IsNull } from 'typeorm';
-import { PaginatedResult, toPaginatedResult } from '../common/pagination/paginated-result';
+import { NotFoundAppException } from '../common/errors/app-exception';
+import { ErrorCode } from '../common/errors/error-code.enum';
+import {
+  PaginatedResult,
+  toPaginatedResult,
+} from '../common/pagination/paginated-result';
 import {
   Notification,
   NotificationRecipientType,
@@ -100,15 +105,37 @@ export class NotificationService {
    * son id (règle #1 : le rôle JWT seul ne suffit jamais sur une ressource
    * qui pourrait appartenir à quelqu'un d'autre).
    */
+  /**
+   * ⚠️ **Refuse quand rien n'a été modifié** (2026-08-05).
+   *
+   * Le filtre `{id, recipientType, recipientId}` protégeait déjà les données :
+   * un appel avec le jeton d'un autre destinataire ne touchait aucune ligne.
+   * Mais la route rendait quand même `201`, si bien que l'appelant ne pouvait
+   * pas distinguer « marquée lue » de « pas la tienne » ni de « effacée par la
+   * purge de rétention ». Un geste sans effet annoncé comme réussi est
+   * exactement ce que la règle 29 interdit : l'app rafraîchissait son badge en
+   * croyant l'avoir changé.
+   *
+   * Trouvé par `test-notifications.sh`, dès son premier passage.
+   */
   async markAsRead(
     notificationId: string,
     recipientType: NotificationRecipientType,
     recipientId: string,
   ): Promise<void> {
-    await this.notifications.update(
+    const resultat = await this.notifications.update(
       { id: notificationId, recipientType, recipientId },
       { readAt: new Date() },
     );
+    // `affected` peut être `null`/`undefined` selon le pilote : on ne refuse
+    // que sur un zéro CERTAIN. Traiter l'inconnu comme un échec ferait rejeter
+    // des marquages parfaitement valides.
+    if (resultat.affected === 0) {
+      throw new NotFoundAppException(
+        ErrorCode.NOTIFICATION_NOT_FOUND,
+        'Cette notification n’existe plus',
+      );
+    }
   }
 
   /**
@@ -152,12 +179,18 @@ export class NotificationService {
   }
 
   async purgeOld(): Promise<number> {
-    const readCutoff = new Date(Date.now() - READ_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-    const unreadCutoff = new Date(Date.now() - UNREAD_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const readCutoff = new Date(
+      Date.now() - READ_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+    );
+    const unreadCutoff = new Date(
+      Date.now() - UNREAD_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+    );
 
     // `readAt < cutoff` exclut déjà les non lues (NULL < date = NULL en SQL,
     // pas besoin de Not(IsNull()) explicite).
-    const readResult = await this.notifications.delete({ readAt: LessThan(readCutoff) });
+    const readResult = await this.notifications.delete({
+      readAt: LessThan(readCutoff),
+    });
     const unreadResult = await this.notifications.delete({
       readAt: IsNull(),
       createdAt: LessThan(unreadCutoff),

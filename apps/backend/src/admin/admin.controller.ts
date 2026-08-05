@@ -2,12 +2,12 @@ import {
   Body,
   Controller,
   Get,
-  Param,
   Patch,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { UuidParam } from '../common/decorators/uuid-param.decorator';
 import { Throttle } from '@nestjs/throttler';
 import { AgentService } from '../agent/agent.service';
 import { AssignCommunesDto } from '../agent/dto/assign-communes.dto';
@@ -16,6 +16,7 @@ import { ResetAgentPasswordDto } from '../agent/dto/reset-agent-password.dto';
 import { TransferCommunesDto } from '../agent/dto/transfer-communes.dto';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { ListAuditLogQueryDto } from '../audit-log/dto/list-audit-log-query.dto';
+import { UpdatePromoActiveCapDto } from './dto/update-promo-active-cap.dto';
 import { AuditActorType } from '../audit-log/entities/audit-log.entity';
 import { AuthService } from '../auth/auth.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -115,15 +116,43 @@ export class AdminController {
     return this.agentService.findAll(query.page, query.limit);
   }
 
+  /**
+   * Seule route d'écriture de ce contrôleur qui n'injectait même pas
+   * `@CurrentUser()` : elle était structurellement incapable de journaliser,
+   * alors qu'elle **élargit le périmètre IDOR** consommé ensuite par
+   * `assertCommuneMatches` — et que `transfer-communes`, au même effet,
+   * journalise cinquante lignes plus bas (revue 2026-08-05, règle #11).
+   *
+   * ⚠️ Ce commentaire était placé ENTRE les décorateurs de garde et `@Patch`.
+   * NestJS s'en moque, mais le banc de frontière lisait alors la route comme
+   * **ouverte** : il retire les commentaires en laissant des lignes vides, et
+   * sa remontée du bloc de décorateurs s'arrêtait là. Un commentaire au
+   * mauvais endroit faisait donc accuser une route parfaitement protégée
+   * (2026-08-05). Le banc a été rendu insensible aux lignes vides, mais la
+   * place conventionnelle du commentaire reste au-dessus des décorateurs.
+   */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Patch('agent/:id/communes')
   async assignCommunes(
-    @Param('id') agentId: string,
+    @CurrentUser() user: AuthTokenPayload,
+    @UuidParam('id') agentId: string,
     @Body() dto: AssignCommunesDto,
   ) {
-    return this.agentService.assignCommunes(agentId, dto.communeIds);
+    const agent = await this.agentService.assignCommunes(
+      agentId,
+      dto.communeIds,
+    );
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'assign_agent_communes',
+      targetType: 'agent',
+      targetId: agentId,
+      metadata: { communeIds: dto.communeIds },
+    });
+    return agent;
   }
 
   /** Révoque les JWT déjà émis pour cet agent (device perdu/volé, départ — audit règle #6). */
@@ -133,7 +162,7 @@ export class AdminController {
   @Post('agent/:id/revoke-token')
   async revokeAgentToken(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') agentId: string,
+    @UuidParam('id') agentId: string,
   ) {
     await this.agentService.revokeTokens(agentId);
     await this.auditLogService.record({
@@ -158,7 +187,7 @@ export class AdminController {
   @Post('agent/:id/reset-password')
   async resetAgentPassword(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') agentId: string,
+    @UuidParam('id') agentId: string,
     @Body() dto: ResetAgentPasswordDto,
   ) {
     await this.agentService.resetPassword(agentId, dto.newPassword);
@@ -205,7 +234,9 @@ export class AdminController {
    * automatique et la liste globale (`/admin/promo`, Phase 2).
    */
   private toAdminPromoJson(promo: Promo) {
-    const photoUrls = promo.photoKeys.map((key) => this.storageService.buildPublicUrl(key));
+    const photoUrls = promo.photoKeys.map((key) =>
+      this.storageService.buildPublicUrl(key),
+    );
     return {
       id: promo.id,
       description: promo.description,
@@ -233,14 +264,19 @@ export class AdminController {
    * `[]` silencieux qui laisserait passer une requête non filtrée par erreur
    * ailleurs (chaque appelant traite explicitement le cas `undefined`).
    */
-  private async scopedCommuneIds(user: AuthTokenPayload): Promise<string[] | undefined> {
+  private async scopedCommuneIds(
+    user: AuthTokenPayload,
+  ): Promise<string[] | undefined> {
     if (user.role !== 'agent') return undefined;
     const agent = await this.agentService.findByIdOrFail(user.sub);
     return agent.communes.map((commune) => commune.id);
   }
 
   /** Garde IDOR (règle #1) : un agent ne peut modérer que les promos de ses propres communes. */
-  private async assertCanModerate(user: AuthTokenPayload, promoId: string): Promise<void> {
+  private async assertCanModerate(
+    user: AuthTokenPayload,
+    promoId: string,
+  ): Promise<void> {
     if (user.role !== 'agent') return;
     const promo = await this.promoService.findByIdOrFail(promoId);
     const agent = await this.agentService.findByIdOrFail(user.sub);
@@ -280,17 +316,24 @@ export class AdminController {
     @Query() query: ListModerationQueueQueryDto,
   ) {
     const communeIds = await this.scopedCommuneIds(user);
-    const result = await this.moderationService.queue(query.page, query.limit, communeIds, {
-      communeId: query.communeId,
-      wilaya: query.wilaya,
-    });
+    const result = await this.moderationService.queue(
+      query.page,
+      query.limit,
+      communeIds,
+      {
+        communeId: query.communeId,
+        wilaya: query.wilaya,
+      },
+    );
     return {
       ...result,
-      items: result.items.map(({ promo, activeReportCount, reasonBreakdown }) => ({
-        ...this.toAdminPromoJson(promo),
-        activeReportCount,
-        reasonBreakdown,
-      })),
+      items: result.items.map(
+        ({ promo, activeReportCount, reasonBreakdown }) => ({
+          ...this.toAdminPromoJson(promo),
+          activeReportCount,
+          reasonBreakdown,
+        }),
+      ),
     };
   }
 
@@ -300,10 +343,14 @@ export class AdminController {
   @Post('moderation/:promoId/masquer')
   async masquer(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('promoId') promoId: string,
+    @UuidParam('promoId') promoId: string,
   ) {
     await this.assertCanModerate(user, promoId);
-    await this.moderationService.masquer(this.actorType(user.role), user.sub, promoId);
+    await this.moderationService.masquer(
+      this.actorType(user.role),
+      user.sub,
+      promoId,
+    );
     return { ok: true };
   }
 
@@ -313,10 +360,14 @@ export class AdminController {
   @Post('moderation/:promoId/verifier-ok')
   async verifierOk(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('promoId') promoId: string,
+    @UuidParam('promoId') promoId: string,
   ) {
     await this.assertCanModerate(user, promoId);
-    await this.moderationService.verifierOk(this.actorType(user.role), user.sub, promoId);
+    await this.moderationService.verifierOk(
+      this.actorType(user.role),
+      user.sub,
+      promoId,
+    );
     return { ok: true };
   }
 
@@ -326,10 +377,14 @@ export class AdminController {
   @Post('moderation/:promoId/avertir')
   async avertir(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('promoId') promoId: string,
+    @UuidParam('promoId') promoId: string,
   ) {
     await this.assertCanModerate(user, promoId);
-    await this.moderationService.avertir(this.actorType(user.role), user.sub, promoId);
+    await this.moderationService.avertir(
+      this.actorType(user.role),
+      user.sub,
+      promoId,
+    );
     return { ok: true };
   }
 
@@ -369,7 +424,10 @@ export class AdminController {
     @Query() query: ListCommercantQueryDto,
   ) {
     const communeIds = await this.scopedCommuneIds(user);
-    const result = await this.commercantService.findAllForAdmin(query, communeIds);
+    const result = await this.commercantService.findAllForAdmin(
+      query,
+      communeIds,
+    );
     return {
       ...result,
       items: await Promise.all(
@@ -396,6 +454,12 @@ export class AdminController {
             ? await this.storageService.getPresignedUrl(commercant.registreKey)
             : null,
           profilePendingReview: commercant.profilePendingReview,
+          // ⚠️ Servi tel quel, `null` compris : `null` veut dire « suit le
+          // réglage global », et l'écran admin affiche deux textes distincts
+          // selon le cas. L'omettre de cette projection ferait afficher
+          // « global » quel que soit le réglage — un écran qui ment sans
+          // erreur ni journal.
+          promoActiveCap: commercant.promoActiveCap,
           suspended: commercant.suspendedAt !== null,
           deleted: commercant.deletedAt !== null,
           createdAt: commercant.createdAt,
@@ -416,7 +480,7 @@ export class AdminController {
   @Post('commercant/:id/suspend')
   async suspendCommercant(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
+    @UuidParam('id') commercantId: string,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.suspend(commercantId);
@@ -430,6 +494,39 @@ export class AdminController {
     return { ok: true };
   }
 
+  /**
+   * Plafond de promos actives **propre à ce commerçant** ; `null` le remet sur
+   * le réglage global (`PROMO_ACTIVE_CAP`).
+   *
+   * ⚠️ **Admin seulement, contrairement à suspendre/réactiver.** Accorder plus
+   * d'emplacements à un commerce est une décision commerciale, pas un geste de
+   * terrain : un agent qui peut l'ajuster peut avantager un commerçant de sa
+   * commune sans que personne ne l'ait décidé. Le journal d'audit garde donc
+   * une trace d'un geste qui n'a qu'un seul auteur possible.
+   */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Patch('commercant/:id/plafond-promos')
+  async setCommercantPromoCap(
+    @CurrentUser() user: AuthTokenPayload,
+    @UuidParam('id') commercantId: string,
+    @Body() dto: UpdatePromoActiveCapDto,
+  ) {
+    await this.commercantService.setPromoActiveCap(commercantId, dto.plafond);
+    await this.auditLogService.record({
+      actorType: this.actorType(user.role),
+      actorId: user.sub,
+      action: 'commercant_promo_cap',
+      targetType: 'commercant',
+      targetId: commercantId,
+      // Le journal doit dire CE QUI a été posé : « plafond modifié » sans la
+      // valeur ne permet pas de reconstituer une décision commerciale.
+      metadata: { plafond: dto.plafond },
+    });
+    return { ok: true };
+  }
+
   /** Lève une suspension (voir `CommercantService.unsuspend`) — pas de republication automatique des promos. */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -437,7 +534,7 @@ export class AdminController {
   @Post('commercant/:id/reactivate')
   async reactivateCommercant(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
+    @UuidParam('id') commercantId: string,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.unsuspend(commercantId);
@@ -463,7 +560,7 @@ export class AdminController {
   @Post('commercant/:id/delete')
   async deleteCommercant(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
+    @UuidParam('id') commercantId: string,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.deleteCommercant(commercantId);
@@ -483,7 +580,7 @@ export class AdminController {
   @Post('commercant/:id/registre/valider')
   async validerRegistre(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
+    @UuidParam('id') commercantId: string,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.resolveRegistreVerification(
@@ -512,7 +609,7 @@ export class AdminController {
   @Post('commercant/:id/profile/valider')
   async validerProfil(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
+    @UuidParam('id') commercantId: string,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.validateProfile(commercantId);
@@ -540,7 +637,7 @@ export class AdminController {
   @Post('commercant/:id/reset-pin')
   async resetPin(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
+    @UuidParam('id') commercantId: string,
     @Body() dto: ResetCommercantPinDto,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
@@ -561,7 +658,7 @@ export class AdminController {
   @Post('commercant/:id/registre/rejeter')
   async rejeterRegistre(
     @CurrentUser() user: AuthTokenPayload,
-    @Param('id') commercantId: string,
+    @UuidParam('id') commercantId: string,
   ) {
     await this.assertCanManageCommercant(user, commercantId);
     await this.commercantService.resolveRegistreVerification(
@@ -588,7 +685,11 @@ export class AdminController {
   @Roles('admin')
   @Get('audit-log')
   async auditLog(@Query() query: ListAuditLogQueryDto) {
-    return this.auditLogService.findAll(query.page, query.limit, query.actorType);
+    return this.auditLogService.findAll(
+      query.page,
+      query.limit,
+      query.actorType,
+    );
   }
 
   /**

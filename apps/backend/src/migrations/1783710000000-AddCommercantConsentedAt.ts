@@ -10,6 +10,8 @@ export class AddCommercantConsentedAt1783710000000 implements MigrationInterface
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "commercant" DROP COLUMN "consentedAt"`);
+    await queryRunner.query(
+      `ALTER TABLE "commercant" DROP COLUMN "consentedAt"`,
+    );
   }
 }
