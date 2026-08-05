@@ -42,6 +42,9 @@
 #                      COMPTEUR DE VUES monte côté serveur.
 #   agent-creation     l'agent crée un commerçant DANS SA COMMUNE : le compte
 #                      se connecte ensuite, et il est bien dans sa zone.
+#   carte              la carte affiche le commerce et sa meilleure remise.
+#                      ⚠️ Pose des COORDONNÉES au commerçant : sans elles, la
+#                      carte est vide — aucun commerçant de la base n'en avait.
 #   signalement        un client signale une promo : elle SORT du public
 #                      (404) et entre dans la file de modération. ⚠️ MODIFIE le
 #                      décor — passe avant `moderation`, qui s'en nourrit.
@@ -80,11 +83,11 @@ DEVICE_ID="parcours-ecran-0001"
 
 CHOIX="${1:-tous}"
 case "$CHOIX" in
-  tous|premier-lancement|plafond|creation|admin|agent|moderation|client|inscription|agent-creation|commune|signalement) ;;
+  tous|premier-lancement|plafond|creation|admin|agent|moderation|client|inscription|agent-creation|commune|signalement|carte) ;;
   *) echo "❌ Parcours inconnu : « $CHOIX »."
      echo "   Attendu : premier-lancement | plafond | creation | admin | agent"
      echo "             | moderation | client | inscription | agent-creation"
-     echo "             | commune | signalement"
+     echo "             | commune | signalement | carte"
      echo "             (rien = tous)"
      exit 2 ;;
 esac
@@ -95,7 +98,7 @@ esac
 BESOIN_COMMERCANT=non
 # `inscription` a besoin du décor UNIQUEMENT pour mesurer le plafond auprès du
 # serveur — le compte qu'il crée, lui, est neuf.
-case "$CHOIX" in tous|plafond|creation|client|inscription|commune|signalement) BESOIN_COMMERCANT=oui ;; esac
+case "$CHOIX" in tous|plafond|creation|client|inscription|commune|signalement|carte) BESOIN_COMMERCANT=oui ;; esac
 BESOIN_PRO=non
 case "$CHOIX" in tous|admin|agent|moderation|agent-creation) BESOIN_PRO=oui ;; esac
 
@@ -210,6 +213,87 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "creation" ]; then
   fi
 fi
 fi  # BESOIN_COMMERCANT
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "carte" ]; then
+# ── 2 sexies. Le commerce que la carte devra montrer ───────────────────────
+#
+# ⚠️ **Les paramètres de la carte sont `north/south/east/west`**, pas
+# `minLat/maxLat`. Une première mesure avec les mauvais noms a rendu « 0
+# commerce » et m'a fait conclure que la carte était vide — elle porte huit
+# commerces géolocalisés, posés par `seed-demo.sh`. Une requête fausse ne
+# prouve rien, elle en a juste l'air (règle #38).
+#
+# ⚠️ **La remise du marqueur est calculée par l'APP** (`MapShop
+# .bestDiscountPercent`), à partir des promos que le serveur envoie. Le script
+# la recalcule donc de son côté : c'est le rôle d'un oracle de test, et c'est
+# la seule façon de vérifier un affichage dérivé. Le jour où la formule change
+# d'un côté seulement, ce parcours le dira.
+echo
+echo "── 2 sexies. Carte ──"
+CARTE_COMMUNE="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ communeId)"
+[ -n "$CARTE_COMMUNE" ] || { echo "❌ communeId du commerçant illisible."; exit 2; }
+
+CENTRE="$(curl -s "$API_URL/promo/map/center?communeIds=$CARTE_COMMUNE"   -H "X-Device-Id: $DEVICE_ID" | "$PY" -c "import sys,json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('ILLISIBLE reponse non JSON'); sys.exit(0)
+c = (d or {}).get('center') or {}
+if c.get('latitude') is None or c.get('longitude') is None:
+    print('ILLISIBLE centre absent'); sys.exit(0)
+print('%s %s' % (c['latitude'], c['longitude']))")"
+case "$CENTRE" in ILLISIBLE*) echo "❌ centre de carte — $CENTRE"; exit 2 ;; esac
+CARTE_LAT="${CENTRE% *}"
+CARTE_LNG="${CENTRE#* }"
+
+BBOX="$(CLAT="$CARTE_LAT" CLNG="$CARTE_LNG" "$PY" -c "import os
+la = float(os.environ['CLAT']); ln = float(os.environ['CLNG'])
+print('north=%s&south=%s&east=%s&west=%s' % (la + 0.2, la - 0.2, ln + 0.2, ln - 0.2))")"
+
+# On choisit un commerce dont la remise est UNIQUE dans la zone : le marqueur
+# n'affiche que « −XX% », donc deux commerces à la même remise rendraient la
+# désignation ambiguë — et le parcours taperait sur l'un ou l'autre en silence.
+CARTE_CHOIX="$(curl -s "$API_URL/promo/map?$BBOX" -H "X-Device-Id: $DEVICE_ID"   | "$PY" -c "import sys,json,collections
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('ILLISIBLE reponse non JSON'); sys.exit(0)
+items = d.get('items')
+if items is None:
+    print('ILLISIBLE champ items absent'); sys.exit(0)
+def meilleure(promos):
+    best = None
+    for p in promos or []:
+        av, ap = p.get('prixAvant'), p.get('prixApres')
+        try:
+            av = float(av); ap = float(ap)
+        except (TypeError, ValueError):
+            continue
+        if av <= 0 or ap >= av:
+            continue
+        pct = int(round((av - ap) / av * 100))
+        if best is None or pct > best:
+            best = pct
+    return best
+candidats = []
+for c in items:
+    r = meilleure(c.get('promos'))
+    if r is not None and c.get('nom'):
+        candidats.append((r, c['nom']))
+if not candidats:
+    print('ILLISIBLE aucun commerce avec remise dans la zone'); sys.exit(0)
+compte = collections.Counter(r for r, _ in candidats)
+uniques = [(r, n) for r, n in candidats if compte[r] == 1]
+if not uniques:
+    print('ILLISIBLE aucune remise unique dans la zone (%d commerce(s))' % len(candidats)); sys.exit(0)
+uniques.sort(reverse=True)
+print('%d|%s' % uniques[0])")"
+case "$CARTE_CHOIX" in
+  ILLISIBLE*) echo "❌ carte — $CARTE_CHOIX"; exit 2 ;;
+esac
+CARTE_REMISE="−${CARTE_CHOIX%%|*}%"
+CARTE_NOM="${CARTE_CHOIX#*|}"
+echo "✅ « $CARTE_NOM » · marqueur attendu : $CARTE_REMISE (remise unique dans la zone)"
+fi
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "signalement" ]; then
 # ── 2 quinquies. Une promo à signaler, et son état de départ ───────────────
 echo
@@ -717,6 +801,12 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "client" ]; then
   echo
 fi
 
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "carte" ]; then
+  jouer parcours_carte_test.dart "client — la carte"     --dart-define=TEST_COMMUNE_ID="$CARTE_COMMUNE"     --dart-define=TEST_REMISE="$CARTE_REMISE"     --dart-define=TEST_COMMERCE_NOM="$CARTE_NOM"
+  noter "client — la carte ($CARTE_REMISE)" $?
+  echo
+fi
+
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "signalement" ]; then
   jouer parcours_signalement_test.dart "client — signaler une promo"     --dart-define=TEST_PROMO_DESC="$SIG_DESC"     --dart-define=TEST_COMMUNE_ID="$SIG_COMMUNE"
   CODE_SIG=$?
@@ -820,6 +910,16 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "moderation" ]; then
     esac
   fi
   echo
+fi
+
+# ⚠️ **Un résumé vide n'est pas un succès.** Le bloc du parcours carte s'est
+# retrouvé, un temps, AVANT la définition de `jouer` : le script rendait
+# « command not found », un résumé vide et un code 0. Aucun parcours joué doit
+# se voir (règle #28 : un contrôle qui ne peut pas refuser ne contrôle rien).
+if [ -z "$RESUME" ]; then
+  echo "❌ Aucun parcours n'a été joué pour « $CHOIX »."
+  echo "   Le script s'est terminé sans rien exécuter — ce n'est pas un succès."
+  exit 2
 fi
 
 echo "════════════════════════════════════════════════════════════════"

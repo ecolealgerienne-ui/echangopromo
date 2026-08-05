@@ -712,6 +712,33 @@ C'est la démonstration de l'avertissement que ce fichier porte en tête : *un
 état périmé est pire qu'aucun état, il fait conclure*. Ici il a fait écrire un
 test qui éprouvait un chemin que personne n'emprunte.
 
+#### La carte — le dernier grand écran jamais ouvert
+
+Douzième parcours : onglet Carte → le marqueur du commerce → sa fiche. Mesuré :
+marqueur `−44%`, fiche « Rôtisserie Es-Salam ».
+
+L'oracle est un **recalcul indépendant** : la remise du marqueur est calculée
+par l'app (`MapShop.bestDiscountPercent`) à partir des promos servies, donc le
+script la recalcule de son côté depuis les prix. C'est le rôle d'un test — le
+jour où la formule change d'un seul côté, ce parcours le dit.
+
+Le commerce visé est celui dont la remise est **unique dans la zone** : le
+marqueur n'affiche que « −XX% », et deux commerces à la même remise rendraient
+la désignation ambiguë. Si aucune n'est unique, le script **refuse** au lieu de
+choisir au hasard.
+
+⚠️ **J'ai d'abord conclu que la carte était vide.** Une requête avec
+`minLat/maxLat` — les paramètres s'appellent `north/south/east/west` — rendait
+« 0 commerce », et j'en ai tiré que personne n'avait de coordonnées. Elle en
+porte **huit**, géolocalisés par `seed-demo.sh`. Une requête fausse ne prouve
+rien, elle en a juste l'air. Troisième fois aujourd'hui que la règle 38 sert.
+
+⚠️ **Et le script a rendu un succès sans avoir rien joué.** Le bloc du parcours
+carte s'était inséré **avant la définition de `jouer`** : deux
+« command not found », un résumé vide, **code de sortie 0**. Un parcours sauté
+ne doit pas ressembler à un succès — le script refuse désormais de se terminer
+sur un résumé vide.
+
 #### Le signalement client — et un défaut qui se déclenche à chaque frappe
 
 Onzième parcours : **la seule écriture d'un client**. Elle porte loin — une

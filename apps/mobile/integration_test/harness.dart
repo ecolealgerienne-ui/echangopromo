@@ -93,6 +93,17 @@ const String communeCible = String.fromEnvironment('TEST_COMMUNE_ID');
 const String wilayaNom = String.fromEnvironment('TEST_WILAYA_NOM');
 const String communeNom = String.fromEnvironment('TEST_COMMUNE_NOM');
 
+/// Meilleure remise du commerce **telle que le serveur la calcule**
+/// (`bestDiscountPercent`, rendu par `GET /promo/map`), déjà formatée comme le
+/// marqueur l'affiche — « −87% ».
+///
+/// ⚠️ Servie, jamais recalculée ici : recalculer, c'est créer un second
+/// endroit qui finira par diverger (règle #30).
+const String remiseAttendue = String.fromEnvironment('TEST_REMISE');
+
+/// Nom du commerce attendu dans la fiche ouverte depuis le marqueur.
+const String commerceNom = String.fromEnvironment('TEST_COMMERCE_NOM');
+
 /// Les cinq compteurs du tableau de bord, **tels que le serveur les sert à ce
 /// rôle-là**, séparés par des virgules (`GET /admin/dashboard`).
 ///
