@@ -117,9 +117,8 @@ def verdict_configuration(env, remote_declare):
     if manquantes:
         if len(manquantes) == len(CLES_REQUISES):
             return ("echec",
-                    "envoi distant non configuré. Renseigner %s, ou poser "
-                    "BACKUP_REMOTE=off pour assumer une sauvegarde locale seule"
-                    % ", ".join(CLES_REQUISES[:2]) + "…")
+                    "non configuré — voir scripts/backup.env.example, ou poser "
+                    "BACKUP_REMOTE=off pour assumer une sauvegarde locale seule")
         # ⚠️ Le cas dangereux : une configuration à moitié faite ressemble à une
         # configuration. On refuse plus fort que pour une absence totale.
         return ("echec",

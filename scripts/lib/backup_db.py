@@ -256,7 +256,10 @@ def main():
     def noter(libelle, verdict, explication):
         marque = {"ok": "✅", "echec": "❌", "non_concluant": "⚠️ "}[verdict]
         print("  %s %-38s %s" % (marque, libelle, explication))
-        resultats.append(verdict)
+        # Le LIBELLÉ est conservé, pas seulement le verdict : depuis que
+        # l'étape 4 existe, deux familles d'échec cohabitent, et le message
+        # final doit dire LAQUELLE. Voir plus bas.
+        resultats.append((libelle, verdict))
 
     # ── 1. Le dump ──────────────────────────────────────────────────────────
     print("\n── 1. sauvegarde ──")
@@ -318,6 +321,10 @@ def main():
     # disque, le conteneur, la machine. C'est le seul mode de défaillance que
     # les trois premières étapes ne voient pas du tout.
     print("\n── 4. envoi hors site ──")
+    # La frontière entre « la sauvegarde elle-même » et « sa copie distante ».
+    # Repérée par un INDICE et non par les libellés : ceux de l'étape 4
+    # viennent d'un autre module et changeront sans prévenir.
+    avant_envoi = len(resultats)
     try:
         import backup_upload
     except ImportError as e:
@@ -326,13 +333,26 @@ def main():
         backup_upload.envoyer(fichier, backup_upload.lire_config(), noter)
 
     print("\n" + "═" * 64)
-    echecs = resultats.count("echec")
-    non_concluants = resultats.count("non_concluant")
+    echecs = [l for l, v in resultats if v == "echec"]
+    non_concluants = [l for l, v in resultats if v == "non_concluant"]
     print("%d contrôles, %d échec(s), %d non concluant(s)"
-          % (len(resultats), echecs, non_concluants))
-    if echecs:
+          % (len(resultats), len(echecs), len(non_concluants)))
+
+    # ⚠️ Le message final DOIT distinguer les deux familles d'échec. Avant que
+    # l'étape 4 existe, un seul échec était possible et le message pouvait le
+    # nommer sans réfléchir. Depuis, un envoi non configuré affichait « la
+    # sauvegarde NE SE RESTAURE PAS » alors qu'elle venait d'être restaurée
+    # avec succès : un opérateur réveillé à 3 h aurait jeté un fichier sain.
+    # Un message qui fait conclure faux est pire qu'un message absent.
+    locaux = [l for l, v in resultats[:avant_envoi] if v == "echec"]
+    distants = [l for l, v in resultats[avant_envoi:] if v == "echec"]
+    if locaux:
         print("⚠️  la sauvegarde a été produite mais NE SE RESTAURE PAS — "
               "la traiter comme inexistante.")
+    elif distants:
+        print("⚠️  la sauvegarde est saine et restaurable, mais elle N'A PAS "
+              "QUITTÉ LA MACHINE — elle ne protège que de la corruption "
+              "logique, pas d'une perte de disque.")
     return 1 if (echecs or non_concluants) else 0
 
 
