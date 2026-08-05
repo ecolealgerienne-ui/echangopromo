@@ -602,9 +602,31 @@ ne peut pas se lire à deux vitesses : on la refait, on ne l'annote pas.
    vulnérabilités npm sont à **0** (dont `sharp`, la seule sur un chemin
    d'entrée d'attaquant, vérifiée à l'usage). La sauvegarde existe et
    **se restaure** (`scripts/backup-db.sh`, prouvé par mutation).
-   **Reste hors dépôt** : la brancher sur une tâche planifiée, et **sortir les
-   dumps de la machine** — un fichier posé à côté de la base ne protège pas
-   d'une perte de disque.
+   L'**envoi hors site** a suivi le même jour (`scripts/lib/backup_upload.py`,
+   étape 4) : chiffrement AES-256 vérifié par déchiffrement, dépôt en ACL
+   privée sur `echango-private`, puis **requête anonyme sur l'objet** — un
+   `200` à ce moment-là fait supprimer l'objet et échouer le lot. Éprouvé de
+   bout en bout contre MinIO sur la vraie base (13 tables, 433 lignes), et le
+   contrôle d'étanchéité a été **vu refuser** sur une photo de promo publique
+   de la production (`--prouver`).
+
+   **Reste hors dépôt, et c'est tout ce qui manque** :
+   - remplir `~/.echango-backup.env` (modèle : `scripts/backup.env.example`,
+     `chmod 600` — le script refuse un autre mode) avec une **clé S3 dédiée**,
+     distincte de celle de l'application : sinon qui compromet l'app peut
+     effacer les sauvegardes ;
+   - ranger `BACKUP_PASSPHRASE` **ailleurs que sur la machine sauvegardée** —
+     la perdre rend toutes les sauvegardes illisibles ;
+   - la brancher sur une tâche planifiée (`0 3 * * *`), en surveillant le
+     **code de sortie**, pas la présence du fichier.
+
+   ⚠️ **Au passage, un fait qui a décidé le choix du dépôt.** Mesuré en
+   anonyme le 2026-08-05 : `echango-private` refuse tout (403, même sur une clé
+   inexistante), tandis que `echango-promo` **sert une photo de promo en 200**.
+   C'est conforme — `storage.service.ts:192` y pose `public-read` sur tout sauf
+   `registre-documents/` — mais ça veut dire que le dépôt de l'application
+   **sert des objets publics par conception**, et que les registres de commerce
+   n'y tiennent que par une ACL par objet. Un dump n'avait rien à y faire.
 
 **Ce qui n'est PAS à faire, et pourquoi** — pour que l'absence de couverture
 reste distinguable d'un oubli :

@@ -40,8 +40,16 @@ contrôle lui-même.
 ── Usage ────────────────────────────────────────────────────────────────────
 
     python3 scripts/lib/backup_db.py --self-test
-    ./scripts/backup-db.sh                    # sauvegarde + vérification
+    ./scripts/backup-db.sh                    # sauvegarde + vérification + envoi
     GARDER=14 ./scripts/backup-db.sh          # rétention personnalisée
+
+── Et depuis le 2026-08-05, l'étape 4 : l'envoi hors site ───────────────────
+
+Les trois premières étapes ne couvrent que la corruption **logique**. Une
+sauvegarde posée à côté de la base disparaît avec le disque qui la porte.
+`backup_upload.py` chiffre, dépose sur S3 en ACL privée, puis **redemande
+l'objet en anonyme** et exige un refus. Voir sa documentation pour le détail —
+notamment pourquoi le dépôt de destination n'est pas celui de l'application.
 """
 
 import os
@@ -303,6 +311,19 @@ def main():
         os.remove(os.path.join(DESTINATION, f))
     noter("purge", "ok", "%d gardée(s), %d supprimée(s)"
           % (min(len(toutes), GARDER), len(vieilles)))
+
+    # ── 4. L'envoi hors site ────────────────────────────────────────────────
+    # ⚠️ Sans cette étape, tout ce qui précède ne couvre que la corruption
+    # LOGIQUE. Une sauvegarde posée à côté de la base disparaît avec elle : le
+    # disque, le conteneur, la machine. C'est le seul mode de défaillance que
+    # les trois premières étapes ne voient pas du tout.
+    print("\n── 4. envoi hors site ──")
+    try:
+        import backup_upload
+    except ImportError as e:
+        noter("module d'envoi", "non_concluant", "backup_upload introuvable : %s" % e)
+    else:
+        backup_upload.envoyer(fichier, backup_upload.lire_config(), noter)
 
     print("\n" + "═" * 64)
     echecs = resultats.count("echec")
