@@ -63,6 +63,7 @@ class PromoListScreen extends ConsumerWidget {
     final search = ref.watch(searchQueryProvider);
     final expanded = ref.watch(listExpandedProvider);
     final density = ref.watch(promoDensityProvider);
+    final selectedCommunes = ref.watch(selectedCommunesProvider);
 
     // Liste en plein écran : soit le client a filtré (catégorie, recherche,
     // favoris) et cherche donc quelque chose de précis, soit il a simplement
@@ -97,77 +98,144 @@ class PromoListScreen extends ConsumerWidget {
               count: promos.length,
             ),
             Expanded(
-              child: switch (promoListState.status) {
-                PromoListStatus.loading =>
-                  const Center(child: CircularProgressIndicator()),
-                PromoListStatus.error =>
-                  Center(child: ApiErrorText(promoListState.error!)),
-                PromoListStatus.loaded => RefreshIndicator(
-                    onRefresh: () =>
-                        ref.read(promoListProvider.notifier).refresh(),
-                    // `CustomScrollView` plutôt qu'une `ListView` ou une
-                    // `GridView` selon la densité : le pied de liste (bouton
-                    // « charger plus ») et le message de liste vide sont
-                    // partagés par les trois dispositions, et seul un sliver
-                    // permet de changer la grille sans les dupliquer.
-                    child: CustomScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      slivers: [
-                        if (promos.isEmpty)
-                          SliverFillRemaining(
-                            hasScrollBody: false,
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 80),
-                              child: Text(
-                                search.isEmpty
-                                    ? l10n.noActivePromos
-                                    : l10n.noSearchResults(search),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          )
-                        else
-                          SliverPadding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: _listPadding),
-                            sliver: _PromoSliver(
-                              density: density,
-                              promos: promos,
-                              favorites: favorites,
-                            ),
+              // ⚠️ « Aucune commune choisie » n'est PAS « aucune promo », et
+              // c'est vérifié avant le statut de chargement : un client non
+              // configuré ne doit voir ni liste, ni spinner, ni erreur d'API,
+              // mais le geste qui lui manque. Seule la liste est remplacée —
+              // la barre de recherche, la vitrine et les catégories restent
+              // (demande 2026-08-05).
+              child: selectedCommunes.isEmpty
+                  ? const _NoCommuneSelected()
+                  : switch (promoListState.status) {
+                      PromoListStatus.loading =>
+                        const Center(child: CircularProgressIndicator()),
+                      PromoListStatus.error =>
+                        Center(child: ApiErrorText(promoListState.error!)),
+                      PromoListStatus.loaded => RefreshIndicator(
+                          onRefresh: () =>
+                              ref.read(promoListProvider.notifier).refresh(),
+                          // `CustomScrollView` plutôt qu'une `ListView` ou une
+                          // `GridView` selon la densité : le pied de liste (bouton
+                          // « charger plus ») et le message de liste vide sont
+                          // partagés par les trois dispositions, et seul un sliver
+                          // permet de changer la grille sans les dupliquer.
+                          child: CustomScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            slivers: [
+                              if (promos.isEmpty)
+                                SliverFillRemaining(
+                                  hasScrollBody: false,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(top: 80),
+                                    child: Text(
+                                      search.isEmpty
+                                          ? l10n.noActivePromos
+                                          : l10n.noSearchResults(search),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                )
+                              else
+                                SliverPadding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: _listPadding),
+                                  sliver: _PromoSliver(
+                                    density: density,
+                                    promos: promos,
+                                    favorites: favorites,
+                                  ),
+                                ),
+                              if (promos.isNotEmpty && promoListState.hasMore)
+                                SliverToBoxAdapter(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: _listSpacing),
+                                    child: Center(
+                                      child: promoListState.loadingMore
+                                          ? const SizedBox(
+                                              height: 24,
+                                              width: 24,
+                                              child: CircularProgressIndicator(
+                                                  strokeWidth: 2),
+                                            )
+                                          : OutlinedButton(
+                                              onPressed: () =>
+                                                  _loadMore(context, ref),
+                                              child: Text(
+                                                  l10n.loadMoreButtonLabel),
+                                            ),
+                                    ),
+                                  ),
+                                ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: _listPadding)),
+                            ],
                           ),
-                        if (promos.isNotEmpty && promoListState.hasMore)
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: _listSpacing),
-                              child: Center(
-                                child: promoListState.loadingMore
-                                    ? const SizedBox(
-                                        height: 24,
-                                        width: 24,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2),
-                                      )
-                                    : OutlinedButton(
-                                        onPressed: () =>
-                                            _loadMore(context, ref),
-                                        child: Text(l10n.loadMoreButtonLabel),
-                                      ),
-                              ),
-                            ),
-                          ),
-                        const SliverToBoxAdapter(
-                            child: SizedBox(height: _listPadding)),
-                      ],
-                    ),
-                  ),
-              },
+                        ),
+                    },
             ),
           ],
         ),
       ),
       bottomNavigationBar: const _ClientTabBar(),
+    );
+  }
+}
+
+/// Ce qu'on affiche **à la place de la liste** quand aucune commune n'est
+/// choisie — nouveau client, ou client existant dont la sélection est vide.
+///
+/// ── Pourquoi ce n'est pas un cas de liste vide ────────────────────────────
+///
+/// Le serveur ne traite pas `communeIds: []` comme « aucune commune » mais
+/// comme **aucun filtre** (`if (query.communeIds?.length)`,
+/// `PromoService.findActiveForClient`). Un client non configuré ne voyait donc
+/// pas une liste vide : il voyait **toutes les promos de toutes les communes**,
+/// présentées comme les siennes, sous un en-tête annonçant sa zone. Un résultat
+/// faux affiché avec assurance, pas une absence.
+///
+/// D'où deux messages distincts et non un seul : « aucune promo » dit qu'il
+/// n'y a rien à voir, celui-ci dit qu'il manque un réglage pour voir — l'inverse
+/// exact (règle #29, deux messages pour « vide » et « pas configuré »).
+class _NoCommuneSelected extends StatelessWidget {
+  const _NoCommuneSelected();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.location_off_outlined,
+                size: 48, color: colorScheme.onSurfaceVariant),
+            const SizedBox(height: 16),
+            Text(
+              l10n.noCommuneSelectedTitle,
+              style: textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.noCommuneSelectedBody,
+              style: textTheme.bodyMedium
+                  ?.copyWith(color: colorScheme.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: () => context.push('/select-commune'),
+              icon: const Icon(Icons.tune),
+              label: Text(l10n.noCommuneSelectedAction),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

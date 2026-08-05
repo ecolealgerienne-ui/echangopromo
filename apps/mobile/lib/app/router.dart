@@ -348,13 +348,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       // commune en tête de l'accueil y mène) — seule la redirection
       // obligatoire est suspendue.
       //
-      // Effet de bord à connaître : sans commune sélectionnée,
-      // `selectedCommunesProvider` est vide, donc `communeIds` n'est pas
-      // envoyé et le backend ne filtre pas — l'accueil affiche les promos
-      // de toutes les communes. Acceptable au volume du pilote, à
-      // réactiver avant l'extension multi-wilaya.
+      // ⚠️ **L'effet de bord décrit ici jusqu'au 2026-08-05 n'existe plus.**
+      // Il disait que sans commune sélectionnée, l'accueil affichait les
+      // promos de toutes les communes (le backend traitant `communeIds: []`
+      // comme *aucun filtre*), et jugeait ça « acceptable au volume du
+      // pilote ». Ça ne l'était pas : ce n'était pas une liste dégradée mais
+      // une liste **fausse**, présentée sans réserve sous un en-tête annonçant
+      // la zone du client.
       //
-      // Pour rétablir : décommenter le bloc ci-dessous.
+      // Résolu autrement que par cette redirection, et c'est le point : la
+      // redirection avait été coupée parce qu'elle **bloquait** l'accueil au
+      // premier lancement. `PromoListScreen` affiche désormais
+      // `_NoCommuneSelected` à la place de la seule liste — l'accueil reste
+      // atteignable, les filtres et la vitrine restent visibles, et le client
+      // voit le geste qui lui manque au lieu d'un résultat qui n'est pas le
+      // sien. La requête n'est même plus émise (`PromoListController._load`).
+      //
+      // Rétablir la redirection redeviendrait donc un choix de produit
+      // (forcer avant de laisser entrer), plus un correctif : décommenter le
+      // bloc ci-dessous.
       //
       // if (path == '/' && ref.read(selectedCommunesProvider).isEmpty) {
       //   return '/select-commune';

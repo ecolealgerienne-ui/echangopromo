@@ -141,6 +141,21 @@ class PromoListController extends StateNotifier<PromoListState> {
   final String _search;
 
   Future<void> _load() async {
+    // ⚠️ Aucune commune choisie ⇒ on ne demande rien. Le serveur traite
+    // `communeIds: []` comme **aucun filtre** et non comme « aucune commune »
+    // (`if (query.communeIds?.length)`, `PromoService.findActiveForClient`) :
+    // il renverrait une page entière de promos de toutes les communes, que
+    // l'écran n'affichera jamais puisqu'il montre `_NoCommuneSelected` à la
+    // place. La requête ne coûtait donc rien d'autre que son coût
+    // (2026-08-05).
+    //
+    // L'état reste `loaded` avec zéro promo : c'est l'écran, et lui seul, qui
+    // distingue « pas configuré » de « rien à voir » — l'état de chargement
+    // n'a pas à porter cette différence, il ne saurait pas la rendre.
+    if (_communeIds.isEmpty) {
+      state = const PromoListState(status: PromoListStatus.loaded);
+      return;
+    }
     state = const PromoListState(status: PromoListStatus.loading);
     try {
       final result = await _fetch(page: 1);
