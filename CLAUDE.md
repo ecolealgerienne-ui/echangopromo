@@ -200,9 +200,28 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
     et le prochain `migration:generate` l'émettra dans une migration qu'on
     croira additive. Toute pose d'`@Index()` doit s'accompagner de sa
     migration ; vérifier l'écart entité↔base plutôt que de faire confiance au
-    décorateur. *Trouvé : `Notification` déclare des `@Index()` sur
+    décorateur. *Trouvé : `Notification` déclarait des `@Index()` sur
     `recipientId` et `promoId` que `1783680000000-CreateNotificationEntity`
-    ne crée pas (seul l'index composite l'est).*
+    ne crée pas (seul l'index composite l'est) — **corrigé le 2026-08-05** en
+    retirant les décorateurs plutôt qu'en créant les index, aucune requête ne
+    les empruntant.*
+
+    ⚠️ **La mesure de cet écart, c'est un `migration:generate` qui ne rend
+    RIEN.** Tant qu'il rend quelque chose, l'entité et la base ne disent pas la
+    même chose — même quand les opérations « ne sont que des renommages ». Il a
+    rendu dix lignes pendant des semaines, ce qui a fait lire les suivantes en
+    diagonale ; elles sont alignées depuis
+    `1783840000000-AlignConstraintNamesWithTypeorm`, et **la sortie vide est
+    désormais la seule normale**.
+
+    ⚠️ **Et `migration:generate` ÉCRIT dans `src/migrations/`** : une
+    génération exploratoire n'est pas une lecture, c'est une migration en
+    attente. Comme TypeORM enveloppe **toutes** les migrations en attente dans
+    **une seule transaction**, un tel fichier oublié fait échouer le lot entier
+    et **annule au passage les migrations légitimes déjà appliquées dans le
+    même `run`**. Supprimer le fichier exploratoire avant tout `migration:run`
+    — et ne jamais filtrer la sortie d'un `run` sur les seules lignes de
+    succès : c'est ainsi qu'un échec passe pour un succès.
 
 13. **Toute opération "vérifier puis insérer" sur une contrainte métier
     (plafond, unicité) doit être protégée par une transaction ou un

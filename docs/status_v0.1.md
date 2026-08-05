@@ -586,12 +586,22 @@ ne peut pas se lire à deux vitesses : on la refait, on ne l'annote pas.
    `npm run seed:admin:prod -- <email> <mdp> <nom> --rotate`, et prévenir :
    il déconnecte l'admin partout.
 
-2. **Silencier le résidu de `migration:generate`.** Dix opérations de
-   renommage — clés étrangères et index de la table de jointure
-   `agent_communes`. Sans danger aujourd'hui (chaque `DROP` a sa recréation
-   dans le même `up()`), mais c'est ce bruit-là qui a caché un
-   `DROP INDEX "UQ_commercant_telephone_active"` sans recréation. Un diff qu'on
-   parcourt en diagonale est un diff qu'on ne lit pas.
+2. ~~**Silencier le résidu de `migration:generate`.**~~ — **fait le
+   2026-08-05** (`1783840000000-AlignConstraintNamesWithTypeorm`).
+   `migration:generate` rend désormais *No changes in database schema were
+   found*, et **c'est cette sortie vide qui devient la normale** : toute autre
+   sortie signale un écart entité↔base à lire ligne à ligne.
+
+   Deux choses valent d'être retenues du chantier. D'abord, les dix opérations
+   n'étaient **pas** dix renommages : les deux clés étrangères de
+   `agent_communes` passaient aussi de `ON UPDATE NO ACTION` à
+   `ON UPDATE CASCADE` — inerte ici (des UUID générés ne sont jamais mis à
+   jour) mais invisible dans un lot qu'on classe « du bruit ». Ensuite, la
+   base a été pliée aux noms de TypeORM et non l'inverse, parce que l'inverse
+   n'est faisable qu'à moitié : `@JoinTable` accepte un
+   `foreignKeyConstraintName` pour ses clés étrangères, mais les deux **index**
+   qu'il pose ne sont pas nommables — on aurait silencié 4 opérations sur 10 et
+   gardé le bruit.
 
 3. **Écrire d'autres parcours écran** (étape 3). Un seul existe — le compteur
    d'emplacements. Les deux suivants, par ce qu'ils protègent : le **premier
@@ -661,6 +671,68 @@ reste distinguable d'un oubli :
 ---
 
 ## Journal
+
+### 2026-08-05 (clôture) — `migration:generate` se tait, et le harnais reproduit le défaut qu'il corrigeait
+
+Point 2 de « par où reprendre ». Dix opérations rendues à chaque
+`migration:generate` sur un schéma pourtant à jour : renommages de clés
+étrangères et d'index sur `agent_communes` et `highlight`, chaque `DROP` ayant
+sa recréation dans le même `up()`. Sans danger — mais **pas sans effet** : c'est
+ce bruit-là qui a caché un `DROP INDEX "UQ_commercant_telephone_active"` sans
+recréation (P10). Un diff qu'on sait devoir ignorer est un diff qu'on ne lit
+plus, et c'est la onzième ligne qui coûte.
+
+**Une des dix n'était pas un renommage.** Les deux clés étrangères de la table
+de jointure passaient de `ON UPDATE NO ACTION` à `ON UPDATE CASCADE` — le
+défaut de TypeORM pour un `@JoinTable`. Inerte en pratique (les clés
+référencées sont des UUID générés, jamais mis à jour) et dans le sens sûr, mais
+elle était là depuis le début, dans un lot que tout le monde appelait « des
+renommages ». Elle est écrite dans l'en-tête de la migration, précisément
+parce qu'elle était le genre de ligne qui ne se voit pas.
+
+**Le sens du pliage est une décision, pas une commodité.** Garder les noms
+lisibles (`FK_agent_communes_agent`) et les imposer à TypeORM n'est faisable
+qu'à moitié : `@JoinTable` accepte un `foreignKeyConstraintName` pour ses deux
+clés étrangères, mais les deux **index** qu'il pose sur les colonnes de
+jointure tirent leur nom de la stratégie de nommage et ne sont pas
+paramétrables. On aurait silencié 4 opérations sur 10 et gardé un bruit
+permanent — le pire des deux mondes. Donc la base est pliée aux noms calculés,
+laids mais déterministes (dérivés de la table et des colonnes). Vérifié avant
+d'écrire : aucun de ces noms n'apparaît ailleurs que dans les migrations — ni
+code, ni script, ni banc.
+
+**Le `down()` a été exécuté, pas relu.** Un `down()` jamais joué n'est pas un
+`down()`. Après `revert`, `migration:generate` a réémis les dix opérations, et
+son `up()` commençait par `DROP CONSTRAINT "FK_agent_communes_agent"` /
+`DROP INDEX "IDX_agent_communes_agentId"` : les anciens noms étaient bel et
+bien revenus en base.
+
+#### ⚠️ Et le harnais de vérification a rejoué le défaut qu'il vérifiait
+
+Deux erreurs de ma part, dans le même enchaînement, qui méritent d'être
+écrites parce qu'elles sont exactement le mode de défaillance visé :
+
+- `migration:generate` **écrit dans `src/migrations/`**. Ma génération
+  « exploratoire » n'était donc pas une lecture : c'était une migration en
+  attente. Ma détection du fichier était fausse, je ne l'ai pas supprimée, et
+  le `migration:run` suivant a tenté de rejouer les mêmes ordres deux fois.
+  Comme TypeORM enveloppe **toutes** les migrations en attente dans **une
+  seule transaction**, l'échec du doublon a **annulé l'alignement légitime
+  avec lui**.
+- Et je ne l'ai pas vu, parce que j'avais filtré la sortie du `run` sur les
+  seules lignes de succès (`grep "has been executed"`). Le lot avait échoué ;
+  mon harnais affichait un succès. **Un filtre qui ne garde que les lignes de
+  réussite ne peut pas rapporter un échec** — c'est la règle 28 prise à
+  l'envers : un contrôle qui ne sait dire que oui.
+
+Les deux faits sont remontés dans la règle 12 de `CLAUDE.md`, où vivait déjà
+l'écart entité↔base. Au passage, l'exemple de cette règle était périmé : les
+deux `@Index()` de `Notification` cités comme absents des migrations ont été
+retirés le 2026-08-05 — et le silence de `generate` en est la preuve directe,
+puisqu'un décorateur non repris en base l'aurait fait parler.
+
+**État final** : 22 migrations, `migration:generate` muet, `npx eslint
+'src/**/*.ts'` à 0 problème.
 
 ### 2026-08-05 (fin de journée) — Point 4 : les vulnérabilités, et enfin une sauvegarde
 
