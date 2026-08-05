@@ -37,6 +37,8 @@
 #   client             l'accueil et la fiche : une promo fabriquée pour ce
 #                      passage est retrouvée par la recherche, ouverte, et son
 #                      COMPTEUR DE VUES monte côté serveur.
+#   agent-creation     l'agent crée un commerçant DANS SA COMMUNE : le compte
+#                      se connecte ensuite, et il est bien dans sa zone.
 #   moderation         masquer une promo signalée depuis la file admin, et
 #                      vérifier qu'elle disparaît AUSSI de ce que le public
 #                      reçoit. ⚠️ MODIFIE le décor — passe en dernier.
@@ -72,10 +74,10 @@ DEVICE_ID="parcours-ecran-0001"
 
 CHOIX="${1:-tous}"
 case "$CHOIX" in
-  tous|premier-lancement|plafond|creation|admin|agent|moderation|client|inscription) ;;
+  tous|premier-lancement|plafond|creation|admin|agent|moderation|client|inscription|agent-creation) ;;
   *) echo "❌ Parcours inconnu : « $CHOIX »."
      echo "   Attendu : premier-lancement | plafond | creation | admin | agent"
-     echo "             | moderation | client | inscription"
+     echo "             | moderation | client | inscription | agent-creation"
      echo "             (rien = tous)"
      exit 2 ;;
 esac
@@ -88,7 +90,7 @@ BESOIN_COMMERCANT=non
 # serveur — le compte qu'il crée, lui, est neuf.
 case "$CHOIX" in tous|plafond|creation|client|inscription) BESOIN_COMMERCANT=oui ;; esac
 BESOIN_PRO=non
-case "$CHOIX" in tous|admin|agent|moderation) BESOIN_PRO=oui ;; esac
+case "$CHOIX" in tous|admin|agent|moderation|agent-creation) BESOIN_PRO=oui ;; esac
 
 echo "════════════════════════════════════════════════════════════════"
 echo "  Parcours écran ($CHOIX) — décor, mesure, puis flutter drive"
@@ -344,6 +346,38 @@ print(total, items[0]['id'] if items else '-')"
   fi
   echo "✅ file de modération : $QUEUE_AVANT   ·   promo visée : $PROMO_CIBLE"
 fi
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent-creation" ]; then
+  # ⚠️ **La commune de l'agent, pas la première venue.** Un agent ne peut créer
+  # que dans SES communes ; choisir au hasard ferait refuser la création par le
+  # serveur, et l'échec accuserait le formulaire.
+  JETON_AGENT="$(curl -s -X POST "$API_URL/agent/login"     -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"     -d "{\"email\":\"$AGENT_EMAIL\",\"password\":\"$AGENT_PASSWORD\"}"     | lire_champ accessToken)"
+  [ -n "$JETON_AGENT" ] || { echo "❌ connexion agent refusée (429 déguisé ?)"; exit 2; }
+
+  lire_zone() { # → "id|wilaya|commune" de la PREMIÈRE commune de l'agent
+    "$PY" -c "import sys,json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('ILLISIBLE reponse non JSON'); sys.exit(0)
+cs = d.get('communes') or []
+if not cs:
+    print('ILLISIBLE aucune commune rattachee a cet agent'); sys.exit(0)
+c = cs[0]
+if not (c.get('id') and c.get('wilaya') and c.get('nom')):
+    print('ILLISIBLE commune incomplete'); sys.exit(0)
+print('%s|%s|%s' % (c['id'], c['wilaya'], c['nom']))"
+  }
+
+  ZONE="$(curl -s "$API_URL/agent/me"     -H "Authorization: Bearer $JETON_AGENT" -H "X-Device-Id: $DEVICE_ID"     | lire_zone)"
+  case "$ZONE" in
+    ILLISIBLE*) echo "❌ zone de l'agent — $ZONE"; exit 2 ;;
+  esac
+  ZONE_ID="${ZONE%%|*}"
+  ZONE_RESTE="${ZONE#*|}"
+  ZONE_WILAYA="${ZONE_RESTE%%|*}"
+  ZONE_COMMUNE="${ZONE_RESTE#*|}"
+  echo "✅ zone de l'agent : $ZONE_WILAYA / $ZONE_COMMUNE"
+fi
 fi  # BESOIN_PRO
 
 # ── 3. Les parcours ─────────────────────────────────────────────────────────
@@ -465,6 +499,45 @@ fi
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent" ]; then
   jouer parcours_espace_pro_test.dart "espace pro — agent"     --dart-define=TEST_PRO_ROLE=agent     --dart-define=TEST_PRO_EMAIL="$AGENT_EMAIL"     --dart-define=TEST_PRO_PASSWORD="$AGENT_PASSWORD"     --dart-define=TEST_PRO_STATS="$STATS_AGENT"
   noter "espace pro — agent ($STATS_AGENT)" $?
+  echo
+fi
+
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent-creation" ]; then
+  AGENT_TEL="+213557$(date +%H%M%S)"
+  AGENT_PIN="135792"
+  echo "── agent : commerçant à créer $AGENT_TEL ──"
+  jouer parcours_agent_creation_commercant_test.dart "agent — créer un commerçant"     --dart-define=TEST_PRO_EMAIL="$AGENT_EMAIL"     --dart-define=TEST_PRO_PASSWORD="$AGENT_PASSWORD"     --dart-define=TEST_COMMERCANT_TEL="$AGENT_TEL"     --dart-define=TEST_COMMERCANT_PIN="$AGENT_PIN"     --dart-define=TEST_WILAYA_NOM="$ZONE_WILAYA"     --dart-define=TEST_COMMUNE_NOM="$ZONE_COMMUNE"
+  CODE_AGENT=$?
+  noter "agent — créer un commerçant ($AGENT_TEL)" $CODE_AGENT
+
+  # ── Contre-mesure : le compte existe-t-il, et DANS LA BONNE COMMUNE ? ────
+  #
+  # La seconde question est celle qui compte : c'est la frontière de zone, dont
+  # l'absence avait produit l'IDOR agent → promo (P5). Une ligne affichée dans
+  # une liste ne prouve ni l'un ni l'autre.
+  if [ "$CODE_AGENT" -eq 0 ]; then
+    echo
+    echo "── contre-mesure : le commerçant créé, vu du serveur ──"
+    JETON_CREE="$(curl -s -X POST "$API_URL/commercant/login"       -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"       -d "{\"telephone\":\"$AGENT_TEL\",\"pin\":\"$AGENT_PIN\"}"       | lire_champ accessToken)"
+    if [ -z "$JETON_CREE" ]; then
+      echo "❌ connexion impossible avec le compte censé venir d'être créé."
+      echo "   ⚠️ Un 429 se déguise en « identifiants incorrects »."
+      noter "contre-mesure agent" 1
+    else
+      COMMUNE_CREE="$(curl -s "$API_URL/commercant/me"         -H "Authorization: Bearer $JETON_CREE" -H "X-Device-Id: $DEVICE_ID"         | lire_champ communeId)"
+      if [ -z "$COMMUNE_CREE" ]; then
+        echo "⚠️  communeId illisible — la contre-mesure n'a PAS eu lieu."
+        noter "contre-mesure agent (non concluante)" 1
+      elif [ "$COMMUNE_CREE" = "$ZONE_ID" ]; then
+        echo "✅ compte créé et rattaché à $ZONE_COMMUNE, la commune de l'agent"
+        noter "contre-mesure agent" 0
+      else
+        echo "❌ le commerçant est en commune $COMMUNE_CREE, hors de la zone de"
+        echo "   l'agent ($ZONE_ID) : la frontière de zone n'a pas tenu."
+        noter "contre-mesure agent" 1
+      fi
+    fi
+  fi
   echo
 fi
 

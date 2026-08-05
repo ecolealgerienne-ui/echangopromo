@@ -712,6 +712,40 @@ C'est la démonstration de l'avertissement que ce fichier porte en tête : *un
 état périmé est pire qu'aucun état, il fait conclure*. Ici il a fait écrire un
 test qui éprouvait un chemin que personne n'emprunte.
 
+#### L'agent crée un commerçant — son geste métier, et sa frontière
+
+Neuvième parcours. L'agent n'avait jusqu'ici qu'un tableau de bord éprouvé : un
+écran qui **montre**, pas un écran qui **fait**. Or son geste — se déplacer en
+boutique et inscrire le commerçant à sa place — est sa raison d'exister.
+
+**La contre-mesure porte sur la zone, et c'est le point.** Le script vérifie que
+le compte se connecte avec le téléphone et le PIN saisis à l'écran (une ligne
+dans une liste ne prouve pas qu'un compte existe), **et** que sa `communeId`
+est celle de l'agent. Mesuré : `Djelfa / Ain Chouhada`, et le commerçant créé y
+est bien rattaché. C'est la frontière dont l'absence avait produit l'IDOR
+agent → promo (P5).
+
+⚠️ **La commune n'est pas choisie au hasard dans la cascade** : un agent ne peut
+créer que dans les siennes. Prendre la première venue ferait refuser la
+création par le serveur, et l'échec accuserait le formulaire. Le script sert
+donc les **noms** servis par `GET /agent/me`, et le parcours les choisit par
+leur texte — des données de la base, pas des libellés traduits.
+
+⚠️ **L'entrée reste un lien**, faute de porte pour l'agent (voir plus bas). Le
+jour où elle existe, seule l'étape 1 de ce parcours change.
+
+#### Le harnais durci : une cible peut disparaître entre la vérification et le tap
+
+Deux échecs de suite, sur deux écrans différents, tous deux juste après une
+saisie : `Bad state: No element` levé par `tester.tap`. Ouvrir le clavier,
+faire défiler, afficher l'aperçu d'une photo — chacun relayoute l'écran, et ce
+qui sort de la zone construite est **détruit**. La cible existait à la
+vérification, plus au moment du tap.
+
+`taper` fait désormais trois tentatives et, s'il échoue, **nomme la cible et
+montre l'écran** au lieu de laisser filer une erreur Dart qui ne dit ni quoi ni
+où. Le réessai ne masque rien : si la cible ne revient pas, l'échec tombe.
+
 #### L'inscription commerçant — le premier contact avec le produit
 
 Huitième parcours. Jusqu'ici **aucun commerçant n'avait jamais été inscrit

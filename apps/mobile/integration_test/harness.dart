@@ -75,6 +75,16 @@ const String promoDescription = String.fromEnvironment('TEST_PROMO_DESC');
 /// `GET /commercant/me`.
 const String communeCible = String.fromEnvironment('TEST_COMMUNE_ID');
 
+/// Wilaya et commune **de l'agent**, par leur nom, pour la cascade du
+/// formulaire de création de commerçant.
+///
+/// ⚠️ Un agent ne peut créer que dans SES communes : choisir la première venue
+/// ferait refuser la création par le serveur, et l'échec accuserait le
+/// formulaire. Les noms sont des **données** (ils viennent de la base), pas des
+/// libellés traduits — les chercher ne lie pas le parcours à la langue.
+const String wilayaNom = String.fromEnvironment('TEST_WILAYA_NOM');
+const String communeNom = String.fromEnvironment('TEST_COMMUNE_NOM');
+
 /// Les cinq compteurs du tableau de bord, **tels que le serveur les sert à ce
 /// rôle-là**, séparés par des virgules (`GET /admin/dashboard`).
 ///
@@ -293,19 +303,32 @@ Future<void> defilerJusquaVrai(
 /// ⚠️ Taper l'icône ne suffit pas : un bandeau peut la recouvrir, ou l'écran
 /// peut ne pas avoir fini de se reconstruire. Le tap part alors dans le vide,
 /// et l'assertion suivante attend trente secondes avant d'accuser l'écran.
+/// ⚠️ **La cible peut disparaître ENTRE la vérification et le tap.** Ouvrir le
+/// clavier, faire défiler, afficher un aperçu de photo : chacun relayoute
+/// l'écran, et ce qui sort de la zone construite est détruit. `tester.tap`
+/// rendait alors « Bad state: No element » — une erreur Dart qui ne dit ni
+/// quoi, ni où. *Trouvé deux fois le 2026-08-05, sur l'inscription commerçant
+/// puis sur la création par l'agent, les deux fois juste après une saisie.*
+///
+/// D'où trois tentatives, et un échec qui **nomme la cible et montre l'écran**.
+/// Le réessai ne masque rien : si la cible ne revient pas, on échoue.
 Future<void> taper(WidgetTester tester, Finder cible) async {
-  // ⚠️ Sans ce contrôle, un élément absent rend « Bad state: No element » —
-  // une erreur Dart qui ne dit ni quoi, ni où. On préfère nommer la cible et
-  // montrer l'écran (2026-08-05, inscription commerçant : la case à cocher
-  // était repassée sous la ligne de flottaison quand la photo l'a poussée).
-  if (cible.evaluate().isEmpty) {
-    fail('rien à taper pour $cible.\n'
-        'à l\'écran : ${textesRendus()}');
+  for (var essai = 0; essai < 3; essai++) {
+    if (cible.evaluate().isEmpty) {
+      await tester.pump(const Duration(milliseconds: 300));
+      continue;
+    }
+    await tester.ensureVisible(cible.first);
+    await tester.pump(const Duration(milliseconds: 200));
+    // Revérifié après `ensureVisible` : c'est précisément lui qui fait défiler,
+    // donc lui qui peut faire sortir la cible de l'autre côté.
+    if (cible.evaluate().isEmpty) continue;
+    await tester.tap(cible.first);
+    await tester.pump(const Duration(milliseconds: 600));
+    return;
   }
-  await tester.ensureVisible(cible.first);
-  await tester.pump(const Duration(milliseconds: 200));
-  await tester.tap(cible.first);
-  await tester.pump(const Duration(milliseconds: 600));
+  fail('rien à taper pour $cible après 3 tentatives.\n'
+      'à l\'écran : ${textesRendus()}');
 }
 
 /// Saisit du texte dans le n-ième champ de l'écran.
