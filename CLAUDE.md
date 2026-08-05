@@ -648,7 +648,15 @@ permet de reconnaître un cas nouveau relevant de la même règle.
     public** avant toute décision admin. Masquer ne retire rien de visible : ça
     rend le retrait définitif. Le total public ne pouvait pas bouger.*
     Corollaire de la règle 28, en miroir : on y exige qu'un contrôle sache
-    refuser ; ici on exige qu'il sache **ne pas refuser à tort**. Les deux se
+    refuser ; ici on exige qu'il sache **ne pas refuser à tort**.
+
+    ⚠️ **Et une mesure prise trop tôt mesure un état qui n'existe plus.** Le
+    rejeu d'ensemble du 2026-08-05 a échoué six fois là-dessus : les valeurs de
+    référence (emplacements, compteurs pro, file de modération) étaient lues au
+    démarrage, puis d'autres parcours créaient des promos et des signalements
+    avant que les parcours concernés ne tournent. L'écran affichait « 3 / 5 »,
+    le test attendait « 1 / 5 » mesuré vingt minutes plus tôt — et accusait
+    l'écran. **Mesurer au plus près du geste**, jamais en préambule. Les deux se
     vérifient de la même façon — en regardant ce que le contrôle mesure
     réellement, pas ce qu'on a voulu qu'il mesure.
 

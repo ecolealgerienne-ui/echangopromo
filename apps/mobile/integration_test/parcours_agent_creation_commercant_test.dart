@@ -165,9 +165,9 @@ void main() {
     await saisir(tester, champs - 2, commercantPin);
     await saisir(tester, champs - 1, commercantPin);
 
-    await defilerJusquaVrai(
+    await defilerJusqua(
       tester,
-      () => find.byType(FilledButton).evaluate().isNotEmpty,
+      find.byType(FilledButton),
       raison: 'le bouton de création n’a jamais été atteint',
     );
     await taper(tester, find.byType(FilledButton));

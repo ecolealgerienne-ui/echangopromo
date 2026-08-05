@@ -712,6 +712,27 @@ C'est la démonstration de l'avertissement que ce fichier porte en tête : *un
 état périmé est pire qu'aucun état, il fait conclure*. Ici il a fait écrire un
 test qui éprouvait un chemin que personne n'emprunte.
 
+#### Les douze parcours enchaînés — et six échecs qui n'accusaient que moi
+
+`./scripts/test-parcours-ecran.sh` sans argument, décor neuf, **code de sortie
+0** : 12 parcours et 6 contre-mesures au vert en un seul passage.
+
+Il a fallu **trois** tentatives, et les six échecs des deux premières avaient
+la même cause : **les valeurs de référence étaient mesurées au démarrage**, puis
+les préparations et les parcours suivants créaient des promos et des
+signalements. Au moment de jouer, l'écran affichait « 3 / 5 » et le test
+attendait « 1 / 5 » — mesuré vingt minutes plus tôt. Idem pour les cinq
+compteurs pro et pour la file de modération, qu'un parcours précédent alimente.
+
+Aucun défaut produit dans le lot : c'était l'ordonnancement du script. Les
+mesures sont désormais reprises **juste avant chaque geste**. Remonté dans la
+règle 38 : *mesurer au plus près du geste, jamais en préambule.*
+
+Un septième échec, différent : le bouton de création restait hors d'atteinte
+après douze glissements, sur un écran passé la veille — un aléa de défilement.
+`defilerJusqua` (qui vise un widget via `scrollUntilVisible`) remplace le
+glissement à l'aveugle quand on sait ce qu'on cherche.
+
 #### 🔓 Fermé — le décor n'annonce plus de photos qui n'existent pas
 
 Point ouvert depuis le matin. `provision-decor.sh` et `seed-demo.sh`

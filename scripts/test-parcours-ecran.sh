@@ -614,6 +614,17 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "premier-lancement" ]; then
   echo
 fi
 
+# ⚠️ **On REMESURE juste avant de jouer.** La mesure prise en section 2 date
+# d'avant les préparations des autres parcours — or « client » et
+# « signalement » créent chacun une promo pour ce même commerçant. Le rejeu
+# d'ensemble du 2026-08-05 a échoué là-dessus : l'écran affichait « 3 / 5 » et
+# le parcours attendait « 1 / 5 », mesuré vingt minutes plus tôt. **Une mesure
+# prise avant d'autres gestes mesure un état qui n'existe plus.**
+MESURE="$(lire_slots)" || { echo "❌ /promo/me/slots — $MESURE"; exit 2; }
+EN_LIGNE="${MESURE% *}"
+PLAFOND="${MESURE#* }"
+echo "   (remesuré : enLigne=$EN_LIGNE plafond=$PLAFOND)"
+
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "plafond" ]; then
   jouer parcours_plafond_commercant_test.dart "compteur d'emplacements" \
     --dart-define=TEST_COMMERCANT_TEL="$TEL" \
@@ -623,6 +634,18 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "plafond" ]; then
   noter "compteur d'emplacements ($EN_LIGNE / $PLAFOND)" $?
   echo
 fi
+
+# Remesure, même raison — et le plafond se revérifie ici : le parcours
+# « client » et « signalement » ont pu consommer les emplacements restants.
+MESURE="$(lire_slots)" || { echo "❌ /promo/me/slots — $MESURE"; exit 2; }
+EN_LIGNE="${MESURE% *}"
+PLAFOND="${MESURE#* }"
+if [ "$EN_LIGNE" -ge "$PLAFOND" ]; then
+  echo "❌ le commerçant est au plafond ($EN_LIGNE/$PLAFOND) : plus de place"
+  echo "   pour publier. Reposer le décor."
+  exit 2
+fi
+echo "   (remesuré : enLigne=$EN_LIGNE plafond=$PLAFOND)"
 
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "creation" ]; then
   jouer parcours_creation_promo_test.dart "création d'une promo" \
@@ -664,12 +687,22 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "creation" ]; then
   echo
 fi
 
+# ⚠️ Remesure : les parcours qui créent des promos ont fait bouger ces
+# compteurs depuis la section 2. Une mesure prise avant d'autres gestes
+# mesure un état qui n'existe plus.
+STATS_ADMIN="$(mesurer_pro admin "$ADMIN_EMAIL" "$ADMIN_PASSWORD")" || {
+  echo "❌ mesure admin — $STATS_ADMIN"; exit 2; }
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "admin" ]; then
   jouer parcours_espace_pro_test.dart "espace pro — admin"     --dart-define=TEST_PRO_ROLE=admin     --dart-define=TEST_PRO_EMAIL="$ADMIN_EMAIL"     --dart-define=TEST_PRO_PASSWORD="$ADMIN_PASSWORD"     --dart-define=TEST_PRO_STATS="$STATS_ADMIN"
   noter "espace pro — admin ($STATS_ADMIN)" $?
   echo
 fi
 
+# ⚠️ Remesure : les parcours qui créent des promos ont fait bouger ces
+# compteurs depuis la section 2. Une mesure prise avant d'autres gestes
+# mesure un état qui n'existe plus.
+STATS_AGENT="$(mesurer_pro agent "$AGENT_EMAIL" "$AGENT_PASSWORD")" || {
+  echo "❌ mesure agent — $STATS_AGENT"; exit 2; }
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent" ]; then
   jouer parcours_espace_pro_test.dart "espace pro — agent"     --dart-define=TEST_PRO_ROLE=agent     --dart-define=TEST_PRO_EMAIL="$AGENT_EMAIL"     --dart-define=TEST_PRO_PASSWORD="$AGENT_PASSWORD"     --dart-define=TEST_PRO_STATS="$STATS_AGENT"
   noter "espace pro — agent ($STATS_AGENT)" $?
@@ -870,6 +903,21 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "signalement" ]; then
   fi
   echo
 fi
+
+# Remesure : le parcours « signalement » vient d'ajouter un élément à la file.
+FILE_AVANT="$(curl -s "$API_URL/admin/moderation/queue" \
+  -H "Authorization: Bearer $JETON_ADMIN" -H "X-Device-Id: $DEVICE_ID" \
+  | lire_file)"
+case "$FILE_AVANT" in
+  ILLISIBLE*) echo "❌ file de modération — $FILE_AVANT"; exit 2 ;;
+esac
+QUEUE_AVANT="${FILE_AVANT% *}"
+PROMO_CIBLE="${FILE_AVANT#* }"
+if [ "$QUEUE_AVANT" -eq 0 ]; then
+  echo "❌ file de modération vide : rien à masquer."
+  exit 2
+fi
+echo "   (remesuré : file de $QUEUE_AVANT, promo visée $PROMO_CIBLE)"
 
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "moderation" ]; then
   jouer parcours_admin_moderation_test.dart "modération admin"     --dart-define=TEST_PRO_EMAIL="$ADMIN_EMAIL"     --dart-define=TEST_PRO_PASSWORD="$ADMIN_PASSWORD"     --dart-define=TEST_QUEUE="$QUEUE_AVANT"

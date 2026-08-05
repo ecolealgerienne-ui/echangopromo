@@ -304,6 +304,33 @@ Future<void> defilerJusquaVrai(
       'à l\'écran : ${textesRendus()}');
 }
 
+/// Fait défiler jusqu'à ce qu'un widget PRÉCIS soit visible.
+///
+/// Préférer cette forme à [defilerJusquaVrai] quand on sait ce qu'on cherche :
+/// `scrollUntilVisible` s'arrête dès que la cible est là et gère le
+/// défilement lui-même, là où un glissement à l'aveugle peut ne pas prendre.
+/// *Le rejeu d'ensemble du 2026-08-05 a échoué là-dessus : le bouton de
+/// création restait hors d'atteinte après douze glissements, sur un écran qui
+/// était passé la veille.*
+Future<void> defilerJusqua(
+  WidgetTester tester,
+  Finder cible, {
+  required String raison,
+}) async {
+  if (cible.evaluate().isNotEmpty) return;
+  try {
+    await tester.scrollUntilVisible(
+      cible,
+      250,
+      scrollable: find.byType(Scrollable).first,
+      maxScrolls: 30,
+    );
+  } catch (_) {
+    fail('$raison — non atteint après défilement.\n'
+        'à l\'écran : ${textesRendus()}');
+  }
+}
+
 /// Tape un élément après s'être assuré qu'il est visible.
 ///
 /// ⚠️ Taper l'icône ne suffit pas : un bandeau peut la recouvrir, ou l'écran
