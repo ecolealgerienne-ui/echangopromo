@@ -40,6 +40,10 @@ D_AGENT_B_EMAIL="${D_AGENT_B_EMAIL:-decor-agent-b@echango.local}"
 D_AGENT_B_PASSWORD="${D_AGENT_B_PASSWORD:-decor-agent-b-2026}"
 D_COMMERCANT_TEL="${D_COMMERCANT_TEL:-+213555000101}"
 D_COMMERCANT_PIN="${D_COMMERCANT_PIN:-654321}"
+# Identifiant d'appareil du décor, requis par les routes client anonymes
+# (`@DeviceId()`). Fixe et reconnaissable : ce décor ne mesure pas de vues, il
+# a seulement besoin que l'en-tête existe.
+D_DEVICE_ID="${D_DEVICE_ID:-decor-provisioning-0001}"
 
 BACKEND_DIR="${BACKEND_DIR:-$(cd "$(dirname "$0")/../apps/backend" && pwd)}"
 
@@ -53,6 +57,18 @@ fail() { echo "❌ $1" >&2; [ -n "${2:-}" ] && echo "   Réponse : $2" >&2; exit
 api() { # METHODE CHEMIN [CORPS] [JETON]
   local m="$1" p="$2" body="${3:-}" tok="${4:-}"
   local args=(-sS -X "$m" "$API_URL$p" -H 'Content-Type: application/json')
+  # ⚠️ `X-Device-Id` sur TOUS les appels (2026-08-05). Les routes client
+  # anonymes l'exigent (`@DeviceId()` — `GET /promo/:id` compte les vues,
+  # `POST /report` en dépend pour l'anti-abus) et refusent en
+  # `DEVICE_ID_MISSING` sans lui. Il est inoffensif partout ailleurs.
+  #
+  # Sans ça, la vérification d'état finale de l'étape 5 ne lisait pas un
+  # statut mais un objet d'erreur, et `.lifecycleStatus // empty` le
+  # transformait en chaîne vide : le décor annonçait « promo non publiée » sur
+  # une promo parfaitement publiée. Ce contrôle n'avait donc JAMAIS pu réussir
+  # depuis son ajout — un contrôle qu'on n'a jamais vu passer est aussi
+  # suspect qu'un contrôle qu'on n'a jamais vu refuser (règle #28).
+  args+=(-H "X-Device-Id: $D_DEVICE_ID")
   [ -n "$body" ] && args+=(-d "$body")
   [ -n "$tok" ] && args+=(-H "Authorization: Bearer $tok")
   curl "${args[@]}"
@@ -210,18 +226,70 @@ step "5. Une promo appartenant à ce commerçant"
 # Le banc d'appartenance a besoin d'une ressource RÉELLE à cibler : une promo
 # inexistante rendrait « introuvable » pour la mauvaise raison, et le banc
 # conclurait juste par accident.
-PROMO_ID="$(api GET "/promo/me/all?limit=1" '' "$COMMERCANT_TOKEN" \
-  | jq -r '.items[0].id // empty')"
+#
+# ⚠️ **Une promo PUBLIÉE, pas la première venue** (2026-08-05). On lisait
+# `items[0]` de `/promo/me/all`, qui rend TOUS les statuts, les plus récentes
+# d'abord — donc le brouillon ou l'arrêtée que le banc de plafond vient de
+# laisser derrière lui. Le décor annonçait alors une promo au banc
+# d'appartenance, qui a besoin d'une ressource RÉELLEMENT visible : ciblée sur
+# un brouillon, ce banc conclurait « introuvable » pour la mauvaise raison.
+#
+# `dateFin` est vérifiée aussi : le cron d'expiration ne passe qu'à 1h,
+# « publiee » ne suffit pas à dire « en ligne » (même distinction que
+# `PromoService.isEnLigne`).
+#
+# ⚠️ Cette correction n'est PAS celle qui débloquait l'échec observé le
+# 2026-08-05 — l'échec venait de `X-Device-Id` manquant dans `api()` (voir
+# plus haut), qui faisait lire un objet d'erreur au lieu d'un statut. Les deux
+# défauts étaient réels et indépendants ; les confondre aurait laissé celui-ci
+# en place, invisible jusqu'au jour où le décor tomberait sur un brouillon.
+PROMO_ID="$(api GET "/promo/me/all?limit=100" '' "$COMMERCANT_TOKEN" \
+  | jq -r --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      '[.items[]? | select(.lifecycleStatus == "publiee" and .dateFin > $now)][0].id // empty')"
+
+# ⚠️ **Publier un brouillon existant AVANT d'en créer un** (2026-08-05).
+# Le plafond anti-abus est de 5 créations par 24 h et par commerçant : après un
+# passage du banc de plafond, le décor ne pouvait plus rien créer pendant une
+# journée entière et échouait en `PROMO_DAILY_CREATION_CAP_REACHED` — un décor
+# qui ne se repose que sur la création n'est rejouable qu'une fois par jour.
+#
+# `publish` ne consomme PAS ce plafond (voir `PromoService.publish` : ni
+# `assertUnderDailyCreationCap`, ni cooldown pour une promo jamais publiée) —
+# et un brouillon traîne précisément là où le banc de plafond en laisse.
+if [ -z "$PROMO_ID" ]; then
+  BROUILLON_ID="$(api GET "/promo/me/all?limit=100" '' "$COMMERCANT_TOKEN" \
+    | jq -r '[.items[]? | select(.lifecycleStatus == "brouillon")][0].id // empty')"
+  if [ -n "$BROUILLON_ID" ]; then
+    info "Aucune promo visible — publication d'un brouillon existant"
+    pub="$(api POST "/promo/$BROUILLON_ID/publish" '{}' "$COMMERCANT_TOKEN")"
+    if echo "$pub" | est_erreur; then
+      fail "Publication du brouillon du décor refusée" \
+        "$(echo "$pub" | jq -c '{code,message}')"
+    fi
+    PROMO_ID="$BROUILLON_ID"
+  fi
+fi
 
 if [ -z "$PROMO_ID" ]; then
-  info "Aucune — création"
+  info "Ni promo visible ni brouillon — création"
   # ⚠️ La durée est plafonnée côté serveur (PROMO_MAX_DURATION_DAYS, 7 jours par
   # défaut). On reste dessous — et on ne recopie pas le plafond : 5 jours vaut
   # pour toute valeur de configuration supérieure ou égale à 5.
-  fin="$(date -u -d '+5 days' +%Y-%m-%dT%H:%M:%S.000Z)"
-  out="$(api POST /promo "$(jq -n --arg f "$fin" \
+  #
+  # `dureeJours` et non `dateFin` (2026-08-05) : c'est la façon dont l'app
+  # exprime désormais une durée, donc ce que le décor doit exercer. Envoyer une
+  # date absolue faisait en outre comparer l'horloge de ce script à celle du
+  # serveur, sans tolérance — un décalage de quelques secondes suffisait à se
+  # voir refuser une durée pourtant légale.
+  # ⚠️ La clé S3 doit APPARTENIR au commerçant (2026-08-05). Le décor posait
+  # `promo-photos/decor/decor.jpg`, un préfixe qui n'appartient à personne :
+  # `assertPhotoKeysOwned` le refuse désormais en `STORAGE_KEY_NOT_OWNED`.
+  # Avant ce garde, n'importe quel compte pouvait rattacher à sa promo un
+  # fichier envoyé par un autre — le décor exerçait donc, sans le savoir, la
+  # faille elle-même.
+  out="$(api POST /promo "$(jq -n --arg k "promo-photos/$CID/decor.jpg" \
     '{description:"Promo du décor", prixAvant:1000, prixApres:700,
-      categorie:"alimentation", photoKeys:["promo-photos/decor/decor.jpg"], dateFin:$f}')" \
+      categorie:"alimentation", photoKeys:[$k], dureeJours:5}')" \
     "$COMMERCANT_TOKEN")"
   echo "$out" | est_erreur && fail "Création promo refusée" "$(echo "$out" | jq -c '{code,message}')"
   PROMO_ID="$(echo "$out" | jq -r '.id // empty')"

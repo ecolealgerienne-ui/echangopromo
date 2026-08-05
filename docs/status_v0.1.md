@@ -490,7 +490,7 @@ Tout est dans `scripts/`. Chaque banc lance son auto-test avant de conclure, et
 | `test-frontiere-http.sh` | 48 routes × 3 sondes de refus | ✅ 138 sondes, 0 échec |
 | `test-appartenance.sh` | 14 routes à identifiant, agent d'une autre commune | ✅ 14 sondes, 0 échec |
 | `test-plafond-promos.sh` | 5 actives sous course, plusieurs tours | ✅ 5/5 tours, 1 gagnant chacun |
-| `test-cycle-commercant.sh` | suspension ≠ suppression | 🔴 **7 ✅ / 1 ❌ — voir P10** |
+| `test-cycle-commercant.sh` | suspension ≠ suppression | ✅ **8 contrôles, 0 échec** (P10 fermé, rejoué 2026-08-05) |
 | `apps/mobile/tool/check_all.dart` | les 3 vérificateurs statiques | ✅ 3/3 |
 
 ```bash
@@ -536,6 +536,59 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
 ---
 
 ## Journal
+
+### 2026-08-05 (soir) — Les quatre bancs rejoués, tous au vert, P10 fermé
+
+Backend sorti du mode `--watch` (cible stable, `node dist/main`) puis les quatre
+bancs rejoués dans l'ordre documenté :
+
+| Banc | Verdict |
+|---|---|
+| `test-frontiere-http.sh` | ✅ 49 routes protégées, **141 sondes, 0 échec** |
+| `test-appartenance.sh` | ✅ 14 sondes, 0 échec, 0 non concluante |
+| `test-plafond-promos.sh` | ✅ **3/3 tours concluants**, 1 gagnant à chaque tour |
+| `test-cycle-commercant.sh` | ✅ **8 contrôles, 0 échec** — **P10 fermé** |
+
+**P10 est fermé** : « le repreneur peut se connecter » passe. C'était le seul
+échec connu depuis le 2026-08-04.
+
+**Aucun de ces bancs n'est passé du premier coup, et c'est l'essentiel.** Cinq
+défauts trouvés, dont deux dans les bancs eux-mêmes et un que j'ai introduit :
+
+1. **`X-Device-Id` absent de `api()`** (`provision-decor.sh`). Les routes client
+   anonymes l'exigent ; la vérification d'état finale lisait donc un objet
+   d'erreur au lieu d'un statut, et annonçait « promo non publiée » sur une
+   promo publiée. **Ce contrôle, ajouté la veille, n'avait jamais pu réussir** —
+   un contrôle qu'on n'a jamais vu passer est aussi suspect qu'un contrôle
+   qu'on n'a jamais vu refuser.
+2. **Clé S3 non possédée**, dans trois bancs (`provision-decor`,
+   `concurrence_plafond`, `cycle_commercant`). `assertPhotoKeysOwned`, ajouté le
+   matin même, refuse `promo-photos/banc/…` : ce préfixe n'appartient à
+   personne. Les bancs exerçaient donc, sans le savoir, la faille que ce garde
+   ferme.
+3. **Un commentaire mal placé rendait une route « ouverte »**. J'avais glissé un
+   bloc `/** … */` entre `@UseGuards` et `@Patch` ; le banc de frontière retire
+   les commentaires **en laissant des lignes vides** et sa remontée s'arrêtait
+   là. `PATCH /admin/agent/:id/communes` était accusée à tort. Les deux ont été
+   corrigés — la place du commentaire *et* la robustesse du parseur (3 cas
+   d'auto-test ajoutés, dont un qui vérifie qu'un bloc ne déborde pas sur son
+   voisin). Un banc qui accuse à tort est un banc qu'on prend l'habitude de
+   discuter : la façon la plus sûre de ne pas voir le jour où il a raison.
+4. **Le décor prenait `items[0]` de `/promo/me/all`**, tous statuts confondus —
+   donc le brouillon laissé par le banc de plafond. Il sélectionne désormais une
+   promo *publiée et non expirée*.
+5. **Le décor n'était rejouable qu'une fois par jour** : sans promo visible il
+   ne savait que créer, et butait sur le plafond de 5 créations/24 h. Il publie
+   maintenant un brouillon existant d'abord (`publish` ne consomme pas ce
+   plafond).
+
+⚠️ **Ce que les bancs n'ont pas prouvé** : le commerçant par défaut du décor
+(`+213555000101`) reste verrouillé par ses propres quotas anti-abus jusqu'au
+soir. Les bancs ont tourné sur un commerçant neuf (`D_COMMERCANT_TEL`
+surchargé). Ce n'est pas une panne — ce sont les règles qui fonctionnent — mais
+un décor dont la rejouabilité dépend de l'heure mérite d'être noté.
+
+---
 
 ### 2026-08-05 (fin) — Communes non configurées : la liste, puis la carte
 

@@ -107,6 +107,29 @@ _BLOC = re.compile(r"/\*[\s\S]*?\*/")
 _LIGNE = re.compile(r"//[^\n]*")
 
 
+def _decorateur_ou_vide(ligne):
+    """Une ligne qui n'INTERROMPT pas un bloc de décorateurs.
+
+    ⚠️ Les lignes vides comptent, et c'est le cœur du correctif du 2026-08-05.
+    Les commentaires sont retirés plus haut par substitution — un bloc `/** … */`
+    de six lignes laisse donc **six lignes vides** derrière lui. La remontée
+    s'arrêtait là, si bien qu'un commentaire glissé entre `@UseGuards` et
+    `@Patch` faisait lire une route parfaitement protégée comme OUVERTE.
+    `PATCH /admin/agent/:id/communes` en a fait les frais.
+
+    Le sens de l'erreur comptait peu ici : ce banc est le SEUL à pouvoir
+    affirmer qu'aucun garde ne manque (règle #33). Qu'il accuse à tort une
+    route protégée, et on prend l'habitude de discuter ses verdicts — ce qui
+    est la façon la plus sûre de ne pas voir le jour où il a raison.
+
+    ⚠️ Sans danger pour l'autre sens : entre deux routes il y a toujours au
+    moins la signature de la précédente ou son `}` fermant, qui ne sont ni
+    vides ni des décorateurs. Un bloc ne peut donc pas déborder sur son voisin.
+    """
+    s = ligne.strip()
+    return s == "" or s.startswith("@")
+
+
 def routes_du_source(texte):
     """Rend [(methode, chemin, roles:set, garde:bool)] pour un contrôleur.
 
@@ -139,10 +162,10 @@ def routes_du_source(texte):
         if not m:
             continue
         j = i
-        while j > idx_classe and lignes[j - 1].lstrip().startswith("@"):
+        while j > idx_classe and _decorateur_ou_vide(lignes[j - 1]):
             j -= 1
         k = i
-        while k + 1 < len(lignes) and lignes[k + 1].lstrip().startswith("@"):
+        while k + 1 < len(lignes) and _decorateur_ou_vide(lignes[k + 1]):
             k += 1
         bloc = "\n".join(lignes[j:k + 1])
 
@@ -288,6 +311,22 @@ _CAS = [
     ("@UseGuards(A)\n@Controller('m')\nexport class C {\n"
      "@Roles('agent','admin')\n@Post('z')\nz() {}\n}",
      [("POST", "/m/z", {"agent", "admin"}, True)]),
+    # ⚠️ Le cas du 2026-08-05 : un commentaire ENTRE les gardes et le verbe.
+    # Retiré par substitution, il laisse des lignes vides — et la remontée
+    # s'arrêtait dessus, faisant lire `PATCH /admin/agent/:id/communes` comme
+    # OUVERTE alors qu'elle porte @UseGuards + @Roles.
+    ("@Controller('adm')\nexport class C {\n"
+     "@UseGuards(A)\n@Roles('admin')\n/**\n * doc\n */\n@Patch('a/:id/b')\nf() {}\n}",
+     [("PATCH", "/adm/a/:id/b", {"admin"}, True)]),
+    # Même piège de l'autre côté : commentaire entre le verbe et @Roles.
+    ("@Controller('adm')\nexport class C {\n"
+     "@UseGuards(A)\n@Get('c')\n// note\n@Roles('agent')\ng() {}\n}",
+     [("GET", "/adm/c", {"agent"}, True)]),
+    # ⚠️ Doit REFUSER de déborder : une route sans garde, séparée de la
+    # précédente par une ligne vide, ne doit pas hériter du @UseGuards voisin.
+    ("@Controller('adm')\nexport class C {\n"
+     "@UseGuards(A)\n@Get('protegee')\np() {}\n\n@Get('ouverte')\no() {}\n}",
+     [("GET", "/adm/protegee", set(), True), ("GET", "/adm/ouverte", set(), False)]),
 ]
 
 _CAS_REFUS = [

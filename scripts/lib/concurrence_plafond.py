@@ -54,13 +54,23 @@ CAP = 5  # ⚠️ lu ici pour l'affichage seulement — l'assertion porte sur le
          # COMPORTEMENT (un seul gagnant), jamais sur une copie du nombre.
 
 
-def corps_promo(marque):
+def corps_promo(marque, cid):
+    # ⚠️ La clé S3 doit APPARTENIR au compte (2026-08-05). `assertPhotoKeysOwned`
+    # exige le préfixe `promo-photos/<commercantId>/` — ou celui de l'agent, une
+    # promo créée par un agent portant l'UUID de l'agent. Le banc posait
+    # `promo-photos/banc/course.jpg`, un préfixe qui n'appartient à personne :
+    # les trois tours échouaient en `STORAGE_KEY_NOT_OWNED` avant même
+    # d'atteindre la course qu'ils devaient éprouver.
+    #
+    # Le banc n'a PAS annoncé un faux vert pour autant — il a dit « 0 tour
+    # concluant, le banc n'a rien prouvé ». C'est ce qu'on lui demande : un tour
+    # non concluant n'est pas une réussite (règle #29).
     return {
         "description": "Course %s" % marque,
         "prixAvant": 1000,
         "prixApres": 700,
         "categorie": "alimentation",
-        "photoKeys": ["promo-photos/banc/course.jpg"],
+        "photoKeys": ["promo-photos/%s/course.jpg" % cid],
     }
 
 
@@ -152,7 +162,7 @@ def preparer(jeton_agent, jeton_commercant, cid):
                 return False
         else:
             st, d = appeler("POST", "/promo/agent/%s" % cid, jeton_agent,
-                            corps_promo("préparation"))
+                            corps_promo("préparation", cid))
             if st not in (200, 201):
                 print("   ❌ création impossible (HTTP %s, %s)" % (st, d.get("code")))
                 return False
@@ -167,7 +177,7 @@ def tirer_simultanement(jeton_agent, cid, n):
     resultats = [None] * n
 
     def un(i):
-        corps = corps_promo("t%d" % i)
+        corps = corps_promo("t%d" % i, cid)
         barriere.wait()          # ⚠️ tous partent au même instant
         st, d = appeler("POST", "/promo/agent/%s" % cid, jeton_agent, corps)
         resultats[i] = (st, d.get("code"))

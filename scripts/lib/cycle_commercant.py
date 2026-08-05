@@ -211,9 +211,20 @@ def main():
     time.sleep(PACE)
 
     for i in range(2):
-        appeler("POST", "/promo/agent/%s" % cid, jg, {
+        # ⚠️ La clé S3 doit APPARTENIR au compte (2026-08-05) :
+        # `assertPhotoKeysOwned` exige le préfixe `promo-photos/<commercantId>/`
+        # (ou celui de l'agent). `promo-photos/cycle/p.jpg` n'appartenait à
+        # personne — sans ce correctif les deux promos du décor ne sont pas
+        # créées, et le banc mesure ensuite une suspension sur un commerçant qui
+        # n'a rien à masquer : il conclurait « bon » sur un scénario absent.
+        st_p, d_p = appeler("POST", "/promo/agent/%s" % cid, jg, {
             "description": "Promo cycle %d" % i, "prixAvant": 900, "prixApres": 600,
-            "categorie": "alimentation", "photoKeys": ["promo-photos/cycle/p.jpg"]})
+            "categorie": "alimentation",
+            "photoKeys": ["promo-photos/%s/p%d.jpg" % (cid, i)]})
+        if st_p not in (200, 201):
+            print("❌ décor : création de la promo %d refusée (HTTP %s, %s)"
+                  % (i, st_p, d_p.get("code")))
+            sys.exit(2)
         time.sleep(PACE)
 
     def promos_publiques():

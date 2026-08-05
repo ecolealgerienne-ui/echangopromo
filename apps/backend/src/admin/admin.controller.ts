@@ -115,16 +115,24 @@ export class AdminController {
     return this.agentService.findAll(query.page, query.limit);
   }
 
-  @Throttle(SENSITIVE_ACTION_THROTTLE)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
   /**
    * Seule route d'écriture de ce contrôleur qui n'injectait même pas
    * `@CurrentUser()` : elle était structurellement incapable de journaliser,
    * alors qu'elle **élargit le périmètre IDOR** consommé ensuite par
    * `assertCommuneMatches` — et que `transfer-communes`, au même effet,
    * journalise cinquante lignes plus bas (revue 2026-08-05, règle #11).
+   *
+   * ⚠️ Ce commentaire était placé ENTRE les décorateurs de garde et `@Patch`.
+   * NestJS s'en moque, mais le banc de frontière lisait alors la route comme
+   * **ouverte** : il retire les commentaires en laissant des lignes vides, et
+   * sa remontée du bloc de décorateurs s'arrêtait là. Un commentaire au
+   * mauvais endroit faisait donc accuser une route parfaitement protégée
+   * (2026-08-05). Le banc a été rendu insensible aux lignes vides, mais la
+   * place conventionnelle du commentaire reste au-dessus des décorateurs.
    */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
   @Patch('agent/:id/communes')
   async assignCommunes(
     @CurrentUser() user: AuthTokenPayload,
