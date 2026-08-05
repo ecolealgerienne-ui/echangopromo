@@ -168,6 +168,37 @@ ENV_FILE=/opt/echangopromo/.env.production
 BACKUP_DIR=/var/backups/echangopromo
 ```
 
+### 2 bis. Ce que la rétention garde, et ce qu'elle peut effacer
+
+**7 quotidiennes + 8 hebdomadaires** — une quinzaine de fichiers pour deux
+mois d'histoire. L'exemplaire hebdomadaire est le **premier de chaque semaine
+ISO**, pas celui d'un jour fixe : si le serveur dort le vendredi, c'est samedi
+qui prend le relais. Un jour fixe ferait disparaître la semaine entière, sans
+que rien ne le signale. L'étiquette est dans le nom :
+
+```
+echango_promo-20260805-030000.dump                  ← quotidienne
+echango_promo-20260807-030000-hebdo-2026W32.dump    ← l'exemplaire de la semaine 32
+```
+
+> ⚠️ **`echango-private` est partagé entre plusieurs applications de la
+> suite — le préfixe est donc une frontière, pas du rangement.** Il borne
+> l'ensemble sur lequel la rétention **supprime**. Trois gardes sont en place,
+> et il vaut mieux savoir qu'ils existent :
+>
+> - un préfixe vide, sans barre finale, ou commençant par `/` est **refusé**
+>   au démarrage (`echango-promo` sans barre capturerait
+>   `echango-promo-v2/…`) ;
+> - la purge ne supprime **que** les clés commençant par le préfixe
+>   configuré — on ne fait pas dépendre les sauvegardes d'un voisin du
+>   filtrage côté serveur ;
+> - une clé dont on ne sait pas lire l'horodatage n'est **jamais** supprimée :
+>   inconnue ≠ vieille.
+
+Si vous ajoutez une autre nature de sauvegarde pour ce produit (objets S3,
+configuration), donnez-lui **son propre préfixe**. Deux natures sous le même
+préfixe se feraient purger l'une l'autre pour tenir dans les 7 + 8.
+
 ### 3. Le premier passage, à faire à la main
 
 ```bash
@@ -230,7 +261,7 @@ cd /opt/echangopromo
 set -a; . ~/.echango-backup.env; set +a
 
 python3 scripts/lib/backup_upload.py --lister
-python3 scripts/lib/backup_upload.py --rapatrier db-backups/<fichier>.dump.gpg /tmp/restaure.dump
+python3 scripts/lib/backup_upload.py --rapatrier echango-promo/db-backups/<fichier>.dump.gpg /tmp/restaure.dump
 
 # Restaurer À CÔTÉ d'abord — jamais par-dessus la base vivante
 docker compose --env-file .env.production -f docker-compose.promo.yml \

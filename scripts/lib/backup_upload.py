@@ -85,6 +85,8 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
+import backup_retention
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuration — aucune valeur de repli silencieuse (règle 29)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -105,8 +107,12 @@ CLES_REQUISES = (
     "BACKUP_S3_SECRET_ACCESS_KEY",
 )
 
-PREFIXE_DEFAUT = "db-backups/"
-GARDER_DISTANT_DEFAUT = 30
+# ⚠️ `echango-private` est un dépôt MUTUALISÉ entre les applications de la
+# suite. Le préfixe n'est donc pas du rangement : c'est la frontière entre
+# voisins, et surtout **l'ensemble sur lequel la rétention supprime**. Deux
+# niveaux — produit, puis nature — pour qu'une autre nature de sauvegarde du
+# même produit ne tombe jamais dans le lot que cette politique-ci purge.
+PREFIXE_DEFAUT = "echango-promo/db-backups/"
 DELAI = 120
 
 
@@ -136,7 +142,35 @@ def verdict_configuration(env, remote_declare):
         return ("echec",
                 "configuration INCOMPLÈTE — %d clé(s) manquante(s) : %s"
                 % (len(manquantes), ", ".join(manquantes)))
-    return "ok", "%s → %s" % (env["BACKUP_S3_BUCKET"], env["BACKUP_S3_ENDPOINT"])
+    vp, ep = verdict_prefixe(env.get("BACKUP_S3_PREFIX") or PREFIXE_DEFAUT)
+    if vp != "ok":
+        return "echec", ep
+    return "ok", "%s/%s → %s" % (env["BACKUP_S3_BUCKET"],
+                                 env.get("BACKUP_S3_PREFIX") or PREFIXE_DEFAUT,
+                                 env["BACKUP_S3_ENDPOINT"])
+
+
+def verdict_prefixe(prefixe):
+    """Le préfixe borne ce que la rétention SUPPRIME. Sur un dépôt partagé
+    entre applications, une borne trop large efface le voisin.
+
+    ⚠️ Le piège n'est pas le préfixe vide (le repli le couvre) mais le préfixe
+    **sans barre finale** : `echango-promo` capture aussi
+    `echango-promo-v2/…` et `echango-promotion/…`. La barre transforme un
+    « commence par » en « est dans le dossier ».
+    """
+    p = (prefixe or "").strip()
+    if not p or p == "/":
+        return ("echec",
+                "préfixe vide — la rétention porterait sur TOUT le dépôt, "
+                "partagé avec les sauvegardes d'autres applications")
+    if not p.endswith("/"):
+        return ("echec",
+                "le préfixe « %s » ne finit pas par « / » : il capturerait "
+                "aussi « %s-autrechose/… »" % (p, p))
+    if p.startswith("/"):
+        return "echec", "un préfixe S3 ne commence pas par « / » : « %s »" % p
+    return "ok", p
 
 
 def verdict_chiffrement(code_sortie, sha_avant, sha_apres_dechiffrement,
@@ -229,18 +263,14 @@ def verdict_listage(code_http, balise_racine, tronque):
     return "ok", ""
 
 
-def a_supprimer_distant(cles, garder):
-    """Les plus anciennes au-delà de [garder]. Rend une liste, ne supprime rien.
-
-    Même forme que `backup_db.a_supprimer` — et **délibérément pas la même
-    fonction** : la rétention locale et la rétention distante peuvent diverger
-    (on garde 7 jours sur disque et 30 hors site), donc changer l'une ne doit
-    pas changer l'autre (règle 30, branche « non ⇒ deux endroits »).
-    """
-    if garder < 1:
-        raise ValueError("garder doit valoir au moins 1")
-    ordonnes = sorted(cles, reverse=True)  # clés horodatées → tri = récence
-    return sorted(ordonnes[garder:])
+# ⚠️ Il y avait ici un `a_supprimer_distant`, jumeau de celui de `backup_db`,
+# avec un commentaire expliquant qu'ils devaient rester séparés « parce que les
+# deux rétentions peuvent diverger ». C'était vrai tant que la politique se
+# résumait à un compte. Elle classe maintenant les sauvegardes en quotidiennes
+# et hebdomadaires **d'après leur nom** — et le même fichier porte le même nom
+# des deux côtés. Deux implémentations pourraient le classer différemment : ce
+# n'est plus « deux endroits qui se ressemblent », c'est un invariant partagé.
+# Il vit donc dans `backup_retention`, appelé ici et là (règle 30).
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -613,17 +643,48 @@ def _televerser(fichier, a_envoyer, suffixe, env, noter):
         return
 
     # ── Rétention distante ─────────────────────────────────────────────────
-    garder = int(env.get("BACKUP_GARDER_DISTANT") or GARDER_DISTANT_DEFAUT)
     v, expl, cles = lister_distant(env)
     if v != "ok":
         noter("rétention distante", v, "%s — les anciennes s'accumulent" % expl)
         return
 
-    vieilles = a_supprimer_distant(cles, garder)
-    for k in vieilles:
+    # ⚠️ On vient d'écrire `cle`. Si le listage ne la contient pas, il ne
+    # regarde pas là où l'on écrit — préfixe mal saisi, ou listage qui ne liste
+    # pas ce qu'on croit. Sans ce contrôle, un préfixe erroné rendrait 0 objet,
+    # « 0 gardée, 0 supprimée », et un ✅ — pendant que rien ne serait jamais
+    # purgé. La preuve est gratuite : elle est là, on vient de la poser.
+    if cle not in cles:
+        noter("rétention distante", "non_concluant",
+              "l'objet qu'on vient d'écrire n'apparaît pas dans le listage "
+              "(%d objet(s) sous « %s ») — on ne purge pas un ensemble qu'on "
+              "ne reconnaît pas" % (len(cles), prefixe))
+        return
+
+    jours = int(env.get("GARDER_JOURS") or backup_retention.JOURS_DEFAUT)
+    semaines = int(env.get("GARDER_SEMAINES")
+                   or backup_retention.SEMAINES_DEFAUT)
+    lot = backup_retention.repartir(cles, jours, semaines)
+
+    # ⚠️ Ceinture ET bretelles : ne supprimer QUE sous notre préfixe. Le dépôt
+    # est partagé entre applications ; on ne fait pas dépendre les sauvegardes
+    # d'un voisin de la justesse du filtrage côté serveur.
+    a_effacer = [k for k in lot["supprimer"] if k.startswith(prefixe)]
+    hors_perimetre = [k for k in lot["supprimer"] if not k.startswith(prefixe)]
+    for k in a_effacer:
         requete_s3("DELETE", env, k)
-    noter("rétention distante", "ok", "%d gardée(s), %d supprimée(s)"
-          % (min(len(cles), garder), len(vieilles)))
+
+    hebdo = len([k for k in lot["garder"] if backup_retention.est_hebdo(k)])
+    noter("rétention distante", "ok",
+          "%d gardée(s) dont %d hebdo, %d supprimée(s)"
+          % (len(lot["garder"]), hebdo, len(a_effacer)))
+    if hors_perimetre:
+        noter("hors périmètre", "non_concluant",
+              "%d clé(s) listées HORS du préfixe « %s » — non supprimées : %s"
+              % (len(hors_perimetre), prefixe, ", ".join(hors_perimetre[:2])))
+    if lot["illisibles"]:
+        noter("clés non classables", "non_concluant",
+              "%d clé(s) sans horodatage, conservées : %s"
+              % (len(lot["illisibles"]), ", ".join(lot["illisibles"][:2])))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -657,9 +718,8 @@ def self_test():
     _v("refus anonyme 404", verdict_etancheite(404)[0], "ok")
     _v("listage conforme",
        verdict_listage(200, "ListBucketResult", False)[0], "ok")
-    _v("rétention : rien à supprimer", a_supprimer_distant(["a", "b"], 30), [])
-    _v("rétention : les plus anciennes",
-       a_supprimer_distant(["a-1", "a-2", "a-3"], 1), ["a-1", "a-2"])
+    _v("préfixe à deux niveaux",
+       verdict_prefixe("echango-promo/db-backups/")[0], "ok")
     _v("signature déterministe et non vide",
        len(signer("GET", "h", "/k", None, "abc", "AK", "SK", "gra")
            ["Authorization"]) > 80, True)
@@ -700,13 +760,21 @@ def self_test():
        verdict_listage(200, "ListBucketResult", True)[0], "non_concluant")
     _v("listage refusé", verdict_listage(403, None, False)[0], "non_concluant")
 
-    try:
-        a_supprimer_distant(["a"], 0)
-        _echecs.append("rétention distante à 0 acceptée — elle effacerait tout")
-    except ValueError:
-        _ok += 1
+    # ── Le préfixe : c'est lui qui borne ce que la rétention SUPPRIME, sur un
+    #    dépôt partagé avec d'autres applications. ────────────────────────────
+    _v("préfixe vide", verdict_prefixe("")[0], "echec")
+    _v("préfixe réduit à une barre", verdict_prefixe("/")[0], "echec")
+    # ⚠️ LE piège : sans barre finale, « echango-promo » capture aussi
+    # « echango-promo-v2/… ». La rétention effacerait le voisin.
+    _v("préfixe sans barre finale",
+       verdict_prefixe("echango-promo")[0], "echec")
+    _v("préfixe commençant par une barre",
+       verdict_prefixe("/echango-promo/")[0], "echec")
+    _v("configuration complète mais préfixe dangereux",
+       verdict_configuration(dict(complet, BACKUP_S3_PREFIX="tout"), "")[0],
+       "echec")
 
-    refus = 17
+    refus = 21
     total = _ok + len(_echecs)
     print("auto-test : %d cas, dont %d refus" % (total, refus))
     for e in _echecs:

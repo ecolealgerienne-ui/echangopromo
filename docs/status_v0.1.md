@@ -610,6 +610,17 @@ ne peut pas se lire à deux vitesses : on la refait, on ne l'annote pas.
    contrôle d'étanchéité a été **vu refuser** sur une photo de promo publique
    de la production (`--prouver`).
 
+   La **rétention à deux paliers** a suivi (`scripts/lib/backup_retention.py`) :
+   **7 quotidiennes + 8 hebdomadaires**, deux mois d'histoire en une quinzaine
+   de fichiers. L'exemplaire hebdomadaire est le premier de chaque semaine
+   **ISO** et non celui d'un jour fixe — un vendredi manqué ferait sinon
+   disparaître la semaine entière. Le module est partagé par le disque et le
+   dépôt : la classification vit dans le **nom**, et c'est le même nom des
+   deux côtés. Éprouvé sur fichiers réels (22 en décor → 7 + 8 gardées, 8
+   supprimées). `echango-private` étant mutualisé entre applications, le
+   préfixe est validé au démarrage et la purge ne touche **que** ce qui est
+   dessous.
+
    Le rapatriement aussi (`--lister`, `--rapatrier`) : ni `aws`, ni `rclone`,
    ni `s3cmd` n'existent sur ces machines, donc sans ces deux modes une
    sauvegarde partie chez OVH **n'aurait pas pu être récupérée** le jour de

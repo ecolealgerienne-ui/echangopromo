@@ -52,15 +52,24 @@ l'objet en anonyme** et exige un refus. Voir sa documentation pour le détail �
 notamment pourquoi le dépôt de destination n'est pas celui de l'application.
 """
 
+import datetime
 import os
 import re
 import subprocess
 import sys
 import time
 
+import backup_retention
+
 CONTENEUR = os.environ.get("PG_CONTAINER", "echangopromo-postgres-1")
 DESTINATION = os.environ.get("BACKUP_DIR", os.path.expanduser("~/backups/echangopromo"))
-GARDER = int(os.environ.get("GARDER", "7"))
+# La politique elle-même vit dans `backup_retention`, appliquée à l'identique
+# ici et sur le dépôt distant — un même fichier ne peut pas être « hebdo » d'un
+# côté et « quotidien » de l'autre.
+GARDER_JOURS = int(os.environ.get("GARDER_JOURS")
+                   or backup_retention.JOURS_DEFAUT)
+GARDER_SEMAINES = int(os.environ.get("GARDER_SEMAINES")
+                      or backup_retention.SEMAINES_DEFAUT)
 # ⚠️ Une sauvegarde plus petite que ça n'est pas une base, c'est un en-tête.
 # Le seuil ne prétend pas valider le contenu — c'est la restauration qui le
 # fait ; il n'attrape que le cas grossier du fichier vide.
@@ -107,18 +116,6 @@ def verdict_restauration(source, restaure):
                 % (len(ecarts), detail))
     return "ok", "%d tables, %d lignes, à l'identique" % (
         len(source), sum(source.values()))
-
-
-def a_supprimer(fichiers, garder):
-    """Les plus anciennes au-delà de [garder]. Rend une liste, ne supprime rien.
-
-    ⚠️ Séparé de la suppression pour être testable : une rétention qui efface
-    la mauvaise sauvegarde est pire que pas de rétention du tout.
-    """
-    if garder < 1:
-        raise ValueError("garder doit valoir au moins 1")
-    ordonnes = sorted(fichiers, reverse=True)  # noms horodatés → tri = récence
-    return sorted(ordonnes[garder:])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -177,10 +174,8 @@ def self_test():
     # ── Doivent PASSER ───────────────────────────────────────────────────────
     _v("dump valide", verdict_dump(0, 5_000_000, None)[0], "ok")
     _v("restauration fidèle", verdict_restauration(src, dict(src))[0], "ok")
-    _v("rétention : rien à supprimer",
-       a_supprimer(["b-1", "b-2"], 7), [])
-    _v("rétention : les plus anciennes",
-       a_supprimer(["b-1", "b-2", "b-3", "b-4"], 2), ["b-1", "b-2"])
+    # La rétention elle-même est éprouvée dans `backup_retention.py` : elle est
+    # partagée avec le dépôt distant, donc elle n'appartient plus à ce module.
 
     # ── Doivent REFUSER ──────────────────────────────────────────────────────
     _v("pg_dump en erreur", verdict_dump(1, 5_000_000, "boom")[0], "echec")
@@ -198,15 +193,7 @@ def self_test():
     _v("source vide → non concluant",
        verdict_restauration({}, {})[0], "non_concluant")
 
-    # ⚠️ Une rétention à 0 effacerait TOUT, y compris la sauvegarde qu'on vient
-    # de faire. Refusée à la source plutôt que corrigée en silence.
-    try:
-        a_supprimer(["b-1"], 0)
-        _echecs.append("rétention à 0 acceptée — elle effacerait tout")
-    except ValueError:
-        _ok += 1
-
-    refus = 8
+    refus = 7
     total = _ok + len(_echecs)
     print("auto-test : %d cas, dont %d refus" % (total, refus))
     for e in _echecs:
@@ -244,7 +231,15 @@ def main():
     UTILISATEUR, BASE = lire_env()
     stamp = time.strftime("%Y%m%d-%H%M%S")
     os.makedirs(DESTINATION, exist_ok=True)
-    fichier = os.path.join(DESTINATION, "%s-%s.dump" % (BASE, stamp))
+    aujourdhui = datetime.date.today()
+    deja = [f for f in os.listdir(DESTINATION) if f.endswith(".dump")]
+    # ⚠️ L'étiquette hebdomadaire se décide ICI, une seule fois. Le nom part tel
+    # quel vers le dépôt distant, donc cette décision vaut des deux côtés — il
+    # n'existe nulle part un second endroit qui pourrait en décider autrement.
+    etiquette = ("-" + backup_retention.etiquette_semaine(aujourdhui)
+                 if backup_retention.doit_etiqueter(deja, aujourdhui) else "")
+    fichier = os.path.join(DESTINATION,
+                           "%s-%s%s.dump" % (BASE, stamp, etiquette))
     base_verif = "verif_restauration_%s" % stamp
 
     print("═" * 64)
@@ -307,13 +302,32 @@ def main():
                         "--if-exists", base_verif], capture_output=True)
 
     # ── 3. La rétention ─────────────────────────────────────────────────────
-    print("\n── 3. rétention (%d sauvegardes gardées) ──" % GARDER)
+    print("\n── 3. rétention (%d quotidiennes + %d hebdomadaires) ──"
+          % (GARDER_JOURS, GARDER_SEMAINES))
     toutes = [f for f in os.listdir(DESTINATION) if f.endswith(".dump")]
-    vieilles = a_supprimer(toutes, GARDER)
-    for f in vieilles:
+    lot = backup_retention.repartir(toutes, GARDER_JOURS, GARDER_SEMAINES)
+    for f in lot["supprimer"]:
         os.remove(os.path.join(DESTINATION, f))
-    noter("purge", "ok", "%d gardée(s), %d supprimée(s)"
-          % (min(len(toutes), GARDER), len(vieilles)))
+    gardees_hebdo = [f for f in lot["garder"] if backup_retention.est_hebdo(f)]
+    noter("purge", "ok", "%d gardée(s) dont %d hebdo, %d supprimée(s)"
+          % (len(lot["garder"]), len(gardees_hebdo), len(lot["supprimer"])))
+    if lot["illisibles"]:
+        # Conservés, mais DITS : un fichier qu'on ne sait pas classer ne doit
+        # pas s'accumuler en silence.
+        noter("noms non classables", "non_concluant",
+              "%d fichier(s) sans horodatage, conservés : %s"
+              % (len(lot["illisibles"]), ", ".join(lot["illisibles"][:3])))
+
+    horodatages = sorted(h for h in (backup_retention.horodatage(f)
+                                     for f in toutes) if h)
+    plus_ancienne = (datetime.datetime.strptime(horodatages[0],
+                                                "%Y%m%d-%H%M%S").date()
+                     if horodatages else None)
+    v, expl = backup_retention.verdict_hebdo_manquant(
+        len(gardees_hebdo), len(lot["garder"]) - len(gardees_hebdo),
+        plus_ancienne, aujourdhui)
+    if v != "ok":
+        noter("étiquetage hebdomadaire", v, expl)
 
     # ── 4. L'envoi hors site ────────────────────────────────────────────────
     # ⚠️ Sans cette étape, tout ce qui précède ne couvre que la corruption

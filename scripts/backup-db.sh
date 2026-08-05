@@ -71,6 +71,9 @@ else
 fi
 
 echo "── auto-tests ──"
+python3 "$HERE/lib/backup_retention.py" --self-test || {
+  echo "❌ l'auto-test de rétention échoue — c'est LUI qui décide quoi effacer."
+  exit 2; }
 python3 "$HERE/lib/backup_db.py" --self-test || {
   echo "❌ l'auto-test échoue : le script lui-même est en cause."; exit 2; }
 python3 "$HERE/lib/backup_upload.py" --self-test || {
