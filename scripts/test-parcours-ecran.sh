@@ -17,7 +17,7 @@
 # empêcher : le plafond était figé dans les fichiers de traduction, et personne
 # ne s'en apercevait parce que le chiffre était juste ce jour-là.
 #
-# ── Les trois parcours ───────────────────────────────────────────────────────
+# ── Les cinq parcours ────────────────────────────────────────────────────────
 #
 #   premier-lancement  splash → choix du rôle → localisation → accueil, et ce
 #                      qui en reste dans le magasin natif. Aucun décor : il ne
@@ -25,6 +25,12 @@
 #   plafond            le compteur d'emplacements affiche le plafond DU SERVEUR.
 #   creation           publier une promo de bout en bout — formulaire, photo,
 #                      upload, création, retour, compteur incrémenté.
+#   admin              l'espace admin, atteint par SA porte : l'écran de
+#                      connexion commerçant bascule en mode admin dès qu'on y
+#                      saisit un e-mail. Ses cinq compteurs valent ceux du
+#                      serveur.
+#   agent              le même écran, avec le périmètre de l'agent — ses
+#                      compteurs ne sont PAS ceux de l'admin.
 #
 # ⚠️ **L'ordre n'est pas cosmétique.** `creation` publie une promo et change
 # donc `enLigne` ; il passe en dernier, après `plafond` qui compare à la mesure
@@ -57,15 +63,20 @@ DEVICE_ID="parcours-ecran-0001"
 
 CHOIX="${1:-tous}"
 case "$CHOIX" in
-  tous|premier-lancement|plafond|creation) ;;
+  tous|premier-lancement|plafond|creation|admin|agent) ;;
   *) echo "❌ Parcours inconnu : « $CHOIX »."
-     echo "   Attendu : premier-lancement | plafond | creation | (rien = tous)"
+     echo "   Attendu : premier-lancement | plafond | creation | admin | agent"
+     echo "             (rien = tous)"
      exit 2 ;;
 esac
 
-# `premier-lancement` seul ne parle à personne : ni décor, ni mesure.
-BESOIN_SERVEUR=oui
-[ "$CHOIX" = "premier-lancement" ] && BESOIN_SERVEUR=non
+# Chaque parcours a besoin d'un décor DIFFÉRENT, et le dire évite de poser un
+# décor pour rien — ou pire, d'en poser un qui consomme des connexions sur un
+# plafond de 5/min avant un parcours qui n'en avait pas besoin.
+BESOIN_COMMERCANT=non
+case "$CHOIX" in tous|plafond|creation) BESOIN_COMMERCANT=oui ;; esac
+BESOIN_PRO=non
+case "$CHOIX" in tous|admin|agent) BESOIN_PRO=oui ;; esac
 
 echo "════════════════════════════════════════════════════════════════"
 echo "  Parcours écran ($CHOIX) — décor, mesure, puis flutter drive"
@@ -76,7 +87,17 @@ command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1 || {
   echo "❌ python3 requis (lecture du JSON)."; exit 2; }
 PY=$(command -v python3 || command -v python)
 
-if [ "$BESOIN_SERVEUR" = "oui" ]; then
+lire_champ() { # CHAMP — lit un champ de l'objet JSON reçu sur stdin
+  "$PY" -c "import sys,json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+v = d.get('$1')
+print('' if v is None else v)"
+}
+
+if [ "$BESOIN_COMMERCANT" = "oui" ]; then
 # ── 1. Décor ────────────────────────────────────────────────────────────────
 #
 # ⚠️ **Ce script vit à cheval sur deux machines, et il faut le dire.** Sur le
@@ -120,16 +141,6 @@ fi
 # ── 2. Mesure de référence ──────────────────────────────────────────────────
 echo
 echo "── 2. Mesure servie par le serveur ──"
-lire_champ() { # CHAMP — lit un champ de l'objet JSON reçu sur stdin
-  "$PY" -c "import sys,json
-try:
-    d = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-v = d.get('$1')
-print('' if v is None else v)"
-}
-
 connexion() { # → jeton du commerçant du décor, vide si refus
   curl -s -X POST "$API_URL/commercant/login" \
     -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID" \
@@ -177,7 +188,61 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "creation" ]; then
     exit 2
   fi
 fi
-fi  # BESOIN_SERVEUR
+fi  # BESOIN_COMMERCANT
+
+if [ "$BESOIN_PRO" = "oui" ]; then
+# ── 2 bis. Comptes pro, et les compteurs servis À CHAQUE RÔLE ───────────────
+#
+# ⚠️ La mesure se fait avec le jeton DU RÔLE JOUÉ, pas avec celui de l'admin
+# pour les deux. `GET /admin/dashboard` est ouvert aux rôles `admin` ET
+# `agent` (`@Roles('admin','agent')`) et rend des compteurs de périmètre
+# différent. Mesurer les deux avec le même jeton ferait passer au vert
+# exactement le défaut qu'on cherche : un agent à qui l'on servirait les
+# chiffres globaux.
+echo
+echo "── 2 bis. Espace pro ──"
+for var in ADMIN_EMAIL ADMIN_PASSWORD AGENT_EMAIL AGENT_PASSWORD; do
+  eval "valeur=\${$var:-}"
+  [ -n "$valeur" ] && continue
+  echo "❌ $var absent de l'environnement."
+  echo "   Ces comptes viennent du décor : lancer ./scripts/provision-decor.sh"
+  echo "   et coller son bloc export avant de relancer ici."
+  exit 2
+done
+
+mesurer_pro() { # ROLE EMAIL MDP → "a,b,c,d,e" ; ILLISIBLE… sinon
+  local role="$1" email="$2" mdp="$3" jeton reponse
+  jeton="$(curl -s -X POST "$API_URL/$role/login"     -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"     -d "{\"email\":\"$email\",\"password\":\"$mdp\"}" | lire_champ accessToken)"
+  if [ -z "$jeton" ]; then
+    echo "ILLISIBLE connexion $role refusée (un 429 se déguise en identifiants incorrects)"
+    return 1
+  fi
+  reponse="$(curl -s "$API_URL/admin/dashboard"     -H "Authorization: Bearer $jeton" -H "X-Device-Id: $DEVICE_ID")"
+  local vals=""
+  for champ in commercesActifs promosPubliees signalementsEnAttente                registresEnAttente profilsEnAttente; do
+    local v; v="$(echo "$reponse" | lire_champ "$champ")"
+    # ⚠️ Pas de zéro par défaut : un champ absent doit arrêter la mesure, pas
+    # produire un chiffre que le parcours irait chercher à l'écran (règle #29).
+    if [ -z "$v" ]; then
+      echo "ILLISIBLE champ $champ absent de /admin/dashboard : $(echo "$reponse" | head -c 160)"
+      return 1
+    fi
+    vals="${vals:+$vals,}$v"
+  done
+  echo "$vals"
+}
+
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "admin" ]; then
+  STATS_ADMIN="$(mesurer_pro admin "$ADMIN_EMAIL" "$ADMIN_PASSWORD")" || {
+    echo "❌ mesure admin — $STATS_ADMIN"; exit 2; }
+  echo "✅ admin ($ADMIN_EMAIL) → $STATS_ADMIN"
+fi
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent" ]; then
+  STATS_AGENT="$(mesurer_pro agent "$AGENT_EMAIL" "$AGENT_PASSWORD")" || {
+    echo "❌ mesure agent — $STATS_AGENT"; exit 2; }
+  echo "✅ agent ($AGENT_EMAIL) → $STATS_AGENT"
+fi
+fi  # BESOIN_PRO
 
 # ── 3. Les parcours ─────────────────────────────────────────────────────────
 echo
@@ -286,6 +351,18 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "creation" ]; then
       fi
     fi
   fi
+  echo
+fi
+
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "admin" ]; then
+  jouer parcours_espace_pro_test.dart "espace pro — admin"     --dart-define=TEST_PRO_ROLE=admin     --dart-define=TEST_PRO_EMAIL="$ADMIN_EMAIL"     --dart-define=TEST_PRO_PASSWORD="$ADMIN_PASSWORD"     --dart-define=TEST_PRO_STATS="$STATS_ADMIN"
+  noter "espace pro — admin ($STATS_ADMIN)" $?
+  echo
+fi
+
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent" ]; then
+  jouer parcours_espace_pro_test.dart "espace pro — agent"     --dart-define=TEST_PRO_ROLE=agent     --dart-define=TEST_PRO_EMAIL="$AGENT_EMAIL"     --dart-define=TEST_PRO_PASSWORD="$AGENT_PASSWORD"     --dart-define=TEST_PRO_STATS="$STATS_AGENT"
+  noter "espace pro — agent ($STATS_AGENT)" $?
   echo
 fi
 

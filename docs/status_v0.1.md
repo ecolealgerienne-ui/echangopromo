@@ -684,6 +684,49 @@ reste distinguable d'un oubli :
 
 ## Journal
 
+### 2026-08-05 (clôture, addendum) — L'espace pro sur l'appareil, et une porte qui manque
+
+Deux parcours de plus, **admin** et **agent**, dans un seul fichier joué deux
+fois : les deux rôles aboutissent sur le même écran (`AdminDashboardScreen`) et
+le même endpoint (`GET /admin/dashboard`, `@Roles('admin','agent')`).
+
+**L'assertion est un contrôle de périmètre, pas d'affichage.** Le script mesure
+les cinq compteurs **avec le jeton du rôle joué**, et le parcours exige de les
+retrouver à l'écran. Résultat mesuré : admin `34,58,2,0,3`, agent
+`21,25,2,0,3`. L'agent voit 21 commerces et 25 promos là où l'admin en voit 34
+et 58 — le cloisonnement tient, **et le parcours sait le distinguer**. Mesurer
+les deux avec le même jeton aurait fait passer au vert exactement le défaut
+qu'on cherche.
+
+#### ⚠️ Une phrase de `CLAUDE.md` m'a fait conclure faux
+
+Elle disait que l'espace admin était en « accès direct par URL `/admin` ». J'ai
+donc écrit le parcours par lien profond — jusqu'à ce que l'utilisateur me
+corrige. **La vraie porte est à deux taps** : barre d'onglets → écran de
+connexion commerçant → saisir un **e-mail** au lieu d'un numéro fait basculer
+ce même écran en mode admin (`_isAdminMode`, `onChanged`, `contains('@')`).
+Entrée discrète, pas inexistante. Le parcours admin emprunte désormais cette
+porte, puisque c'est celle de l'utilisateur. Phrase corrigée dans `CLAUDE.md`.
+
+C'est la démonstration de l'avertissement que ce fichier porte en tête : *un
+état périmé est pire qu'aucun état, il fait conclure*. Ici il a fait écrire un
+test qui éprouvait un chemin que personne n'emprunte.
+
+#### 🔶 Ouvert — l'agent n'a aucune porte dans l'app
+
+Vérifié le 2026-08-05 : aucun écran ne navigue vers `/agent`, et la bascule
+e-mail de l'écran commerçant appelle `POST /admin/login`, dont le service ne
+lit que la table `admins` — un e-mail d'agent y rend `AUTH_INVALID_CREDENTIALS`.
+`AgentLoginScreen` et `POST /agent/login` existent, sont couverts par les
+bancs, et **rien dans l'app ne les atteint** (règle #31 : ce que le serveur
+sert doit avoir un appelant). Un agent de terrain ne peut donc pas ouvrir son
+espace depuis l'app.
+
+Le parcours agent entre par un lien **en le disant** — le jour où une porte
+existe, seule l'étape d'entrée change. Le remède relève d'une décision produit
+(faire basculer l'écran commerçant vers `/agent/login` en cas de refus admin ?
+un lien explicite ?) et n'est pas pris ici.
+
 ### 2026-08-05 (clôture du chantier) — Rejeu d'ensemble : 3 parcours + 8 bancs, tout au vert
 
 Rejeu demandé pour clore le chantier. Le résultat est bon, mais **il a fallu

@@ -14,6 +14,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -41,6 +42,27 @@ const String plafondAttendu = String.fromEnvironment('TEST_PLAFOND');
 
 /// Nombre de promos réellement en ligne au moment du décor.
 const String enLigneAttendu = String.fromEnvironment('TEST_EN_LIGNE');
+
+// ── Espace pro (admin et agent) ──────────────────────────────────────────────
+//
+// Le MÊME parcours est joué deux fois, une fois par rôle : les deux
+// aboutissent sur `AdminDashboardScreen`, qui adapte son titre et **le
+// périmètre de ses chiffres**. C'est justement ce qu'on veut éprouver — un
+// agent qui verrait les compteurs globaux serait une fuite de périmètre, pas
+// un défaut d'affichage.
+
+/// `admin` ou `agent` — décide de la route d'entrée et de rien d'autre.
+const String proRole = String.fromEnvironment('TEST_PRO_ROLE');
+const String proEmail = String.fromEnvironment('TEST_PRO_EMAIL');
+const String proPassword = String.fromEnvironment('TEST_PRO_PASSWORD');
+
+/// Les cinq compteurs du tableau de bord, **tels que le serveur les sert à ce
+/// rôle-là**, séparés par des virgules (`GET /admin/dashboard`).
+///
+/// ⚠️ Mesurés par le script avec le jeton de CE rôle, jamais recopiés : c'est
+/// la seule façon de distinguer « l'écran affiche les chiffres de l'agent » de
+/// « l'écran affiche des chiffres ».
+const String proStatsAttendues = String.fromEnvironment('TEST_PRO_STATS');
 
 /// Vérifie que le décor a fourni ses identifiants, et nomme le script sinon.
 void exigerIdentifiants(Map<String, String> attendus) {
@@ -189,6 +211,35 @@ String normaliserCompteur(String texte) =>
 // ─────────────────────────────────────────────────────────────────────────────
 // Désignation
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Ouvre une route comme le ferait un **lien entrant**, faute de porte au doigt.
+///
+/// ── Pourquoi ce n'est pas une entorse à la méthode ───────────────────────
+///
+/// Les autres parcours entrent par où l'utilisateur entre : un tap sur la
+/// barre d'onglets. `/admin` et `/agent` n'ont **aucune porte dans l'app** —
+/// vérifié le 2026-08-05, aucun écran ne navigue vers ces routes, les seules
+/// mentions hors du routeur sont des chemins d'API. Pour l'admin c'est une
+/// décision produit assumée (ne pas la rendre découvrable depuis l'app grand
+/// public) ; pour l'agent, c'est le même état de fait.
+///
+/// Leur entrée réelle est donc une URL. Un parcours qui les atteindrait
+/// autrement éprouverait un chemin qui n'existe pas.
+///
+/// ⚠️ On passe par le canal `flutter/navigation` de la plateforme, celui-là
+/// même qu'emprunte un lien profond ouvert depuis WhatsApp — pas par une API
+/// interne de navigation. Ce qui est joué est le vrai mécanisme d'entrée, y
+/// compris la redirection du routeur et le contrôle de rôle qui va avec.
+Future<void> ouvrirLien(WidgetTester tester, String chemin) async {
+  await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+    'flutter/navigation',
+    const JSONMethodCodec().encodeMethodCall(
+      MethodCall('pushRouteInformation', <String, dynamic>{'location': chemin}),
+    ),
+    (_) {},
+  );
+  await tester.pump(const Duration(milliseconds: 800));
+}
 
 /// Tape un élément après s'être assuré qu'il est visible.
 ///

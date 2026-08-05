@@ -32,9 +32,17 @@ ce fichier-ci en est la synthèse actionnable.
 Backend NestJS + TypeORM + PostgreSQL (`apps/backend`), app mobile Flutter
 multi-rôles Client/Commerçant/Agent/Admin (`apps/mobile`). Pilote V0 sur un
 quartier de Djelfa. UI admin ajoutée le 2026-07-09 (modération, registre,
-agents) — pas d'entrée dans le menu public "espace pro" (accès direct par
-URL `/admin`, décision produit : ne pas la rendre découvrable depuis l'app
-grand public). Le concept de Zone opérationnelle (découpage interne dédié
+agents) — pas d'entrée dans le menu public "espace pro", **mais une porte
+bien réelle dans l'app** : l'écran de connexion commerçant bascule en mode
+admin dès qu'on y saisit un e-mail au lieu d'un numéro
+(`commercant_login_screen.dart`, `_isAdminMode`). Décision produit : discrète,
+pas introuvable. ⚠️ **Cette phrase disait « accès direct par URL `/admin` »
+jusqu'au 2026-08-05, et c'était faux** — au point de faire écrire un parcours
+de test par lien profond alors que la vraie porte était à deux taps.
+**L'agent, lui, n'a aucune porte** : la bascule ci-dessus appelle
+`POST /admin/login`, qui ne connaît que la table `admins`. `AgentLoginScreen`
+et `POST /agent/login` existent et ne sont atteints par rien (voir
+`docs/status_v0.1.md`). Le concept de Zone opérationnelle (découpage interne dédié
 aux tournées d'agent) a été abandonné le 2026-07-09 : un agent est
 désormais rattaché directement à zéro, une ou plusieurs `Commune`
 (relation many-to-many), "assigner toute la wilaya" n'étant qu'une
