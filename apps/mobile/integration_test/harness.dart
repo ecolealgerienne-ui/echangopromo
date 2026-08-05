@@ -146,15 +146,21 @@ Future<void> reinitialiserAppareil() async {
 /// ── Pourquoi c'est nécessaire ────────────────────────────────────────────
 ///
 /// `flutter_test` fait échouer un test dès qu'une exception est signalée,
-/// **même asynchrone et sans rapport avec ce qu'il éprouve**. Or le décor pose
-/// des promos dont la `photoKey` désigne un objet qui n'existe pas dans MinIO
-/// (`promo-photos/demo/photo.jpg`) : le tableau de bord tente de l'afficher,
-/// reçoit un 404, et le parcours du compteur échoue en accusant le compteur.
+/// **même asynchrone et sans rapport avec ce qu'il éprouve**. Une image qui
+/// rend 404 suffit donc à faire échouer un parcours qui n'affirme rien sur les
+/// images.
 ///
-/// ⚠️ **Et ça ne se voyait pas**, parce que l'image était en cache sur
-/// l'émulateur depuis un passage précédent : l'app n'allait jamais la
-/// chercher. Découvert le 2026-08-05 en repartant d'un appareil vierge — le
-/// parcours passait pour une raison qui n'avait rien à voir avec lui.
+/// ⚠️ **La raison d'origine n'existe plus, et c'est important de le dire** :
+/// `provision-decor.sh` et `seed-demo.sh` annonçaient des `photoKey` auxquelles
+/// aucun objet ne correspondait dans MinIO. Depuis le 2026-08-05, les deux
+/// **envoient un vrai fichier** et utilisent la clé rendue par le serveur.
+///
+/// Ce qui reste, et qui justifie de garder ce filtre :
+///
+///   · les **fonds de carte** viennent d'un serveur de tuiles externe, dont
+///     l'échec n'apprend rien sur l'app ;
+///   · les données créées **avant** cette correction pointent toujours sur
+///     rien, et une base de développement n'est pas remise à zéro.
 ///
 /// ── Ce que ça ne fait PAS ────────────────────────────────────────────────
 ///
@@ -163,9 +169,10 @@ Future<void> reinitialiserAppareil() async {
 /// parcours, par le gestionnaire précédent qu'on rappelle. Un `catch` large
 /// ici transformerait le harnais en machine à rassurer (règle #28).
 ///
-/// Le prix est assumé et il est nul aujourd'hui : aucun parcours n'affirme
-/// quoi que ce soit sur les photos, et celui qui en publie une la vérifie par
-/// la création côté serveur, pas par son affichage.
+/// ⚠️ **Et ce filtre a déjà masqué un vrai symptôme** : tant que le décor
+/// mentait, un parcours restait vert sur un appareil dont le cache portait
+/// l'image — et rouge sur un appareil neuf. Un filtre est un choix, pas un
+/// réglage : quand sa cause disparaît, il faut le redire ou le retirer.
 void ignorerErreursDeChargementDImage() {
   final precedent = FlutterError.onError;
   FlutterError.onError = (details) {

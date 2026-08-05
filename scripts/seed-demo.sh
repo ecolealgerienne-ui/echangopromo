@@ -193,6 +193,24 @@ step "4. Promos"
 FIN="$(date -u -d '+5 days' +%Y-%m-%dT%H:%M:%S.000Z)"
 NB_PROMOS=0
 PREMIERE_PROMO=""
+# ── Une VRAIE photo, envoyée une fois pour toutes ──────────────────────────
+#
+# ⚠️ Ce script annonçait `promo-photos/demo/photo.jpg`, une clé à laquelle
+# aucun objet ne correspond : toutes les promos de démonstration s'affichaient
+# avec une image en 404. On envoie donc un vrai fichier — l'icône de l'app —
+# et on réutilise la clé rendue pour toutes les promos. Un seul objet suffit :
+# ce qui compte est qu'il EXISTE.
+#
+# ⚠️ Envoyée avec le jeton de l'AGENT, qui crée ces promos : la garde
+# d'appartenance rattache la clé à son émetteur.
+FICHIER_PHOTO="${FICHIER_PHOTO:-$(cd "$(dirname "$0")/.." && pwd)/apps/mobile/assets/images/brand/icon-master-terracotta-1024.png}"
+[ -f "$FICHIER_PHOTO" ] || fail "Photo de démonstration introuvable" "$FICHIER_PHOTO"
+PHOTO_KEY="$(curl -s -X POST "$API_URL/storage/upload" \
+  -H "Authorization: Bearer $AGENT_TOKEN" -H "X-Device-Id: seed-demo-0001" \
+  -F "purpose=promo" -F "file=@$FICHIER_PHOTO" | jq -r '.key // empty')"
+[ -n "$PHOTO_KEY" ] || fail "Envoi de la photo de démonstration impossible" \
+  "un décor ne doit pas annoncer des photos qui n'existent pas"
+
 for idx in "${!IDS[@]}"; do
   cid="${IDS[$idx]}"
   cat="$(echo "$LISTE" | jq -r --arg i "$cid" '.items[] | select(.id==$i) | .categorie')"
@@ -201,9 +219,9 @@ for idx in "${!IDS[@]}"; do
     avant=$(( (RANDOM % 40 + 10) * 100 ))
     apres=$(( avant - (avant * (RANDOM % 30 + 15) / 100) ))
     out="$(ecrire POST "/promo/agent/$cid" "$(jq -n --arg d "$base" --argjson a "$avant" \
-      --argjson b "$apres" --arg c "$cat" --arg f "$FIN" \
+      --argjson b "$apres" --arg c "$cat" --arg f "$FIN" --arg k "$PHOTO_KEY" \
       '{description:$d, prixAvant:$a, prixApres:$b, categorie:$c,
-        photoKeys:["promo-photos/demo/photo.jpg"], dateFin:$f}')" "$AGENT_TOKEN")"
+        photoKeys:[$k], dateFin:$f}')" "$AGENT_TOKEN")"
     if echo "$out" | est_erreur; then
       code="$(echo "$out" | jq -r '.code')"
       [ "$code" = "PROMO_ACTIVE_CAP_REACHED" ] && break   # plafond atteint : normal

@@ -209,6 +209,28 @@ pass "Agent B connecté ($D_AGENT_B_EMAIL) — commune « $COMMUNE_B_NOM » (vé
   "Les deux communes du décor sont identiques — la disjonction est perdue"
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ── Envoi d'une VRAIE photo ────────────────────────────────────────────────
+#
+# ⚠️ **Le décor annonçait des photos qui n'existaient pas.** Il fabriquait des
+# clés (`promo-photos/<id>/decor.jpg`) que le serveur accepte — elles
+# appartiennent bien au commerçant — mais auxquelles aucun objet ne
+# correspondait dans MinIO. Chaque écran affichant une promo du décor recevait
+# donc un 404 d'image, et les parcours joués sur l'appareil ont dû apprendre à
+# ignorer ces erreurs pour ne pas échouer en accusant l'écran. **Une donnée de
+# décor qui ment coûte toujours plus cher qu'elle ne fait gagner.**
+#
+# On envoie donc un vrai fichier — l'icône de l'app, un PNG 1024×1024 déjà
+# versionné — et on utilise la clé RENDUE par le serveur.
+FICHIER_PHOTO="${FICHIER_PHOTO:-$(cd "$(dirname "$0")/.." && pwd)/apps/mobile/assets/images/brand/icon-master-terracotta-1024.png}"
+
+envoyer_photo() { # TOKEN PURPOSE → clé S3 rendue par le serveur, ou vide
+  [ -f "$FICHIER_PHOTO" ] || return 1
+  curl -s -X POST "$API_URL/storage/upload" \
+    -H "Authorization: Bearer $1" -H "X-Device-Id: $D_DEVICE_ID" \
+    -F "purpose=$2" -F "file=@$FICHIER_PHOTO" \
+    | jq -r '.key // empty'
+}
+
 step "4. Commerçant actif, registre validé"
 
 commercant_login() {
@@ -255,8 +277,11 @@ ETAT="$(echo "$liste" | jq -r --arg t "$D_COMMERCANT_TEL" \
 if [ "$ETAT" != "valide" ]; then
   # La clé doit porter le préfixe posé par StorageService.buildKey, sinon
   # COMMERCANT_REGISTRE_KEY_MISMATCH (garde d'appartenance sur le document).
+  REGISTRE_KEY="$(envoyer_photo "$COMMERCANT_TOKEN" registre)"
+  [ -n "$REGISTRE_KEY" ] || fail "Envoi de la photo du registre impossible" \
+    "le décor refuse d'annoncer un registre dont le fichier n'existe pas"
   out="$(api POST /commercant/me/registre \
-    "$(jq -n --arg k "registre-documents/$CID/decor.jpg" '{registreKey:$k}')" "$COMMERCANT_TOKEN")"
+    "$(jq -n --arg k "$REGISTRE_KEY" '{registreKey:$k}')" "$COMMERCANT_TOKEN")"
   echo "$out" | est_erreur && fail "Soumission du registre refusée" \
     "$(echo "$out" | jq -c '{code,message}')"
 
@@ -333,7 +358,10 @@ if [ -z "$PROMO_ID" ]; then
   # Avant ce garde, n'importe quel compte pouvait rattacher à sa promo un
   # fichier envoyé par un autre — le décor exerçait donc, sans le savoir, la
   # faille elle-même.
-  out="$(api POST /promo "$(jq -n --arg k "promo-photos/$CID/decor.jpg" \
+  PROMO_PHOTO_KEY="$(envoyer_photo "$COMMERCANT_TOKEN" promo)"
+  [ -n "$PROMO_PHOTO_KEY" ] || fail "Envoi de la photo de promo impossible" \
+    "le décor refuse d'annoncer une photo dont le fichier n'existe pas"
+  out="$(api POST /promo "$(jq -n --arg k "$PROMO_PHOTO_KEY" \
     '{description:"Promo du décor", prixAvant:1000, prixApres:700,
       categorie:"alimentation", photoKeys:[$k], dureeJours:5}')" \
     "$COMMERCANT_TOKEN")"

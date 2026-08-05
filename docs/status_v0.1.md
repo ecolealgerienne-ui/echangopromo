@@ -712,6 +712,34 @@ C'est la démonstration de l'avertissement que ce fichier porte en tête : *un
 état périmé est pire qu'aucun état, il fait conclure*. Ici il a fait écrire un
 test qui éprouvait un chemin que personne n'emprunte.
 
+#### 🔓 Fermé — le décor n'annonce plus de photos qui n'existent pas
+
+Point ouvert depuis le matin. `provision-decor.sh` et `seed-demo.sh`
+fabriquaient des `photoKey` que le serveur accepte — elles appartiennent bien à
+leur émetteur — mais auxquelles **aucun objet ne correspondait** dans MinIO.
+Chaque écran affichant une promo de décor recevait un 404 d'image.
+
+Le coût réel n'était pas l'image manquante : c'est que les parcours joués sur
+l'appareil ont dû **apprendre à ignorer ces erreurs**, et que ce filtre a
+ensuite masqué un vrai symptôme — un parcours vert sur un appareil dont le
+cache portait l'image, rouge sur un appareil neuf. *Une donnée de décor qui
+ment coûte toujours plus cher qu'elle ne fait gagner.*
+
+Les deux scripts **envoient désormais un vrai fichier** (l'icône de l'app, déjà
+versionnée) et utilisent la clé rendue par le serveur. Ils **refusent de
+continuer** si l'envoi échoue : un décor ne doit pas annoncer ce qu'il n'a pas.
+
+Vérifié, pas supposé : la photo de la promo du décor rend **HTTP 200, 42 567
+octets** là où l'ancienne clé inventée rend toujours 404. Et le chemin de
+`seed-demo` — une clé envoyée par l'**agent**, posée sur une promo créée par
+l'agent — a été éprouvé à part, la boucle de peuplement n'ayant rien créé ce
+jour-là (commerçants au plafond) : objet en 200, promo acceptée.
+
+Le filtre du harnais reste, avec sa raison **réécrite** : il ne couvre plus le
+décor mais les fonds de carte externes et les données créées avant cette
+correction. Quand la cause d'un filtre disparaît, il faut le redire ou le
+retirer.
+
 #### La carte — le dernier grand écran jamais ouvert
 
 Douzième parcours : onglet Carte → le marqueur du commerce → sa fiche. Mesuré :
