@@ -598,10 +598,13 @@ ne peut pas se lire à deux vitesses : on la refait, on ne l'annote pas.
    lancement** (onboarding, explicitement hors périmètre du premier parcours)
    et la **création de promo de bout en bout**.
 
-4. **La dette mineure de P6**, inchangée : 4 vulnérabilités npm non examinées,
-   et **aucun mécanisme de sauvegarde de la base** — identifié le 2026-07-12
-   après un incident de corruption, toujours ouvert. C'est le seul point de
-   cette liste dont l'échec serait irréversible.
+4. ~~**La dette mineure de P6**~~ — **traitée le 2026-08-05.** Les 4
+   vulnérabilités npm sont à **0** (dont `sharp`, la seule sur un chemin
+   d'entrée d'attaquant, vérifiée à l'usage). La sauvegarde existe et
+   **se restaure** (`scripts/backup-db.sh`, prouvé par mutation).
+   **Reste hors dépôt** : la brancher sur une tâche planifiée, et **sortir les
+   dumps de la machine** — un fichier posé à côté de la base ne protège pas
+   d'une perte de disque.
 
 **Ce qui n'est PAS à faire, et pourquoi** — pour que l'absence de couverture
 reste distinguable d'un oubli :
@@ -616,6 +619,64 @@ reste distinguable d'un oubli :
 ---
 
 ## Journal
+
+### 2026-08-05 (fin de journée) — Point 4 : les vulnérabilités, et enfin une sauvegarde
+
+**Volet 1 — les 4 vulnérabilités npm**, « signalées, non examinées » depuis
+l'audit V0. Examinées, elles ne se valent pas : **une seule est sur un chemin
+qui traite une entrée d'attaquant**. `sharp` génère les miniatures à partir des
+**photos téléversées**, et les CVE libvips y sont atteignables par un fichier
+fabriqué. Les trois autres sont transitives ou sur un chemin de développement.
+
+`npm audit fix` a réglé les trois autres. `sharp` exigeait un saut majeur
+(0.33.5 → 0.35.3), accepté : l'API utilisée est le cœur stable de la
+bibliothèque, et l'alternative était de servir des CVE connues sur le chemin
+d'upload. **0 vulnérabilité.**
+
+⚠️ Et c'est là que la vérification comptait : `tryGenerateThumbnail` **attrape
+toute erreur** et rend `null`. Une bibliothèque cassée y serait *totalement
+silencieuse* — la promo se créerait, sans miniature, sans journal. Un `tsc` vert
+et 69 tests verts ne prouvent **rien** sur sharp. Éprouvé end-to-end contre
+MinIO : une miniature distincte est bien produite (`…-thumb-….jpg`).
+
+**Volet 2 — la sauvegarde**, seul point du registre dont l'échec serait
+irréversible, ouvert depuis l'incident de corruption du 2026-07-12.
+
+`scripts/backup-db.sh` **restaure chaque sauvegarde qu'il produit**, dans une
+base jetable, et compare les lignes **table par table**. Parce que le mode de
+défaillance n'est pas « le dump n'a pas tourné » — c'est *« il tourne tous les
+jours, exite 0, et produit un fichier tronqué »*, découvert le jour où l'on en a
+besoin.
+
+```
+✅ echango_promo-20260805-152738.dump    0.1 Mo
+✅ comptes source ↔ restauré             13 tables, 433 lignes, à l'identique
+✅ purge                                 2 gardée(s), 0 supprimée(s)
+```
+
+**Prouvé par mutation** : un `pg_dump` réduit à une seule table — qui exite 0,
+comme un bon — est refusé (*« la restauration n'a produit AUCUNE table »*),
+avec **code de sortie 1**. C'est lui qu'une supervision doit surveiller, pas la
+présence du fichier.
+
+Deux choix écrits dans le script : `pg_dump` est pris **dans le conteneur** (un
+client plus ancien que le serveur refuse de dumper, et l'hôte n'a aucun client
+installé), et le format est `custom` — restaurable **sélectivement**, ce qui
+compte le jour où l'on veut récupérer une table sans écraser le reste.
+
+⚠️ **Une erreur de mesure de ma part, la septième de la journée.** J'ai annoncé
+un « défaut réel » — le script exiterait 0 malgré l'échec — sur la foi d'un
+enchaînement shell en ligne. Mesuré proprement depuis un fichier : **code 1**,
+pour Python comme pour le wrapper. Le script était correct ; c'est ma mesure qui
+ne l'était pas. Exactement la famille d'erreur que les bancs ont trouvée toute
+la journée : croire une observation qu'on n'a pas contrôlée.
+
+⚠️ **Ce qui reste à faire, et qui n'est pas dans ce dépôt** : brancher le script
+sur une tâche planifiée, et **sortir les sauvegardes de la machine** — un dump
+posé à côté de la base ne protège pas d'une perte de disque. La ligne cron est
+dans l'en-tête du script.
+
+---
 
 ### 2026-08-05 (après-midi) — La rotation du mot de passe admin était IMPOSSIBLE
 
