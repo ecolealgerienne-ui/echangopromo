@@ -11,6 +11,7 @@ import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/models/map_shop.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../providers/location_providers.dart';
 import '../providers/map_providers.dart';
@@ -46,6 +47,13 @@ class MapScreen extends ConsumerStatefulWidget {
 }
 
 class _MapScreenState extends ConsumerState<MapScreen> {
+  /// L'invitation à activer la localisation a-t-elle été écartée ?
+  ///
+  /// Lue une fois au démarrage de l'écran : le magasin est synchrone, mais on
+  /// veut aussi pouvoir la masquer immédiatement après un geste, sans relire.
+  late bool _invitationEcartee =
+      ref.read(locationInviteStoreProvider).isDismissed();
+
   final MapController _map = MapController();
 
   /// Zone **chargée**, volontairement plus large que l'écran — pas la zone
@@ -179,6 +187,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         bounds == null ? null : ref.watch(mapShopsProvider(bounds));
     final userPosition = ref.watch(userPositionProvider).valueOrNull;
     final communeCenter = ref.watch(mapCenterForCommunesProvider).valueOrNull;
+    // `?? false` : tant qu'on ne sait pas, on ne propose rien — une invitation
+    // affichée puis retirée est plus déroutante qu'une invitation tardive.
+    final peutDemander =
+        ref.watch(peutDemanderLocalisationProvider).valueOrNull ?? false;
 
     // Premier centrage sur l'utilisateur dès que sa position est connue —
     // après le premier rendu, sinon `MapController` n'est pas encore relié
@@ -369,6 +381,42 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 message: l10n.mapTooManyShops,
                 color: colorScheme.secondaryContainer,
                 onColor: colorScheme.onSecondaryContainer,
+              ),
+            ),
+
+          // ── L'invitation à activer la localisation ────────────────────
+          //
+          // ⚠️ **Ici, et nulle part avant.** Cette proposition vivait dans
+          // l'onboarding, juste après un premier refus : Apple l'a refusée le
+          // 2026-08-05 (5.1.1(iv), « encourages users to allow »). Elle est
+          // désormais faite là où la fonction ne marche pas sans position —
+          // ce qu'Apple suggère explicitement dans sa réponse.
+          //
+          // Trois conditions, et chacune compte : la permission doit être
+          // encore DEMANDABLE (voir `peutDemanderLocalisationProvider` — un
+          // `deniedForever` rendrait le bouton inerte), aucune fiche ne doit
+          // être ouverte, et l'utilisateur ne doit pas l'avoir déjà écartée.
+          // Sans cette dernière, l'invitation reviendrait à chaque ouverture
+          // de la carte : la même proposition répétée n'est plus une
+          // proposition.
+          if (peutDemander && _selected == null && !_invitationEcartee)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 24,
+              child: _InvitationLocalisation(
+                onActiver: () async {
+                  final accorde = await demanderPermissionLocalisation();
+                  if (!context.mounted) return;
+                  ref.invalidate(userPositionProvider);
+                  ref.invalidate(peutDemanderLocalisationProvider);
+                  if (accorde) setState(() => _invitationEcartee = true);
+                },
+                onEcarter: () async {
+                  await ref.read(locationInviteStoreProvider).markDismissed();
+                  if (!context.mounted) return;
+                  setState(() => _invitationEcartee = true);
+                },
               ),
             ),
 
@@ -747,6 +795,67 @@ class _UserDot extends StatelessWidget {
               blurRadius: 0,
               spreadRadius: 5),
         ],
+      ),
+    );
+  }
+}
+
+/// Invitation discrète à activer la localisation, posée sur la carte.
+///
+/// Un bandeau, pas un écran : la carte est déjà là, et la couvrir d'une
+/// proposition plein écran reviendrait à redemander avant de laisser voir —
+/// exactement ce qui a été refusé.
+class _InvitationLocalisation extends StatelessWidget {
+  const _InvitationLocalisation({
+    required this.onActiver,
+    required this.onEcarter,
+  });
+
+  final Future<void> Function() onActiver;
+  final Future<void> Function() onEcarter;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colorScheme.secondaryContainer,
+      borderRadius: BorderRadius.circular(AppRadii.md),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 8, 8, 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.mapLocationInvite,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSecondaryContainer,
+                        ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  color: colorScheme.onSecondaryContainer,
+                  tooltip: MaterialLocalizations.of(context).closeButtonLabel,
+                  onPressed: onEcarter,
+                ),
+              ],
+            ),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: FilledButton(
+                onPressed: onActiver,
+                child: Text(l10n.onboardingLocationEnable),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

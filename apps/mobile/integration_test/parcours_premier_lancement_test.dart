@@ -29,12 +29,16 @@
 /// par lancement d'app, pas deux.** La couvrir demande un second
 /// `flutter drive` sur son propre fichier.
 ///
-/// **Le bouton « Activer » de la localisation** — celui des deux écrans. Il
-/// ouvre la boîte de dialogue **du système**, qu'`integration_test` ne peut pas
-/// toucher. Le parcours emprunte donc le chemin du refus (« Plus tard » puis
-/// « Continuer sans »), qui est aussi celui qui compte le plus : c'est lui qui
-/// doit laisser l'app utilisable. La permission accordée relève d'un test
-/// manuel, pas de celui-ci.
+/// **Le bouton « Activer » de la localisation.** Il ouvre la boîte de dialogue
+/// **du système**, qu'`integration_test` ne peut pas toucher. Le parcours
+/// emprunte donc « Continuer », qui est aussi le chemin qui compte le plus :
+/// c'est lui qui doit laisser l'app utilisable. La permission accordée relève
+/// d'un test manuel, pas de celui-ci.
+///
+/// ⚠️ **L'invitation à activer la localisation n'est plus dans l'onboarding**
+/// depuis le refus d'Apple du 2026-08-05 : elle vit sur la carte. Ce parcours
+/// vérifie donc qu'après « Continuer », on arrive bien à l'accueil — et pas
+/// sur une seconde demande.
 library;
 
 import 'package:echango_promo/main.dart' as app;
@@ -88,40 +92,25 @@ void main() {
       raison: 'l’écran de localisation ne suit pas le choix « client »',
     );
 
-    // ── 3. Refuser prend DEUX écrans, pas un ─────────────────────────────
+    // ── 3. « Continuer » termine l'onboarding ────────────────────────────
     //
-    // « Plus tard » ne termine pas l'onboarding : il mène à un écran de
-    // seconde chance. C'est délibéré (`onboarding_navigation.dart`) — un
-    // refus sur NOS écrans ne consomme pas la permission système, alors qu'un
-    // refus sur la boîte native est définitif (`deniedForever`). D'où une
-    // seconde demande, qui n'aurait aucun sens après un refus système.
-    //
-    // ⚠️ **Ce parcours a été écrit avec un écran de trop en moins**, et c'est
-    // lui qui l'a dit : il attendait l'accueil, a trouvé « Activer la
-    // localisation / Continuer sans » et l'a écrit dans son message d'échec.
-    // Une relecture du code de navigation aurait pu le montrer ; elle ne
-    // l'avait pas fait.
+    // ⚠️ **Il menait à un second écran qui redemandait la localisation**, et
+    // Apple l'a refusé le 2026-08-05 (5.1.1(iv) : « encourages users to
+    // allow »). La proposition existe toujours, mais sur la CARTE — là où la
+    // fonction ne marche pas sans position. Le libellé du bouton est passé de
+    // « Plus tard » à « Continuer », mot neutre exigé par la réponse d'Apple.
     //
     // Chaque bouton est désigné par son TYPE, jamais par son libellé :
-    // « Activer » est un `FilledButton` sur les deux écrans, « Plus tard » un
-    // `TextButton`, « Continuer sans » un `OutlinedButton`. Les trois types
-    // suffisent à les séparer, dans n'importe quelle langue.
+    // « Activer » est un `FilledButton`, « Continuer » un `TextButton`.
     await taper(tester, find.byType(TextButton));
 
-    await pomperJusqua(
-      tester,
-      find.byType(OutlinedButton),
-      raison: 'l’écran de seconde chance ne suit pas « Plus tard »',
-    );
-    await taper(tester, find.byType(OutlinedButton));
-
     // L'accueil est reconnu à sa barre d'onglets — la même icône que la carte
-    // « commerçant » de l'étape 1, mais les deux écrans de localisation l'ont
-    // fait disparaître entre les deux, donc aucune confusion possible.
+    // « commerçant » de l'étape 1, mais l'écran de localisation l'a fait
+    // disparaître entre les deux, donc aucune confusion possible.
     await pomperJusqua(
       tester,
       find.byIcon(Icons.storefront_outlined),
-      raison: 'l’accueil client n’a pas suivi « Continuer sans »',
+      raison: 'l’accueil client n’a pas suivi « Continuer »',
     );
 
     // ── 4. Ce qui a été retenu, dans le VRAI magasin ─────────────────────

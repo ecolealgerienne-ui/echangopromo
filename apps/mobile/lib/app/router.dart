@@ -43,7 +43,6 @@ import '../features/commercant/screens/promo_form_screen.dart';
 import '../features/commercant/screens/registre_resend_screen.dart';
 import '../features/dev/screens/dev_profile_switcher_screen.dart';
 import '../features/onboarding/screens/location_permission_screen.dart';
-import '../features/onboarding/screens/location_second_chance_screen.dart';
 import '../features/onboarding/screens/role_choice_screen.dart';
 import '../features/onboarding/screens/splash_screen.dart';
 import '../features/shared/screens/legal_document_screen.dart';
@@ -86,10 +85,6 @@ final _appRoutes = <_AppRoute>[
   _AppRoute('/onboarding/role', (context, state) => const RoleChoiceScreen()),
   _AppRoute('/onboarding/location',
       (context, state) => const LocationPermissionScreen()),
-  _AppRoute(
-    '/onboarding/location/second-chance',
-    (context, state) => const LocationSecondChanceScreen(),
-  ),
   // Publics, sans rôle requis — accessibles depuis l'inscription commerçant
   // et un lien général (plan de correction, Phase 4).
   _AppRoute('/legal/cgu', (context, state) => const LegalDocumentScreen.cgu()),

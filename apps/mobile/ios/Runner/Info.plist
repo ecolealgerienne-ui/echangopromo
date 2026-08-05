@@ -46,7 +46,7 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Utilisée pour enregistrer la position de votre commerce, afin que les clients puissent le trouver facilement.</string>
+	<string>Utilisée pour vous montrer les promotions les plus proches de vous, et — si vous êtes commerçant — pour enregistrer la position de votre commerce afin que les clients puissent le trouver.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Utilisée pour prendre la photo de votre commerce ou d'une promo.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

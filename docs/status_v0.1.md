@@ -712,6 +712,52 @@ C'est la démonstration de l'avertissement que ce fichier porte en tête : *un
 état périmé est pire qu'aucun état, il fait conclure*. Ici il a fait écrire un
 test qui éprouvait un chemin que personne n'emprunte.
 
+### 2026-08-05 (soir) — Refus d'Apple 5.1.1(iv) : la localisation demandée deux fois
+
+App Store Connect, soumission `3d2aab99`, testée sur iPad Air 11" (M3). Motif :
+*« The app encourages or directs users to allow the app to access the location…
+to proceed users press a "plus tard" button. Use words like "Continue" or
+"Next" on the button instead. »*
+
+**Ce qu'Apple a vu**, et qui était vrai : sur l'écran de localisation de
+l'onboarding, le bouton qui fait avancer s'appelait « Plus tard ». Un mot de
+report là où il faut un mot neutre.
+
+**Ce qu'Apple n'a pas dit, et qui était la cause de fond** : « Plus tard » ne
+refusait rien — il menait à un **second écran qui redemandait la même chose**,
+même titre « Activer la localisation ». Deux sollicitations d'affilée, c'est
+littéralement *encourages users to allow*. Corriger le seul libellé pouvait
+passer, comme valoir un second refus, plus lent.
+
+**Trois corrections.**
+
+1. Le bouton dit « Continuer » / « Continue » / « متابعة », et **sa clé a été
+   renommée** (`onboardingLocationLater` → `onboardingLocationContinue`) : une
+   clé nommée « plus tard » portant « Continuer » est le prochain contresens
+   garanti.
+2. **L'écran de seconde chance est supprimé** (route et fichier — règle #31), et
+   la proposition est déplacée **sur la carte**, sous forme de bandeau en
+   contexte. C'est ce qu'Apple suggère explicitement dans sa réponse : *« If the
+   user is trying to use a feature that won't function without access »*. Elle
+   se montre à trois conditions — permission encore **demandable**
+   (`deniedForever` ⇒ rien, un bouton inerte laisse croire à une panne, c'est le
+   raisonnement que la carte tenait déjà pour « me localiser »), aucune fiche
+   ouverte, et **pas déjà écartée** (`LocationInviteStore`). Sans cette dernière
+   condition, l'invitation reviendrait à chaque ouverture de la carte — le
+   harcèlement qu'on vient de retirer, réintroduit ailleurs.
+3. **La justification iOS ne décrivait pas l'usage réel** : elle parlait
+   d'« enregistrer la position de votre commerce » alors que la demande vue par
+   le testeur est celle du client (tri par proximité). Apple ne l'a pas relevé ;
+   c'est un motif 5.1.1 à part entière. Réécrite pour couvrir les deux usages,
+   client d'abord.
+
+L'écran de seconde chance dessinait une **fausse carte** en illustration — le
+reposer sur la vraie n'avait aucun sens, d'où le bandeau plutôt que l'écran.
+
+Rejoué après coup : **les douze parcours au vert**, code de sortie 0. Celui du
+premier lancement vérifie désormais qu'après « Continuer » on arrive à
+l'accueil — **et pas sur une seconde demande**.
+
 #### Les douze parcours enchaînés — et six échecs qui n'accusaient que moi
 
 `./scripts/test-parcours-ecran.sh` sans argument, décor neuf, **code de sortie
