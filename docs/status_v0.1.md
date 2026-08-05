@@ -105,7 +105,11 @@ décrit toujours les exclusions, alors que la liste fait foi dans
 ne pointe pas vers le vérificateur. ⚠️ Modification d'un fichier existant —
 voir A1.
 
-### P2 — Aucun contrôle exécuté ne tient les couples serveur ↔ app
+### P2 — Aucun contrôle exécuté ne tient les couples serveur ↔ app ✅ *fermé le 2026-08-04*
+
+**Fermé** par les quatre vérificateurs de `tool/check_all.dart` (codes
+d'erreur, enums miroirs, bornes de validation, thème), tous prouvés par
+mutation et verts à chaque commit.
 
 Six couples doivent rester d'accord ; **aucun n'est tenu par autre chose qu'une
 consigne** (`docs/TEST_PROMO.md` §3). P1 est la démonstration que ça ne suffit
@@ -119,7 +123,12 @@ produirait aucune erreur de compilation.
 `check-sync.dart` tourne déjà sur les vrais fichiers, il reste à le déplacer
 dans `apps/mobile/tool/` et à l'éprouver par mutation.
 
-### P3 — `PROMO_MAX_DURATION_DAYS` absente du `.env`
+### P3 — `PROMO_MAX_DURATION_DAYS` absente du `.env` ✅ *fermé le 2026-08-05*
+
+**Fermé** en même temps que ses trois clés sœurs (voir le journal du
+2026-08-05 après-midi) : les cinq `PROMO_*` sont dans le `.env` de WSL, et
+le journal de démarrage ne signale plus aucun repli. ⚠️ Action hors dépôt —
+à refaire sur toute machine neuve.
 
 Huit clés présentes dans `.env.example` manquent au `.env` local :
 `ANDROID_PACKAGE_NAME`, `ANDROID_SHA`, `IOS_TEAM_ID`, `IOS_BUNDLE_ID`,
@@ -134,7 +143,16 @@ nombre. `CORS_ORIGINS` mérite d'être fixée aussi.
 > **imprime la valeur qu'il a effectivement utilisée**. Une borne lue depuis
 > l'environnement est une donnée d'entrée du banc, pas une constante.
 
-### P10 — Un numéro recyclé enferme son repreneur dehors 🔴 **défaut réel, ouvert**
+### P10 — Un numéro recyclé enferme son repreneur dehors ✅ *fermé le 2026-08-05*
+
+**Fermé** par `test-cycle-commercant.sh` (8 contrôles, 0 échec) : « le
+repreneur peut se connecter » passe. Doublement sondé depuis, par
+`test-commercant-autosuppression` (« le numéro est libéré »).
+
+⚠️ L'index partiel qui porte cette garantie — `UQ_commercant_telephone_active`
+— a failli être supprimé le soir même par un `migration:generate` qui le
+voyait « en base mais pas dans le modèle ». Il est désormais déclaré sur
+l'entité (voir le journal).
 
 **Trouvé le 2026-08-04** par `test-cycle-commercant.sh`. Reproduit sur un numéro
 neuf, avec témoin positif :
@@ -323,7 +341,10 @@ Les trois qui lèvent (`RegistreStatus`, `AuditActorType`,
 `CommercantOriginVerification`) continuent de lever : plus bruyant, donc plus
 sûr, et aucun d'eux n'alimente une liste entière.
 
-### P8 — La règle 19 est contournée dans les écrans 🆕
+### P8 — La règle 19 est contournée dans les écrans ✅ *sans objet le 2026-08-05*
+
+**Mesuré à zéro** : plus aucune comparaison littérale sur une valeur d'enum
+dans le dépôt, et `tool/check_enums.dart` tient l'invariant.
 
 Les vérificateurs garantissent que les *valeurs* des miroirs sont justes ; ils
 ne garantissent pas que les écrans **s'en servent**. Plusieurs comparent encore
@@ -343,8 +364,9 @@ portant sur une valeur d'enum connue. Reste à écrire.
   graphe de dépendances.
 - `npm install` backend signale **4 vulnérabilités** (1 modérée, 3 hautes), non
   examinées.
-- Upload S3/MinIO **jamais éprouvé de bout en bout** contre un vrai bucket —
-  dette héritée de l'audit V0, toujours ouverte.
+- ~~Upload S3/MinIO jamais éprouvé de bout en bout~~ — **fermé le 2026-08-05**
+  par `test-storage-upload.sh` : l'envoi traverse réellement MinIO et rend
+  une clé sous le préfixe du compte.
 - Aucun mécanisme de **backup** de la base — dette identifiée le 2026-07-12
   après l'incident de corruption, toujours ouverte.
 
@@ -550,38 +572,46 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
 
 ### Par où reprendre
 
-1. ~~**Rejouer les cinq bancs**~~ — **fait le 2026-08-05 au soir**, les quatre
-   bancs au vert et **P10 fermé** ; les trois vérifications rapides faites aussi
-   (voir le journal du jour). Ce qu'il reste de cet item : le renommage des clés
-   étrangères et des index de `agent_communes` fait encore du bruit dans
-   `migration:generate` — sans danger (chaque `DROP` a sa recréation dans le
-   même `up()`), mais à silencier avant qu'il ne recache autre chose.
-2. ~~**Trancher P9 et P7**~~ — **fait le 2026-08-05.** P9 : les deux rôles de
-   `S3_ENDPOINT` séparés jusque dans les fichiers d'exemple, et la miniature
-   bornée à 5 s. P7 : le repli des miroirs est **conservé mais parlant**
-   (`fromApiValue`). ~~**P8**~~ — sans objet, mesuré à zéro le 2026-08-05.
-3. ~~**Étape 3** — les parcours écran~~ — **installée le 2026-08-05**, un
-   parcours au vert et **prouvé par mutation**
-   (`scripts/test-parcours-ecran.sh`). Reste à en écrire d'autres : le premier
-   lancement (onboarding, explicitement hors périmètre du premier parcours) et
-   la création de promo de bout en bout.
-4. ~~**Étape 4** — les bancs métier~~ — **close le 2026-08-05** : les 27 lignes
-   de la matrice §6 sont couvertes. Voir le journal du jour pour les trois
-   défauts trouvés et les cinq sondes corrigées.
-   ~~`test-admin-highlight`~~ **écrit le 2026-08-05** (8 contrôles, 0 échec,
-   prouvé par mutation). Le prochain le plus rentable : `test-notifications`
-   ~~`test-notifications`~~ **écrit le 2026-08-05** — 8 contrôles, 0 échec, et
-   **un défaut trouvé à son premier passage** (`markAsRead` rendait 201 sur un
-   geste sans effet). ~~`test-admin-audit-log`~~ **écrit le 2026-08-05** —
-   7 contrôles, 0 échec, et une sonde corrigée après mutation.
-   ~~`test-storage-upload`~~ **écrit le 2026-08-05** — 6 contrôles, 0 échec,
-   l'upload atteint enfin un vrai bucket.
-   ~~`test-commercant-autosuppression`~~ **écrit le 2026-08-05** — 8
-   contrôles, 0 échec, dont une sonde de rayon d'action. Les trois bancs
-   que l'ordre d'écriture plaçait en tête sont désormais tous écrits.
-   ~~`test-admin-dashboard`~~ **écrit le 2026-08-05** — 9 contrôles, 0
-   échec, et un décor corrigé au passage (il affirmait le rattachement des
-   agents sans jamais le vérifier). Restent 17 bancs de la matrice §6.
+⚠️ **Section RÉÉCRITE le 2026-08-05, pas complétée.** Elle avait accumulé les
+ratures au point de se contredire — l'item 4 annonçait « close, les 27 lignes
+couvertes » *et* « restent 17 bancs ». Une liste qui répond à « il reste quoi »
+ne peut pas se lire à deux vitesses : on la refait, on ne l'annote pas.
+
+**Ce qui reste, par ce qui coûte le plus cher à laisser traîner.**
+
+1. **Faire tourner le mot de passe `superadmin` sur le VPS.** Le seul point
+   ouvert de sécurité. La capacité existe depuis le 2026-08-05
+   (`seed:admin --rotate`, qui coupe aussi les sessions) ; **le geste, non** —
+   il demande un accès au serveur.
+   `npm run seed:admin:prod -- <email> <mdp> <nom> --rotate`, et prévenir :
+   il déconnecte l'admin partout.
+
+2. **Silencier le résidu de `migration:generate`.** Dix opérations de
+   renommage — clés étrangères et index de la table de jointure
+   `agent_communes`. Sans danger aujourd'hui (chaque `DROP` a sa recréation
+   dans le même `up()`), mais c'est ce bruit-là qui a caché un
+   `DROP INDEX "UQ_commercant_telephone_active"` sans recréation. Un diff qu'on
+   parcourt en diagonale est un diff qu'on ne lit pas.
+
+3. **Écrire d'autres parcours écran** (étape 3). Un seul existe — le compteur
+   d'emplacements. Les deux suivants, par ce qu'ils protègent : le **premier
+   lancement** (onboarding, explicitement hors périmètre du premier parcours)
+   et la **création de promo de bout en bout**.
+
+4. **La dette mineure de P6**, inchangée : 4 vulnérabilités npm non examinées,
+   et **aucun mécanisme de sauvegarde de la base** — identifié le 2026-07-12
+   après un incident de corruption, toujours ouvert. C'est le seul point de
+   cette liste dont l'échec serait irréversible.
+
+**Ce qui n'est PAS à faire, et pourquoi** — pour que l'absence de couverture
+reste distinguable d'un oubli :
+
+| Non couvert | Raison |
+|---|---|
+| notification « expire bientôt » | cron de 1h ; la déclencher demanderait d'appeler une méthode interne, ce qui n'éprouve plus le chemin réel |
+| plafond de 10 diapositives | sur base partagée, un échec en cours de route laisserait dix diapositives orphelines dans le bandeau d'accueil |
+| lecture effective d'un objet S3 | demanderait les identifiants MinIO ; la clé rendue suffit aux questions posées |
+| franchissement du plafond de 300 commerces sur la carte | il faudrait en créer autant ; la cohérence de `truncated` est vérifiée sur ce qui existe |
 
 ---
 
