@@ -684,6 +684,42 @@ reste distinguable d'un oubli :
 
 ## Journal
 
+### 2026-08-05 (clôture du chantier) — Rejeu d'ensemble : 3 parcours + 8 bancs, tout au vert
+
+Rejeu demandé pour clore le chantier. Le résultat est bon, mais **il a fallu
+trois tentatives**, et les deux premières n'ont rien appris sur le produit —
+elles ont appris sur l'outillage. C'est le résumé le plus honnête qu'on puisse
+en faire.
+
+**Ce qui est vert, et sur quoi :**
+
+| | |
+|---|---|
+| 3 parcours écran | émulateur **vierge**, décor neuf, code de sortie 0 — premier lancement, compteur `2 / 5`, création `2 / 5 → 3 / 5` |
+| contre-mesure serveur | le serveur compte bien 3 promos en ligne après la création |
+| 8 bancs admin + agent | **59 contrôles, 0 échec, 0 non concluant** |
+
+⚠️ **Les bancs admin et agent sont des bancs HTTP, pas des parcours écran.**
+Ils éprouvent le serveur. **Aucun écran admin ni agent n'est joué sur
+l'appareil à ce jour** — les trois parcours sont client/commerçant. L'écrire
+ici plutôt que de laisser « admin ✅ » suggérer le contraire.
+
+**Deux défauts d'outillage trouvés en chemin**, aucun côté produit :
+
+- **25 des 31 bancs n'étaient pas exécutables dans git** (mode 100644). Toute
+  la documentation dit `./scripts/test-X.sh` : sur un clone neuf, sept bancs
+  ont rendu **126** avant même de parler au serveur. Les 6 qui marchaient ne
+  marchaient que par accident de création. Corrigé — 31/31.
+- **Le disque de l'émulateur était plein** (`INSTALL_FAILED_INSUFFICIENT_STORAGE`,
+  93 %), et ce n'était pas notre app qui le remplissait. Le remède — un *wipe
+  data* — a révélé le défaut décrit plus bas : un parcours qui passait grâce au
+  cache d'images.
+
+Et un rappel qui vaut pour tout rejeu : **le commerçant par défaut du décor
+épuise ses quotas anti-abus**. Mon premier lanceur ne lui donnait pas de numéro
+neuf, le décor s'est arrêté sur `PROMO_REPUBLISH_TOO_SOON`. Le refus était
+juste ; il ne parlait simplement pas des bancs qu'on voulait rejouer.
+
 ### 2026-08-05 (clôture, suite) — Deux parcours écran de plus, et le compteur qui mentait
 
 Point 3 de « par où reprendre ». Deux parcours ajoutés au seul qui existait :
