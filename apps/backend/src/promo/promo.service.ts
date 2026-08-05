@@ -50,7 +50,9 @@ import {
  * la famille à exiger un redéploiement pour bouger, alors que ses quatre
  * voisines immédiates — durée par défaut, durée maximale, plafond quotidien,
  * cooldown de republication — se règlent toutes par variable d'environnement.
- * Voir `activeCap()`, et `PROMO_ACTIVE_CAP` dans `.env.example`.
+ * Voir `plafondActif()`, et `PROMO_ACTIVE_CAP` dans `.env.example`.
+ * Depuis le 2026-08-05, un commerçant peut porter le sien
+ * (`Commercant.promoActiveCap`) ; `null` suit le global.
  *
  * Il n'est **pas** recopié côté app : `GET /promo/me/slots` le sert avec le
  * décompte (`getSlotUsage`), de sorte qu'un changement de plafond ne demande
@@ -155,12 +157,29 @@ export class PromoService {
    * (specs §3.2). Servi tel quel à l'app par `getSlotUsage` — c'est cette
    * valeur, et non une copie compilée, qui remplit le compteur d'emplacements.
    */
-  private activeCap(): number {
+  private plafondParDefaut(): number {
     return configNumber(
       this.configService.get('PROMO_ACTIVE_CAP'),
       5,
       'PROMO_ACTIVE_CAP',
     );
+  }
+
+  /**
+   * **L'unique endroit où se lit « propre au commerçant, sinon global ».**
+   *
+   * ⚠️ La garde à la création (`assertUnderCap`) et le décompte servi à
+   * l'écran (`getSlotUsage`) passent tous deux par ici. Les séparer ferait
+   * voir « 3 / 8 » à un commerçant refusé à sa quatrième promo — deux endroits
+   * qui répondent à la même question finissent toujours par diverger
+   * (règle #30).
+   *
+   * `null` n'est pas zéro : il dit « suit le défaut ». D'où `??` et non `||`,
+   * qui prendrait aussi le défaut pour un plafond de 0 posé volontairement —
+   * un commerçant qu'on veut empêcher de publier sans le suspendre.
+   */
+  private plafondActif(plafondPropre: number | null | undefined): number {
+    return plafondPropre ?? this.plafondParDefaut();
   }
 
   /**
@@ -280,10 +299,19 @@ export class PromoService {
         dateFin: MoreThan(new Date()),
       },
     });
-    if (activeCount >= this.activeCap()) {
+    // ⚠️ Lu par le `manager`, donc dans la transaction qui porte déjà le
+    // verrou consultatif : le plafond ne peut pas changer entre le décompte
+    // et la décision.
+    const commercant = await manager.findOne(Commercant, {
+      where: { id: commercantId },
+      select: { id: true, promoActiveCap: true },
+    });
+    const plafond = this.plafondActif(commercant?.promoActiveCap);
+
+    if (activeCount >= plafond) {
       throw new BadRequestAppException(
         ErrorCode.PROMO_ACTIVE_CAP_REACHED,
-        `Plafond de ${this.activeCap()} promos actives atteint pour ce commerçant`,
+        `Plafond de ${plafond} promos actives atteint pour ce commerçant`,
       );
     }
   }
@@ -968,7 +996,12 @@ export class PromoService {
         dateFin: MoreThan(new Date()),
       },
     });
-    return { enLigne, plafond: this.activeCap() };
+    const commercant =
+      await this.commercantService.findByIdOrFail(commercantId);
+    return {
+      enLigne,
+      plafond: this.plafondActif(commercant.promoActiveCap),
+    };
   }
 
   async listByCommercant(

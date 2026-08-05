@@ -114,6 +114,24 @@ export class Commercant {
   @Column()
   communeId: string;
 
+  /**
+   * Plafond de promos actives **propre à ce commerçant**, ou `null` pour
+   * suivre le réglage global (`PROMO_ACTIVE_CAP`).
+   *
+   * ⚠️ **`null` n'est pas « zéro », et c'est tout l'intérêt** : il dit « suit
+   * le défaut », ce qu'aucune valeur numérique ne saurait exprimer. Écrire 5
+   * en base pour dire « comme tout le monde » figerait ce commerçant le jour
+   * où le global passerait à 8 — sans que personne ne s'en aperçoive
+   * (règle #29 : un défaut n'a pas de valeur par défaut).
+   *
+   * Lu par `PromoService.plafondActif()`, qui est **l'unique endroit** où la
+   * règle « propre au commerçant sinon global » est écrite : la garde à la
+   * création et le décompte servi à l'écran passent tous deux par lui. Les
+   * séparer ferait voir « 3 / 8 » à un commerçant refusé à sa quatrième promo.
+   */
+  @Column({ type: 'int', nullable: true })
+  promoActiveCap: number | null;
+
   @ManyToOne(() => Agent, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'createdByAgentId' })
   createdByAgent: Agent | null;

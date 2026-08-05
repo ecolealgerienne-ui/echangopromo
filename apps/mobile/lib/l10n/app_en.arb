@@ -1,6 +1,5 @@
 {
   "@@locale": "en",
-
   "appTitle": "Echango Promo",
   "commonError": "Error: {error}",
   "commonCancel": "Cancel",
@@ -11,7 +10,6 @@
   "languageFrench": "Français",
   "languageEnglish": "English",
   "languageArabic": "العربية",
-
   "categoryLabel": "Category",
   "categoryRequired": "Category required",
   "categorieAlimentation": "Food",
@@ -21,10 +19,8 @@
   "categorieBeauteHygiene": "Beauty / Hygiene",
   "categorieMaisonAmeublement": "Home / Furniture",
   "categorieAutre": "Other",
-
   "photoPickerTakePhoto": "Take a photo",
   "photoPickerGallery": "Gallery",
-
   "descriptionLabel": "Description",
   "descriptionRequired": "Description required",
   "prixAvantLabel": "Price before (DZD)",
@@ -32,33 +28,27 @@
   "prixApresMustBeLower": "Must be lower than the price before",
   "dureeValiditeLabel": "Validity period",
   "dureeJoursOption": "{count, plural, one{{count} day} other{{count} days}}",
-
   "wilayaLabel": "Province",
   "communeLabel": "Municipality",
   "filterAllOption": "All",
   "communeRequired": "Municipality required",
-
   "locationEnableService": "Enable location on your phone.",
   "locationPermissionDenied": "Location permission denied.",
   "locationUnavailable": "Location unavailable. Step outside or move near a window, then try again.",
   "locationSaved": "Location captured — locate again",
   "locationCapture": "Locate my shop (optional)",
-
   "telephoneLabel": "Phone",
   "telephoneHint": "+213...",
   "telephoneRequired": "Phone required",
   "nomCommerceLabel": "Shop name",
   "nomRequired": "Name required",
   "adresseLabel": "Address (optional)",
-
   "logoutTooltip": "Log out",
   "newCommercantLabel": "New merchant",
-
   "newPromoTitle": "New promo",
   "photoRequiredCamera": "The photo must be taken with the camera.",
   "publishLabel": "Publish",
   "publishFailed": "Publishing failed.",
-
   "agentSpaceTitle": "Field agent area",
   "emailLabel": "Email",
   "emailInvalid": "Invalid email",
@@ -66,7 +56,6 @@
   "passwordRequired": "Password required",
   "loginLabel": "Log in",
   "loginFailed": "Login failed.",
-
   "newCommercantScreenTitle": "New merchant",
   "commercantCreatedTitle": "Merchant created",
   "addFirstPromoQuestion": "Add the first promo now?",
@@ -74,9 +63,7 @@
   "yesLabel": "Yes",
   "createLabel": "Create",
   "createFailed": "Creation failed.",
-
   "chooseCommuneTitle": "Choose your municipality",
-
   "promoDetailTitle": "Promo details",
   "validUntil": "Valid until {date}",
   "reportButton": "Report (expired or incorrect promo)",
@@ -95,7 +82,6 @@
   "shareMessage": "{description} at {commercantNom}: {prixApres} DZD instead of {prixAvant} DZD! Seen on Echango Promo.",
   "shareInstallCta": "Get the Echango Promo app: {url}",
   "shareTextCopiedNotice": "Text copied: some apps (e.g. Messenger) only share the photo, paste the text manually if needed.",
-
   "changeCommuneTooltip": "Change municipality",
   "professionalSpaceTooltip": "Professional area",
   "commercantSpaceItem": "Merchant area",
@@ -115,12 +101,10 @@
   "sortNouveautes": "Newest",
   "resetFiltersLabel": "Reset",
   "expiringSoonBadgeLabel": "Ending soon",
-
   "myCommercantSpaceTitle": "My merchant area",
   "profileViewsLabel": "Views of your listing (unique devices)",
   "myPromosLabel": "My promos",
   "editProfileLabel": "Edit my profile",
-
   "notificationsTooltip": "Notifications",
   "notificationsTitle": "Notifications",
   "noNotifications": "No notifications",
@@ -129,14 +113,25 @@
   "backToHomeTooltip": "Back to home",
   "notificationJustNow": "Just now",
   "notificationMinutesAgo": "{count, plural, one{{count} minute ago} other{{count} minutes ago}}",
-  "@notificationMinutesAgo": { "placeholders": { "count": { "type": "int" } } },
+  "@notificationMinutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "notificationHoursAgo": "{count, plural, one{{count} hour ago} other{{count} hours ago}}",
-  "@notificationHoursAgo": { "placeholders": { "count": { "type": "int" } } },
+  "@notificationHoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "notificationYesterday": "Yesterday",
   "reviewPromoCta": "Review",
   "unreadNotificationsTab": "Unread",
   "historyNotificationsTab": "History",
-
   "myPromosTitle": "My promos",
   "capReachedLabel": "Cap of {plafond} promos reached",
   "noPromosYet": "No promo yet.",
@@ -155,7 +150,6 @@
   "moderationSignalee": "Reported",
   "moderationMasquee": "Hidden",
   "moderationVerifieeOk": "Verified OK",
-
   "editProfileTitle": "Edit my profile",
   "saveLabel": "Save",
   "modifyFailed": "Update failed.",
@@ -163,13 +157,11 @@
   "deleteAccountConfirmTitle": "Delete your account?",
   "deleteAccountConfirmMessage": "This action can't be undone from the app — your promos will no longer be visible to customers. Continue?",
   "deleteAccountFailed": "Could not delete account.",
-
   "editPromoTitle": "Edit promo",
   "photoRequired": "A photo is required.",
   "promoPhotosHint": "Up to 3 photos: the first one will be shown first.",
   "saveDraftLabel": "Save as draft",
   "operationFailed": "Operation failed.",
-
   "commercantSpaceTitle": "Merchant area",
   "pinLabel": "PIN code",
   "pinRule": "The PIN code must contain 6 to 12 digits",
@@ -182,7 +174,6 @@
   "pinMismatch": "The two PIN codes do not match",
   "forgotPinTitle": "Forgot PIN",
   "forgotPinBody": "There is no automatic reset. Contact an agent or the administrator: after verifying your identity, they'll give you a new PIN directly over the phone.",
-
   "registerTitle": "Create a merchant account",
   "choosePinLabel": "Choose a PIN code (6-12 digits)",
   "registerFailed": "Registration failed.",
@@ -197,7 +188,6 @@
   "registreResendTitle": "Resend registration",
   "registreResendHelperText": "Send a new, readable photo of your business registration for a new review.",
   "registreResendSubmit": "Resend",
-
   "nomLabel": "Name",
   "adminSpaceTitle": "Admin space",
   "commercesActifsLabel": "Active businesses",
@@ -246,7 +236,13 @@
   "changePinDialogTitle": "Change this merchant's PIN",
   "changePinSuccessMessage": "PIN changed.",
   "reportCountLabel": "{count, plural, one{{count} report} other{{count} reports}}",
-  "@reportCountLabel": { "placeholders": { "count": { "type": "int" } } },
+  "@reportCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "masquerLabel": "Hide",
   "verifierOkLabel": "Mark verified",
   "avertirLabel": "Warn",
@@ -271,10 +267,21 @@
   "toAgentLabel": "To agent",
   "selectAllInWilayaLabel": "Select all in this wilaya",
   "communesSelectedCount": "{count, plural, one{{count} commune selected} other{{count} communes selected}}",
-  "@communesSelectedCount": { "placeholders": { "count": { "type": "int" } } },
+  "@communesSelectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "maxCommunesHint": "Choose up to {max} nearby communes: their deals will be shown together.",
-  "@maxCommunesHint": { "placeholders": { "max": { "type": "int" } } },
-
+  "@maxCommunesHint": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
   "legalCguTitle": "Terms of use",
   "legalPrivacyTitle": "Privacy policy",
   "legalCguLinkLabel": "Read the terms of use",
@@ -283,7 +290,6 @@
   "acceptTermsRequired": "You must accept the terms of use and the privacy policy to create an account.",
   "legalCguContent": "Last updated: [to be completed]\n\n1. Purpose\nEchango Promo is a mobile app allowing merchants in a pilot neighborhood (Djelfa) to publish temporary promotions, freely browsable by nearby customers.\n\n2. Merchant registration\nBy creating an account, you certify that the information provided (name, address, category, phone number) is accurate. The PIN code you choose is personal and confidential — Echango Promo never knows it in cleartext.\n\n3. Published content\nYou are solely responsible for the promotions you publish (price, description, photo). Displayed prices must reflect an actual discount. Any misleading, expired-but-not-removed, or fraudulent promotion may be hidden after being reported and reviewed by a moderator (field agent or administrator), without prior notice.\n\n4. Reporting and moderation\nCustomers can report a promotion. Beyond a threshold of distinct reports, the promotion is placed in a moderation queue. A moderator may hide it, validate it, or warn the merchant (the promotion then reverts to draft, requiring an explicit republish).\n\n5. Account suspension\nIn case of clearly fraudulent or repeated content despite a warning, the administrator may suspend a merchant account. The merchant may delete their own account at any time from the app.\n\n6. Limitation of liability\nEchango Promo is a technical intermediary. Echango Promo is not a party to transactions between merchants and customers and does not guarantee the accuracy or actual availability of published promotions.\n\n7. Changes to these terms\nThese terms may evolve, in particular when the app opens to a wider audience. Any substantial change will be announced within the app.\n\n8. Contact\nFor any question regarding these terms: [to be completed — contact email].",
   "legalPrivacyContent": "Last updated: [to be completed]\n\n1. Data collected\nMerchant (account): phone number, business name, address, category, business photo (optional), GPS location (optional), PIN code (never stored in cleartext, only in hashed form).\n\nCustomer: no personal data or account required. An anonymous technical identifier is generated on the device to limit abuse (one report or favorite per device), with no link to a real identity.\n\n2. Purpose\nThis data is used solely for the service to function: displaying promotions and merchant listings, anti-fraud on reports, anonymous usage statistics (view counts).\n\n3. Retention\nPhotos are removed from storage after 30 days of inactivity on the associated promotion; account data (name, phone, history) is kept as long as the account is active. When an account is deleted, data is deactivated immediately (no longer publicly visible) and kept for internal history purposes only, with no further processing.\n\n4. Sharing\nNo data is sold or shared with third parties for commercial purposes. Merchant information (name, address, photo) is public by nature (merchant listing visible to customers).\n\n5. Your rights\nYou can view, correct, or delete your account at any time from the app. For any other request (access, full deletion of historical data): [to be completed — contact email].\n\n6. Security\nPasswords and PIN codes are stored in hashed form, never in cleartext. Administrator and agent access is protected by authentication and restricted by role.",
-
   "onboardingSplashTagline": "Deals in my city",
   "onboardingWelcomeTitle": "Welcome",
   "onboardingWelcomeSubtitle": "Tell us who you are and we'll tailor the app.",
@@ -299,7 +305,6 @@
   "onboardingLocationEnable": "Turn on location",
   "onboardingLocationContinue": "Continue",
   "mapLocationInvite": "Without location we can't sort by distance — you'll see every deal in the commune.",
-
   "mapDirections": "Directions",
   "mapCall": "Call",
   "mapBackToList": "Back to the list",
@@ -307,56 +312,110 @@
   "mapLoadError": "Couldn't load deals for this area.",
   "mapTooManyShops": "Too many shops in this area — zoom in to see them all.",
   "mapShopsHere": "{count, plural, one{1 shop here} other{{count} shops here}}",
-  "@mapShopsHere": { "placeholders": { "count": { "type": "int" } } },
-
+  "@mapShopsHere": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "searchPromoHint": "A deal, a shop…",
   "searchClear": "Clear search",
   "topPromosTitle": "Top deals",
   "allPromosTitle": "All deals",
   "promoCount": "{count, plural, =0{none} =1{1 deal} other{{count} deals}}",
-  "@promoCount": { "placeholders": { "count": { "type": "int" } } },
+  "@promoCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "noSearchResults": "No results for \"{query}\".",
-  "@noSearchResults": { "placeholders": { "query": { "type": "String" } } },
+  "@noSearchResults": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
   "tabHome": "Home",
   "tabMap": "Map",
   "tabFavorites": "Favourites",
   "youSave": "You save {amount}",
-  "@youSave": { "placeholders": { "amount": { "type": "String" } } },
+  "@youSave": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "endsToday": "Ends today",
   "endsTomorrow": "Ends tomorrow",
   "endsInDays": "Ends in {days} days",
-  "@endsInDays": { "placeholders": { "days": { "type": "int" } } },
+  "@endsInDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
   "otherShopPromosTitle": "Other deals from this shop",
   "callButton": "Call",
-
   "distanceMeters": "{meters} m",
-  "@distanceMeters": { "placeholders": { "meters": { "type": "int" } } },
+  "@distanceMeters": {
+    "placeholders": {
+      "meters": {
+        "type": "int"
+      }
+    }
+  },
   "distanceKilometers": "{km} km",
-  "@distanceKilometers": { "placeholders": { "km": { "type": "String" } } },
+  "@distanceKilometers": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
   "mapRecenter": "Recentre on my position",
-
   "themeSwitchToDark": "Switch to dark mode",
   "themeSwitchToLight": "Switch to light mode",
-
   "commercantLoginSubtitle": "Sign in to publish and track your deals.",
   "commonOr": "or",
   "dashboardActivePromosLabel": "Deals online",
   "dashboardSlotsLeft": "{count, plural, =0{No slot left.} =1{1 slot left.} other{{count} slots left.}}",
-  "@dashboardSlotsLeft": { "placeholders": { "count": { "type": "int" } } },
+  "@dashboardSlotsLeft": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "dashboardPromoViewsLabel": "Views on my deals",
   "verifiedBadge": "Verified",
   "seeAllLabel": "See all",
-
   "alertsCount": "{count, plural, =1{1 alert} other{{count} alerts}}",
-  "@alertsCount": { "placeholders": { "count": { "type": "int" } } },
-
+  "@alertsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "promoSectionPhotos": "Photos",
   "promoSectionPhotosHint": "The first photo is the one customers see in the list.",
   "promoSectionProduct": "The product",
   "promoSectionPrice": "The price",
   "promoSectionDuration": "Duration",
   "discountPreview": "Customers save {amount}.",
-  "@discountPreview": { "placeholders": { "amount": { "type": "String" } } },
+  "@discountPreview": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "profileSectionStorefront": "My storefront",
   "profileSectionStorefrontHint": "What customers see before walking in.",
   "profileSectionLocation": "Where to find me",
@@ -364,14 +423,12 @@
   "profileSectionSecurity": "Security",
   "profileSectionDanger": "Sensitive area",
   "profileSectionDangerHint": "This action is permanent.",
-
   "commercantSectionShop": "The shop",
   "commercantSectionShopHint": "What customers see before walking in.",
   "commercantSectionWhere": "Where to find it",
   "commercantSectionWhereHint": "The location enables directions and the map view.",
   "registerSectionPin": "My access code",
   "registerSectionPinHint": "You'll use it to sign in. Nobody else knows it.",
-
   "highlightsTitle": "Home banner",
   "highlightsEmptyTitle": "Nothing featured",
   "highlightsEmptyBody": "As long as nothing is featured, the home screen automatically shows the biggest discounts available.",
@@ -405,12 +462,25 @@
   "highlightSearchPromoHint": "Product or shop name",
   "highlightNoPromoSelected": "No promo — poster only",
   "highlightContentRequired": "Pick a promo or upload an image.",
-
   "notificationPromoHidden": "Your promo “{promo}” was hidden after reports.",
   "notificationPromoWarned": "Your promo “{promo}” received several reports and was moved back to draft. Review it, then publish it again.",
   "notificationPromoVerified": "Your promo “{promo}” was reviewed and approved.",
   "notificationPromoExpiringSoon": "Your promo “{promo}” expires soon. Consider publishing it again.",
   "notificationRegistreValidated": "Your trade register was approved — you can now publish promos.",
   "notificationRegistreRejected": "Your trade register was rejected. Please send a readable document.",
-  "notificationProfileValidated": "Your profile changes were approved by an administrator."
+  "notificationProfileValidated": "Your profile changes were approved by an administrator.",
+  "promoCapSectionLabel": "Promo cap",
+  "promoCapGlobalLabel": "Follows the server-wide setting",
+  "promoCapCustomLabel": "Cap specific to this merchant: {plafond}",
+  "@promoCapCustomLabel": {
+    "placeholders": {
+      "plafond": {
+        "type": "int"
+      }
+    }
+  },
+  "promoCapEditLabel": "Change the cap",
+  "promoCapDialogTitle": "Active promo cap",
+  "promoCapDialogBody": "Leave empty to follow the server-wide setting. Zero prevents publishing without suspending the account.",
+  "promoCapFieldLabel": "Cap (empty = global)"
 }

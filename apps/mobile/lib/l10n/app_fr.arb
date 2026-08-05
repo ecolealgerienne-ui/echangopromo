@@ -1,9 +1,14 @@
 {
   "@@locale": "fr",
-
   "appTitle": "Echango Promo",
   "commonError": "Erreur : {error}",
-  "@commonError": { "placeholders": { "error": { "type": "String" } } },
+  "@commonError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "commonCancel": "Annuler",
   "commonConfirm": "Valider",
   "commonUnderstood": "Compris",
@@ -12,7 +17,6 @@
   "languageFrench": "Français",
   "languageEnglish": "English",
   "languageArabic": "العربية",
-
   "categoryLabel": "Catégorie",
   "categoryRequired": "Catégorie requise",
   "categorieAlimentation": "Alimentation",
@@ -22,10 +26,8 @@
   "categorieBeauteHygiene": "Beauté / Hygiène",
   "categorieMaisonAmeublement": "Maison / Ameublement",
   "categorieAutre": "Autre",
-
   "photoPickerTakePhoto": "Prendre une photo",
   "photoPickerGallery": "Galerie",
-
   "descriptionLabel": "Description",
   "descriptionRequired": "Description requise",
   "prixAvantLabel": "Prix avant (DA)",
@@ -33,34 +35,34 @@
   "prixApresMustBeLower": "Doit être inférieur au prix avant",
   "dureeValiditeLabel": "Durée de validité",
   "dureeJoursOption": "{count, plural, one{{count} jour} other{{count} jours}}",
-  "@dureeJoursOption": { "placeholders": { "count": { "type": "int" } } },
-
+  "@dureeJoursOption": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "wilayaLabel": "Wilaya",
   "communeLabel": "Commune",
   "filterAllOption": "Toutes",
   "communeRequired": "Commune requise",
-
   "locationEnableService": "Active la localisation sur ton téléphone.",
   "locationPermissionDenied": "Permission de localisation refusée.",
   "locationUnavailable": "Position introuvable. Sortez ou approchez-vous d'une fenêtre, puis réessayez.",
   "locationSaved": "Position captée — relocaliser",
   "locationCapture": "Localiser mon commerce (optionnel)",
-
   "telephoneLabel": "Téléphone",
   "telephoneHint": "+213...",
   "telephoneRequired": "Téléphone requis",
   "nomCommerceLabel": "Nom du commerce",
   "nomRequired": "Nom requis",
   "adresseLabel": "Adresse (optionnel)",
-
   "logoutTooltip": "Déconnexion",
   "newCommercantLabel": "Nouveau commerçant",
-
   "newPromoTitle": "Nouvelle promo",
   "photoRequiredCamera": "La photo doit être prise avec l'appareil photo.",
   "publishLabel": "Publier",
   "publishFailed": "Publication impossible.",
-
   "agentSpaceTitle": "Espace agent terrain",
   "emailLabel": "Email",
   "emailInvalid": "Email invalide",
@@ -68,7 +70,6 @@
   "passwordRequired": "Mot de passe requis",
   "loginLabel": "Se connecter",
   "loginFailed": "Connexion impossible.",
-
   "newCommercantScreenTitle": "Nouveau commerçant",
   "commercantCreatedTitle": "Commerçant créé",
   "addFirstPromoQuestion": "Ajouter la première promo maintenant ?",
@@ -76,12 +77,16 @@
   "yesLabel": "Oui",
   "createLabel": "Créer",
   "createFailed": "Création impossible.",
-
   "chooseCommuneTitle": "Choisissez votre commune",
-
   "promoDetailTitle": "Détail de la promo",
   "validUntil": "Valable jusqu'au {date}",
-  "@validUntil": { "placeholders": { "date": { "type": "String" } } },
+  "@validUntil": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "reportButton": "Signaler (promo expirée ou incorrecte)",
   "reportSent": "Signalement envoyé, merci.",
   "reportFailed": "Signalement impossible.",
@@ -98,16 +103,29 @@
   "shareMessage": "{description} chez {commercantNom} : {prixApres} DA au lieu de {prixAvant} DA ! Vu sur Echango Promo.",
   "@shareMessage": {
     "placeholders": {
-      "description": { "type": "String" },
-      "commercantNom": { "type": "String" },
-      "prixApres": { "type": "String" },
-      "prixAvant": { "type": "String" }
+      "description": {
+        "type": "String"
+      },
+      "commercantNom": {
+        "type": "String"
+      },
+      "prixApres": {
+        "type": "String"
+      },
+      "prixAvant": {
+        "type": "String"
+      }
     }
   },
   "shareInstallCta": "Télécharge l'app Echango Promo : {url}",
-  "@shareInstallCta": { "placeholders": { "url": { "type": "String" } } },
+  "@shareInstallCta": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
   "shareTextCopiedNotice": "Texte copié : certaines applis (ex. Messenger) n'affichent que la photo, collez le texte manuellement si besoin.",
-
   "changeCommuneTooltip": "Changer de commune",
   "professionalSpaceTooltip": "Espace professionnel",
   "commercantSpaceItem": "Espace commerçant",
@@ -127,12 +145,10 @@
   "sortNouveautes": "Nouveautés",
   "resetFiltersLabel": "Réinitialiser",
   "expiringSoonBadgeLabel": "Expire bientôt",
-
   "myCommercantSpaceTitle": "Mon espace commerçant",
   "profileViewsLabel": "Vues de votre fiche (devices uniques)",
   "myPromosLabel": "Mes promos",
   "editProfileLabel": "Modifier mon profil",
-
   "notificationsTooltip": "Notifications",
   "notificationsTitle": "Notifications",
   "noNotifications": "Aucune notification",
@@ -141,25 +157,63 @@
   "backToHomeTooltip": "Retour à l'accueil",
   "notificationJustNow": "À l'instant",
   "notificationMinutesAgo": "{count, plural, one{Il y a {count} minute} other{Il y a {count} minutes}}",
-  "@notificationMinutesAgo": { "placeholders": { "count": { "type": "int" } } },
+  "@notificationMinutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "notificationHoursAgo": "{count, plural, one{Il y a {count} heure} other{Il y a {count} heures}}",
-  "@notificationHoursAgo": { "placeholders": { "count": { "type": "int" } } },
+  "@notificationHoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "notificationYesterday": "Hier",
   "reviewPromoCta": "Vérifier",
   "unreadNotificationsTab": "Non lues",
   "historyNotificationsTab": "Historique",
-
   "myPromosTitle": "Mes promos",
   "capReachedLabel": "Plafond de {plafond} promos atteint",
-  "@capReachedLabel": { "placeholders": { "plafond": { "type": "int" } } },
+  "@capReachedLabel": {
+    "placeholders": {
+      "plafond": {
+        "type": "int"
+      }
+    }
+  },
   "noPromosYet": "Aucune promo pour le moment.",
   "activeCountLabel": "{count} / {plafond} promos actives",
-  "@activeCountLabel": { "placeholders": { "count": { "type": "int" }, "plafond": { "type": "int" } } },
+  "@activeCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "plafond": {
+        "type": "int"
+      }
+    }
+  },
   "untilDate": "jusqu'au {date}",
-  "@untilDate": { "placeholders": { "date": { "type": "String" } } },
+  "@untilDate": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "notPublishedYet": "pas encore publiée",
   "myPromosViewsCount": "{count, plural, one{{count} vue} other{{count} vues}}",
-  "@myPromosViewsCount": { "placeholders": { "count": { "type": "int" } } },
+  "@myPromosViewsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "editItem": "Modifier",
   "stopItem": "Arrêter",
   "lifecycleDraft": "Brouillon",
@@ -171,7 +225,6 @@
   "moderationSignalee": "Signalée",
   "moderationMasquee": "Masquée",
   "moderationVerifieeOk": "Vérifiée OK",
-
   "editProfileTitle": "Modifier mon profil",
   "saveLabel": "Enregistrer",
   "modifyFailed": "Modification impossible.",
@@ -179,13 +232,11 @@
   "deleteAccountConfirmTitle": "Supprimer votre compte ?",
   "deleteAccountConfirmMessage": "Cette action est irréversible depuis l'application — vos promos ne seront plus visibles par les clients. Voulez-vous continuer ?",
   "deleteAccountFailed": "Suppression du compte impossible.",
-
   "editPromoTitle": "Modifier la promo",
   "photoRequired": "Une photo est requise.",
   "promoPhotosHint": "Jusqu'à 3 photos : la première sera affichée en priorité.",
   "saveDraftLabel": "Enregistrer en brouillon",
   "operationFailed": "Opération impossible.",
-
   "commercantSpaceTitle": "Espace commerçant",
   "pinLabel": "Code PIN",
   "pinRule": "Le code PIN doit contenir 6 à 12 chiffres",
@@ -198,7 +249,6 @@
   "pinMismatch": "Les deux codes PIN ne correspondent pas",
   "forgotPinTitle": "PIN oublié",
   "forgotPinBody": "Il n'y a pas de réinitialisation automatique. Contactez un agent ou l'administrateur : après vous avoir identifié, il vous communique directement un nouveau PIN par téléphone.",
-
   "registerTitle": "Créer un compte commerçant",
   "choosePinLabel": "Choisissez un code PIN (6-12 chiffres)",
   "registerFailed": "Inscription impossible.",
@@ -213,7 +263,6 @@
   "registreResendTitle": "Renvoyer le registre",
   "registreResendHelperText": "Envoyez une nouvelle photo lisible de votre registre de commerce pour une nouvelle vérification.",
   "registreResendSubmit": "Renvoyer",
-
   "nomLabel": "Nom",
   "adminSpaceTitle": "Espace administrateur",
   "commercesActifsLabel": "Commerces actifs",
@@ -262,7 +311,13 @@
   "changePinDialogTitle": "Changer le PIN de ce commerçant",
   "changePinSuccessMessage": "PIN modifié.",
   "reportCountLabel": "{count, plural, one{{count} signalement} other{{count} signalements}}",
-  "@reportCountLabel": { "placeholders": { "count": { "type": "int" } } },
+  "@reportCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "masquerLabel": "Masquer",
   "verifierOkLabel": "Vérifier OK",
   "avertirLabel": "Avertir",
@@ -287,10 +342,21 @@
   "toAgentLabel": "Agent destination",
   "selectAllInWilayaLabel": "Tout sélectionner dans cette wilaya",
   "communesSelectedCount": "{count, plural, one{{count} commune sélectionnée} other{{count} communes sélectionnées}}",
-  "@communesSelectedCount": { "placeholders": { "count": { "type": "int" } } },
+  "@communesSelectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "maxCommunesHint": "Choisissez jusqu'à {max} communes voisines : leurs promos s'afficheront ensemble.",
-  "@maxCommunesHint": { "placeholders": { "max": { "type": "int" } } },
-
+  "@maxCommunesHint": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
   "legalCguTitle": "Conditions générales d'utilisation",
   "legalPrivacyTitle": "Politique de confidentialité",
   "legalCguLinkLabel": "Lire les CGU",
@@ -299,7 +365,6 @@
   "acceptTermsRequired": "Vous devez accepter les CGU et la politique de confidentialité pour créer un compte.",
   "legalCguContent": "Dernière mise à jour : [à compléter]\n\n1. Objet\nEchango Promo est une application mobile permettant aux commerçants d'un quartier pilote (Djelfa) de publier des promotions temporaires, consultables gratuitement par les clients à proximité.\n\n2. Inscription du commerçant\nEn créant un compte, vous certifiez que les informations fournies (nom, adresse, catégorie, numéro de téléphone) sont exactes. Le code PIN choisi est personnel et confidentiel — Echango Promo ne le connaît jamais en clair.\n\n3. Contenu publié\nVous êtes seul responsable des promotions que vous publiez (prix, description, photo). Les prix affichés doivent refléter une réduction réelle. Toute promotion trompeuse, expirée non retirée, ou à caractère frauduleux peut être masquée après signalement et vérification par un modérateur (agent ou administrateur), sans préavis.\n\n4. Signalement et modération\nLes clients peuvent signaler une promotion. Au-delà d'un seuil de signalements distincts, la promotion est mise en attente de vérification. Un modérateur peut la masquer, la valider, ou avertir le commerçant (la promotion repasse alors en brouillon, une republication explicite est requise).\n\n5. Suspension de compte\nEn cas de contenu manifestement frauduleux ou répété malgré avertissement, l'administrateur peut suspendre un compte commerçant. Le commerçant peut à tout moment supprimer son propre compte depuis l'application.\n\n6. Limitation de responsabilité\nEchango Promo est un intermédiaire technique. Echango Promo n'est pas partie aux transactions entre commerçants et clients et ne garantit ni l'exactitude ni la disponibilité effective des promotions publiées.\n\n7. Évolution des CGU\nCes conditions peuvent évoluer, notamment à l'ouverture de l'application à un public plus large. Toute modification substantielle sera signalée dans l'application.\n\n8. Contact\nPour toute question relative à ces conditions : [à compléter — email de contact].",
   "legalPrivacyContent": "Dernière mise à jour : [à compléter]\n\n1. Données collectées\nCommerçant (compte) : numéro de téléphone, nom du commerce, adresse, catégorie, photo du commerce (facultative), position GPS (facultative), code PIN (jamais stocké en clair, uniquement sous forme chiffrée).\n\nClient : aucune donnée personnelle ni compte requis. Un identifiant technique anonyme est généré sur l'appareil pour limiter les abus (un signalement ou favori par appareil), sans lien avec une identité réelle.\n\n2. Finalité\nCes données servent uniquement au fonctionnement du service : affichage des promotions et fiches commerçants, anti-fraude sur les signalements, statistiques de fréquentation anonymes (nombre de vues).\n\n3. Conservation\nLes photos sont supprimées du stockage après 30 jours d'inactivité de la promotion associée ; les données du compte (nom, téléphone, historique) sont conservées tant que le compte est actif. En cas de suppression de compte, les données sont désactivées immédiatement (invisibles publiquement) et conservées à des fins d'historique interne, sans traitement ultérieur.\n\n4. Partage\nAucune donnée n'est vendue ni partagée avec des tiers à des fins commerciales. Les informations du commerçant (nom, adresse, photo) sont publiques par nature (fiche commerçant visible des clients).\n\n5. Vos droits\nVous pouvez à tout moment consulter, corriger ou supprimer votre compte depuis l'application. Pour toute autre demande (accès, suppression complète des données historiques) : [à compléter — email de contact].\n\n6. Sécurité\nLes mots de passe et codes PIN sont stockés sous forme chiffrée (hachage), jamais en clair. Les accès administrateur et agent sont protégés par authentification et limités par rôle.",
-
   "onboardingSplashTagline": "Les promos de ma ville",
   "onboardingWelcomeTitle": "Bienvenue",
   "onboardingWelcomeSubtitle": "Dites-nous qui vous êtes, on adapte l'application.",
@@ -315,7 +380,6 @@
   "onboardingLocationEnable": "Activer la localisation",
   "onboardingLocationContinue": "Continuer",
   "mapLocationInvite": "Sans localisation, on ne peut pas trier par proximité — vous verrez toutes les promos de la commune.",
-
   "mapDirections": "Itinéraire",
   "mapCall": "Appeler",
   "mapBackToList": "Revenir à la liste",
@@ -323,56 +387,110 @@
   "mapLoadError": "Impossible de charger les promos de cette zone.",
   "mapTooManyShops": "Trop de commerces dans cette zone — zoomez pour tous les voir.",
   "mapShopsHere": "{count, plural, one{1 commerce ici} other{{count} commerces ici}}",
-  "@mapShopsHere": { "placeholders": { "count": { "type": "int" } } },
-
+  "@mapShopsHere": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "searchPromoHint": "Une promo, un magasin…",
   "searchClear": "Effacer la recherche",
   "topPromosTitle": "Top promos",
   "allPromosTitle": "Toutes les promos",
   "promoCount": "{count, plural, =0{aucune} =1{1 promo} other{{count} promos}}",
-  "@promoCount": { "placeholders": { "count": { "type": "int" } } },
+  "@promoCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "noSearchResults": "Aucun résultat pour « {query} ».",
-  "@noSearchResults": { "placeholders": { "query": { "type": "String" } } },
+  "@noSearchResults": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
   "tabHome": "Accueil",
   "tabMap": "Carte",
   "tabFavorites": "Favoris",
   "youSave": "Vous économisez {amount}",
-  "@youSave": { "placeholders": { "amount": { "type": "String" } } },
+  "@youSave": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "endsToday": "Se termine aujourd'hui",
   "endsTomorrow": "Se termine demain",
   "endsInDays": "Se termine dans {days} jours",
-  "@endsInDays": { "placeholders": { "days": { "type": "int" } } },
+  "@endsInDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
   "otherShopPromosTitle": "Autres promos du magasin",
   "callButton": "Appeler",
-
   "distanceMeters": "{meters} m",
-  "@distanceMeters": { "placeholders": { "meters": { "type": "int" } } },
+  "@distanceMeters": {
+    "placeholders": {
+      "meters": {
+        "type": "int"
+      }
+    }
+  },
   "distanceKilometers": "{km} km",
-  "@distanceKilometers": { "placeholders": { "km": { "type": "String" } } },
+  "@distanceKilometers": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
   "mapRecenter": "Recentrer sur ma position",
-
   "themeSwitchToDark": "Passer en mode sombre",
   "themeSwitchToLight": "Passer en mode clair",
-
   "commercantLoginSubtitle": "Connectez-vous pour publier et suivre vos promos.",
   "commonOr": "ou",
   "dashboardActivePromosLabel": "Promos en ligne",
   "dashboardSlotsLeft": "{count, plural, =0{Plus d'emplacement disponible.} =1{Il vous reste 1 emplacement.} other{Il vous reste {count} emplacements.}}",
-  "@dashboardSlotsLeft": { "placeholders": { "count": { "type": "int" } } },
+  "@dashboardSlotsLeft": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "dashboardPromoViewsLabel": "Vues de mes promos",
   "verifiedBadge": "Vérifié",
   "seeAllLabel": "Tout voir",
-
   "alertsCount": "{count, plural, =1{1 alerte} other{{count} alertes}}",
-  "@alertsCount": { "placeholders": { "count": { "type": "int" } } },
-
+  "@alertsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "promoSectionPhotos": "Photos",
   "promoSectionPhotosHint": "La première photo est celle que le client voit dans la liste.",
   "promoSectionProduct": "Le produit",
   "promoSectionPrice": "Le prix",
   "promoSectionDuration": "Durée",
   "discountPreview": "Le client économise {amount}.",
-  "@discountPreview": { "placeholders": { "amount": { "type": "String" } } },
+  "@discountPreview": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "profileSectionStorefront": "Ma vitrine",
   "profileSectionStorefrontHint": "Ce que le client voit avant d'entrer.",
   "profileSectionLocation": "Où me trouver",
@@ -380,14 +498,12 @@
   "profileSectionSecurity": "Sécurité",
   "profileSectionDanger": "Zone sensible",
   "profileSectionDangerHint": "Cette action est définitive.",
-
   "commercantSectionShop": "Le commerce",
   "commercantSectionShopHint": "Ce que le client voit avant d'entrer.",
   "commercantSectionWhere": "Où le trouver",
   "commercantSectionWhereHint": "La position permet l'itinéraire et l'affichage sur la carte.",
   "registerSectionPin": "Mon code d'accès",
   "registerSectionPinHint": "Il vous servira à vous connecter. Personne d'autre ne le connaît.",
-
   "highlightsTitle": "Bandeau d'accueil",
   "highlightsEmptyTitle": "Aucune mise en avant",
   "highlightsEmptyBody": "Tant que rien n'est mis en avant, l'accueil affiche automatiquement les plus fortes réductions du moment.",
@@ -421,16 +537,53 @@
   "highlightSearchPromoHint": "Nom du produit ou du commerce",
   "highlightNoPromoSelected": "Aucune promo — affiche seule",
   "highlightContentRequired": "Choisissez une promo ou importez une image.",
-
   "notificationPromoHidden": "Votre promo « {promo} » a été masquée suite à des signalements.",
-  "@notificationPromoHidden": { "placeholders": { "promo": { "type": "String" } } },
+  "@notificationPromoHidden": {
+    "placeholders": {
+      "promo": {
+        "type": "String"
+      }
+    }
+  },
   "notificationPromoWarned": "Votre promo « {promo} » a reçu plusieurs signalements et a été repassée en brouillon. Vérifiez-la puis republiez-la.",
-  "@notificationPromoWarned": { "placeholders": { "promo": { "type": "String" } } },
+  "@notificationPromoWarned": {
+    "placeholders": {
+      "promo": {
+        "type": "String"
+      }
+    }
+  },
   "notificationPromoVerified": "Votre promo « {promo} » a été vérifiée et validée.",
-  "@notificationPromoVerified": { "placeholders": { "promo": { "type": "String" } } },
+  "@notificationPromoVerified": {
+    "placeholders": {
+      "promo": {
+        "type": "String"
+      }
+    }
+  },
   "notificationPromoExpiringSoon": "Votre promo « {promo} » expire bientôt. Pensez à la republier.",
-  "@notificationPromoExpiringSoon": { "placeholders": { "promo": { "type": "String" } } },
+  "@notificationPromoExpiringSoon": {
+    "placeholders": {
+      "promo": {
+        "type": "String"
+      }
+    }
+  },
   "notificationRegistreValidated": "Votre registre de commerce a été validé — vous pouvez maintenant publier vos promos.",
   "notificationRegistreRejected": "Votre registre de commerce a été rejeté. Renvoyez un document lisible.",
-  "notificationProfileValidated": "Les modifications de votre profil ont été validées par un administrateur."
+  "notificationProfileValidated": "Les modifications de votre profil ont été validées par un administrateur.",
+  "promoCapSectionLabel": "Plafond de promos",
+  "promoCapGlobalLabel": "Suit le réglage global du serveur",
+  "promoCapCustomLabel": "Plafond propre à ce commerçant : {plafond}",
+  "@promoCapCustomLabel": {
+    "placeholders": {
+      "plafond": {
+        "type": "int"
+      }
+    }
+  },
+  "promoCapEditLabel": "Modifier le plafond",
+  "promoCapDialogTitle": "Plafond de promos actives",
+  "promoCapDialogBody": "Laissez le champ vide pour suivre le réglage global. Zéro empêche de publier sans suspendre le compte.",
+  "promoCapFieldLabel": "Plafond (vide = global)"
 }

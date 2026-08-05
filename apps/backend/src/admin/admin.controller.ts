@@ -16,6 +16,7 @@ import { ResetAgentPasswordDto } from '../agent/dto/reset-agent-password.dto';
 import { TransferCommunesDto } from '../agent/dto/transfer-communes.dto';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { ListAuditLogQueryDto } from '../audit-log/dto/list-audit-log-query.dto';
+import { UpdatePromoActiveCapDto } from './dto/update-promo-active-cap.dto';
 import { AuditActorType } from '../audit-log/entities/audit-log.entity';
 import { AuthService } from '../auth/auth.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -453,6 +454,12 @@ export class AdminController {
             ? await this.storageService.getPresignedUrl(commercant.registreKey)
             : null,
           profilePendingReview: commercant.profilePendingReview,
+          // ⚠️ Servi tel quel, `null` compris : `null` veut dire « suit le
+          // réglage global », et l'écran admin affiche deux textes distincts
+          // selon le cas. L'omettre de cette projection ferait afficher
+          // « global » quel que soit le réglage — un écran qui ment sans
+          // erreur ni journal.
+          promoActiveCap: commercant.promoActiveCap,
           suspended: commercant.suspendedAt !== null,
           deleted: commercant.deletedAt !== null,
           createdAt: commercant.createdAt,
@@ -483,6 +490,39 @@ export class AdminController {
       action: 'commercant_suspend',
       targetType: 'commercant',
       targetId: commercantId,
+    });
+    return { ok: true };
+  }
+
+  /**
+   * Plafond de promos actives **propre à ce commerçant** ; `null` le remet sur
+   * le réglage global (`PROMO_ACTIVE_CAP`).
+   *
+   * ⚠️ **Admin seulement, contrairement à suspendre/réactiver.** Accorder plus
+   * d'emplacements à un commerce est une décision commerciale, pas un geste de
+   * terrain : un agent qui peut l'ajuster peut avantager un commerçant de sa
+   * commune sans que personne ne l'ait décidé. Le journal d'audit garde donc
+   * une trace d'un geste qui n'a qu'un seul auteur possible.
+   */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Patch('commercant/:id/plafond-promos')
+  async setCommercantPromoCap(
+    @CurrentUser() user: AuthTokenPayload,
+    @UuidParam('id') commercantId: string,
+    @Body() dto: UpdatePromoActiveCapDto,
+  ) {
+    await this.commercantService.setPromoActiveCap(commercantId, dto.plafond);
+    await this.auditLogService.record({
+      actorType: this.actorType(user.role),
+      actorId: user.sub,
+      action: 'commercant_promo_cap',
+      targetType: 'commercant',
+      targetId: commercantId,
+      // Le journal doit dire CE QUI a été posé : « plafond modifié » sans la
+      // valeur ne permet pas de reconstituer une décision commerciale.
+      metadata: { plafond: dto.plafond },
     });
     return { ok: true };
   }

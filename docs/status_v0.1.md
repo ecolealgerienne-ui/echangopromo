@@ -712,6 +712,50 @@ C'est la démonstration de l'avertissement que ce fichier porte en tête : *un
 état périmé est pire qu'aucun état, il fait conclure*. Ici il a fait écrire un
 test qui éprouvait un chemin que personne n'emprunte.
 
+### 2026-08-05 (nuit) — Plafond de promos **par commerçant**
+
+`Commercant.promoActiveCap`, colonne `integer` **nullable**. `NULL` veut dire
+« suit le réglage global » (`PROMO_ACTIVE_CAP`) — ce qu'aucune valeur numérique
+ne sait exprimer. Poser `DEFAULT 5` aurait figé chaque commerçant existant : le
+jour où le global passerait à 8, personne n'en profiterait et rien ne le
+signalerait (règle #29).
+
+**Une seule fonction porte la règle.** `PromoService.plafondActif()` est
+l'unique endroit où se lit « propre au commerçant, sinon global », et la garde à
+la création comme le décompte servi à l'écran y passent tous deux. Les séparer
+ferait voir « 3 / 8 » à un commerçant refusé à sa quatrième promo (règle #30).
+La garde lit le plafond **par le `manager`**, donc dans la transaction qui porte
+déjà le verrou consultatif : il ne peut pas changer entre le décompte et la
+décision.
+
+**L'app n'a rien eu à changer côté commerçant** — c'est le gain du travail du
+matin : `GET /promo/me/slots` servait déjà le plafond, l'écran affiche ce que le
+serveur dit. Seul l'écran **admin** gagne de quoi le régler.
+
+**Prouvé de bout en bout**, les deux côtés ensemble :
+
+| Réglage | `/promo/me/slots` | Création |
+|---|---|---|
+| aucun | `plafond: 5` | — |
+| `1` | `plafond: 1` | **refusée** (`PROMO_ACTIVE_CAP_REACHED`) |
+| `8` | `plafond: 8` | **passe** |
+| `null` | `plafond: 5` | — |
+
+Bornes refusées : `51`, `-1`, `1e9` → **400**. `0` est autorisé et volontaire :
+il empêche de publier **sans suspendre** le compte — une mesure graduée qui
+laisse les promos existantes en ligne.
+
+⚠️ **Un défaut trouvé en le vérifiant plutôt qu'en le supposant** : la liste
+admin construit une **projection**, pas l'entité. Le champ n'y était pas — donc
+l'écran aurait affiché « suit le réglage global » quel que soit le réglage,
+sans erreur ni journal. Un écran qui ment en silence est précisément ce que ces
+vérifications existent pour attraper.
+
+⚠️ **Admin seulement**, contrairement à suspendre/réactiver qui sont aussi
+ouverts à l'agent : accorder plus d'emplacements est une décision commerciale,
+pas un geste de terrain. Tracé au journal d'audit **avec la valeur posée** —
+« plafond modifié » sans le chiffre ne permet pas de reconstituer la décision.
+
 ### 2026-08-05 (soir) — Le seuil de modération devient réglable, avec un plancher
 
 `MODERATION_THRESHOLD = 3`, constante en dur dans `report.service.ts`, devient

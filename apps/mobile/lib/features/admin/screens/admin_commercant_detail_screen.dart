@@ -86,6 +86,67 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
     );
   }
 
+  /// Fixe — ou libère — le plafond de promos actives de ce commerçant.
+  ///
+  /// ⚠️ **Le champ vide n'est pas zéro.** Il remet le commerçant sur le
+  /// réglage global, ce qu'aucun chiffre ne saurait dire : écrire « 5 » pour
+  /// signifier « comme tout le monde » figerait ce commerçant le jour où le
+  /// global changerait. Zéro, lui, reste saisissable et signifie « ne peut
+  /// plus publier » — une mesure graduée, sans suspendre le compte.
+  Future<void> _modifierPlafond(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context)!;
+    final controller =
+        TextEditingController(text: item.promoActiveCap?.toString() ?? '');
+
+    final saisie = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.promoCapDialogTitle),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.promoCapDialogBody),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: l10n.promoCapFieldLabel),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l10n.commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: Text(l10n.commonConfirm),
+          ),
+        ],
+      ),
+    );
+    if (saisie == null || !context.mounted) return;
+
+    // Le serveur borne à 0..50 et refuse le reste ; on ne recopie pas ces
+    // bornes ici (règle #32) — on se contente de distinguer « vide » de
+    // « nombre », la seule chose que l'écran doit décider.
+    final plafond = saisie.isEmpty ? null : int.tryParse(saisie);
+    if (saisie.isNotEmpty && plafond == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(l10n.commonInvalid)));
+      return;
+    }
+
+    await _act(
+      context,
+      ref,
+      () => ref.read(adminApiProvider).setPromoActiveCap(item.id, plafond),
+      popOnSuccess: true,
+    );
+  }
+
   Future<String?> _promptForNewPin(
     BuildContext context, {
     required String title,
@@ -267,6 +328,28 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                         openMapsAt(item.latitude!, item.longitude!),
                   ),
                 ],
+                const Divider(height: 40),
+                Text(l10n.promoCapSectionLabel,
+                    style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                // ⚠️ Deux textes distincts, jamais un chiffre dans les deux
+                // cas : « suit le réglage global » et « 8 » ne veulent pas
+                // dire la même chose, et les confondre ferait perdre
+                // l'information qui compte — ce commerçant a-t-il été réglé ?
+                Text(
+                  item.promoActiveCap == null
+                      ? l10n.promoCapGlobalLabel
+                      : l10n.promoCapCustomLabel(item.promoActiveCap!),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.tune),
+                  label: Text(l10n.promoCapEditLabel),
+                  onPressed: () => _modifierPlafond(context, ref),
+                ),
                 if (item.originVerification ==
                     CommercantOriginVerification.autoInscrit) ...[
                   const Divider(height: 40),

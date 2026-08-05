@@ -136,6 +136,18 @@ class AdminApi {
     await _dio.post<void>('/admin/commercant/$commercantId/reactivate');
   }
 
+  /// Fixe le plafond de promos actives propre à ce commerçant.
+  ///
+  /// `null` le remet sur le réglage global du serveur — ce n'est pas « zéro »,
+  /// et c'est pour ça que le paramètre est nullable plutôt qu'un `int` avec
+  /// une valeur sentinelle.
+  Future<void> setPromoActiveCap(String commercantId, int? plafond) async {
+    await _dio.patch<void>(
+      '/admin/commercant/$commercantId/plafond-promos',
+      data: {'plafond': plafond},
+    );
+  }
+
   /// Suppression logique (2026-07-14) — distincte de la suspension, libère
   /// le numéro de téléphone et "supprime" les promos, pas de restauration.
   Future<void> deleteCommercant(String commercantId) async {

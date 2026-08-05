@@ -18,6 +18,7 @@ class AdminCommercantItem {
     this.photoUrl,
     this.latitude,
     this.longitude,
+    this.promoActiveCap,
     required this.accountState,
     required this.originVerification,
     required this.registreStatus,
@@ -39,6 +40,7 @@ class AdminCommercantItem {
         photoUrl: json['photoUrl'] as String?,
         latitude: (json['latitude'] as num?)?.toDouble(),
         longitude: (json['longitude'] as num?)?.toDouble(),
+        promoActiveCap: (json['promoActiveCap'] as num?)?.toInt(),
         accountState:
             CommercantAccountState.fromValue(json['accountState'] as String),
         originVerification: CommercantOriginVerification.fromValue(
@@ -61,6 +63,14 @@ class AdminCommercantItem {
   final String? photoUrl;
   final double? latitude;
   final double? longitude;
+
+  /// Plafond de promos actives propre à ce commerçant, ou `null` s'il suit le
+  /// réglage global du serveur.
+  ///
+  /// ⚠️ `null` n'est pas zéro : il dit « suit le défaut ». L'écran affiche donc
+  /// deux textes distincts, pas un chiffre dans les deux cas — sinon on ne
+  /// saurait plus si ce commerçant a été réglé ou non.
+  final int? promoActiveCap;
   final CommercantAccountState accountState;
   final CommercantOriginVerification? originVerification;
   final RegistreStatus? registreStatus;

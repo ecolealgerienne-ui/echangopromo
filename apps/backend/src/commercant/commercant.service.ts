@@ -626,6 +626,27 @@ export class CommercantService {
   }
 
   /**
+   * Fixe le plafond de promos actives propre à ce commerçant, ou le remet sur
+   * le réglage global avec `null`.
+   *
+   * ⚠️ **N'agit sur aucune promo déjà en ligne.** Abaisser le plafond de 5 à 2
+   * ne dépublie rien : il empêche les prochaines publications jusqu'à ce que
+   * le compte redescende sous la nouvelle valeur. Dépublier d'autorité serait
+   * une sanction, pas un réglage — et la sanction a déjà son geste
+   * (`suspend`), qui, lui, repasse les promos en brouillon.
+   */
+  async setPromoActiveCap(
+    commercantId: string,
+    plafond: number | null,
+  ): Promise<void> {
+    await this.findByIdOrFail(commercantId);
+    await this.commercants.update(
+      { id: commercantId },
+      { promoActiveCap: plafond },
+    );
+  }
+
+  /**
    * Suppression par l'admin/agent — même effet que l'auto-suppression du
    * commerçant (`deleteAccount`), déclenchée cette fois par l'admin/agent
    * (compte frauduleux, commerce fermé, changement de propriétaire...).
