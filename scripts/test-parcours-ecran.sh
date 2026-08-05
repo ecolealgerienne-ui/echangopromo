@@ -34,6 +34,9 @@
 #   inscription        un commerçant s'inscrit DEPUIS L'APP : formulaire,
 #                      photo du registre, conditions — puis le script vérifie
 #                      que le compte existe et que son registre est en attente.
+#   commune            l'état vide de l'accueil → choix d'une commune → les
+#                      promos DE CETTE COMMUNE apparaissent, et le choix est
+#                      retenu dans le magasin natif.
 #   client             l'accueil et la fiche : une promo fabriquée pour ce
 #                      passage est retrouvée par la recherche, ouverte, et son
 #                      COMPTEUR DE VUES monte côté serveur.
@@ -74,10 +77,11 @@ DEVICE_ID="parcours-ecran-0001"
 
 CHOIX="${1:-tous}"
 case "$CHOIX" in
-  tous|premier-lancement|plafond|creation|admin|agent|moderation|client|inscription|agent-creation) ;;
+  tous|premier-lancement|plafond|creation|admin|agent|moderation|client|inscription|agent-creation|commune) ;;
   *) echo "❌ Parcours inconnu : « $CHOIX »."
      echo "   Attendu : premier-lancement | plafond | creation | admin | agent"
      echo "             | moderation | client | inscription | agent-creation"
+     echo "             | commune"
      echo "             (rien = tous)"
      exit 2 ;;
 esac
@@ -88,7 +92,7 @@ esac
 BESOIN_COMMERCANT=non
 # `inscription` a besoin du décor UNIQUEMENT pour mesurer le plafond auprès du
 # serveur — le compte qu'il crée, lui, est neuf.
-case "$CHOIX" in tous|plafond|creation|client|inscription) BESOIN_COMMERCANT=oui ;; esac
+case "$CHOIX" in tous|plafond|creation|client|inscription|commune) BESOIN_COMMERCANT=oui ;; esac
 BESOIN_PRO=non
 case "$CHOIX" in tous|admin|agent|moderation|agent-creation) BESOIN_PRO=oui ;; esac
 
@@ -203,6 +207,56 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "creation" ]; then
   fi
 fi
 fi  # BESOIN_COMMERCANT
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "commune" ]; then
+# ── 2 quater. La commune du commerçant, par son NOM, et une de ses promos ───
+echo
+echo "── 2 quater. Sélection de commune ──"
+CID_COM="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ communeId)"
+[ -n "$CID_COM" ] || { echo "❌ communeId du commerçant illisible."; exit 2; }
+
+lire_commune() { # ID — → "wilaya|nom" depuis la liste des communes
+  "$PY" -c "import sys,json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('ILLISIBLE reponse non JSON'); sys.exit(0)
+items = d.get('items') if isinstance(d, dict) else d
+if not isinstance(items, list):
+    print('ILLISIBLE liste des communes inattendue'); sys.exit(0)
+for c in items:
+    if c.get('id') == '$1':
+        if not (c.get('wilaya') and c.get('nom')):
+            print('ILLISIBLE commune incomplete'); sys.exit(0)
+        print('%s|%s' % (c['wilaya'], c['nom'])); sys.exit(0)
+print('ILLISIBLE commune introuvable dans /commune')"
+}
+
+INFO_COM="$(curl -s "$API_URL/commune" -H "X-Device-Id: $DEVICE_ID" | lire_commune "$CID_COM")"
+case "$INFO_COM" in
+  ILLISIBLE*) echo "❌ commune — $INFO_COM"; exit 2 ;;
+esac
+COM_WILAYA="${INFO_COM%%|*}"
+COM_NOM="${INFO_COM#*|}"
+
+# Une promo réellement servie POUR CETTE COMMUNE : c'est elle que l'accueil
+# devra afficher une fois la commune choisie. Sans elle, le parcours vérifierait
+# « la liste s'est remplie » au lieu de « avec ce que ce filtre doit rendre ».
+COM_PROMO="$("$PY" -c "import sys,json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('ILLISIBLE reponse non JSON'); sys.exit(0)
+items = d.get('items') or []
+if not items:
+    print('ILLISIBLE aucune promo publiee dans cette commune'); sys.exit(0)
+print(items[0].get('description') or 'ILLISIBLE description vide')"   < <(curl -s "$API_URL/promo?communeIds=$CID_COM&limit=1" -H "X-Device-Id: $DEVICE_ID"))"
+case "$COM_PROMO" in
+  ILLISIBLE*) echo "❌ promo de référence — $COM_PROMO"
+              echo "   Le décor doit publier au moins une promo dans cette commune."
+              exit 2 ;;
+esac
+echo "✅ $COM_WILAYA / $COM_NOM · promo de référence : « $COM_PROMO »"
+fi
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "client" ]; then
 # ── 2 ter. Une promo À NOUS, pour que la recherche désigne UNE promo ────────
 #
@@ -582,6 +636,12 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "inscription" ]; then
       fi
     fi
   fi
+  echo
+fi
+
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "commune" ]; then
+  jouer parcours_selection_commune_test.dart "client — choisir sa commune"     --dart-define=TEST_WILAYA_NOM="$COM_WILAYA"     --dart-define=TEST_COMMUNE_NOM="$COM_NOM"     --dart-define=TEST_COMMUNE_ID="$CID_COM"     --dart-define=TEST_PROMO_DESC="$COM_PROMO"
+  noter "client — choisir sa commune ($COM_NOM)" $?
   echo
 fi
 

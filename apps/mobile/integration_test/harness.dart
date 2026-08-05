@@ -11,10 +11,18 @@
 ///
 /// L'app bascule fr/en/ar depuis juillet 2026 : ce n'est pas une précaution
 /// théorique.
+///
+/// ── ⚠️ `find.byType` compare le type EXACT ───────────────────────────────
+///
+/// Il ne matche pas les sous-classes. Les constructeurs `.icon` de Material
+/// (`FilledButton.icon`, `ElevatedButton.icon`…) rendent une sous-classe
+/// **privée** : `find.byType(FilledButton)` ne les voit pas. *Trouvé le
+/// 2026-08-05 sur l'invitation « choisir mes communes », bien affichée et
+/// pourtant introuvable.* Pour ces cas, `find.byWidgetPredicate((w) => w is
+/// FilledButton)`, qui accepte l'héritage.
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -241,35 +249,6 @@ String normaliserCompteur(String texte) =>
 // Désignation
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Ouvre une route comme le ferait un **lien entrant**, faute de porte au doigt.
-///
-/// ── Pourquoi ce n'est pas une entorse à la méthode ───────────────────────
-///
-/// Les autres parcours entrent par où l'utilisateur entre : un tap sur la
-/// barre d'onglets. `/admin` et `/agent` n'ont **aucune porte dans l'app** —
-/// vérifié le 2026-08-05, aucun écran ne navigue vers ces routes, les seules
-/// mentions hors du routeur sont des chemins d'API. Pour l'admin c'est une
-/// décision produit assumée (ne pas la rendre découvrable depuis l'app grand
-/// public) ; pour l'agent, c'est le même état de fait.
-///
-/// Leur entrée réelle est donc une URL. Un parcours qui les atteindrait
-/// autrement éprouverait un chemin qui n'existe pas.
-///
-/// ⚠️ On passe par le canal `flutter/navigation` de la plateforme, celui-là
-/// même qu'emprunte un lien profond ouvert depuis WhatsApp — pas par une API
-/// interne de navigation. Ce qui est joué est le vrai mécanisme d'entrée, y
-/// compris la redirection du routeur et le contrôle de rôle qui va avec.
-Future<void> ouvrirLien(WidgetTester tester, String chemin) async {
-  await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
-    'flutter/navigation',
-    const JSONMethodCodec().encodeMethodCall(
-      MethodCall('pushRouteInformation', <String, dynamic>{'location': chemin}),
-    ),
-    (_) {},
-  );
-  await tester.pump(const Duration(milliseconds: 800));
-}
-
 /// Fait défiler l'écran jusqu'à ce qu'une condition soit vraie.
 ///
 /// ⚠️ **Un formulaire plus long qu'un écran n'est pas entièrement construit.**
@@ -290,7 +269,16 @@ Future<void> defilerJusquaVrai(
 }) async {
   for (var i = 0; i < essais; i++) {
     if (condition()) return;
-    await tester.drag(find.byType(Scrollable).last, const Offset(0, -280));
+    // ⚠️ Rien à faire défiler tant que l'écran n'est pas bâti : `tester.drag`
+    // rendait « Bad state: No element » quand l'app démarrait encore. On pompe
+    // alors, ce qui fait de ce helper une attente doublée d'un défilement —
+    // sans jamais transformer une absence en succès, l'échec tombe au bout.
+    final zones = find.byType(Scrollable);
+    if (zones.evaluate().isEmpty) {
+      await tester.pump(const Duration(milliseconds: 300));
+      continue;
+    }
+    await tester.drag(zones.last, const Offset(0, -280));
     await tester.pump(const Duration(milliseconds: 250));
   }
   if (condition()) return;

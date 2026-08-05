@@ -712,6 +712,59 @@ C'est la démonstration de l'avertissement que ce fichier porte en tête : *un
 état périmé est pire qu'aucun état, il fait conclure*. Ici il a fait écrire un
 test qui éprouvait un chemin que personne n'emprunte.
 
+#### 🔓 Fermé — l'agent entre désormais par la porte de l'admin
+
+Point produit tranché par l'utilisateur : *« l'agent, c'est comme l'admin,
+seulement 2 fonctionnalités en moins, donc c'est la même entrée »*. Ce n'était
+donc pas une décision à documenter mais **un défaut à corriger**.
+
+La bascule e-mail de l'écran de connexion commerçant essaie maintenant
+`POST /admin/login` puis, **sur ce seul code `AUTH_INVALID_CREDENTIALS`**,
+`POST /agent/login`. Tout autre refus (429, panne, réseau) remonte tel quel :
+retenter à l'aveugle masquerait la vraie cause derrière un second échec.
+
+⚠️ **Le premier essai n'a rien changé, et pour une raison instructive** : le
+`on ApiException catch` ne matchait jamais. L'intercepteur de `ApiClient`
+**enveloppe** l'`ApiException` dans une `DioException` (`.error`) — un `catch`
+typé qui ne rattrape rien ne fait aucun bruit. D'où `apiErrorCode(error)`,
+posé à côté de `extractApiErrorMessage` qui portait déjà cette logique de
+déballage, et le commentaire du fichier qui disait déjà pourquoi : « sans
+dupliquer cette logique partout ».
+
+Conséquences : les deux parcours agent entrent désormais par la vraie porte, et
+`ouvrirLien` — écrit ce matin faute de mieux — **n'a plus d'appelant, donc il
+est supprimé** (règle #31). Vérifié : admin `37,60,0,1,3` et agent
+`23,27,0,0,3`, les deux au vert par le même chemin.
+
+#### Le choix des communes — l'écran vers lequel l'accueil pousse tout le monde
+
+Dixième parcours. L'état vide → l'invitation → la cascade → la case cochée →
+la confirmation → **et le retour, où les promos apparaissent**.
+
+L'assertion ne porte pas sur « des promos » mais sur **une promo précise**,
+servie par le serveur pour cette commune-là. Une sélection qui n'enverrait pas
+la commune au serveur afficherait, elle aussi, des promos. Et le magasin natif
+est relu à la fin : la sélection doit **survivre**, sinon l'utilisateur la
+refait à chaque lancement.
+
+⚠️ **Trois passages pour désigner un seul bouton**, et chacun a appris quelque
+chose :
+
+- `Icons.tune` existe **deux fois** sur l'accueil — les filtres de la barre du
+  haut, puis l'invitation. `.first` tapait sur les filtres ;
+- `find.byType(FilledButton)` ne le retrouve pas non plus : **`find.byType`
+  compare le type EXACT**, et `FilledButton.icon` construit une sous-classe
+  privée. `w is FilledButton` n'a pas suffi davantage ;
+- la désignation finale est **positionnelle, mais vérifiée** : le parcours
+  exige exactement deux icônes `tune` et échoue en le disant si l'écran en
+  gagne ou en perd une. Désigner par position sans contrôler la position,
+  c'est taper ailleurs en silence le jour où l'écran bouge.
+
+Au passage, `defilerJusquaVrai` plantait quand **aucun `Scrollable` n'existait
+encore** (app en cours de démarrage) : il pompe désormais au lieu de tirer, ce
+qui en fait une attente doublée d'un défilement — sans jamais transformer une
+absence en succès.
+
 #### L'agent crée un commerçant — son geste métier, et sa frontière
 
 Neuvième parcours. L'agent n'avait jusqu'ici qu'un tableau de bord éprouvé : un

@@ -39,10 +39,16 @@ admin dès qu'on y saisit un e-mail au lieu d'un numéro
 pas introuvable. ⚠️ **Cette phrase disait « accès direct par URL `/admin` »
 jusqu'au 2026-08-05, et c'était faux** — au point de faire écrire un parcours
 de test par lien profond alors que la vraie porte était à deux taps.
-**L'agent, lui, n'a aucune porte** : la bascule ci-dessus appelle
-`POST /admin/login`, qui ne connaît que la table `admins`. `AgentLoginScreen`
-et `POST /agent/login` existent et ne sont atteints par rien (voir
-`docs/status_v0.1.md`). Le concept de Zone opérationnelle (découpage interne dédié
+**L'agent passe par la même porte** — un agent, c'est un admin avec deux
+fonctionnalités en moins, pas un autre produit. La bascule essaie
+`POST /admin/login` puis, **sur ce seul code `AUTH_INVALID_CREDENTIALS`**,
+`POST /agent/login`. ⚠️ Jusqu'au 2026-08-05 elle n'essayait que l'admin, dont
+le service ne lit que la table `admins` : `AgentLoginScreen` et
+`POST /agent/login` existaient, étaient couverts par les bancs, et **rien dans
+l'app ne les atteignait** (règle #31). Coût assumé : une connexion d'agent
+consomme deux requêtes du seau strict (5/min/IP).
+
+Le concept de Zone opérationnelle (découpage interne dédié
 aux tournées d'agent) a été abandonné le 2026-07-09 : un agent est
 désormais rattaché directement à zéro, une ou plusieurs `Commune`
 (relation many-to-many), "assigner toute la wilaya" n'étant qu'une
@@ -346,6 +352,16 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
     backend et un mapping mobile est silencieuse : le message backend brut
     (toujours en français) s'affiche à la place du texte localisé prévu,
     sans erreur de compilation d'aucun côté pour le signaler.
+
+    ⚠️ **Et côté mobile, un `on ApiException catch` ne matche JAMAIS.**
+    L'intercepteur de `ApiClient` enveloppe l'`ApiException` dans une
+    `DioException` (`.error`) : tout `catch` qui raisonne sur le code doit
+    passer par `apiErrorCode(error)` / `extractApiErrorMessage(error, …)`, qui
+    déballent. *Trouvé le 2026-08-05 en ouvrant l'espace pro aux agents : le
+    repli « admin refusé, essayons agent » ne s'est jamais déclenché, et
+    l'écran affichait « Identifiants invalides » sur des identifiants
+    parfaitement valides — un `catch` typé qui ne rattrape rien ne fait aucun
+    bruit.*
 
 27. **Toute chaîne d'interface mobile ajoutée doit passer par
     `AppLocalizations`** (`lib/l10n/app_{fr,en,ar}.arb`), jamais un littéral

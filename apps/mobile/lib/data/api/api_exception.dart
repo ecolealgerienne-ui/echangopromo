@@ -80,3 +80,22 @@ String extractApiErrorMessage(Object error,
   }
   return fallback;
 }
+
+/// Le `code` backend d'une erreur d'appel API, ou `null` si l'erreur n'en
+/// porte pas.
+///
+/// ⚠️ **Le même enveloppement piège tout `catch` qui raisonne sur le code.**
+/// Un `on ApiException catch` ne matche jamais : l'intercepteur rend une
+/// [DioException] dont `.error` porte l'[ApiException]. *Trouvé le 2026-08-05
+/// en ouvrant l'espace pro aux agents — le repli « admin refusé, essayons
+/// agent » ne s'est jamais déclenché, et l'écran affichait « Identifiants
+/// invalides » sur des identifiants parfaitement valides.*
+///
+/// Rendre `null` plutôt qu'une chaîne vide : « pas de code » et « code vide »
+/// n'appellent pas le même geste (règle #29).
+String? apiErrorCode(Object error) {
+  if (error is DioException && error.error is ApiException) {
+    return (error.error as ApiException).code;
+  }
+  return null;
+}

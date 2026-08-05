@@ -40,11 +40,28 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
     super.dispose();
   }
 
-  /// Point d'entrée admin volontairement caché plutôt qu'une entrée de menu
+  /// Point d'entrée **pro** volontairement caché plutôt qu'une entrée de menu
   /// (un seul compte admin en V0, CLAUDE.md dette connue) : saisir un email
   /// au lieu d'un numéro de téléphone bascule ce même écran vers
-  /// l'authentification admin (email + mot de passe) sans rien changer à
+  /// l'authentification par email + mot de passe, sans rien changer à
   /// l'apparence du champ "téléphone" ni du reste de l'écran commerçant.
+  ///
+  /// ⚠️ **Admin ET agent passent par ici** — un agent, c'est un admin avec deux
+  /// fonctionnalités en moins, pas un autre produit. Jusqu'au 2026-08-05, cette
+  /// bascule n'essayait que `POST /admin/login`, dont le service ne lit que la
+  /// table `admins` : un agent y recevait « Identifiants invalides », et
+  /// `AgentLoginScreen` — qui existe, et que les bancs couvrent — n'était
+  /// atteint par **rien** dans l'app (règle #31). Un agent de terrain ne
+  /// pouvait tout simplement pas ouvrir son espace.
+  ///
+  /// L'admin est essayé d'abord, l'agent ensuite, et **uniquement** si le
+  /// refus porte le code « identifiants invalides » : un compte bloqué, un
+  /// serveur en panne ou un 429 doivent remonter tels quels, pas déclencher une
+  /// seconde tentative qui masquerait la vraie cause.
+  ///
+  /// ⚠️ Coût assumé : une connexion d'agent consomme **deux** requêtes du seau
+  /// strict (5/min/IP), contre une pour l'admin. C'est le prix d'une porte
+  /// unique tant que le serveur n'expose pas un point d'entrée pro commun.
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
@@ -55,15 +72,38 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
 
     try {
       if (_isAdminMode) {
-        final api = ref.read(adminApiProvider);
-        final token = await api.login(
-          email: _telephoneController.text.trim(),
-          password: _pinController.text,
-        );
+        final email = _telephoneController.text.trim();
+        final password = _pinController.text;
+        String? token;
+        var role = AppRole.admin;
+        try {
+          token = await ref.read(adminApiProvider).login(
+                email: email,
+                password: password,
+              );
+        } catch (error) {
+          // ⚠️ `on ApiException catch` ne marcherait PAS : l'intercepteur de
+          // `ApiClient` enveloppe l'`ApiException` dans une `DioException`.
+          // C'est ce piège qui a fait échouer le premier essai de ce repli.
+          //
+          // Seul « identifiants invalides » justifie de retenter en agent :
+          // tout autre refus (429, panne, réseau) doit remonter tel quel,
+          // sinon on masquerait la vraie cause derrière un second échec.
+          if (apiErrorCode(error) != 'AUTH_INVALID_CREDENTIALS') rethrow;
+          token = await ref.read(agentApiProvider).login(
+                email: email,
+                password: password,
+              );
+          role = AppRole.agent;
+        }
         await ref
             .read(authControllerProvider.notifier)
-            .login(AuthSession(role: AppRole.admin, token: token));
-        if (mounted) context.go('/admin/dashboard');
+            .login(AuthSession(role: role, token: token));
+        if (mounted) {
+          context.go(
+            role == AppRole.admin ? '/admin/dashboard' : '/agent/dashboard',
+          );
+        }
       } else {
         final token = await ref.read(commercantApiProvider).login(
               telephone: _telephoneController.text.trim(),

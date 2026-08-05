@@ -27,12 +27,11 @@
 /// l'agent (`GET /agent/me`), et le parcours les choisit **par leur texte** —
 /// des données de la base, pas des libellés traduits.
 ///
-/// ── ⚠️ L'entrée reste un lien, faute de porte ────────────────────────────
+/// ── L'entrée : la même que l'admin ───────────────────────────────────────
 ///
-/// Aucun écran de l'app ne mène à `/agent` : la bascule e-mail de la connexion
-/// commerçant appelle `POST /admin/login`, qui ne connaît que les admins. C'est
-/// un point produit ouvert, pas un choix de ce parcours — voir
-/// `docs/status_v0.1.md`. Le jour où une porte existe, seule l'étape 1 change.
+/// Barre d'onglets → connexion commerçant → e-mail. Un agent, c'est un admin
+/// avec deux fonctionnalités en moins, pas un autre produit. Cette porte ne
+/// servait que l'admin jusqu'au 2026-08-05 — voir `docs/status_v0.1.md`.
 ///
 /// ── Ce qu'il ne couvre PAS ───────────────────────────────────────────────
 ///
@@ -82,7 +81,12 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
 
     // ── 1. Entrer, se connecter ──────────────────────────────────────────
-    await ouvrirLien(tester, '/agent');
+    await pomperJusqua(
+      tester,
+      find.byIcon(Icons.storefront_outlined),
+      raison: 'la barre d’onglets client n’est pas apparue',
+    );
+    await taper(tester, find.byIcon(Icons.storefront_outlined));
     await pomperJusqua(
       tester,
       find.byType(TextFormField),

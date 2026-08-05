@@ -21,25 +21,19 @@
 /// seraient plausibles, simplement pas les siens. Comparer aux chiffres du
 /// serveur *pour ce rôle* est la seule façon de distinguer les deux.
 ///
-/// ── Les deux rôles n'entrent PAS par la même porte, et ça se voit ────────
+/// ── Une seule porte pour les deux rôles ──────────────────────────────────
 ///
-/// **L'admin entre par l'app**, exactement comme le commerçant : barre
-/// d'onglets → écran de connexion commerçant → **saisir un e-mail** au lieu
-/// d'un numéro fait basculer ce même écran en mode admin (mot de passe au lieu
-/// du PIN). Entrée volontairement discrète plutôt qu'une entrée de menu — un
-/// seul compte admin en V0. C'est cette porte-là que le parcours emprunte,
-/// puisque c'est celle de l'utilisateur.
+/// Barre d'onglets → écran de connexion commerçant → **saisir un e-mail** au
+/// lieu d'un numéro fait basculer ce même écran en mode pro (mot de passe au
+/// lieu du PIN). Entrée volontairement discrète plutôt qu'une entrée de menu.
 ///
-/// **L'agent n'a pas de porte.** Vérifié le 2026-08-05 : aucun écran ne mène à
-/// `/agent`, et la bascule e-mail ci-dessus appelle `POST /admin/login`, dont
-/// le service ne cherche que dans la table `admins` — un e-mail d'agent y rend
-/// « Identifiants invalides ». `AgentLoginScreen` et `POST /agent/login`
-/// existent, sont couverts par les bancs, et **rien dans l'app ne les
-/// atteint** (règle #31 : ce que le serveur sert doit avoir un appelant).
-///
-/// Le parcours agent entre donc par un lien, `ouvrirLien`, **faute de mieux et
-/// en le disant**. Le jour où une porte existe, seule l'étape d'entrée change
-/// ici — le reste du parcours est déjà le bon.
+/// ⚠️ **Cette porte n'a servi que l'admin jusqu'au 2026-08-05** : la bascule
+/// n'essayait que `POST /admin/login`, dont le service ne lit que la table
+/// `admins`, et un agent y recevait « Identifiants invalides ». Le parcours
+/// agent entrait alors par un lien profond, faute de mieux. La bascule tente
+/// désormais l'agent quand l'admin refuse pour identifiants invalides, et **les
+/// deux rôles empruntent ici le même chemin que l'utilisateur** — ce qui est
+/// tout l'intérêt de les jouer.
 ///
 /// ── Ce qu'il ne couvre PAS ───────────────────────────────────────────────
 ///
@@ -93,22 +87,13 @@ void main() {
     app.main();
     await tester.pump(const Duration(seconds: 2));
 
-    // ── 1. Entrer par la porte de CE rôle ────────────────────────────────
-    if (proRole == 'admin') {
-      // La vraie porte, celle de l'utilisateur : l'espace commerçant, dont
-      // l'écran de connexion bascule en mode admin dès qu'on saisit un
-      // e-mail. Aucun lien profond ici — ce serait éprouver un chemin que
-      // personne n'emprunte.
-      await pomperJusqua(
-        tester,
-        find.byIcon(Icons.storefront_outlined),
-        raison: 'la barre d’onglets client n’est pas apparue',
-      );
-      await taper(tester, find.byIcon(Icons.storefront_outlined));
-    } else {
-      // Faute de porte — voir l'en-tête. Le seul accès existant à ce jour.
-      await ouvrirLien(tester, '/agent');
-    }
+    // ── 1. Entrer par la porte, la même pour les deux rôles ──────────────
+    await pomperJusqua(
+      tester,
+      find.byIcon(Icons.storefront_outlined),
+      raison: 'la barre d’onglets client n’est pas apparue',
+    );
+    await taper(tester, find.byIcon(Icons.storefront_outlined));
 
     await pomperJusqua(
       tester,
