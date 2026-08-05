@@ -592,6 +592,23 @@ permet de reconnaître un cas nouveau relevant de la même règle.
     vérificateurs statiques, ni un banc HTTP — le serveur, lui, a toujours
     raison. Il faut un parcours qui **revienne** sur l'écran d'avant.
 
+38. **Une contre-mesure fondée sur une prémisse fausse accuse le produit — et
+    c'est le pire des faux négatifs, parce qu'il est crédible.** Un banc qui
+    échoue est cru ; on part corriger un code qui n'a rien. Avant d'écrire
+    « après ce geste, X doit baisser », établir que **X pouvait baisser** :
+    la quantité mesurée doit dépendre du geste, et l'objet visé doit être dans
+    l'état de départ qu'on lui suppose.
+    *Trouvé le 2026-08-05 : le parcours de modération exigeait que le nombre de
+    promos servies au public baisse de un après un masquage. Il rendait ❌ sur
+    un produit correct — `VISIBLE_MODERATION_STATUSES` ne contient que
+    `NORMALE` et `VERIFIEE_OK`, donc **une promo signalée est déjà hors du
+    public** avant toute décision admin. Masquer ne retire rien de visible : ça
+    rend le retrait définitif. Le total public ne pouvait pas bouger.*
+    Corollaire de la règle 28, en miroir : on y exige qu'un contrôle sache
+    refuser ; ici on exige qu'il sache **ne pas refuser à tort**. Les deux se
+    vérifient de la même façon — en regardant ce que le contrôle mesure
+    réellement, pas ce qu'on a voulu qu'il mesure.
+
 ### Règles de `echango-delivery` volontairement **non** reprises
 
 Une exclusion non écrite est indiscernable d'un oubli.

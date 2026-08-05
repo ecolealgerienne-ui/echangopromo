@@ -712,6 +712,38 @@ C'est la démonstration de l'avertissement que ce fichier porte en tête : *un
 état périmé est pire qu'aucun état, il fait conclure*. Ici il a fait écrire un
 test qui éprouvait un chemin que personne n'emprunte.
 
+#### La modération admin, et une contre-mesure qui accusait le produit
+
+Sixième parcours : **masquer une promo signalée depuis la file**, entrée par la
+porte admin (écran de connexion commerçant, mode e-mail) → tableau de bord →
+tuile « signalements » → menu de la tuile → `masquer`. L'action est désignée
+**par la valeur** de son `PopupMenuItem<String>`, jamais par son libellé.
+
+Choisi en premier parmi les treize écrans admin parce que c'est **le seul geste
+d'écran qui change ce que tous les clients voient** — et parce que l'écart
+était maximal : treize écrans, un seul atteint.
+
+⚠️ **Le premier passage a rendu ❌ sur un produit correct.** La contre-mesure
+exigeait que le nombre de promos servies au public baisse de un après le
+masquage. Or `VISIBLE_MODERATION_STATUSES` ne contient que `NORMALE` et
+`VERIFIEE_OK` : **une promo signalée est déjà hors du public** au moment du
+signalement. L'admin qui masque rend ce retrait définitif, il ne retire pas
+quelque chose de visible. Le total public ne pouvait pas bouger.
+
+Vérifié plutôt que supposé, avant toute conclusion : la promo masquée rend bien
+404 en public, la promo encore signalée **aussi**, et il existe exactement une
+`publiee/masquee`. C'est ce dernier point qui a tranché — le geste avait porté,
+c'est la mesure qui regardait ailleurs.
+
+C'est le pire des faux négatifs : un banc qui échoue est cru, et on part
+corriger un code qui n'a rien. D'où la **règle 38**. La contre-mesure vérifie
+désormais ce qui dépend réellement du geste : la file du serveur passe de `n` à
+`n-1`, **et c'est la promo visée qui en est sortie** — le compte seul ne
+distinguerait pas un masquage sur la mauvaise ligne.
+
+Rejoué après correction : file `1 → 0`, promo visée sortie, écran et serveur
+d'accord.
+
 #### 🔶 Ouvert — l'agent n'a aucune porte dans l'app
 
 Vérifié le 2026-08-05 : aucun écran ne navigue vers `/agent`, et la bascule

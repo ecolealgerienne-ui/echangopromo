@@ -31,6 +31,9 @@
 #                      serveur.
 #   agent              le même écran, avec le périmètre de l'agent — ses
 #                      compteurs ne sont PAS ceux de l'admin.
+#   moderation         masquer une promo signalée depuis la file admin, et
+#                      vérifier qu'elle disparaît AUSSI de ce que le public
+#                      reçoit. ⚠️ MODIFIE le décor — passe en dernier.
 #
 # ⚠️ **L'ordre n'est pas cosmétique.** `creation` publie une promo et change
 # donc `enLigne` ; il passe en dernier, après `plafond` qui compare à la mesure
@@ -63,9 +66,10 @@ DEVICE_ID="parcours-ecran-0001"
 
 CHOIX="${1:-tous}"
 case "$CHOIX" in
-  tous|premier-lancement|plafond|creation|admin|agent) ;;
+  tous|premier-lancement|plafond|creation|admin|agent|moderation) ;;
   *) echo "❌ Parcours inconnu : « $CHOIX »."
      echo "   Attendu : premier-lancement | plafond | creation | admin | agent"
+     echo "             | moderation"
      echo "             (rien = tous)"
      exit 2 ;;
 esac
@@ -76,7 +80,7 @@ esac
 BESOIN_COMMERCANT=non
 case "$CHOIX" in tous|plafond|creation) BESOIN_COMMERCANT=oui ;; esac
 BESOIN_PRO=non
-case "$CHOIX" in tous|admin|agent) BESOIN_PRO=oui ;; esac
+case "$CHOIX" in tous|admin|agent|moderation) BESOIN_PRO=oui ;; esac
 
 echo "════════════════════════════════════════════════════════════════"
 echo "  Parcours écran ($CHOIX) — décor, mesure, puis flutter drive"
@@ -242,6 +246,47 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent" ]; then
     echo "❌ mesure agent — $STATS_AGENT"; exit 2; }
   echo "✅ agent ($AGENT_EMAIL) → $STATS_AGENT"
 fi
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "moderation" ]; then
+  # ⚠️ **Ne PAS mesurer le total public ici.** La première version de cette
+  # contre-mesure exigeait qu'il baisse de un après un masquage, et rendait ❌
+  # sur un produit correct : `VISIBLE_MODERATION_STATUSES` ne contient que
+  # NORMALE et VERIFIEE_OK, donc une promo SIGNALÉE est déjà hors du public
+  # avant toute décision admin. Masquer ne retire rien de visible — ça rend le
+  # retrait définitif. Une contre-mesure fondée sur une prémisse fausse accuse
+  # le produit, et c'est le pire des faux négatifs parce qu'il est crédible.
+  #
+  # Ce qu'on mesure donc : la file, et **l'identité** de la promo visée. Le
+  # parcours masque la PREMIÈRE tuile ; l'écran affiche la file dans l'ordre
+  # que ce même endpoint rend.
+  JETON_ADMIN="$(curl -s -X POST "$API_URL/admin/login"     -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"     -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}"     | lire_champ accessToken)"
+  [ -n "$JETON_ADMIN" ] || { echo "❌ connexion admin refusée (429 déguisé ?)"; exit 2; }
+
+  lire_file() { # → "total id-du-premier" ; ILLISIBLE… sinon
+    "$PY" -c "import sys,json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('ILLISIBLE reponse non JSON'); sys.exit(0)
+items = d.get('items')
+total = d.get('total')
+if total is None or items is None:
+    print('ILLISIBLE champs total/items absents'); sys.exit(0)
+print(total, items[0]['id'] if items else '-')"
+  }
+
+  FILE_AVANT="$(curl -s "$API_URL/admin/moderation/queue"     -H "Authorization: Bearer $JETON_ADMIN" -H "X-Device-Id: $DEVICE_ID"     | lire_file)"
+  case "$FILE_AVANT" in
+    ILLISIBLE*) echo "❌ file de modération — $FILE_AVANT"; exit 2 ;;
+  esac
+  QUEUE_AVANT="${FILE_AVANT% *}"
+  PROMO_CIBLE="${FILE_AVANT#* }"
+  if [ "$QUEUE_AVANT" -eq 0 ]; then
+    echo "❌ La file de modération est vide : le parcours « moderation » n'a"
+    echo "   rien à masquer. Reposer le décor, qui crée les signalements."
+    exit 2
+  fi
+  echo "✅ file de modération : $QUEUE_AVANT   ·   promo visée : $PROMO_CIBLE"
+fi
 fi  # BESOIN_PRO
 
 # ── 3. Les parcours ─────────────────────────────────────────────────────────
@@ -363,6 +408,47 @@ fi
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent" ]; then
   jouer parcours_espace_pro_test.dart "espace pro — agent"     --dart-define=TEST_PRO_ROLE=agent     --dart-define=TEST_PRO_EMAIL="$AGENT_EMAIL"     --dart-define=TEST_PRO_PASSWORD="$AGENT_PASSWORD"     --dart-define=TEST_PRO_STATS="$STATS_AGENT"
   noter "espace pro — agent ($STATS_AGENT)" $?
+  echo
+fi
+
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "moderation" ]; then
+  jouer parcours_admin_moderation_test.dart "modération admin"     --dart-define=TEST_PRO_EMAIL="$ADMIN_EMAIL"     --dart-define=TEST_PRO_PASSWORD="$ADMIN_PASSWORD"     --dart-define=TEST_QUEUE="$QUEUE_AVANT"
+  CODE_MODERATION=$?
+  noter "modération admin (file de $QUEUE_AVANT)" $CODE_MODERATION
+
+  # ── Contre-mesure : le serveur a-t-il bougé, et sur LA BONNE promo ? ─────
+  #
+  # L'écran a montré une tuile de moins. Un écran qui retirerait la tuile sans
+  # que le serveur bouge donnerait le même vert — et un écran qui masquerait la
+  # mauvaise promo aussi. D'où les deux vérifications : le compte, et
+  # l'identité.
+  if [ "$CODE_MODERATION" -eq 0 ]; then
+    echo
+    echo "── contre-mesure : la file, côté serveur ──"
+    FILE_APRES="$(curl -s "$API_URL/admin/moderation/queue"       -H "Authorization: Bearer $JETON_ADMIN" -H "X-Device-Id: $DEVICE_ID"       | lire_file)"
+    case "$FILE_APRES" in
+      ILLISIBLE*)
+        echo "⚠️  file illisible après coup — la contre-mesure n'a PAS eu lieu."
+        echo "    Ce n'est pas un échec du parcours, c'est une absence de"
+        echo "    vérification : $FILE_APRES"
+        noter "contre-mesure serveur (non concluante)" 1 ;;
+      *)
+        QUEUE_APRES="${FILE_APRES% *}"
+        TETE_APRES="${FILE_APRES#* }"
+        if [ "$QUEUE_APRES" -ne $((QUEUE_AVANT - 1)) ]; then
+          echo "❌ la file du serveur compte $QUEUE_APRES, attendu $((QUEUE_AVANT - 1))."
+          echo "   La tuile a disparu de l'écran sans que le serveur bouge."
+          noter "contre-mesure serveur" 1
+        elif [ "$TETE_APRES" = "$PROMO_CIBLE" ]; then
+          echo "❌ la promo visée ($PROMO_CIBLE) est TOUJOURS en tête de file."
+          echo "   Le compte a baissé, mais c'est une autre promo qui est sortie."
+          noter "contre-mesure serveur" 1
+        else
+          echo "✅ file $QUEUE_AVANT → $QUEUE_APRES, et $PROMO_CIBLE en est sortie"
+          noter "contre-mesure serveur" 0
+        fi ;;
+    esac
+  fi
   echo
 fi
 

@@ -56,6 +56,10 @@ const String proRole = String.fromEnvironment('TEST_PRO_ROLE');
 const String proEmail = String.fromEnvironment('TEST_PRO_EMAIL');
 const String proPassword = String.fromEnvironment('TEST_PRO_PASSWORD');
 
+/// Nombre d'éléments dans la file de modération, **servi par le serveur**
+/// (`GET /admin/moderation/queue`, champ `total`).
+const String queueAttendue = String.fromEnvironment('TEST_QUEUE');
+
 /// Les cinq compteurs du tableau de bord, **tels que le serveur les sert à ce
 /// rôle-là**, séparés par des virgules (`GET /admin/dashboard`).
 ///
