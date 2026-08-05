@@ -189,6 +189,8 @@ describe('HighlightService', () => {
   });
 
   describe('findForClient', () => {
+    const COMMUNE = ['11111111-1111-4111-8111-111111111111'];
+
     it("retombe sur le classement calculé quand aucune curation n'existe", async () => {
       highlights.find.mockResolvedValue([]);
       promoService.findActiveForClient.mockResolvedValue({
@@ -198,12 +200,43 @@ describe('HighlightService', () => {
         limit: 8,
       });
 
-      const slides = await service.findForClient();
+      const slides = await service.findForClient(COMMUNE);
 
       expect(slides).toHaveLength(1);
       expect(slides[0].curated).toBe(false);
       // Identifiant préfixé : il ne désigne aucune ligne `highlight`.
       expect(slides[0].id).toBe('auto-p1');
+    });
+
+    it('transmet bien la commune au classement de repli', async () => {
+      highlights.find.mockResolvedValue([]);
+      promoService.findActiveForClient.mockResolvedValue({
+        items: [],
+        total: 0,
+        page: 1,
+        limit: 8,
+      });
+
+      await service.findForClient(COMMUNE);
+
+      const [query] = promoService.findActiveForClient.mock
+        .calls[0] as unknown as [{ communeIds?: string[] }];
+      expect(query.communeIds).toEqual(COMMUNE);
+    });
+
+    // ⚠️ Le cas fondateur (2026-08-05). `findActiveForClient` traite
+    // `communeIds` vide comme AUCUN FILTRE, pas comme AUCUNE COMMUNE : le
+    // repli composait donc une vitrine « Top promos » tirée de toutes les
+    // communes pour un client qui n'en a choisi aucune. Mieux vaut ne rien
+    // montrer que montrer faux — et l'app replie d'elle-même un bandeau vide.
+    it('ne compose AUCUN repli sans commune — une vitrine vide plutôt que fausse', async () => {
+      highlights.find.mockResolvedValue([]);
+
+      expect(await service.findForClient()).toEqual([]);
+      expect(await service.findForClient([])).toEqual([]);
+      // Décisif : la requête ne part même pas. La tester par son résultat
+      // seul laisserait passer un filtre appliqué puis ignoré.
+      expect(promoService.findActiveForClient).not.toHaveBeenCalled();
     });
 
     it("écarte une diapositive dont la promo n'est plus visible, et bascule sur le repli si plus rien ne reste", async () => {
@@ -216,10 +249,21 @@ describe('HighlightService', () => {
         limit: 8,
       });
 
-      const slides = await service.findForClient();
+      const slides = await service.findForClient(COMMUNE);
 
       expect(slides).toHaveLength(1);
       expect(slides[0].curated).toBe(false);
+    });
+
+    it('sert la curation même sans commune — elle est globale par décision produit', async () => {
+      highlights.find.mockResolvedValue([
+        makeHighlight({ promoId: null, titre: 'Ramadan' }),
+      ]);
+
+      const slides = await service.findForClient();
+
+      expect(slides).toHaveLength(1);
+      expect(slides[0].curated).toBe(true);
     });
 
     it("garde une affiche sans promo tant qu'elle porte une image", async () => {

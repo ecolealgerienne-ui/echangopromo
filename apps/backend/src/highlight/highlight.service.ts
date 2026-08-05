@@ -120,15 +120,41 @@ export class HighlightService {
     return displayable;
   }
 
-  /** Comportement d'avant la curation : les plus fortes réductions. */
+  /**
+   * Comportement d'avant la curation : les plus fortes réductions.
+   *
+   * ⚠️ **Sans commune, on ne replie pas — on ne montre rien.**
+   * `findActiveForClient` traite `communeIds` vide comme *aucun filtre*
+   * (`if (query.communeIds?.length)`), pas comme *aucune commune*. Le repli
+   * composait donc, pour un client qui n'a rien configuré, une vitrine
+   * « Top promos » tirée de **toutes** les communes — présentée en tête de son
+   * accueil comme si elle était la sienne.
+   *
+   * Le défaut ne se voyait pas, et pour deux raisons qui cessent d'être vraies
+   * en même temps : la curation admin est active, donc le repli ne se
+   * déclenche jamais ; et le pilote est mono-wilaya, donc « toutes les
+   * communes » reste plausible. À l'extension multi-wilaya, une simple
+   * expiration de diapositive suffirait à afficher des promos d'une autre
+   * wilaya (constaté le 2026-08-05, même motif que `PromoListController`).
+   *
+   * Une vitrine **vide** est le bon résultat ici : l'app la replie d'elle-même
+   * (`_TopPromosSection`), et l'accueil demande déjà au client de choisir ses
+   * communes juste en dessous. Mieux vaut ne rien montrer que montrer faux
+   * (règle #29).
+   *
+   * ⚠️ Ne concerne **que** ce repli. Les diapositives curées restent globales
+   * par décision produit — voir `ListHighlightQueryDto`.
+   */
   private async buildFallbackSlides(
     communeIds?: string[],
   ): Promise<HighlightSlide[]> {
+    if (!communeIds?.length) return [];
+
     const result = await this.promoService.findActiveForClient({
       page: 1,
       limit: HIGHLIGHT_FALLBACK_LIMIT,
       sort: PromoSortOrder.DISCOUNT,
-      ...(communeIds?.length ? { communeIds } : {}),
+      communeIds,
     });
     return result.items.map((promo) => ({
       // Préfixé : cet identifiant n'est pas celui d'une ligne `highlight`,
