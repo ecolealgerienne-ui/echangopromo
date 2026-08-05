@@ -573,11 +573,57 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
    geste sans effet). ~~`test-admin-audit-log`~~ **écrit le 2026-08-05** —
    7 contrôles, 0 échec, et une sonde corrigée après mutation.
    ~~`test-storage-upload`~~ **écrit le 2026-08-05** — 6 contrôles, 0 échec,
-   l'upload atteint enfin un vrai bucket. Restent 19 bancs de la matrice §6.
+   l'upload atteint enfin un vrai bucket.
+   ~~`test-commercant-autosuppression`~~ **écrit le 2026-08-05** — 8
+   contrôles, 0 échec, dont une sonde de rayon d'action. Les trois bancs
+   que l'ordre d'écriture plaçait en tête sont désormais tous écrits.
+   Restent 18 bancs de la matrice §6.
 
 ---
 
 ## Journal
+
+### 2026-08-05 (nuit) — `test-commercant-autosuppression` : l'action sans retour
+
+Cinquième banc métier, et le dernier des trois que l'ordre d'écriture de
+`TEST_PROMO.md` §6 plaçait avant tous les autres — *les actions
+irréversibles*. `DELETE /commercant/me` n'avait **aucun test** (T4).
+
+**Verdict : 8 contrôles, 0 échec.** Auto-test 13 cas dont 9 refus.
+
+La route fait trois choses d'un coup — marquer le compte supprimé, révoquer la
+session, effacer les promos — et **chacune peut manquer sans que rien ne le
+dise**. Les cinq sondes :
+
+| Sonde | Constat |
+|---|---|
+| session révoquée | `401 AUTH_TOKEN_REVOKED` |
+| promo retirée du client | oui |
+| ancien PIN inopérant | `400 AUTH_INVALID_CREDENTIALS` |
+| numéro libéré (P10) | repris par un nouveau compte |
+| **rayon d'action** | voisin et sa promo intacts |
+
+**La cinquième est celle qui manquerait ailleurs.** Un `update()` dont le
+critère aurait sauté effacerait la base entière — et les quatre premières
+sondes n'y verraient rien, puisqu'elles ne regardent que la victime. Le banc
+crée donc **deux** commerçants et n'en supprime qu'un.
+
+**Prouvé par mutation** : en retirant l'incrément de `tokenVersion`, **seule**
+la sonde de révocation tombe — *« le jeton du compte supprimé fonctionne ENCORE
+— il reste exploitable jusqu'à expiration (30 j) »*. C'est la règle 6 dans son
+énoncé exact.
+
+⚠️ **Le banc ne touche jamais au commerçant du décor** : l'action est sans
+retour, et aucune sonde ne justifie de détruire ce dont les autres bancs ont
+besoin. Il crée les siens, par l'agent — ce qui évite au passage le seau strict
+de 5 connexions/minute que `register` partage avec les logins.
+
+⚠️ Un défaut de décor au premier passage, à noter parce qu'il ressemblait à une
+panne applicative : mes numéros faisaient **dix** chiffres après `+213` au lieu
+de neuf, et `@IsPhoneNumber('DZ')` les refusait. « Création refusée
+(VALIDATION_ERROR) » désignait le banc, pas le serveur.
+
+---
 
 ### 2026-08-05 (nuit) — `test-storage-upload` : l'upload atteint enfin un vrai bucket
 
