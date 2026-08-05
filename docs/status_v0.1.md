@@ -610,15 +610,24 @@ ne peut pas se lire à deux vitesses : on la refait, on ne l'annote pas.
    contrôle d'étanchéité a été **vu refuser** sur une photo de promo publique
    de la production (`--prouver`).
 
-   **Reste hors dépôt, et c'est tout ce qui manque** :
-   - remplir `~/.echango-backup.env` (modèle : `scripts/backup.env.example`,
-     `chmod 600` — le script refuse un autre mode) avec une **clé S3 dédiée**,
-     distincte de celle de l'application : sinon qui compromet l'app peut
-     effacer les sauvegardes ;
-   - ranger `BACKUP_PASSPHRASE` **ailleurs que sur la machine sauvegardée** —
-     la perdre rend toutes les sauvegardes illisibles ;
-   - la brancher sur une tâche planifiée (`0 3 * * *`), en surveillant le
-     **code de sortie**, pas la présence du fichier.
+   Le rapatriement aussi (`--lister`, `--rapatrier`) : ni `aws`, ni `rclone`,
+   ni `s3cmd` n'existent sur ces machines, donc sans ces deux modes une
+   sauvegarde partie chez OVH **n'aurait pas pu être récupérée** le jour de
+   l'incident — après des mois de « ✅ » chaque nuit. Éprouvé : rapatrié,
+   déchiffré, octet pour octet identique à la source, et restauré (13 tables).
+
+   **Reste hors dépôt** — la configuration porte une clé S3 et une phrase de
+   passe, elle ne peut pas être versionnée. Procédure complète, dans l'ordre,
+   avec les valeurs propres au VPS : **`docs/DEPLOIEMENT_VPS.md` §
+   Sauvegardes**. En un mot : une clé S3 **dédiée** (pas celle de l'app), la
+   phrase de passe rangée **ailleurs que sur la machine sauvegardée**, et le
+   cron qu'on surveille par son **code de sortie**.
+
+   ⚠️ **Une étape reste non éprouvée** : la rétention distante, jamais
+   exécutée contre OVH (le banc local tourne contre MinIO, qui ne fait pas de
+   virtual-hosted et répond par la liste des *dépôts* — le script le détecte
+   et rend `non concluant` au lieu de conclure « rien à purger »). Le premier
+   passage sur le VPS est le seul juge.
 
    ⚠️ **Au passage, un fait qui a décidé le choix du dépôt.** Mesuré en
    anonyme le 2026-08-05 : `echango-private` refuse tout (403, même sur une clé

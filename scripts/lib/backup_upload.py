@@ -59,6 +59,18 @@ montré.
     python3 scripts/lib/backup_upload.py --prouver          # contrôle vs objet public réel
     python3 scripts/lib/backup_upload.py --envoyer <fichier.dump>
 
+    # ── le jour où l'on en a besoin ─────────────────────────────────────────
+    set -a; . ~/.echango-backup.env; set +a
+    python3 scripts/lib/backup_upload.py --lister
+    python3 scripts/lib/backup_upload.py --rapatrier db-backups/xxx.dump.gpg [dest]
+
+⚠️ `--lister` et `--rapatrier` ne sont pas du confort. Ni `aws`, ni `rclone`,
+ni `s3cmd` ne sont installés sur les machines de ce projet : sans eux, une
+sauvegarde partie chez OVH ne pourrait **pas être récupérée** le jour de
+l'incident, avec un script qui aurait pourtant dit « ✅ » chaque nuit pendant
+des mois. Une sauvegarde qu'on ne sait pas rapatrier n'est pas une sauvegarde
+— même raisonnement exactement que « un dump qu'on n'a jamais restauré ».
+
 Appelé automatiquement par `backup_db.py` (étape 4).
 """
 
@@ -396,6 +408,15 @@ def chiffrer(source, destination, phrase):
     return r.returncode, r.stderr.decode("utf-8", "replace")
 
 
+def dechiffrer_vers_fichier(chemin_chiffre, destination, phrase):
+    """Rend (code_sortie, message d'erreur)."""
+    r = subprocess.run(
+        ["gpg", "--batch", "--yes", "--quiet", "--decrypt",
+         "--passphrase-fd", "0", "--output", destination, chemin_chiffre],
+        input=phrase.encode("utf-8"), capture_output=True)
+    return r.returncode, r.stderr.decode("utf-8", "replace")
+
+
 def dechiffrer_vers_sha(chemin_chiffre, phrase):
     """Déchiffre en mémoire et rend le SHA-256 — ou None si ça ne s'ouvre pas.
 
@@ -413,6 +434,92 @@ def dechiffrer_vers_sha(chemin_chiffre, phrase):
 # ─────────────────────────────────────────────────────────────────────────────
 # Le flux complet
 # ─────────────────────────────────────────────────────────────────────────────
+
+def lister_distant(env):
+    """Rend (verdict, explication, [clés]). Une seule implémentation du
+    listage — la rétention et le rapatriement s'en servent tous les deux, et
+    si l'analyse de la réponse change, elle doit changer pour les deux
+    (règle 30, branche « oui ⇒ un seul endroit »)."""
+    prefixe = env.get("BACKUP_S3_PREFIX") or PREFIXE_DEFAUT
+    code, corps, _ = requete_s3("GET", env, "", parametres={
+        "list-type": "2", "prefix": prefixe, "max-keys": "1000"})
+
+    racine, tronque = None, False
+    if code == 200 and corps:
+        try:
+            arbre = ET.fromstring(corps)
+            racine = arbre.tag.split("}")[-1]
+            tronque = any(e.tag.split("}")[-1] == "IsTruncated"
+                          and (e.text or "").lower() == "true"
+                          for e in arbre.iter())
+        except ET.ParseError:
+            racine = "illisible"
+
+    v, expl = verdict_listage(code, racine, tronque)
+    if v != "ok":
+        return v, expl, []
+    cles = [e.text for e in ET.fromstring(corps).iter()
+            if e.tag.split("}")[-1] == "Key" and e.text]
+    return "ok", "%d sauvegarde(s) distante(s)" % len(cles), sorted(cles)
+
+
+def telecharger(env, cle, destination):
+    """Rapatrie un objet EN FLUX vers un fichier.
+
+    ⚠️ Pas via `requete_s3`, qui rend le corps en mémoire : une base de
+    plusieurs gigaoctets y tiendrait mal, et le jour où l'on rapatrie est
+    précisément celui où l'on n'a pas envie d'un MemoryError.
+    """
+    hote, schema = _hote_virtuel(env["BACKUP_S3_ENDPOINT"], env["BACKUP_S3_BUCKET"])
+    chemin = "/" + urllib.parse.quote(cle, safe="/~")
+    sha_vide = hashlib.sha256(b"").hexdigest()
+    entetes = signer("GET", hote, chemin, None, sha_vide,
+                     env["BACKUP_S3_ACCESS_KEY_ID"],
+                     env["BACKUP_S3_SECRET_ACCESS_KEY"],
+                     env["BACKUP_S3_REGION"])
+    requete = urllib.request.Request("%s://%s%s" % (schema, hote, chemin),
+                                     method="GET")
+    for k, v in entetes.items():
+        requete.add_header(k, v)
+    try:
+        with urllib.request.urlopen(requete, timeout=DELAI) as r, \
+                open(destination, "wb") as sortie:
+            for bloc in iter(lambda: r.read(1024 * 1024), b""):
+                sortie.write(bloc)
+        return r.status, None
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode("utf-8", "replace")[:200]
+    except Exception as e:
+        return None, str(e)
+
+
+def rapatrier(env, cle, destination):
+    """Télécharge et déchiffre. Rend 0 si tout s'est bien passé."""
+    chiffre = destination + ".gpg" if cle.endswith(".gpg") else destination
+    code, err = telecharger(env, cle, chiffre)
+    if code != 200:
+        print("❌ téléchargement : HTTP %s %s" % (code, err or ""))
+        return 1
+    print("✅ téléchargé : %s (%.1f Mo)"
+          % (chiffre, os.path.getsize(chiffre) / 1024 / 1024))
+
+    if not cle.endswith(".gpg"):
+        return 0
+
+    phrase = env.get("BACKUP_PASSPHRASE") or ""
+    if not phrase:
+        print("⚠️  BACKUP_PASSPHRASE absente — le fichier reste chiffré.")
+        return 1
+    code, err = dechiffrer_vers_fichier(chiffre, destination, phrase)
+    if code != 0:
+        print("❌ déchiffrement impossible : %s" % err[:200])
+        print("   Le fichier chiffré est conservé : %s" % chiffre)
+        return 1
+    os.remove(chiffre)
+    print("✅ déchiffré  : %s (%.1f Mo)"
+          % (destination, os.path.getsize(destination) / 1024 / 1024))
+    return 0
+
 
 def lire_config(env=None):
     env = dict(env if env is not None else os.environ)
@@ -507,27 +614,11 @@ def _televerser(fichier, a_envoyer, suffixe, env, noter):
 
     # ── Rétention distante ─────────────────────────────────────────────────
     garder = int(env.get("BACKUP_GARDER_DISTANT") or GARDER_DISTANT_DEFAUT)
-    code, corps, _ = requete_s3("GET", env, "", parametres={
-        "list-type": "2", "prefix": prefixe, "max-keys": "1000"})
-
-    racine, tronque = None, False
-    if code == 200 and corps:
-        try:
-            arbre = ET.fromstring(corps)
-            racine = arbre.tag.split("}")[-1]
-            tronque = any(e.tag.split("}")[-1] == "IsTruncated"
-                          and (e.text or "").lower() == "true"
-                          for e in arbre.iter())
-        except ET.ParseError:
-            racine = "illisible"
-
-    v, expl = verdict_listage(code, racine, tronque)
+    v, expl, cles = lister_distant(env)
     if v != "ok":
         noter("rétention distante", v, "%s — les anciennes s'accumulent" % expl)
         return
 
-    cles = [e.text for e in ET.fromstring(corps).iter()
-            if e.tag.split("}")[-1] == "Key" and e.text]
     vieilles = a_supprimer_distant(cles, garder)
     for k in vieilles:
         requete_s3("DELETE", env, k)
@@ -663,9 +754,41 @@ def prouver():
     return True
 
 
+def _env_prete():
+    env = lire_config()
+    v, expl = verdict_configuration(
+        env, (env.get("BACKUP_REMOTE") or "").strip().lower())
+    if v != "ok":
+        print("❌ %s" % expl)
+        print("   (le fichier ~/.echango-backup.env n'est PAS lu ici — ce "
+              "module lit l'environnement.\n    Le charger d'abord : "
+              "set -a; . ~/.echango-backup.env; set +a)")
+        sys.exit(2)
+    return env
+
+
 if __name__ == "__main__":
     if "--self-test" in sys.argv:
         sys.exit(0 if self_test() else 1)
+    if "--lister" in sys.argv:
+        env = _env_prete()
+        v, expl, cles = lister_distant(env)
+        if v != "ok":
+            print("⚠️  %s" % expl)
+            sys.exit(1)
+        print(expl)
+        for k in cles:
+            print("  %s" % k)
+        sys.exit(0)
+    if "--rapatrier" in sys.argv:
+        i = sys.argv.index("--rapatrier")
+        if i + 1 >= len(sys.argv):
+            print("❌ --rapatrier attend une clé (voir --lister)")
+            sys.exit(2)
+        cle_demandee = sys.argv[i + 1]
+        dest = (sys.argv[i + 2] if i + 2 < len(sys.argv)
+                else os.path.basename(cle_demandee).replace(".gpg", ""))
+        sys.exit(rapatrier(_env_prete(), cle_demandee, dest))
     if "--prouver" in sys.argv:
         sys.exit(0 if prouver() else 1)
     if "--envoyer" in sys.argv:
