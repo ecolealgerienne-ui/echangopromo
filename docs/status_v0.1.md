@@ -577,11 +577,67 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
    ~~`test-commercant-autosuppression`~~ **écrit le 2026-08-05** — 8
    contrôles, 0 échec, dont une sonde de rayon d'action. Les trois bancs
    que l'ordre d'écriture plaçait en tête sont désormais tous écrits.
-   Restent 18 bancs de la matrice §6.
+   ~~`test-admin-dashboard`~~ **écrit le 2026-08-05** — 9 contrôles, 0
+   échec, et un décor corrigé au passage (il affirmait le rattachement des
+   agents sans jamais le vérifier). Restent 17 bancs de la matrice §6.
 
 ---
 
 ## Journal
+
+### 2026-08-05 (nuit) — `test-admin-dashboard`, et un décor qui affirmait sans vérifier
+
+Sixième banc métier. Le tableau de bord est le seul endroit du produit où l'on
+regarde des **nombres** plutôt que des objets — un chiffre faux a toujours
+l'air juste, et rien dans l'interface ne le contredit. Deux défauts y sont déjà
+nés : le surcompte des promos actives (cas fondateur de la **règle 8**) et
+`countPendingModeration` rendant 6 pour 2.
+
+**Verdict : 9 contrôles, 0 échec.** Auto-test 17 cas dont 10 refus.
+
+**Mais la première version de ses sondes de cloisonnement ne valait rien.**
+Comparer un agent à l'admin par `≤` passait sur « agent 48 ≤ admin 48 » — une
+égalité qui est aussi bien le résultat normal d'un agent couvrant presque tout
+le territoire que celui d'un périmètre **purement disparu**. La sonde ne
+pouvait pas distinguer les deux.
+
+Remplacée par une sonde qui ne peut pas passer par accident : **deux agents aux
+communes disjointes ne peuvent pas totaliser plus que la vue globale**, et
+leurs listes de commerçants ne peuvent avoir aucun élément commun.
+
+**Et cette sonde a trouvé autre chose que ce qu'elle cherchait.** Elle a rougi —
+à tort. Vérification faite : agent A portait **quatre** communes, dont celle de
+l'agent B. Les deux territoires, annoncés disjoints, se chevauchaient.
+
+La cause est dans le décor : **les communes n'étaient posées qu'à la CRÉATION
+de l'agent.** Sur un agent déjà existant, `provision-decor.sh` se connectait
+puis imprimait `Agent A connecté — commune « Ain Chouhada »` — **une
+affirmation, pas une mesure**. Agent A avait accumulé ses communes au fil des
+sessions sans que rien ne le signale.
+
+Ce n'est pas un défaut de confort : **`test-appartenance` repose entièrement
+sur cette disjonction**, l'agent B y servant d'intrus. S'il partage une commune
+avec A, la sonde éprouve un refus qui n'avait pas lieu d'être — et reste verte.
+
+Corrigé : `assurer_communes()` lit `/agent/me`, réassigne si l'état diffère, et
+**relit après écriture** — c'est l'état final qui compte, pas le code de sortie
+de la requête qui prétend l'avoir posé. Le décor imprime désormais
+« (vérifiée) ». Au premier passage il a annoncé *« Agent A : rattachement à
+corriger (actuel : 4 communes) »*.
+
+Et la sonde **énonce et vérifie sa prémisse** : si les territoires ne sont pas
+disjoints, elle rend **non concluant** — elle ne rougit pas, et ne verdit pas
+non plus.
+
+`test-appartenance` rejoué après la correction du territoire : **14 sondes, 0
+échec**.
+
+⚠️ **Troisième fois de la soirée** qu'une sonde verte s'est révélée mesurer
+autre chose que ce qu'elle annonçait — après `test-admin-highlight` (deux
+gardes produisant le même effet) et `test-admin-audit-log` (des traces
+anciennes). Ici, c'est la sonde renforcée qui a démasqué le décor.
+
+---
 
 ### 2026-08-05 (nuit) — `test-commercant-autosuppression` : l'action sans retour
 

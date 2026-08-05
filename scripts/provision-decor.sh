@@ -140,7 +140,45 @@ if [ -z "$AGENT_TOKEN" ]; then
   AGENT_TOKEN="$(agent_login)"
   [ -n "$AGENT_TOKEN" ] || fail "Connexion agent impossible après création"
 fi
-pass "Agent A connecté ($D_AGENT_EMAIL) — commune « $COMMUNE_NOM »"
+# ⚠️ **Le rattachement est VÉRIFIÉ, pas annoncé** (2026-08-05).
+#
+# Les communes n'étaient posées qu'à la CRÉATION de l'agent. Sur un agent déjà
+# existant, le décor se contentait de se connecter puis d'imprimer
+# « commune « Ain Chouhada » » — une affirmation, pas une mesure. Agent A avait
+# ainsi accumulé QUATRE communes au fil des sessions, dont celle de l'agent B :
+# les deux territoires, annoncés disjoints, se chevauchaient.
+#
+# Ce n'est pas un détail de confort. `test-appartenance` repose entièrement sur
+# cette disjonction : l'agent B y sert d'intrus, et s'il partage une commune
+# avec A, la sonde teste un refus qui n'avait pas lieu d'être. Un décor qui
+# affirme sans vérifier fabrique exactement le genre de banc qui rassure.
+assurer_communes() { # JETON_AGENT EMAIL COMMUNE_ID LIBELLE
+  local tok="$1" email="$2" commune="$3" libelle="$4"
+  local actuelles
+  actuelles="$(api GET /agent/me '' "$tok" | jq -r '[.communes[]?.id] | sort | join(",")')"
+  if [ "$actuelles" = "$commune" ]; then
+    return 0
+  fi
+  info "$libelle : rattachement à corriger (actuel : ${actuelles:-aucun})"
+  local aid
+  aid="$(api GET "/admin/agent?limit=100" '' "$ADMIN_TOKEN" \
+    | jq -r --arg e "$email" '.items[]? | select(.email == $e) | .id' | head -1)"
+  [ -n "$aid" ] || fail "$libelle introuvable dans /admin/agent"
+  out="$(api PATCH "/admin/agent/$aid/communes" \
+    "$(jq -n --arg c "$commune" '{communeIds:[$c]}')" "$ADMIN_TOKEN")"
+  echo "$out" | est_erreur && fail "$libelle : réassignation refusée" \
+    "$(echo "$out" | jq -c '{code,message}')"
+  sleep "$PACE"
+  # Relu APRÈS écriture : c'est l'état final qui compte, pas le code de sortie
+  # de la requête qui prétend l'avoir posé.
+  actuelles="$(api GET /agent/me '' "$tok" | jq -r '[.communes[]?.id] | sort | join(",")')"
+  [ "$actuelles" = "$commune" ] || fail \
+    "$libelle : rattachement toujours faux après réassignation" \
+    "attendu $commune, obtenu ${actuelles:-aucun}"
+}
+
+assurer_communes "$AGENT_TOKEN" "$D_AGENT_EMAIL" "$COMMUNE_ID" "Agent A"
+pass "Agent A connecté ($D_AGENT_EMAIL) — commune « $COMMUNE_NOM » (vérifiée)"
 
 # ── Agent B : l'intrus du banc d'appartenance ────────────────────────────────
 agent_b_login() {
@@ -160,7 +198,15 @@ if [ -z "$AGENT_B_TOKEN" ]; then
   AGENT_B_TOKEN="$(agent_b_login)"
   [ -n "$AGENT_B_TOKEN" ] || fail "Connexion agent B impossible après création"
 fi
-pass "Agent B connecté ($D_AGENT_B_EMAIL) — commune « $COMMUNE_B_NOM »"
+assurer_communes "$AGENT_B_TOKEN" "$D_AGENT_B_EMAIL" "$COMMUNE_B_ID" "Agent B"
+pass "Agent B connecté ($D_AGENT_B_EMAIL) — commune « $COMMUNE_B_NOM » (vérifiée)"
+
+# Les deux territoires sont maintenant d'un seul élément chacun, et distincts
+# par construction (`COMMUNE_ID` ≠ `COMMUNE_B_ID`, garanti à l'étape 2). La
+# disjonction sur laquelle reposent `test-appartenance` et
+# `test-admin-dashboard` n'est donc plus une supposition.
+[ "$COMMUNE_ID" != "$COMMUNE_B_ID" ] || fail \
+  "Les deux communes du décor sont identiques — la disjonction est perdue"
 
 # ─────────────────────────────────────────────────────────────────────────────
 step "4. Commerçant actif, registre validé"
