@@ -135,6 +135,29 @@ class PromoApi {
     return MapShopsResult.fromJson(response.data!);
   }
 
+  /// Où centrer la carte pour les communes choisies, quand la position GPS
+  /// n'est pas disponible.
+  ///
+  /// `null` quand le serveur ne connaît pas de centre — aucun commerçant
+  /// positionné n'a de promo visible dans ces communes. C'est une réponse à
+  /// part entière, pas un échec : l'appelant garde son propre repli plutôt que
+  /// de recevoir un point inventé (règle #29).
+  Future<({double latitude, double longitude})?> fetchMapCenter(
+    List<String> communeIds,
+  ) async {
+    if (communeIds.isEmpty) return null;
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/promo/map/center',
+      queryParameters: <String, dynamic>{'communeIds': communeIds.join(',')},
+    );
+    final center = response.data!['center'] as Map<String, dynamic>?;
+    if (center == null) return null;
+    return (
+      latitude: (center['latitude'] as num).toDouble(),
+      longitude: (center['longitude'] as num).toDouble(),
+    );
+  }
+
   Future<Promo> detail(String id) async {
     final response = await _dio.get<Map<String, dynamic>>('/promo/$id');
     return Promo.fromJson(response.data!);

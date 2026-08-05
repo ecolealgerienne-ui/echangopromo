@@ -707,6 +707,85 @@ export class PromoService {
   }
 
   /**
+   * Où centrer la carte pour un client qui n'a pas (ou pas encore) de position
+   * GPS, mais qui a choisi ses communes.
+   *
+   * ── Pourquoi ce calcul et pas une colonne ────────────────────────────────
+   *
+   * `Commune` ne porte **que** `id`/`nom`/`wilaya` — aucune coordonnée, et le
+   * seed les crée par nom seul. Ajouter latitude/longitude aurait demandé
+   * d'inventer 36 paires de coordonnées pour les communes de Djelfa : des
+   * chiffres plausibles, faux, et impossibles à distinguer de vrais une fois
+   * en base. On dérive donc le centre des **positions réelles** des
+   * commerçants qui ont quelque chose à montrer.
+   *
+   * ── Ce qu'il renvoie quand il ne sait pas ────────────────────────────────
+   *
+   * `null`, jamais un point de repli. Une commune sans commerçant positionné
+   * n'a pas de centre connu, et un centre inventé enverrait le client
+   * regarder un endroit où il n'y a rien — en lui laissant croire qu'il n'y a
+   * rien *là où il habite*. C'est l'appelant qui décide quoi faire de
+   * l'absence (règle #29).
+   *
+   * La moyenne suffit ici : à l'échelle d'une commune algérienne les points
+   * sont assez groupés pour qu'un barycentre tombe dans la zone habitée. Ce
+   * ne serait plus vrai sur un territoire éclaté — à revoir à l'extension
+   * multi-wilaya, pas avant.
+   */
+  async findMapCenterForCommunes(
+    communeIds: string[],
+  ): Promise<{ latitude: number; longitude: number } | null> {
+    if (communeIds.length === 0) return null;
+
+    // Les mêmes cinq conditions que partout ailleurs : le centre doit désigner
+    // ce que la carte affichera, pas ce qui existe en base. Passer par
+    // `applyVisibleConditions` plutôt que de les réécrire est ce qui le
+    // garantit (règle #9).
+    //
+    // ⚠️ La moyenne se prend sur une sous-requête, pas directement.
+    // `AVG(DISTINCT latitude)` et `AVG(DISTINCT longitude)` dédoublonneraient
+    // **indépendamment** : ils dédupliquent des coordonnées, pas des
+    // commerçants, et recomposeraient un point qui ne correspond à aucune
+    // répartition réelle. Il faut dédoublonner le commerçant d'abord — sinon
+    // un commerce à 5 promos pèse aussi cinq fois et tire le centre vers lui.
+    const positions = this.applyVisibleConditions(
+      this.promos
+        .createQueryBuilder('promo')
+        .innerJoin('promo.commercant', 'commercant'),
+    )
+      .andWhere('commercant.communeId IN (:...communeIds)', { communeIds })
+      .andWhere('commercant.latitude IS NOT NULL')
+      .andWhere('commercant.longitude IS NOT NULL')
+      // `id` dans le SELECT : c'est lui qui rend le DISTINCT « par commerçant »
+      // plutôt que « par couple de coordonnées » — deux commerces à la même
+      // adresse restent deux points.
+      .select('commercant.id', 'id')
+      .addSelect('commercant.latitude', 'latitude')
+      .addSelect('commercant.longitude', 'longitude')
+      .distinct(true);
+
+    const [sql, parameters] = positions.getQueryAndParameters();
+    const rows = await this.promos.manager.query<
+      { latitude: string | null; longitude: string | null }[]
+    >(
+      `SELECT AVG("latitude") AS latitude, AVG("longitude") AS longitude FROM (${sql}) AS positions`,
+      parameters,
+    );
+    const row = rows[0];
+
+    if (!row?.latitude || !row.longitude) return null;
+
+    const latitude = Number(row.latitude);
+    const longitude = Number(row.longitude);
+    // `AVG` sort en chaîne côté pilote Postgres, et une chaîne illisible
+    // donnerait `NaN` — que `JSON.stringify` sérialise en `null` sans erreur,
+    // donc un centre absent déguisé en centre présent (règle #34).
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+    return { latitude, longitude };
+  }
+
+  /**
    * Vue admin/agent (plan de correction, Phase 2) : toutes les promos, tous
    * statuts confondus (contrairement à `findActiveForClient`) — permet de
    * repérer et masquer un contenu problématique sans attendre 3

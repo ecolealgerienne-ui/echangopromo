@@ -74,6 +74,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   /// chaque reconstruction, ce qui empêcherait toute exploration manuelle.
   bool _centeredOnUser = false;
 
+  /// Drapeau **distinct** de `_centeredOnUser`, et c'est délibéré : un GPS qui
+  /// arrive après le centrage sur la commune doit reprendre la main. Un seul
+  /// drapeau partagé aurait figé la carte sur le centre approximatif alors
+  /// que la position exacte était devenue disponible.
+  bool _centeredOnCommune = false;
+
   @override
   void dispose() {
     _settle?.cancel();
@@ -172,6 +178,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final shopsAsync =
         bounds == null ? null : ref.watch(mapShopsProvider(bounds));
     final userPosition = ref.watch(userPositionProvider).valueOrNull;
+    final communeCenter = ref.watch(mapCenterForCommunesProvider).valueOrNull;
 
     // Premier centrage sur l'utilisateur dès que sa position est connue —
     // après le premier rendu, sinon `MapController` n'est pas encore relié
@@ -180,6 +187,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _centeredOnUser = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _recenterOn(userPosition, zoom: 15);
+      });
+    } else if (userPosition == null &&
+        communeCenter != null &&
+        !_centeredOnCommune) {
+      // Pas de GPS, mais des communes choisies : on ouvre là plutôt que sur
+      // `_fallbackCenter` (Djelfa, en dur), qui envoyait tout client d'ailleurs
+      // regarder une ville qui n'est pas la sienne — vue comme vide, sans rien
+      // pour le lui dire (2026-08-05).
+      //
+      // Zoom volontairement plus large que pour le GPS : ce centre est le
+      // barycentre des commerces d'une commune, pas une position. L'afficher
+      // au même zoom lui donnerait une précision qu'il n'a pas.
+      _centeredOnCommune = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _recenterOn(
+            LatLng(communeCenter.latitude, communeCenter.longitude),
+            zoom: _initialZoom,
+          );
+        }
       });
     }
 

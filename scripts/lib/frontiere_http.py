@@ -57,7 +57,7 @@ PACE = float(os.environ.get("PACE_SECONDS", "1.1"))
 
 ROLES_CONNUS = ("commercant", "agent", "admin")
 
-# Les 14 routes ouvertes, épinglées une par une AVEC leur justification.
+# Les 15 routes ouvertes, épinglées une par une AVEC leur justification.
 #
 # ⚠️ Ne jamais y ajouter une entrée pour faire passer le banc : une route
 # ouverte est la seule surface qu'un inconnu peut marteler.
@@ -65,6 +65,9 @@ ROUTES_OUVERTES = {
     ("GET", "/promo"): "consultation client — le client est anonyme par conception",
     ("GET", "/promo/:id"): "idem",
     ("GET", "/promo/map"): "idem — borné par MAP_THROTTLE (180/min)",
+    ("GET", "/promo/map/center"): "centrage de la carte sur les communes choisies — "
+                                  "même surface que /promo/map et même MAP_THROTTLE, "
+                                  "en moins précis (positions agrégées, pas listées)",
     ("GET", "/commune"): "sélecteur wilaya→commune, chargé en entier par CommuneCascadeField",
     ("GET", "/highlight"): "bandeau Top promos de l'accueil",
     ("GET", "/commercant/:id/public"): "fiche commerçant publique",

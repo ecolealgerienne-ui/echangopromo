@@ -537,6 +537,61 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
 
 ## Journal
 
+### 2026-08-05 (fin) — Communes non configurées : la liste, puis la carte
+
+**La liste.** Un client sans commune choisie voit désormais un message et le
+bouton vers `/select-commune` **à la place de la seule liste** (filtres,
+recherche et vitrine restent). Ce n'était pas un cas de liste vide :
+`findActiveForClient` fait `if (query.communeIds?.length)`, donc un tableau
+vide **ne filtre rien** — le client voyait toutes les promos de toutes les
+communes, sous un en-tête annonçant sa zone. Un résultat faux affiché avec
+assurance. La requête n'est plus émise du tout dans ce cas.
+
+Effet de bord connu depuis le 2026-07-29 (`router.dart` le documentait, jugé
+« acceptable au volume du pilote »), quand la redirection obligatoire vers
+`/select-commune` a été coupée parce qu'elle bloquait l'accueil au premier
+lancement. L'arbitrage était binaire — bloquer ou tout montrer ; ceci en est
+la troisième sortie.
+
+**La carte : le défaut annoncé n'existait pas.** Vérification faite,
+`mapShopsProvider` interroge par **cadre visible**, jamais par commune, et ne
+lit pas `selectedCommunesProvider`. Sans commune, la carte n'affiche donc rien
+de faux : le cadre visible *est* le filtre. Y poser le même message aurait
+masqué une fonctionnalité qui marche. *L'annonce contraire faite au commit
+précédent était erronée — corrigée ici plutôt que laissée dans le journal.*
+
+**Le vrai manque de la carte, lui, est traité** : sans GPS elle s'ouvrait sur
+`_fallbackCenter`, Djelfa **écrit en dur**. Invisible en mono-wilaya, faux dès
+qu'un client suit des communes ailleurs — il aurait ouvert la carte sur une
+ville qui n'est pas la sienne, vue comme vide, sans rien pour le lui dire.
+
+`GET /promo/map/center?communeIds=…` (nouvelle, publique, `MAP_THROTTLE`,
+**épinglée dans `scripts/lib/frontiere_http.py`** — 15 routes ouvertes, règle
+33) rend le barycentre des commerçants positionnés ayant une promo visible
+dans ces communes, via `applyVisibleConditions` et non une copie du filtre
+(règle 9). Le centre est **dérivé de positions réelles** : `Commune` ne porte
+ni latitude ni longitude, et en inventer 36 paires aurait produit des chiffres
+plausibles, faux, indistinguables de vrais une fois en base. Renvoie `null`
+quand aucun commerçant positionné ne s'y trouve — l'app garde alors son repli
+(règle 29). Priorité au GPS, avec un drapeau distinct pour qu'une position
+arrivant après le centrage sur la commune reprenne la main.
+
+⚠️ **Un défaut introduit puis corrigé pendant l'écriture**, à connaître :
+`AVG(DISTINCT latitude)` et `AVG(DISTINCT longitude)` dédoublonnent
+**indépendamment** — ils dédupliquent des coordonnées, pas des commerçants, et
+recomposent un point qui ne correspond à aucune répartition réelle. La moyenne
+se prend sur une sous-requête qui dédoublonne d'abord par `commercant.id`.
+
+⚠️ **Non vérifié contre une base vivante** : la sous-requête enveloppant
+`getQueryAndParameters()` n'a pas pu être exercée depuis Windows (le backend
+tourne sous WSL). Même patron que `ReportService.countPendingModeration`, mais
+à passer au banc — c'est le seul point de ce lot qui n'est pas prouvé.
+
+**Vérifications** : `flutter analyze` 0 · `flutter test` 14 · `check_all` 4/4 ·
+`dart format` 0 · `tsc` propre · `eslint` 0 sur `src/promo` · `jest` 49 tests.
+
+---
+
 ### 2026-08-05 (suite) — Le plafond de 5 sort du binaire, et un piège de configuration
 
 **La question posée** : « le plafond de 5 promos est figé dans l'app, si je le
