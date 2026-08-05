@@ -560,9 +560,11 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
    `S3_ENDPOINT` séparés jusque dans les fichiers d'exemple, et la miniature
    bornée à 5 s. P7 : le repli des miroirs est **conservé mais parlant**
    (`fromApiValue`). ~~**P8**~~ — sans objet, mesuré à zéro le 2026-08-05.
-3. **Étape 3** — les parcours écran. La base est désormais assez peuplée pour
-   qu'ils aient quelque chose à montrer, et `harness.dart` attend dans
-   `docs/methode-test/`.
+3. ~~**Étape 3** — les parcours écran~~ — **installée le 2026-08-05**, un
+   parcours au vert et **prouvé par mutation**
+   (`scripts/test-parcours-ecran.sh`). Reste à en écrire d'autres : le premier
+   lancement (onboarding, explicitement hors périmètre du premier parcours) et
+   la création de promo de bout en bout.
 4. **Étape 4** — les 23 bancs restants, matrice complète en `TEST_PROMO.md` §6.
    Les plus rentables d'abord : `test-admin-highlight` (livré fin juillet,
    jamais éprouvé) et `test-notifications` (module entier sans couverture).
@@ -570,6 +572,49 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
 ---
 
 ## Journal
+
+### 2026-08-05 (nuit) — Étape 3 : le premier parcours joué sur l'appareil
+
+`flutter drive` tourne de bout en bout. Un parcours, choisi sur le critère de
+la méthode — *quelle valeur affichée tromperait le plus si elle était faux ?*
+
+**Le compteur d'emplacements du commerçant.** Il ne décore pas l'écran : il dit
+au commerçant **s'il peut encore publier**. Et il n'a pas été choisi par
+intuition — **il a été faux deux fois le jour même**, de deux façons qu'aucun
+test unitaire ne pouvait voir :
+
+1. « 0 / 5 » et cinq barres vides tant que `GET /promo/me/slots` n'avait pas
+   répondu — c'est-à-dire *des emplacements libres*, sans rien en savoir ;
+2. le plafond écrit **en toutes lettres dans les trois `.arb`**. La valeur
+   vivait dans une traduction : ni le compilateur, ni `flutter test`, ni
+   `check_server_rules.dart` ne pouvaient l'atteindre.
+
+Le parcours compare le chiffre **rendu à l'écran** à celui que le serveur a
+servi au décor. Il lit les `Text.rich` (`textSpan.toPlainText()`) — s'en tenir
+à `Text.data` l'aurait rendu aveugle à la seule valeur qu'il surveille, ce
+compteur étant composé de deux spans.
+
+**Prouvé par mutation** : lancé avec un plafond annoncé faux (`TEST_PLAFOND=9`
+contre 5 servi), il sort en **échec** avec le message
+« le compteur n'a jamais affiché « 1 / 9 » (mesure servie par
+`GET /promo/me/slots`) ». Un parcours qu'on n'a jamais vu refuser ne prouve
+rien.
+
+**Rien n'est cherché par son libellé** : l'espace commerçant est atteint par
+l'icône `storefront_outlined`, les champs par leur rang. L'app bascule
+fr/en/ar — un test lié aux libellés passerait ici et échouerait sur un
+téléphone en arabe, pour une raison sans rapport avec le défaut.
+
+⚠️ **Ce que ce parcours ne couvre pas, et le dit** : l'onboarding est marqué
+comme fait avant le démarrage. Mélanger les deux ferait échouer l'un pour des
+raisons appartenant à l'autre.
+
+⚠️ **Le script vit à cheval sur deux machines**, et c'est écrit dedans : sur ce
+poste le décor tourne sous WSL (backend et `jq`) tandis que `flutter drive`
+tourne sous Windows (émulateur). D'où deux modes — identifiants fournis par
+l'appelant, ou décor posé sur place quand `jq` existe.
+
+---
 
 ### 2026-08-05 (soir, suite) — Les trois vérifications rapides, et un DROP orphelin
 
