@@ -712,6 +712,43 @@ C'est la démonstration de l'avertissement que ce fichier porte en tête : *un
 état périmé est pire qu'aucun état, il fait conclure*. Ici il a fait écrire un
 test qui éprouvait un chemin que personne n'emprunte.
 
+#### Le parcours client — l'accueil et la fiche, enfin éprouvés
+
+Septième parcours, et celui qui couvre **ce que voient 95 % des utilisateurs** :
+l'accueil, la recherche, l'ouverture d'une fiche. Il n'avait aucune assertion
+jusque-là.
+
+Une promo à **description unique** est fabriquée par le script juste avant
+(horodatée) : chercher « Promo du décor » ramènerait autant de résultats qu'il
+y a eu de décors, et l'assertion « exactement une carte » deviendrait fausse
+pour une raison sans rapport avec l'écran.
+
+**La contre-mesure est le compteur de vues** : `0 → 1`. C'est ce qui distingue
+« la fiche s'est affichée » de « la fiche a réellement demandé la promo au
+serveur ». Un écran qui rendrait la fiche depuis la carte déjà chargée en liste
+afficherait exactement la même chose — et le commerçant ne verrait jamais ses
+vues monter.
+
+⚠️ **Deux défauts, tous deux dans mon parcours, tous deux instructifs.**
+
+Le premier est le pire : **l'assertion se vérifiait elle-même.** Elle tapait la
+description dans le champ de recherche puis exigeait `find.text(description)` —
+or `find.text` matche aussi les `EditableText`, donc le champ lui-même. Elle
+passait alors qu'**aucune carte n'était affichée**. Remontée dans la règle 28 :
+si ce qu'on cherche peut venir du test lui-même, l'assertion ne mesure rien.
+
+Le second explique pourquoi il n'y avait aucune carte : **sans commune
+sélectionnée, l'accueil n'affiche aucune promo** — il montre « Choisissez vos
+communes ». `reinitialiserAppareil` efface les préférences, donc l'état de
+départ est exactement celui-là. La commune est désormais posée dans le magasin
+local comme l'onboarding, et le choix des communes est déclaré comme un
+parcours à lui seul (écran dédié, plafond de 4, cascade wilaya → commune).
+
+Et un détail du serveur découvert en chemin : `POST /promo` rend
+`STORAGE_KEY_NOT_OWNED` sur une clé photo inventée — **c'est l'id du commerçant
+dans le chemin** (`promo-photos/<id>/…`) qui fait la preuve d'appartenance. Le
+script passe donc par `GET /commercant/me` au lieu de fabriquer un chemin.
+
 #### La modération admin, et une contre-mesure qui accusait le produit
 
 Sixième parcours : **masquer une promo signalée depuis la file**, entrée par la

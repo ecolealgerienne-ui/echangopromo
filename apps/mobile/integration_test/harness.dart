@@ -60,6 +60,21 @@ const String proPassword = String.fromEnvironment('TEST_PRO_PASSWORD');
 /// (`GET /admin/moderation/queue`, champ `total`).
 const String queueAttendue = String.fromEnvironment('TEST_QUEUE');
 
+/// Description **unique** de la promo que le parcours client doit retrouver.
+///
+/// ⚠️ Fabriquée par le script pour ce passage-là (horodatée). Chercher « Promo
+/// du décor » ramènerait autant de résultats qu'il y a eu de décors, et
+/// l'assertion « une seule carte » deviendrait fausse pour une raison qui n'a
+/// rien à voir avec l'écran.
+const String promoDescription = String.fromEnvironment('TEST_PROMO_DESC');
+
+/// Commune à poser dans le magasin local avant le parcours client.
+///
+/// ⚠️ Sans elle, l'accueil n'affiche aucune promo : il montre « Choisissez vos
+/// communes ». C'est la commune du commerçant du décor, servie par
+/// `GET /commercant/me`.
+const String communeCible = String.fromEnvironment('TEST_COMMUNE_ID');
+
 /// Les cinq compteurs du tableau de bord, **tels que le serveur les sert à ce
 /// rôle-là**, séparés par des virgules (`GET /admin/dashboard`).
 ///

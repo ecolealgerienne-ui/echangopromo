@@ -379,6 +379,17 @@ permet de reconnaître un cas nouveau relevant de la même règle.
     aucun ne levait.* Corollaire : une mutation qui **casse** au lieu de
     **dégrader** ne prouve rien — un `INTERNAL_ERROR` n'est pas un refus.
 
+    ⚠️ **Le cas limite : l'assertion qui se vérifie elle-même.** Elle ne peut
+    pas refuser, parce que ce qu'elle cherche est ce qu'elle vient de poser.
+    *Trouvé le 2026-08-05 : le parcours client tapait une description dans le
+    champ de recherche puis exigeait `find.text(description)` — or **`find.text`
+    matche aussi les `EditableText`**, donc le champ lui-même. L'assertion
+    passait alors qu'aucune carte n'était affichée (aucune commune
+    sélectionnée, l'accueil montrait « Choisissez vos communes »).* En Flutter,
+    viser `(w) => w is Text && w.data == …` dès que la valeur cherchée peut
+    aussi être une saisie. En général : **si ce qu'on cherche peut venir du
+    test lui-même, l'assertion ne mesure rien.**
+
 29. **Un défaut n'a pas de valeur par défaut.** Une valeur de repli détruit
     l'information d'absence, et l'absence est presque toujours l'information
     qui compte. Le critère : *si cette valeur est fausse, est-ce que quelque

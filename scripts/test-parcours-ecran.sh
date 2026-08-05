@@ -31,6 +31,9 @@
 #                      serveur.
 #   agent              le même écran, avec le périmètre de l'agent — ses
 #                      compteurs ne sont PAS ceux de l'admin.
+#   client             l'accueil et la fiche : une promo fabriquée pour ce
+#                      passage est retrouvée par la recherche, ouverte, et son
+#                      COMPTEUR DE VUES monte côté serveur.
 #   moderation         masquer une promo signalée depuis la file admin, et
 #                      vérifier qu'elle disparaît AUSSI de ce que le public
 #                      reçoit. ⚠️ MODIFIE le décor — passe en dernier.
@@ -66,10 +69,10 @@ DEVICE_ID="parcours-ecran-0001"
 
 CHOIX="${1:-tous}"
 case "$CHOIX" in
-  tous|premier-lancement|plafond|creation|admin|agent|moderation) ;;
+  tous|premier-lancement|plafond|creation|admin|agent|moderation|client) ;;
   *) echo "❌ Parcours inconnu : « $CHOIX »."
      echo "   Attendu : premier-lancement | plafond | creation | admin | agent"
-     echo "             | moderation"
+     echo "             | moderation | client"
      echo "             (rien = tous)"
      exit 2 ;;
 esac
@@ -78,7 +81,7 @@ esac
 # décor pour rien — ou pire, d'en poser un qui consomme des connexions sur un
 # plafond de 5/min avant un parcours qui n'en avait pas besoin.
 BESOIN_COMMERCANT=non
-case "$CHOIX" in tous|plafond|creation) BESOIN_COMMERCANT=oui ;; esac
+case "$CHOIX" in tous|plafond|creation|client) BESOIN_COMMERCANT=oui ;; esac
 BESOIN_PRO=non
 case "$CHOIX" in tous|admin|agent|moderation) BESOIN_PRO=oui ;; esac
 
@@ -193,6 +196,55 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "creation" ]; then
   fi
 fi
 fi  # BESOIN_COMMERCANT
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "client" ]; then
+# ── 2 ter. Une promo À NOUS, pour que la recherche désigne UNE promo ────────
+#
+# ⚠️ Chercher « Promo du décor » ramènerait autant de résultats qu'il y a eu de
+# décors : l'assertion « exactement une carte » deviendrait fausse pour une
+# raison sans rapport avec l'écran. On fabrique donc une description horodatée,
+# unique par construction.
+echo
+echo "── 2 ter. Promo du parcours client ──"
+PROMO_DESC="Parcours client $(date +%H%M%S)"
+# ⚠️ La clé photo doit APPARTENIR au compte : le serveur rend
+# STORAGE_KEY_NOT_OWNED sur une clé inventée, et c'est l'id du commerçant dans
+# le chemin qui fait la preuve (`promo-photos/<id>/…`, comme le décor). D'où ce
+# détour par /commercant/me plutôt qu'un chemin fabriqué.
+CID="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ id)"
+[ -n "$CID" ] || { echo "❌ /commercant/me illisible — impossible de composer une clé photo valide."; exit 2; }
+# La commune du commerçant : sans elle, l'accueil client n'affiche AUCUNE promo
+# (il montre « Choisissez vos communes »).
+COMMUNE_CIBLE="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ communeId)"
+[ -n "$COMMUNE_CIBLE" ] || { echo "❌ communeId du commerçant illisible."; exit 2; }
+CREEE="$(curl -s -X POST "$API_URL/promo"   -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"   -H "Authorization: Bearer $JETON"   -d "{\"description\":\"$PROMO_DESC\",\"prixAvant\":1000,\"prixApres\":700,      \"categorie\":\"alimentation\",\"photoKeys\":[\"promo-photos/$CID/parcours.jpg\"],      \"dureeJours\":5}")"
+PROMO_CLIENT="$(echo "$CREEE" | lire_champ id)"
+if [ -z "$PROMO_CLIENT" ]; then
+  echo "❌ création de la promo du parcours refusée : $(echo "$CREEE" | head -c 200)"
+  echo "   ⚠️ Lire le code : PROMO_DAILY_CAP_REACHED = 5 créations/24 h (reposer"
+  echo "      le décor) ; STORAGE_KEY_NOT_OWNED = la clé photo n'appartient pas"
+  echo "      à ce compte."
+  exit 2
+fi
+
+lire_vues() { # ID — lit viewCount de CETTE promo dans GET /promo/me/all
+  "$PY" -c "import sys,json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('ILLISIBLE reponse non JSON'); sys.exit(0)
+for p in (d.get('items') or []):
+    if p.get('id') == '$1':
+        v = p.get('viewCount')
+        print('ILLISIBLE viewCount absent' if v is None else v); sys.exit(0)
+print('ILLISIBLE promo introuvable')"
+}
+
+VUES_AVANT="$(curl -s "$API_URL/promo/me/all"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID"   | lire_vues "$PROMO_CLIENT")"
+case "$VUES_AVANT" in
+  ILLISIBLE*) echo "❌ vues illisibles — $VUES_AVANT"; exit 2 ;;
+esac
+echo "✅ « $PROMO_DESC » créée · vues avant : $VUES_AVANT"
+fi
 
 if [ "$BESOIN_PRO" = "oui" ]; then
 # ── 2 bis. Comptes pro, et les compteurs servis À CHAQUE RÔLE ───────────────
@@ -408,6 +460,42 @@ fi
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent" ]; then
   jouer parcours_espace_pro_test.dart "espace pro — agent"     --dart-define=TEST_PRO_ROLE=agent     --dart-define=TEST_PRO_EMAIL="$AGENT_EMAIL"     --dart-define=TEST_PRO_PASSWORD="$AGENT_PASSWORD"     --dart-define=TEST_PRO_STATS="$STATS_AGENT"
   noter "espace pro — agent ($STATS_AGENT)" $?
+  echo
+fi
+
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "client" ]; then
+  jouer parcours_client_liste_fiche_test.dart "client — liste et fiche"     --dart-define=TEST_PROMO_DESC="$PROMO_DESC"     --dart-define=TEST_COMMUNE_ID="$COMMUNE_CIBLE"
+  CODE_CLIENT=$?
+  noter "client — liste et fiche" $CODE_CLIENT
+
+  # ── Contre-mesure : la fiche a-t-elle VRAIMENT appelé le serveur ? ────────
+  #
+  # Un écran qui rendrait la fiche à partir de la carte déjà chargée en liste
+  # afficherait la même chose — et le commerçant ne verrait jamais ses vues
+  # monter. Le compteur est par appareil unique : l'app repart d'un identifiant
+  # neuf à chaque passage (les préférences sont effacées), le script mesure
+  # depuis un autre, qui ne compte qu'une fois.
+  if [ "$CODE_CLIENT" -eq 0 ]; then
+    echo
+    echo "── contre-mesure : le compteur de vues de la promo ──"
+    VUES_APRES="$(curl -s "$API_URL/promo/me/all"       -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID"       | lire_vues "$PROMO_CLIENT")"
+    case "$VUES_APRES" in
+      ILLISIBLE*)
+        echo "⚠️  vues illisibles après coup — la contre-mesure n'a PAS eu lieu."
+        echo "    Ce n'est pas un échec du parcours, c'est une absence de"
+        echo "    vérification : $VUES_APRES"
+        noter "contre-mesure vues (non concluante)" 1 ;;
+      *)
+        if [ "$VUES_APRES" -gt "$VUES_AVANT" ]; then
+          echo "✅ vues $VUES_AVANT → $VUES_APRES : la fiche a bien appelé le serveur"
+          noter "contre-mesure vues" 0
+        else
+          echo "❌ vues toujours à $VUES_APRES : la fiche s'est affichée sans"
+          echo "   demander la promo au serveur."
+          noter "contre-mesure vues" 1
+        fi ;;
+    esac
+  fi
   echo
 fi
 
