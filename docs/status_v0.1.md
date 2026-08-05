@@ -587,6 +587,55 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
 
 ## Journal
 
+### 2026-08-05 (après-midi) — Les cinq clés `PROMO_*` sont dans le `.env` qui tourne
+
+Action **hors dépôt**, consignée ici parce que la règle 36 l'exige : sans ça,
+personne ne saura qu'elle a été faite — ni qu'il faudra la refaire sur une
+autre machine.
+
+`PROMO_ACTIVE_CAP=5` avait été ajouté au `.env` de WSL à 11h07. La
+vérification a montré autre chose : le journal de démarrage portait **trois**
+avertissements de repli —
+
+```
+PROMO_MAX_DURATION_DAYS absente        — repli sur 7
+PROMO_DAILY_CREATION_CAP absente       — repli sur 5
+PROMO_REPUBLISH_COOLDOWN_HOURS absente — repli sur 24
+```
+
+…et **`PROMO_ACTIVE_CAP` n'y figurait pas**. C'est le mécanisme de la règle 36
+qui fait son travail : une absence d'avertissement **au milieu de trois
+autres** prouve que la clé est lue, là où un silence général ne prouverait
+rien.
+
+Les trois retombaient sur les bonnes valeurs — rien ne dysfonctionnait — mais
+elles n'étaient **réglables nulle part**, exactement la situation que la règle
+décrit. Ajoutées avec les mêmes valeurs : le comportement ne change pas, la
+configurabilité oui.
+
+```
+PROMO_DEFAULT_DURATION_DAYS=5   PROMO_ACTIVE_CAP=5   PROMO_MAX_DURATION_DAYS=7
+PROMO_DAILY_CREATION_CAP=5      PROMO_REPUBLISH_COOLDOWN_HOURS=24
+```
+
+**Vérifié après redémarrage, et pas seulement constaté** : les trois chemins de
+lecture ont été empruntés pour de bon (création par agent `201`, création par
+commerçant `400` sur le quota, republication `400` sur le cooldown), et le
+journal ne porte **aucun** repli. Un silence ne vaut que si le chemin a été
+parcouru.
+
+⚠️ **Rien de tout ça n'est versionné.** `.env.example` porte les cinq clés,
+mais aucun processus ne le lit. Sur une machine neuve, tout est à refaire — et
+le journal de démarrage reste le seul mécanisme qui le dira.
+
+⚠️ Une erreur de ma part à noter, parce qu'elle est du même genre que celles
+que les bancs ont trouvées ce soir : mon récapitulatif précédent listait
+`PROMO_ACTIVE_CAP` comme « jamais ajouté » alors que je l'avais posé trois
+heures plus tôt. Un état repris d'une liste sans être revérifié — c'est le
+défaut que ce fichier dénonce à chaque page.
+
+---
+
 ### 2026-08-05 (nuit) — Étape 4 close : les 27 bancs de la matrice sont écrits
 
 Les 18 bancs restants ont été écrits, lancés et prouvés. **La matrice §6 de
@@ -1241,7 +1290,12 @@ Faussement suspectes, à ne pas recompter : `maxLength: 12` sur les téléphones
 `_targetBytes = 250 Ko` vs `MAX_UPLOAD_BYTES = 500 Ko` (volontairement
 différents, documentés).
 
-**⛔ ACTION HORS DÉPÔT, NON FAITE — `PROMO_ACTIVE_CAP` dans le `.env` de WSL.**
+**⛔ ACTION HORS DÉPÔT** — ~~NON FAITE~~ **faite le 2026-08-05 à 11h07**,
+avec ses trois clés sœurs l'après-midi (voir le journal du jour). Le texte
+ci-dessous décrit l'état au moment où il a été écrit ; il reste utile pour
+la raison qu'il donne — sur une machine neuve, tout est à refaire.
+
+**`PROMO_ACTIVE_CAP` dans le `.env` de WSL.**
 La clé n'existe que dans les deux `.env.example`, qui ne sont lus par aucun
 processus. Le `.env` réel vit dans `~/projects/echangopromo` et n'est pas
 versionné : **le plafond n'est réglable dans aucun environnement tant que
