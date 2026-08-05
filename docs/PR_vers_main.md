@@ -1,80 +1,94 @@
 # PR — `claude/echango-promo-suite-2026-08-04` → `main`
 
 > Ce fichier existe pour être **copié dans la PR GitHub**, `gh` n'étant installé
-> ni sur le poste ni dans WSL. Lien direct pour l'ouvrir :
+> ni sur le poste ni dans WSL (revérifié le 2026-08-05). Lien direct pour
+> l'ouvrir :
 > https://github.com/ecolealgerienne-ui/echangopromo/compare/main...claude/echango-promo-suite-2026-08-04?expand=1
 
-**111 commits · 292 fichiers · +30 506 / −1 981**
-En avance de 111 commits sur `main`, **en retard de 0** : la fusion est directe,
-aucun conflit possible.
+**1 commit · 2 fichiers · +100 / −1**
+En avance de 1 commit sur `main`, **en retard de 0** : la fusion est directe.
+
+> Les deux PR précédentes (#14, #15) sont fusionnées. Celle-ci ne porte que la
+> clôture du rejeu contre le VPS.
 
 ---
 
-## Ce que cette branche apporte
+## Titre
 
-### Exploitation — ce qui manquait pour tenir un pilote
-
-- **Une sauvegarde de base qui se restaure vraiment.** Le script restaure chaque
-  dump qu'il produit dans une base jetable et compare les lignes table par
-  table : un fichier jamais restauré n'est pas une sauvegarde.
-- **Envoi hors site chiffré, et prouvé non lisible** : AES-256 vérifié par
-  déchiffrement, dépôt en ACL privée, puis **requête anonyme sur l'objet** — un
-  `200` à ce moment-là fait supprimer l'objet et échouer le lot.
-- **Rétention 7 quotidiennes + 8 hebdomadaires** (deux mois d'histoire en une
-  quinzaine de fichiers), sur un préfixe borné puisque le dépôt est mutualisé.
-- **Rapatriement** (`--lister`, `--rapatrier`) : ni `aws`, ni `rclone`, ni
-  `s3cmd` n'existent sur ces machines — sans ces deux modes, une sauvegarde
-  partie chez OVH n'aurait pas pu être récupérée le jour de l'incident.
-- **Rotation du mot de passe admin** rendue possible (elle ne l'était pas).
-
-### Produit
-
-- **Plafond de promos actives par commerçant** (`null` = suit le global).
-- **Seuil de signalement réglable**, avec un **plancher à 2** — il avait été
-  abaissé à 1 pour un test, et un seul signalement suffisait alors à masquer la
-  promo d'un concurrent.
-- **L'agent entre par la même porte que l'admin** : `AgentLoginScreen` existait,
-  était couvert par les bancs, et **rien dans l'app ne l'atteignait**.
-- **Refus Apple 5.1.1(iv) corrigé** : la localisation n'est plus demandée deux
-  fois ; l'invitation vit désormais sur la carte, là où la fonction ne marche
-  pas sans position.
-
-### Tests
-
-- **12 parcours joués sur l'appareil** (`scripts/test-parcours-ecran.sh`),
-  couvrant les quatre profils et chaque geste qui écrit. Rejoués d'un seul
-  tenant, code de sortie 0.
-- **27 bancs HTTP**, dont les 8 admin/agent rejoués à 59 contrôles, 0 échec.
-- Vérificateurs de synchronisation, specs backend (74 tests), et
-  `migration:generate` **muet** — toute sortie signale désormais un écart réel.
+`fix(décor) : poser les coordonnées à l'inscription, et le prouver au serveur`
 
 ---
 
-## Les défauts que ce travail a trouvés
+## Ce que cette PR apporte
 
-Chacun a été **mesuré**, pas supposé.
+### Le décor pose enfin le point que le banc de la carte va chercher
 
-| Défaut | Portée |
+`provision-decor.sh` inscrivait son commerçant **sans `latitude`/`longitude`**,
+que `register-commercant.dto` accepte pourtant depuis toujours. Conséquence :
+`GET /promo/map/center` rendait `{"center":null}` pour sa commune, et le
+parcours écran « carte » s'arrêtait sur *« centre absent »* — **trois étapes
+après la cause**. `seed-demo.sh`, lui, en posait : d'où une commune peuplée avec
+centre et une commune de décor sans, écart que rien ne signalait.
+
+### Et surtout, le contrôle qui manquait
+
+Le décor demande maintenant **au serveur** si la commune a un centre, et échoue
+sinon. Vérifier qu'on a *envoyé* le point n'aurait rien prouvé : c'est ce que le
+serveur en fait qui compte. Sans ce contrôle, l'oubli se reproduit en silence.
+
+⚠️ **Corriger ces coordonnées après coup ne marche pas** : un
+`PATCH /commercant/me` remet le commerçant en revue de profil, et ce seul état
+lui interdit de publier (`403 COMMERCANT_PROFILE_PENDING_REVIEW`). Un décor qui
+répare un profil se sabote lui-même — d'où la pose à l'inscription.
+
+### `docs/status_v0.1.md` — l'entrée de session
+
+**Aucun code produit modifié** : rien sous `apps/backend/src/` ni
+`apps/mobile/lib/`.
+
+---
+
+## Ce que le rejeu contre le VPS a donné
+
+Première fois que le harnais tourne ailleurs que contre WSL.
+
+| Lot | Résultat |
 |---|---|
-| `PromoListController` écrivait son état après `dispose` | se déclenchait **à chaque frappe** dans la recherche |
-| `promoSlotsProvider` n'était invalidé **nulle part** | le serveur comptait 2 promos, l'écran affichait « 1 / 5 » |
-| 25 bancs sur 31 n'étaient **pas exécutables** dans git | `./scripts/test-X.sh` rendait « Permission denied » sur un clone neuf |
-| Le décor annonçait des **photos inexistantes** | chaque écran de promo recevait un 404 d'image |
-| `S3_ENDPOINT` servait **deux rôles** | 300 s de timeout à chaque création de promo → 88 ms |
-| Un numéro recyclé **enfermait son repreneur dehors** | `login` n'appliquait pas le filtre que son commentaire annonçait |
+| 27 bancs HTTP | **25 verts · 2 non concluants · 0 échec** |
+| 12 parcours écran | **tous verts**, contre-mesures serveur comprises |
+
+`frontiere-http` rend les mêmes **50 routes protégées, 144 sondes, 0 échec**
+qu'en local : la frontière ne change pas au déploiement.
 
 ---
 
-## Ce qui reste ouvert, et qui est écrit plutôt que caché
+## Ce que le rejeu a appris
 
-- **Les CGU et la politique de confidentialité portent `[à compléter]`** — date
-  et e-mail de contact, dans les trois langues. Motif de refus App Store à part
-  entière ; les valeurs sont une décision produit.
-- **Le VPS** : clé S3 dédiée, phrase de passe rangée hors de la machine
-  sauvegardée, cron surveillé par son code de sortie, rotation du mot de passe
-  `superadmin`. Procédure complète dans `docs/DEPLOIEMENT_VPS.md`.
-- **La rétention distante n'a jamais tourné contre OVH** — le banc local tourne
-  contre MinIO, qui ne fait pas de virtual-hosted et rend `non concluant` au
-  lieu de conclure. Le premier passage sur le VPS est le seul juge.
-- Parcours écran non couverts, déclarés : favoris, partage, première promo par
-  l'agent, brouillon commerçant, bandeau « Top promos ».
+| Constat | Portée |
+|---|---|
+| **Le VPS n'était pas vide** — `/promo` (0) et `/commune` (35) l'avaient fait croire | deux endpoints publics ne montrent ni les commerçants ni les files ; le tableau de bord admin en comptait **11** et **6 dossiers en attente** |
+| **`GET /commune` lu sans limite** dans `seed-demo.sh` | **20 communes sur 35** ; invisible tant qu'on visait `.items[0:4]`, n'apparaît qu'en demandant une commune **par son nom** (règle #15 vue depuis l'outillage) — corrigé par comparaison à `total`, pas par un `?limit=100` seul |
+| **`i % 4` en dur** dans la répartition des commerces | avec une liste plus courte, `jq` rendait `null` et le commerce partait **sans commune**, sans un mot |
+| **Trois blocages, tous dans le décor** | plafond plein · coordonnées absentes · profil en revue — le harnais a **refusé de jouer** à chaque fois, plutôt que rendre un échec parlant de l'écran |
+
+---
+
+## Points ouverts, écrits plutôt que cachés
+
+- **Bandeau « Top promos »** — `client-highlight` rend non concluant :
+  `GET /highlight` sert `{"items":[]}`. Mesuré : les **deux** mises en avant
+  sont `active: true`, pointent la **même** promo, et le serveur les marque
+  `promoVisible: false`. Le filtre public est correct ; c'est l'admin qui
+  affiche comme vivante une curation morte, alors que le champ est servi.
+  **Non corrigé : décision éditoriale.**
+- **`promo-cycle`** — bornes de durée et brouillon invisible passent ; le
+  cooldown de republication n'a pas pu être éprouvé (plafond plein). À rejouer
+  sur un commerçant neuf.
+- **AVG Antivirus intercepte tout le HTTPS de ce poste** — certificat resigné
+  par `AVG Web/Mail Shield Root`, constaté aussi sur `api.github.com` et
+  `pub.dev`. Windows accepte cette racine, Android non. ⚠️ **L'installer en
+  autorité utilisateur ne suffit pas** : Chrome charge la page, l'app non —
+  `network_security_config.xml` gouverne la pile Java/Android, pas `HttpClient`
+  de `dart:io`. Remède côté machine : exclure le domaine de l'inspection HTTPS.
+- **Le clone WSL** porte les scripts corrigés mais pas les commits — `git pull`
+  à la prochaine session.
