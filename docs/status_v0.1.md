@@ -565,13 +565,59 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
    (`scripts/test-parcours-ecran.sh`). Reste à en écrire d'autres : le premier
    lancement (onboarding, explicitement hors périmètre du premier parcours) et
    la création de promo de bout en bout.
-4. **Étape 4** — les 23 bancs restants, matrice complète en `TEST_PROMO.md` §6.
-   Les plus rentables d'abord : `test-admin-highlight` (livré fin juillet,
-   jamais éprouvé) et `test-notifications` (module entier sans couverture).
+4. **Étape 4** — les bancs métier, matrice complète en `TEST_PROMO.md` §6.
+   ~~`test-admin-highlight`~~ **écrit le 2026-08-05** (8 contrôles, 0 échec,
+   prouvé par mutation). Le prochain le plus rentable : `test-notifications`
+   — module entier sans couverture, et dont le miroir d'enum a perdu *toutes*
+   les notifications jusqu'au 2026-08-05.
 
 ---
 
 ## Journal
+
+### 2026-08-05 (nuit, suite) — Étape 4 : `test-admin-highlight`, et une sonde qui ne prouvait rien
+
+Premier banc métier de l'étape 4. Module livré fin juillet, **jamais éprouvé de
+bout en bout**. Trois règles sondées — pas « couvrons le module », mais les
+trois qui y ont déjà produit un défaut :
+
+1. **Aucun champ interne dans la projection publique.** `imageKey` porte l'UUID
+   de l'admin ; la recherche est **récursive**, parce que le défaut d'origine
+   (`{...promo, photoUrl}`, règle 4) exposait la clé dans un objet imbriqué.
+2. **Une diapositive dont la promo est morte quitte le bandeau CLIENT et reste
+   chez l'ADMIN.** L'asymétrie est voulue : c'est chez lui qu'elle est
+   corrigeable.
+3. **Le réordonnancement refuse un ordre partiel et un doublon** — éprouvé en
+   unitaire depuis juillet, jamais par HTTP.
+
+Verdict : **8 contrôles, 0 échec**. Auto-test 14 cas dont 10 refus.
+
+⚠️ **Et c'est la mutation qui a appris quelque chose, pas le vert.** Retirer la
+garde de visibilité de `keepDisplayable` n'a fait échouer **aucun** contrôle :
+le banc passait pour une raison que je n'avais pas prévue.
+
+La diapositive du banc n'avait pas d'`imageKey`. Or **deux gardes indépendantes**
+écartent une diapositive côté client — « sa promo n'est plus visible » (celle
+qu'on voulait éprouver) et « il n'y a plus rien à afficher ». Sans image, la
+seconde suffisait à produire le résultat attendu. La sonde mesurait la mauvaise
+garde et ne pouvait pas le dire.
+
+Corrigé en donnant une image à la diapositive : elle garde alors quelque chose à
+montrer, et seule la garde de visibilité peut encore la retirer. La même
+mutation fait désormais échouer le banc — *« la promo n'est plus visible et la
+diapositive est TOUJOURS servie au client — le bandeau annonce une promo
+morte »*.
+
+**Ce qui vaut d'être retenu** : un banc au vert du premier coup sur un module
+jamais éprouvé aurait dû éveiller les soupçons. La mutation n'est pas une
+formalité de fin — c'est elle qui dit *quelle* règle la sonde touche.
+
+⚠️ **Non sondé, et déclaré** : le plafond de 10 diapositives
+(`HIGHLIGHT_CAP_REACHED`) demanderait d'en créer dix sur une base partagée ; le
+coût d'un échec en cours de route (dix diapositives orphelines dans le bandeau
+d'accueil) dépasse ce que la sonde rapporte.
+
+---
 
 ### 2026-08-05 (nuit) — Étape 3 : le premier parcours joué sur l'appareil
 
