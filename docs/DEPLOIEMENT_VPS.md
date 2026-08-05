@@ -44,10 +44,16 @@ compilés dans `dist/scripts/` par `nest build` (comme `main.ts` →
 `dist/main.js`), donc exécutables directement dans le conteneur de prod
 sans dépendance dev (`ts-node` n'est pas dans l'image finale) :
 
+⚠️ **Le mot de passe ci-dessous reste un espace réservé, et doit le rester.**
+Ce fichier est versionné et poussé sur GitHub : y écrire le vrai secret le
+publie, et l'historique Git le garde même après correction — il faudrait alors
+faire tourner le mot de passe, pas seulement modifier la ligne. Le secret réel
+se tape au moment du seed et ne vit nulle part dans le dépôt.
+
 ```bash
 # Premier admin (une seule fois)
 docker compose --env-file .env.production -f docker-compose.promo.yml exec backend \
-  npm run seed:admin:prod -- admin@echango.com "mot-de-passe" "Nom Admin"
+  npm run seed:admin:prod -- admin@echango.com "<mot-de-passe-hors-dépôt>" "Admin Promo"
 
 # Référentiel communes (idempotent, à relancer si la liste est corrigée)
 docker compose --env-file .env.production -f docker-compose.promo.yml exec backend \

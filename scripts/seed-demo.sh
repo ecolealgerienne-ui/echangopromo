@@ -132,8 +132,22 @@ pass "Admin et agent connectés"
 step "2. L'agent couvre plusieurs communes"
 # Sans ça, tous les commerces tomberaient dans la même commune et la carte
 # comme les filtres wilaya/commune n'auraient rien à montrer.
-COMMUNES="$(api GET /commune | jq -c '[.items[] | {id, nom}]')"
+# ⚠️ `?limit=100`, et la vérification qui va avec. Sans limite, `/commune` rend
+# **20** communes (sa page par défaut) sur les 35 de la wilaya : tout ce qui
+# vient après « Guettara » était invisible à ce script — Hassi Bahbah, Messaad,
+# Moudjebara… Le défaut est resté caché tant qu'on visait `.items[0:4]`, les
+# quatre premières étant toujours dans la page. Il n'apparaît qu'en demandant
+# une commune par son nom. C'est la règle #15 vue depuis l'outillage : un
+# consommateur qui traite une liste paginée comme un référentiel complet se
+# trompe en silence. D'où la comparaison avec `total`, qui, elle, échoue.
+COMMUNES_REP="$(api GET '/commune?limit=100')"
+COMMUNES="$(echo "$COMMUNES_REP" | jq -c '[.items[] | {id, nom}]')"
 NB_COMMUNES="$(echo "$COMMUNES" | jq 'length')"
+TOTAL_COMMUNES="$(echo "$COMMUNES_REP" | jq -r '.total // empty')"
+[ -n "$TOTAL_COMMUNES" ] || fail "Réponse /commune illisible" "$(echo "$COMMUNES_REP" | head -c 200)"
+[ "$NB_COMMUNES" -eq "$TOTAL_COMMUNES" ] || fail \
+  "Référentiel tronqué : $NB_COMMUNES reçues sur $TOTAL_COMMUNES" \
+  "augmenter la limite ou paginer — viser une commune par son nom serait faussé"
 [ "$NB_COMMUNES" -ge 3 ] || fail "Moins de 3 communes en base" "lancer npm run seed:communes"
 
 # ⚠️ Pas de `(.items // .)` : sur un objet d'erreur `{statusCode, code,
@@ -147,11 +161,34 @@ AGENT_ID="$(echo "$agents" \
   | jq -r --arg e "$AGENT_EMAIL" '.items[] | select(.email==$e) | .id' | head -1)"
 [ -n "$AGENT_ID" ] || fail "Agent introuvable côté admin"
 
-CIBLES="$(echo "$COMMUNES" | jq -c '[.[0:4][].id]')"
+# ⚠️ Par défaut, les quatre PREMIÈRES communes — c'est-à-dire les premières par
+# ordre alphabétique, jamais celle du pilote. Sur Djelfa, `.items[0:4]` donne
+# Ain Chouhada, Ain El Bell, Ain Maabed, Ain Oussara : un décor de démonstration
+# qui ne pose rien dans la commune qu'on ouvre pour regarder. D'où ce réglage.
+#
+#   COMMUNES_CIBLES='Djelfa,Ain Oussara' ./scripts/seed-demo.sh
+#
+# Un nom inconnu ARRÊTE le script au lieu d'être ignoré : silencieusement sauté,
+# il produirait un décor amputé qu'on croirait complet (règle #29).
+if [ -n "${COMMUNES_CIBLES:-}" ]; then
+  CIBLES="$(echo "$COMMUNES" | jq -c --arg noms "$COMMUNES_CIBLES" '
+    . as $communes
+    | ($noms | split(",") | map(gsub("^\\s+|\\s+$";""))) as $voulus
+    | [ $voulus[] | . as $n
+        | ($communes | map(select(.nom == $n)) | .[0].id // ("INCONNU:" + $n)) ]')"
+  MANQUANTS="$(echo "$CIBLES" | jq -r '[.[] | select(startswith("INCONNU:"))] | join(", ")')"
+  [ -z "$MANQUANTS" ] || fail "Commune(s) introuvable(s) : ${MANQUANTS//INCONNU:/}" \
+    "communes en base : $(echo "$COMMUNES" | jq -r '[.[].nom] | join(", ")')"
+  pass "Communes visées : $COMMUNES_CIBLES"
+else
+  CIBLES="$(echo "$COMMUNES" | jq -c '[.[0:4][].id]')"
+fi
+NB_CIBLES="$(echo "$CIBLES" | jq 'length')"
+[ "$NB_CIBLES" -ge 1 ] || fail "Aucune commune visée" "COMMUNES_CIBLES = ${COMMUNES_CIBLES:-<vide>}"
 out="$(api PATCH "/admin/agent/$AGENT_ID/communes" "$(jq -n --argjson c "$CIBLES" '{communeIds:$c}')" \
   "$ADMIN_TOKEN")"
 echo "$out" | est_erreur && fail "Assignation des communes refusée" "$(echo "$out" | jq -c '{code,message}')"
-pass "Agent rattaché à $(echo "$CIBLES" | jq 'length') communes"
+pass "Agent rattaché à $NB_CIBLES commune(s)"
 
 step "3. Commerces"
 CREES=0; EXISTANTS=0
@@ -160,7 +197,13 @@ for i in $(seq 0 $((COMMERCES - 1))); do
   [ "$i" -lt "${#NOMS[@]}" ] || break
   IFS='|' read -r nom cat adresse <<< "${NOMS[$i]}"
   tel="$(printf '+2135550002%02d' "$i")"
-  cid_commune="$(echo "$CIBLES" | jq -r ".[$((i % 4))]")"
+  # ⚠️ `% NB_CIBLES`, pas `% 4` : le 4 était figé du temps où la liste faisait
+  # toujours quatre entrées. Avec `COMMUNES_CIBLES` plus courte, l'index sortait
+  # du tableau et `jq` rendait `null` — le commerce partait sans commune, sans
+  # que rien ne le signale ici.
+  cid_commune="$(echo "$CIBLES" | jq -r ".[$((i % NB_CIBLES))]")"
+  [ "$cid_commune" != "null" ] || fail "Commune nulle pour le commerce $i" \
+    "CIBLES = $CIBLES"
   # Position dispersée autour de Djelfa, pour que la carte ait du relief.
   lat="$(awk -v i="$i" 'BEGIN{printf "%.5f", 34.6714 + (i%4)*0.012 - 0.018}')"
   lng="$(awk -v i="$i" 'BEGIN{printf "%.5f", 3.2630 + (i%3)*0.015 - 0.015}')"
