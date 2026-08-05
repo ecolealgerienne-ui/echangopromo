@@ -2672,6 +2672,85 @@ banc de cycle de vie **8/8**.
 
 ---
 
+### 2026-08-05 (nuit) — Tout le harnais rejoué contre le VPS
+
+Premier rejeu complet contre `https://promo.echango.com` — jusque-là, tout
+avait été mesuré contre WSL.
+
+**Résultat : 27 bancs HTTP → 25 verts, 2 non concluants · 12 parcours écran →
+tous verts**, contre-mesures serveur comprises. `frontiere-http` rend les mêmes
+50 routes protégées et 144 sondes qu'en local : la frontière ne change pas au
+déploiement.
+
+**Le VPS n'était pas vide, contrairement à ce qu'on croyait.** `/promo` rendait
+0 et `/commune` 35, d'où la conclusion « base vierge » — deux endpoints publics
+qui ne montrent ni les commerçants ni les files. `GET /admin/dashboard` disait
+en réalité **11 commerçants actifs et 6 dossiers en attente**. Une base jugée
+depuis le seul public est une base qu'on n'a pas regardée.
+
+**Ce qui a bloqué, et qui était à chaque fois dans le décor, jamais dans le
+produit** — les trois refus sont venus du harnais, qui a préféré ne pas jouer
+plutôt que rendre un échec parlant de l'écran :
+
+- **Plafond plein** — le commerçant du décor était à 5/5 **et** avait épuisé ses
+  5 créations sur 24 h. Un `POST /promo/:id/stop` aurait rendu des emplacements
+  mais pas du quota : le parcours « plafond » serait tombé sur
+  `PROMO_DAILY_CAP_REACHED` et aurait parlé du mauvais refus. Corrigé par un
+  commerçant neuf.
+- **Coordonnées absentes** — `provision-decor.sh` inscrivait son commerçant sans
+  `latitude`/`longitude`, que `register-commercant.dto` accepte pourtant depuis
+  toujours. Conséquence : `GET /promo/map/center` rendait `{"center":null}` et
+  le parcours « carte » s'arrêtait sur « centre absent », trois étapes après la
+  cause. `seed-demo.sh`, lui, en posait — d'où une commune peuplée avec centre
+  et une commune de décor sans, écart que rien ne signalait. **Corrigé, avec le
+  contrôle qui manquait** : le décor demande maintenant au serveur si la commune
+  a un centre. Vérifier qu'on a *envoyé* le point n'aurait rien prouvé.
+- **Profil en attente** — corriger les coordonnées après coup par
+  `PATCH /commercant/me` remet le commerçant en revue, et **ce seul état lui
+  interdit de publier** (`403 COMMERCANT_PROFILE_PENDING_REVIEW`). Un décor qui
+  répare un profil se sabote donc lui-même ; d'où la correction à l'inscription
+  et non après.
+
+**Deux défauts trouvés dans l'outillage, tous deux par un réglage neuf** —
+`COMMUNES_CIBLES`, ajouté pour viser Djelfa (la commune du pilote), que
+`seed-demo.sh` ne savait pas atteindre puisqu'il visait `.items[0:4]`, soit les
+quatre premières par ordre alphabétique :
+
+- **`GET /commune` était lu sans limite** : 20 rendues sur 35. Invisible tant
+  qu'on visait les quatre premières, toujours dans la page ; le défaut
+  n'apparaît qu'en demandant une commune **par son nom**. Règle #15 vue depuis
+  l'outillage. Corrigé par une comparaison à `total`, pas par un `?limit=100`
+  seul — une limite est un pari, une comparaison un contrôle. *Mesuré au
+  passage : l'app, elle, boucle jusqu'à `total` et n'était pas concernée.*
+- **`i % 4` en dur** dans la répartition des commerces : avec une liste plus
+  courte, `jq` rendait `null` et le commerce partait sans commune, sans un mot.
+
+**Point ouvert — le bandeau « Top promos ».** `client-highlight` rend non
+concluant : `GET /highlight` sert `{"items":[]}`. Mesuré : les **deux** mises en
+avant côté admin sont `active: true`, pointent la **même** promo, et le serveur
+lui-même les marque `promoVisible: false`. Le filtre public est donc correct ;
+ce qui manque est côté admin, où une curation morte s'affiche comme active alors
+qu'elle ne produit rien — le champ est pourtant servi. **Non corrigé : c'est du
+contenu éditorial, la décision revient au produit** (ajouter deux entrées sur
+des promos visibles, ou remplacer les mortes).
+
+**Point ouvert — `promo-cycle`.** Ses trois premiers volets passent (bornes de
+durée, dont le cas `NaN` ; brouillon invisible) ; le cooldown de republication
+n'a pas pu être éprouvé, plafond plein. À rejouer sur un commerçant neuf.
+
+**L'app ne joignait pas le VPS, et ce n'était ni l'app ni le serveur.** AVG
+Antivirus intercepte tout le HTTPS de ce poste — certificat resigné par
+`AVG Web/Mail Shield Root`, constaté aussi sur `api.github.com` et `pub.dev`.
+Windows accepte cette racine, Android non. Écarté par la mesure : `nc` ouvrait
+le 443 depuis l'émulateur et le port 80 rendait un vrai `301` du VPS. ⚠️
+**Installer la racine en autorité utilisateur ne suffit pas** : Chrome charge
+alors la page, l'app non — `network_security_config.xml` gouverne la pile
+Java/Android, pas `HttpClient` de `dart:io`, qui a son propre magasin de racines.
+L'avertissement est désormais dans le fichier. Le remède est côté machine :
+exclure le domaine de l'inspection HTTPS.
+
+---
+
 ## Comment tenir ce fichier
 
 - **Une entrée de journal par session**, datée, qui dit ce qui a été fait **et

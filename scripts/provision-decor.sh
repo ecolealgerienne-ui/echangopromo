@@ -242,10 +242,19 @@ sleep "$PACE"
 COMMERCANT_TOKEN="$(commercant_login)"
 if [ -z "$COMMERCANT_TOKEN" ]; then
   info "Absent — inscription (consomme 1 sur le plafond horaire)"
+  # ⚠️ Les coordonnées ne sont PAS décoratives. Sans elles, ce commerçant
+  # n'apparaît sur aucune carte, et `GET /promo/map/center` rend
+  # `{"center":null}` pour sa commune — le parcours écran « carte » s'arrête
+  # alors sur « centre absent », et le banc `client-carte` mesure une carte
+  # vide. Le décor prétend préparer le terrain de TOUS les bancs ; il lui
+  # manquait le point que celui de la carte va chercher.
+  # (Constaté le 2026-08-05 : `seed-demo.sh` en posait, `provision-decor.sh`
+  # non — d'où une commune peuplée avec centre et une commune de décor sans.)
   out="$(api POST /commercant/register "$(jq -n --arg t "$D_COMMERCANT_TEL" \
     --arg p "$D_COMMERCANT_PIN" --arg c "$COMMUNE_ID" \
     '{telephone:$t, nom:"Commerce Décor", adresse:"Rue du Décor", categorie:"alimentation",
-      communeId:$c, pin:$p, acceptedTerms:true}')")"
+      communeId:$c, pin:$p, acceptedTerms:true,
+      latitude:34.6714, longitude:3.2630}')")"
   echo "$out" | est_erreur && fail "Inscription commerçant refusée" \
     "$(echo "$out" | jq -c '{code,message}')"
   sleep "$PACE"
@@ -393,6 +402,17 @@ etat_promo="$(api GET "/promo/$PROMO_ID" '' "$COMMERCANT_TOKEN" \
 pass "Promo $PROMO_ID"
 
 # ─────────────────────────────────────────────────────────────────────────────
+step "6. La commune du décor a un centre de carte"
+# ⚠️ Contrôle, pas commentaire. Le décor a longtemps posé un commerçant SANS
+# coordonnées : tout passait au vert ici, et c'est le parcours « carte » qui
+# s'arrêtait plus tard sur « centre absent » — loin de la cause. Le seul moyen
+# de savoir que le point est posé, c'est de demander au serveur ce qu'il en
+# fait, pas de vérifier qu'on l'a envoyé.
+centre="$(api GET "/promo/map/center?communeIds=$COMMUNE_ID" | jq -c '.center // empty')"
+[ -n "$centre" ] || fail "Commune « $COMMUNE_NOM » sans centre de carte" \
+  "le commerçant du décor n'a pas de coordonnées — le parcours « carte » ne pourra pas partir"
+pass "Centre $centre"
+
 echo
 echo "════════════════════════════════════════════════════════════════"
 echo "  Décor posé. Bloc à exporter avant de lancer un banc :"
