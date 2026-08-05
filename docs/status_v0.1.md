@@ -565,7 +565,9 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
    (`scripts/test-parcours-ecran.sh`). Reste à en écrire d'autres : le premier
    lancement (onboarding, explicitement hors périmètre du premier parcours) et
    la création de promo de bout en bout.
-4. **Étape 4** — les bancs métier, matrice complète en `TEST_PROMO.md` §6.
+4. ~~**Étape 4** — les bancs métier~~ — **close le 2026-08-05** : les 27 lignes
+   de la matrice §6 sont couvertes. Voir le journal du jour pour les trois
+   défauts trouvés et les cinq sondes corrigées.
    ~~`test-admin-highlight`~~ **écrit le 2026-08-05** (8 contrôles, 0 échec,
    prouvé par mutation). Le prochain le plus rentable : `test-notifications`
    ~~`test-notifications`~~ **écrit le 2026-08-05** — 8 contrôles, 0 échec, et
@@ -584,6 +586,76 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
 ---
 
 ## Journal
+
+### 2026-08-05 (nuit) — Étape 4 close : les 27 bancs de la matrice sont écrits
+
+Les 18 bancs restants ont été écrits, lancés et prouvés. **La matrice §6 de
+`TEST_PROMO.md` est couverte en entier.**
+
+**Trois défauts serveur trouvés**, tous corrigés et poussés :
+
+| Défaut | Trouvé par |
+|---|---|
+| `markAsRead` rendait `201` sur un geste sans effet | `test-notifications`, 1er passage |
+| le repli `/highlight` composait une vitrine de toutes les communes | revue de code, corrigé avant le banc |
+| `provision-decor.sh` annonçait le rattachement des agents **sans le vérifier** | `test-admin-dashboard` |
+
+Le troisième est le plus lourd : `test-appartenance` repose **entièrement** sur
+la disjonction des territoires, et agent A avait accumulé quatre communes dont
+celle de l'agent B. Le banc restait vert en éprouvant un refus qui n'avait pas
+lieu d'être.
+
+### ⚠️ Cinq fois, la sonde mesurait autre chose que ce qu'elle annonçait
+
+C'est l'enseignement de la soirée, et il s'est répété assez pour ne plus être
+un accident.
+
+| Banc | Ce qu'elle croyait mesurer | Ce qu'elle mesurait |
+|---|---|---|
+| `admin-highlight` | la garde de visibilité | la garde « rien à afficher » |
+| `admin-audit-log` | une trace **neuve** | n'importe quelle trace, même d'hier |
+| `admin-dashboard` | un cloisonnement | une égalité fortuite (`agent 48 ≤ admin 48`) |
+| `admin-moderation` | qu'`avertir` rende visible | *faux rouge* — le brouillon EST la sanction |
+| `registre` | qu'on ne valide pas deux fois | *faux rouge* — rejouable, et documenté |
+
+Les trois premières donnaient un **faux vert**, les deux dernières un **faux
+rouge**. Même cause : **sonder un effet supposé au lieu de la règle écrite**. Et
+un faux rouge use la confiance dans un banc aussi sûrement qu'un faux vert.
+
+Trois ont été démasquées par mutation ; deux en allant lire le code après un
+échec. Aucune ne l'aurait été par relecture du banc seul.
+
+Une sixième, plus bête et tout aussi instructive : `test-auth-login` accusait
+une fuite d'annuaire parce que **son propre échantillon** (`+213599999999`)
+n'était pas un numéro algérien valide. Comparer deux refus n'a de sens que si
+les deux requêtes atteignent la même règle.
+
+### Deux lignes du plan corrigées
+
+- `test-commercant-registre` était annoncé comme « demande un décor
+  **photographique** ». C'était une supposition : un JPEG valide tient en 125
+  octets. Le banc `test-registre` couvre désormais le cycle complet — dépôt
+  **et** décision — donc **deux lignes de la matrice**.
+- `test-commercant-dashboard` était annoncé pour « le surcompte de promos
+  actives ». Ce compteur n'y est plus : il a migré vers `GET /promo/me/slots`.
+  Le banc éprouve ce qui reste — `profileViewCount`, qui compte des **appareils
+  distincts** et non des visites.
+
+### Ce qui reste, et qui est écrit plutôt que caché
+
+- **`test-auth-login` et `test-abus-signalement` doivent tourner SEULS** : ils
+  épuisent volontairement le seau de 5/min, et tout banc lancé dans la minute
+  suivante accuserait ses propres identifiants.
+- **`test-promo-cycle` épuise le plafond quotidien** du commerçant du décor :
+  à lancer en dernier, ou sur un décor jetable.
+- La notification « expire bientôt » (cron de 1h) reste non couverte : la
+  déclencher demanderait d'appeler une méthode interne, ce qui n'éprouverait
+  plus le chemin réel.
+- Le plafond de 10 diapositives (`HIGHLIGHT_CAP_REACHED`) reste non sondé : sur
+  une base partagée, un échec en cours de route laisserait dix diapositives
+  orphelines dans le bandeau d'accueil.
+
+---
 
 ### 2026-08-05 (nuit) — `test-admin-dashboard`, et un décor qui affirmait sans vérifier
 
