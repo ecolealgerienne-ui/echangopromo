@@ -25,6 +25,21 @@
   placement — le mettre dans `src/main/` aurait suivi jusqu'au Play Store.
 -->
 <network-security-config>
+    <!--
+      ⚠️ N'essayez PAS d'ajouter ici `<trust-anchors><certificates src="user"/>`
+      pour faire passer l'app derrière un antivirus ou un proxy qui inspecte le
+      HTTPS : **ce fichier ne gouverne pas les requêtes de l'app.** Il gouverne
+      la pile réseau Java/Android ; Dio passe par `HttpClient` de `dart:io`, qui
+      a son PROPRE magasin de racines (BoringSSL, alimenté par les seules
+      racines système) et ignore aussi bien les autorités installées par
+      l'utilisateur que ce fichier.
+
+      Mesuré le 2026-08-05 contre le VPS, sur le même émulateur, à la même URL :
+      racine de l'intercepteur installée en autorité utilisateur → **Chrome
+      charge `https://promo.echango.com/commune`**, l'app rend toujours
+      « Impossible de contacter le serveur ». Le remède est côté machine
+      (exclure le domaine de l'inspection HTTPS), pas ici.
+    -->
     <domain-config cleartextTrafficPermitted="true">
         <!-- L'hôte, vu depuis l'émulateur Android (jamais `localhost`, qui
              désigne le téléphone lui-même). -->
