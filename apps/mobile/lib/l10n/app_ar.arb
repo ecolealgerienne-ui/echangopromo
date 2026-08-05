@@ -37,7 +37,6 @@
   "communeLabel": "البلدية",
   "filterAllOption": "الكل",
   "communeRequired": "البلدية مطلوبة",
-  "communesError": "خطأ في البلديات: {error}",
 
   "locationEnableService": "فعّل تحديد الموقع في هاتفك.",
   "locationPermissionDenied": "تم رفض إذن تحديد الموقع.",
@@ -405,5 +404,13 @@
   "highlightSearchPromoTitle": "اختيار عرض",
   "highlightSearchPromoHint": "اسم المنتج أو المحل",
   "highlightNoPromoSelected": "بدون عرض — ملصق فقط",
-  "highlightContentRequired": "اختر عرضًا أو استورد صورة."
+  "highlightContentRequired": "اختر عرضًا أو استورد صورة.",
+
+  "notificationPromoHidden": "تم إخفاء عرضك «{promo}» بعد ورود بلاغات.",
+  "notificationPromoWarned": "تلقى عرضك «{promo}» عدة بلاغات وأُعيد إلى المسودة. راجعه ثم أعد نشره.",
+  "notificationPromoVerified": "تمت مراجعة عرضك «{promo}» والموافقة عليه.",
+  "notificationPromoExpiringSoon": "سينتهي عرضك «{promo}» قريبًا. فكر في إعادة نشره.",
+  "notificationRegistreValidated": "تمت الموافقة على سجلك التجاري — يمكنك الآن نشر العروض.",
+  "notificationRegistreRejected": "تم رفض سجلك التجاري. يرجى إرسال مستند واضح.",
+  "notificationProfileValidated": "تمت الموافقة على تعديلات ملفك من طرف مسؤول."
 }

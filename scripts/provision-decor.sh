@@ -226,8 +226,28 @@ if [ -z "$PROMO_ID" ]; then
   echo "$out" | est_erreur && fail "Création promo refusée" "$(echo "$out" | jq -c '{code,message}')"
   PROMO_ID="$(echo "$out" | jq -r '.id // empty')"
   [ -n "$PROMO_ID" ] || fail "Promo créée sans id" "$(echo "$out" | head -c 200)"
-  api POST "/promo/$PROMO_ID/publish" '{}' "$COMMERCANT_TOKEN" >/dev/null 2>&1 || true
+  # ⚠️ C'était le seul appel écrivant du script à ne pas passer par
+  # `est_erreur` — un `|| true` posé 49 lignes après le commentaire qui
+  # condamne ce geste. Le décor annonçait « ✅ Promo » sur une promo restée
+  # en BROUILLON, et le banc suivant accusait autre chose (revue 2026-08-05).
+  #
+  # Le refus attendu est nommé, pas avalé : la création ci-dessus publie déjà
+  # (pas de `asDraft`), donc republier rend `PROMO_ALREADY_PUBLISHED`. C'est
+  # le seul refus acceptable ici — tout autre est une panne de décor.
+  pub="$(api POST "/promo/$PROMO_ID/publish" '{}' "$COMMERCANT_TOKEN")"
+  if echo "$pub" | est_erreur; then
+    code_pub="$(echo "$pub" | jq -r '.code // empty')"
+    [ "$code_pub" = "PROMO_ALREADY_PUBLISHED" ] || fail \
+      "Publication de la promo du décor refusée" \
+      "$(echo "$pub" | jq -c '{code,message}')"
+  fi
 fi
+# L'état final est vérifié, pas déduit du code de sortie d'un appel : c'est
+# « publiée » qui compte pour les bancs, pas « la requête n'a pas planté ».
+etat_promo="$(api GET "/promo/$PROMO_ID" '' "$COMMERCANT_TOKEN" \
+  | jq -r '.lifecycleStatus // empty')"
+[ "$etat_promo" = "publiee" ] || fail \
+  "Promo du décor non publiée" "lifecycleStatus=${etat_promo:-<absent>}"
 pass "Promo $PROMO_ID"
 
 # ─────────────────────────────────────────────────────────────────────────────

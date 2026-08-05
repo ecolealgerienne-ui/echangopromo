@@ -190,13 +190,37 @@ export class ReportService {
     return toPaginatedResult(items, total, page, limit);
   }
 
-  /** Nombre total de promos en attente de modération (stat dashboard, pas de pagination). */
+  /**
+   * Nombre total de **promos** en attente de modération (stat dashboard et
+   * `total` de pagination).
+   *
+   * ⚠️ **Jamais `.getCount()` sur ce builder.** Il est groupé par promo avec
+   * un `HAVING`, et `getCount()` remplace le SELECT, **efface les `groupBy`
+   * et conserve le `HAVING`** : la valeur rendue devenait un nombre de
+   * *signalements*, pas de promos — 2 promos signalées par 3 appareils
+   * chacune affichaient `6`, et `listPendingModeration` rendait `total: 6`
+   * pour 2 items, faisant paginer le mobile sur des pages vides. Symétrique
+   * et plus vicieux : sous le seuil global, le `HAVING` sans groupe rend
+   * **0** sur une file non vide (revue 2026-08-05).
+   *
+   * Compter les lignes du groupement depuis une sous-requête garde le
+   * décompte côté base (pas de transfert des lignes), contrairement à un
+   * `getRawMany().length`.
+   */
   async countPendingModeration(
     communeIds?: string[],
     filter?: { communeId?: string; wilaya?: string },
   ): Promise<number> {
     if (communeIds && communeIds.length === 0) return 0;
-    return this.pendingModerationQueryBuilder(communeIds, filter).getCount();
+    const [sql, parameters] = this.pendingModerationQueryBuilder(
+      communeIds,
+      filter,
+    ).getQueryAndParameters();
+    const rows = await this.reports.manager.query<{ count: number }[]>(
+      `SELECT COUNT(*)::int AS count FROM (${sql}) AS grouped`,
+      parameters,
+    );
+    return rows[0].count;
   }
 
   /**

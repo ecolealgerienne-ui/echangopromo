@@ -136,8 +136,15 @@ COMMUNES="$(api GET /commune | jq -c '[.items[] | {id, nom}]')"
 NB_COMMUNES="$(echo "$COMMUNES" | jq 'length')"
 [ "$NB_COMMUNES" -ge 3 ] || fail "Moins de 3 communes en base" "lancer npm run seed:communes"
 
-AGENT_ID="$(api GET /admin/agent '' "$ADMIN_TOKEN" \
-  | jq -r --arg e "$AGENT_EMAIL" '(.items // .)[] | select(.email==$e) | .id' | head -1)"
+# ⚠️ Pas de `(.items // .)` : sur un objet d'erreur `{statusCode, code,
+# message}`, ce repli fait itérer l'erreur elle-même au lieu d'échouer — le
+# script continuait alors sur des données qu'il n'avait jamais reçues (revue
+# 2026-08-05, règle #29). On exige la réponse paginée, ou on s'arrête.
+agents="$(api GET /admin/agent '' "$ADMIN_TOKEN")"
+echo "$agents" | est_erreur && fail "Liste des agents refusée" \
+  "$(echo "$agents" | jq -c '{code,message}')"
+AGENT_ID="$(echo "$agents" \
+  | jq -r --arg e "$AGENT_EMAIL" '.items[] | select(.email==$e) | .id' | head -1)"
 [ -n "$AGENT_ID" ] || fail "Agent introuvable côté admin"
 
 CIBLES="$(echo "$COMMUNES" | jq -c '[.[0:4][].id]')"
@@ -210,17 +217,40 @@ done
 pass "$NB_PROMOS promos publiées"
 
 step "5. Bandeau « Top promos »"
-DEJA="$(api GET /admin/highlight '' "$ADMIN_TOKEN" | jq -r '(.items // .) | length')"
-if [ "${DEJA:-0}" -gt 0 ]; then
+# ⚠️ Même piège, en pire : `(.items // .) | length` sur un objet d'erreur à
+# trois champs rendait **3**, et le script imprimait « 3 mises en avant déjà
+# présentes — inchangé » avant de sauter toute l'étape 5. Le décor annonçait
+# un bandeau qu'il n'avait jamais posé. Et `${DEJA:-0}` achevait le travail en
+# transformant une sortie vide en « zéro », c'est-à-dire en verdict.
+highlights="$(api GET /admin/highlight '' "$ADMIN_TOKEN")"
+echo "$highlights" | est_erreur && fail "Liste des mises en avant refusée" \
+  "$(echo "$highlights" | jq -c '{code,message}')"
+# `has("items")` et pas `.items | length` : en jq, `null | length` vaut **0**.
+# Une réponse sans « items » rendrait donc « aucune mise en avant » — le zéro
+# de l'absence, indiscernable du zéro mesuré.
+echo "$highlights" | jq -e 'has("items")' >/dev/null 2>&1 \
+  || fail "Réponse /admin/highlight sans « items »" \
+    "$(echo "$highlights" | head -c 200)"
+DEJA="$(echo "$highlights" | jq -r '.items | length')"
+if [ "$DEJA" -gt 0 ]; then
   info "$DEJA mise(s) en avant déjà présente(s) — inchangé"
 else
   mapfile -t TOP < <(api GET "/promo?limit=3" | jq -r '.items[].id')
+  [ "${#TOP[@]}" -gt 0 ] || fail "Aucune promo à mettre en avant" \
+    "l'étape 4 aurait dû en publier"
+  poses=0
   for pid in "${TOP[@]}"; do
     out="$(ecrire POST /admin/highlight "$(jq -n --arg p "$pid" '{promoId:$p}')" "$ADMIN_TOKEN")"
-    echo "$out" | est_erreur && info "mise en avant refusée : $(echo "$out" | jq -r '.code')"
+    # `info` sur un refus laissait le décor annoncer « 3 mises en avant » sur
+    # zéro posée : un message n'est pas un verdict. On compte ce qui a
+    # réellement abouti, et le compte final doit correspondre.
+    if echo "$out" | est_erreur; then
+      fail "Mise en avant refusée" "$(echo "$out" | jq -c '{code,message}')"
+    fi
+    poses=$((poses + 1))
     sleep "$PACE"
   done
-  pass "${#TOP[@]} mises en avant"
+  pass "$poses mises en avant"
 fi
 
 step "6. Signalements — les DEUX états"

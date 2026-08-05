@@ -4,14 +4,40 @@ import '../../domain/models/map_shop.dart';
 import '../../domain/models/promo.dart';
 
 /// Le backend pagine `/promo` et `/promo/me/all` (`{items, total, page,
-/// limit}`). `listMine()` reste une page unique généreuse (plafond métier de
-/// 5 promos actives par commerçant, jamais approché).
+/// limit}`). `listMine()` reste une page unique généreuse — pour l'**aperçu**
+/// des promos, qui tolère d'être tronqué.
+///
+/// ⚠️ Sa justification d'origine (« plafond métier de 5 promos actives, jamais
+/// approché ») était fausse : le plafond porte sur 5 **publiées**, cet endpoint
+/// renvoie tous les statuts, et un commerçant actif dépasse 100 promos cumulées
+/// en quelques mois. Le décompte d'emplacements ne se dérive donc plus d'ici —
+/// il vient de [PromoApi.fetchSlots] (revue 2026-08-05).
 const _pageSize = 100;
 
 /// `listActive()` pagine réellement côté mobile via bouton "Afficher plus"
 /// (retour terrain 2026-07-14 : grosses communes type Djelfa dépassant cette
 /// taille en promos actives simultanées).
 const _activePageSize = 50;
+
+/// Occupation du plafond de promos actives, telle que le serveur la compte.
+///
+/// `plafond` vient du serveur lui aussi : l'app recopiait `5` dans
+/// `kMaxPromosActives`, une règle métier qui vit dans `PromoService`
+/// (`MAX_PROMOS_ACTIVES`) — règle #32.
+class PromoSlots {
+  const PromoSlots({required this.enLigne, required this.plafond});
+
+  factory PromoSlots.fromJson(Map<String, dynamic> json) => PromoSlots(
+        enLigne: json['enLigne'] as int,
+        plafond: json['plafond'] as int,
+      );
+
+  final int enLigne;
+  final int plafond;
+
+  int get restants => plafond - enLigne;
+  bool get auPlafond => enLigne >= plafond;
+}
 
 /// Miroir mobile de `PaginatedResult<T>` (backend) pour `listActive()`.
 class PaginatedPromos {
@@ -120,13 +146,13 @@ class PromoApi {
     required double prixApres,
     required Categorie categorie,
     required List<String> photoKeys,
-    DateTime? dateFin,
+    int? dureeJours,
     bool asDraft = false,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/promo',
       data: _buildPayload(description, prixAvant, prixApres, categorie,
-          photoKeys, dateFin, asDraft),
+          photoKeys, dureeJours, asDraft),
     );
     return Promo.fromJson(response.data!);
   }
@@ -138,15 +164,28 @@ class PromoApi {
     required double prixApres,
     required Categorie categorie,
     required List<String> photoKeys,
-    DateTime? dateFin,
+    int? dureeJours,
     bool asDraft = false,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/promo/agent/$commercantId',
       data: _buildPayload(description, prixAvant, prixApres, categorie,
-          photoKeys, dateFin, asDraft),
+          photoKeys, dureeJours, asDraft),
     );
     return Promo.fromJson(response.data!);
+  }
+
+  /// Occupation du plafond, **mesurée par le serveur**.
+  ///
+  /// Elle était dérivée de [listMine] — une page de 100, tous statuts
+  /// confondus — en comptant les `publiee`. Le commentaire justifiait cette
+  /// page unique par « le plafond de 5 actives », que cet endpoint ne renvoie
+  /// pas : au-delà de 100 promos cumulées, le tableau de bord annonçait des
+  /// emplacements libres pendant que le serveur refusait en
+  /// `PROMO_ACTIVE_CAP_REACHED` (revue 2026-08-05, règle #29).
+  Future<PromoSlots> fetchSlots() async {
+    final response = await _dio.get<Map<String, dynamic>>('/promo/me/slots');
+    return PromoSlots.fromJson(response.data!);
   }
 
   Future<List<Promo>> listMine() async {
@@ -192,7 +231,7 @@ class PromoApi {
     double prixApres,
     Categorie categorie,
     List<String> photoKeys,
-    DateTime? dateFin,
+    int? dureeJours,
     bool asDraft,
   ) =>
       {
@@ -201,7 +240,13 @@ class PromoApi {
         'prixApres': prixApres,
         'categorie': categorie.value,
         'photoKeys': photoKeys,
-        if (dateFin != null) 'dateFin': dateFin.toIso8601String(),
+        // Une DUREE, jamais une date : l'app envoyait une `dateFin` calculee
+        // sur l'horloge du telephone, que le serveur comparait a la sienne
+        // sans tolerance — quelques minutes d'avance suffisaient a faire
+        // refuser une duree pourtant legale, avec un message non traduit
+        // (`PROMO_DATE_FIN_EXCEEDS_MAX`). La seule horloge qui compte est
+        // celle qui valide (revue 2026-08-05).
+        if (dureeJours != null) 'dureeJours': dureeJours,
         if (asDraft) 'asDraft': asDraft,
       };
 }

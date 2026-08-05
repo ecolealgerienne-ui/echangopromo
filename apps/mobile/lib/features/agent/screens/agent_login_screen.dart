@@ -47,11 +47,9 @@ class _AgentLoginScreenState extends ConsumerState<AgentLoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      await ref.read(authControllerProvider.notifier).loginThenResolveId(
-            role: AppRole.agent,
-            token: token,
-            fetchId: () async => (await api.me()).id,
-          );
+      await ref
+          .read(authControllerProvider.notifier)
+          .login(AuthSession(role: AppRole.agent, token: token));
       if (mounted) context.go('/agent/dashboard');
     } catch (error) {
       setState(() => _error = extractApiErrorMessage(

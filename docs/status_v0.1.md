@@ -505,15 +505,27 @@ Tout est dans `scripts/`. Chaque banc lance son auto-test avant de conclure, et
 ⚠️ **Attendre une minute entre deux bancs** : connexions et inscriptions sont
 plafonnées à 5/min/IP, et un 429 se déguise en « identifiants incorrects ».
 
-⚠️ **`test-cycle-commercant.sh` sort en échec, légitimement**, sur P10. Il
-repassera au vert quand le filtre `deletedAt` sera ajouté à `login`.
+~~⚠️ **`test-cycle-commercant.sh` sort en échec, légitimement**, sur P10.~~
+**Périmé — P10 est corrigé.** `CommercantService.login` passe par
+`findVivantByTelephone`, qui filtre `deletedAt IS NULL`
+(`commercant.service.ts:148`), et `assertPhoneAvailable` emprunte la **même
+méthode** : l'invariant est tenu par du code partagé, plus par un commentaire.
+Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
 
 ### Par où reprendre
 
-1. **Corriger P10** — une ligne, et vérifier les autres recherches par
-   téléphone dans le même geste.
-2. **Trancher P9** (séparation S3 dans `.env.example`), **P7** (les replis
-   silencieux des miroirs) et **P8** (les comparaisons littérales).
+1. **Rejouer les cinq bancs** — la revue multi-agents du 2026-08-05 a modifié
+   des chemins qu'ils traversent (visibilité des promos, plafond de 5, file de
+   modération, décor), **et changé le contrat sur trois points** : `POST /promo`
+   reçoit `dureeJours`, `GET /notifications` rend `promoDescription` au lieu
+   d'une phrase, `GET /promo/me/slots` est neuf. Rien n'a été exécuté depuis :
+   c'est le premier geste. Trois vérifications rapides à faire au passage —
+   `migration:generate` à sec (le diff destructeur sur `Notification` doit avoir
+   disparu), `strings base.apk` (quels binaires portent encore les identifiants
+   admin), et `countPendingModeration` qui doit rendre **2** là où il rendait 6.
+2. **Trancher P9** (séparation S3 dans `.env.example`) et **P7** (les replis
+   silencieux des miroirs). ~~**P8** (les comparaisons littérales)~~ — sans
+   objet, mesuré à zéro le 2026-08-05.
 3. **Étape 3** — les parcours écran. La base est désormais assez peuplée pour
    qu'ils aient quelque chose à montrer, et `harness.dart` attend dans
    `docs/methode-test/`.
@@ -524,6 +536,79 @@ repassera au vert quand le filtre `deletedAt` sera ajouté à `login`.
 ---
 
 ## Journal
+
+### 2026-08-05 — Revue multi-agents par spécialité, et ses correctifs
+
+**La revue.** Six spécialistes (sécurité, architecture, métier, mobile, qualité,
+contrat d'erreur) sur le code à HEAD, chaque lot passé à un sceptique chargé de
+le **réfuter**. 34 constats, **34 retenus** — taux de survie de 100 %, qui est
+en soi un signal : au moins un faux positif a traversé la réfutation (voir plus
+bas). Synthèse complète : `docs/REVUE_MULTIAGENTS_2026-08-05.md`.
+
+**Le faux positif, et ce qu'il enseigne.** Un constat affirmait « `@Param('id')`
+non-UUID → 500, 0 `ParseUUIDPipe` dans tout le backend ». Faux : `UuidParam`
+existe (`common/decorators/uuid-param.decorator.ts`), est appliqué à la ligne
+citée, et sa doc référence un pentest du 2026-08-05. Le sceptique l'a confirmé
+sans ouvrir le fichier. **Une preuve citée n'est pas une preuve vérifiée** — les
+correctifs n'ont été écrits qu'après relecture de chaque fichier visé.
+
+**Corrigé (22 constats).** Deux critiques : les clés S3 venues du client sont
+désormais rattachées à leur uploadeur (`StorageService.assertKeyOwnedBy`,
+branchée dans `PromoService.create`/`update` et `CommercantService.updateProfile`
+— la suppression croisée d'objets d'un tiers était ouverte à tout commerçant
+inscrit) ; les identifiants du pilote ne sont plus des littéraux Dart et
+`/dev/profiles` n'est plus construite hors `kDebugMode`. **Le mot de passe
+`superadmin` reste à faire tourner côté serveur** : retirer le code ne rappelle
+pas les APK déjà installés.
+
+Trois causes racines traitées d'un geste : `applyVisibleConditions` devient
+l'unique définition de « promo visible » (elle vivait en cinq exemplaires, dont
+une à une condition sur cinq sur la route publique de lien partagé) ;
+`aliveAccountWhere` réunit les quatre compteurs de dashboard (le bug de
+`countActive` corrigé le 2026-07-14 subsistait sur les trois autres) ; les cinq
+outils qui « rassuraient » savent maintenant refuser.
+
+**Les outils, éprouvés par mutation** — c'est le seul verdict qui compte :
+`check_enums` couvre `NotificationType` (9 couples, refus prouvé) ;
+`check_error_codes` exige les codes client-seuls (retirer `NETWORK_ERROR` de
+l'arabe échoue désormais, contre « ✅ accord complet » avant) ;
+`check_server_rules` sait lire un défaut de configuration et une constante
+serveur, refuse les motifs ambigus (l'interversion titre/sous-titre est
+attrapée) ; `appartenance.py` distingue « ne le voit pas » de « on n'a rien
+reçu » (23 cas, 16 refus) ; `provision-decor.sh` et `seed-demo.sh` n'avalent
+plus l'échec.
+
+**Les trois changements de contrat, faits ensuite.** Ils demandaient de modifier
+ce qui circule entre l'app et le serveur, pas seulement de corriger du code :
+
+- **Les notifications sont localisées.** Le serveur n'envoie plus une phrase
+  française mais le couple (`type`, `promoDescription`) — extrait explicitement
+  de `metadata`, qui reste `@Exclude()` ; `notificationLabel` compose la phrase
+  côté app, 7 clés × 3 `.arb`. Le `message` serveur ne sert plus que de dernier
+  recours, pour un type que le miroir Dart ne connaît pas encore. Le `switch`
+  Dart étant exhaustif, **le compilateur tient la couverture** : un type ajouté
+  sans libellé ne compile pas.
+- **Le décompte d'emplacements vient du serveur** (`GET /promo/me/slots`, posé
+  sur `PromoController` — `CommercantController` n'injecte pas `PromoService` et
+  l'y injecter fermerait un cycle de modules). `kMaxPromosActives = 5` et
+  `countActivePromos` sont supprimés : le plafond voyage avec la mesure. Tant
+  qu'elle n'est pas là, **rien n'est affiché** — un « 0 / 5 » de repli
+  annoncerait des emplacements libres sans rien en savoir.
+- **L'app envoie une durée, plus une date.** `dureeJours` remplace la `dateFin`
+  absolue calculée sur l'horloge du téléphone : le calcul se fait sur l'horloge
+  qui valide. `dateFin` reste accepté côté serveur pour les clients déjà
+  installés, marqué historique dans le DTO, `dureeJours` l'emportant quand les
+  deux arrivent.
+
+**Reste ouvert : les angles morts.** Rien n'a été exécuté — voir « Par où
+reprendre ».
+
+**Vérifié.** `flutter analyze` 0, `flutter test` 14 verts, `dart format` 0
+différence, `check_all.dart` 4/4, `tsc` backend propre, `eslint` sans erreur
+imputable. `npx jest` : 21 tests verts sur 4 suites — la 5ᵉ ne charge pas,
+`@aws-sdk/s3-request-presigner` et `sharp` étant absents du `node_modules`
+**Windows** (le backend tourne depuis WSL). **Aucun banc de bout en bout n'a été
+rejoué** : la revue est statique, les correctifs ne le sont pas.
 
 ### 2026-08-04 — Reprise, mise à niveau et outillage de test
 

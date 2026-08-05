@@ -58,6 +58,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
         return ErrorCode.VALIDATION_ERROR;
       case HttpStatus.TOO_MANY_REQUESTS:
         return ErrorCode.RATE_LIMITED;
+      // Le seul 413 du produit vient de la limite Multer de
+      // `StorageController.upload` : le fichier n'atteint jamais
+      // `StorageService.uploadPhoto`, donc jamais le refus métier
+      // `STORAGE_FILE_TOO_LARGE` — il tombait dans `HTTP_ERROR` alors que ce
+      // code existe et est traduit dans les trois langues. Le mobile
+      // affichait « une erreur est survenue » sur une cause parfaitement
+      // nommable et corrigeable par l'utilisateur (revue 2026-08-05).
+      case HttpStatus.PAYLOAD_TOO_LARGE:
+        return ErrorCode.STORAGE_FILE_TOO_LARGE;
       default:
         return ErrorCode.HTTP_ERROR;
     }

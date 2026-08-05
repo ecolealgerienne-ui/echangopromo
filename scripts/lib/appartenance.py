@@ -90,6 +90,34 @@ def verdict_refus(statut, code):
     return "ok", "%s %s" % (statut, code)
 
 
+def verdict_projection(statut, corps, cid, doit_voir):
+    """Le verdict de la liste filtrée par commune — rend (verdict, explication).
+
+    ⚠️ **Le contrôle négatif est celui qui prouve quelque chose**, et c'est
+    exactement celui qu'un repli désarmait. Avant le 2026-08-05, le statut
+    était jeté et `corps.get("items", [])` rendait `[]` sur un 429, un 401,
+    un 500 ou une coupure : pour l'agent B (`doit_voir=False`), toute panne
+    imprimait « ✅ ne le voit pas ». Le banc enchaîne 16 écritures sur un seau
+    de 20/min — le 429 n'est pas théorique.
+
+    Une réponse dont on ne sait rien n'est pas une liste vide (règle #29) :
+    sans un 200 portant réellement la clé `items`, le verdict est NON
+    CONCLUANT, jamais une réussite.
+    """
+    if statut is None:
+        return "non_concluant", "pas de réponse"
+    if statut != 200:
+        return "non_concluant", "HTTP %s — la sonde n'a pas atteint la liste" % statut
+    if not isinstance(corps, dict) or "items" not in corps:
+        return "non_concluant", "200 mais réponse sans « items »"
+    vu = any(i.get("id") == cid for i in corps["items"])
+    if vu != doit_voir:
+        return "echec", "%s alors qu'il %s" % (
+            "le voit" if vu else "ne le voit pas",
+            "devrait" if doit_voir else "ne devrait pas")
+    return "ok", "voit le commerçant" if vu else "ne le voit pas"
+
+
 def verdict_temoin(statut, code):
     """L'agent légitime ne doit PAS être refusé pour appartenance."""
     if statut is None:
@@ -150,6 +178,25 @@ def jeton_agent(email, mot_de_passe, quoi):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def self_test():
+    # La projection prend un corps et un booléen en plus — testée à part.
+    liste_a = {"items": [{"id": "CID"}]}
+    liste_vide = {"items": []}
+    cas_projection = [
+        # (statut, corps, doit_voir, verdict attendu)
+        (200, liste_a, True, "ok"),
+        (200, liste_vide, False, "ok"),
+        # ── Doivent REFUSER ──────────────────────────────────────────────────
+        (200, liste_a, False, "echec"),      # l'agent B voit : la fuite même
+        (200, liste_vide, True, "echec"),    # l'agent A ne voit pas : filtre trop strict
+        # ⚠️ Le cœur du correctif : une panne n'est PAS « ne le voit pas ».
+        (429, {}, False, "non_concluant"),
+        (401, {}, False, "non_concluant"),
+        (500, {}, False, "non_concluant"),
+        (200, {}, False, "non_concluant"),   # 200 sans « items »
+        (200, "pas un objet", False, "non_concluant"),
+        (None, {}, False, "non_concluant"),
+    ]
+
     cas = [
         # (fonction, statut, code, verdict attendu)
         (verdict_refus, 403, "COMMERCANT_NOT_IN_AGENT_COMMUNES", "ok"),
@@ -176,11 +223,20 @@ def self_test():
         else:
             echecs.append("%s(%s, %r) = %s, attendu %s" % (
                 fn.__name__, statut, code, obtenu, attendu))
-    refus = sum(1 for c in cas if c[3] != "ok")
-    print("auto-test : %d cas, dont %d refus" % (len(cas), refus))
+    for statut, corps, doit_voir, attendu in cas_projection:
+        obtenu, _ = verdict_projection(statut, corps, "CID", doit_voir)
+        if obtenu == attendu:
+            passes += 1
+        else:
+            echecs.append("verdict_projection(%s, %r, doit_voir=%s) = %s, attendu %s" % (
+                statut, corps, doit_voir, obtenu, attendu))
+    total = len(cas) + len(cas_projection)
+    refus = (sum(1 for c in cas if c[3] != "ok")
+             + sum(1 for c in cas_projection if c[3] != "ok"))
+    print("auto-test : %d cas, dont %d refus" % (total, refus))
     for e in echecs:
         print("  ❌ " + e)
-    print("  %d/%d" % (passes, len(cas)))
+    print("  %d/%d" % (passes, total))
     return not echecs
 
 
@@ -263,16 +319,15 @@ def main():
     # ── Projection de la liste ───────────────────────────────────────────────
     print("\n── la liste des commerçants est filtrée par commune ──")
     for jeton, quoi, doit_voir in ((a, "agent A", True), (b, "agent B", False)):
-        _, _, d = appeler("GET", "/admin/commercant?limit=100", jeton)
+        statut, _, d = appeler("GET", "/admin/commercant?limit=100", jeton)
         time.sleep(PACE)
-        vu = any(i.get("id") == cid for i in d.get("items", []))
-        ok = vu == doit_voir
-        print("  %s %-32s %s" % ("✅" if ok else "❌", quoi,
-                                 "voit le commerçant" if vu else "ne le voit pas"))
-        if not ok:
-            echecs.append("liste %s : %s alors qu'il %s" % (
-                quoi, "le voit" if vu else "ne le voit pas",
-                "devrait" if doit_voir else "ne devrait pas"))
+        v, explication = verdict_projection(statut, d, cid, doit_voir)
+        marque = {"ok": "✅", "non_concluant": "⚠️ ", "echec": "❌"}[v]
+        print("  %s %-32s %s" % (marque, quoi, explication))
+        if v == "echec":
+            echecs.append("liste %s : %s" % (quoi, explication))
+        elif v == "non_concluant":
+            non_concluants.append("liste %s : %s" % (quoi, explication))
 
     print("\n════════════════════════════════════════════════════════════════")
     if non_concluants:

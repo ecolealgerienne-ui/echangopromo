@@ -47,11 +47,9 @@ class _AdminLoginScreenState extends ConsumerState<AdminLoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      await ref.read(authControllerProvider.notifier).loginThenResolveId(
-            role: AppRole.admin,
-            token: token,
-            fetchId: () async => (await api.me()).id,
-          );
+      await ref
+          .read(authControllerProvider.notifier)
+          .login(AuthSession(role: AppRole.admin, token: token));
       if (mounted) context.go('/admin/dashboard');
     } catch (error) {
       setState(() => _error = extractApiErrorMessage(

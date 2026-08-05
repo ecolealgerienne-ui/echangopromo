@@ -29,12 +29,20 @@ import 'dart:io';
 
 class Paire {
   const Paire(
-      this.libelle, this.sourceTs, this.enumTs, this.sourceDart, this.enumDart);
+      this.libelle, this.sourceTs, this.enumTs, this.sourceDart, this.enumDart,
+      {this.appSeules = const {}});
   final String libelle;
   final String sourceTs;
   final String enumTs;
   final String sourceDart;
   final String enumDart;
+
+  /// Valeurs présentes **côté app uniquement**, assumées, avec leur raison.
+  ///
+  /// Sert au repli explicite d'un miroir (`unknown`), qui ne correspond par
+  /// construction à aucune valeur serveur. Comme `_mobileSeuls` : une entrée
+  /// sans raison est indiscernable d'un oubli, et l'auto-test la refuse.
+  final Map<String, String> appSeules;
 }
 
 const _paires = <Paire>[
@@ -82,6 +90,21 @@ const _paires = <Paire>[
       'AuditActorType',
       'apps/mobile/lib/domain/enums/audit_actor_type.dart',
       'AuditActorType'),
+  // Absent de cette liste jusqu'au 2026-08-05 : le vérificateur annonçait
+  // « les 8 couples sont d'accord » sans jamais l'avoir regardé, alors que le
+  // backend y a ajouté quatre valeurs en trois migrations et que le miroir
+  // levait sur une valeur inconnue. Un contrôle qui ne couvre pas ce qu'il
+  // prétend couvrir rassure plus qu'il ne protège (règle #28).
+  Paire(
+      'Type de notification',
+      'apps/backend/src/notification/entities/notification.entity.ts',
+      'NotificationType',
+      'apps/mobile/lib/domain/models/notification.dart',
+      'NotificationType',
+      appSeules: {
+        '__unknown__':
+            'repli explicite du miroir — sentinelle, jamais émise par le serveur',
+      }),
 ];
 
 /// Enums Dart **sans** contrepartie backend, épinglés avec leur raison.
@@ -246,8 +269,23 @@ bool selfTest() {
   // Garde-fou identique à check_error_codes : toute exception porte sa raison.
   _verifie('tout enum mobile-seul porte une raison',
       _mobileSeuls.values.where((v) => v.trim().isEmpty).length, 0);
+  _verifie(
+      'toute valeur app-seule porte une raison',
+      _paires
+          .expand((p) => p.appSeules.values)
+          .where((v) => v.trim().isEmpty)
+          .length,
+      0);
+  // Une exclusion `appSeules` ne doit jamais couvrir une valeur RÉELLEMENT
+  // servie par le backend : ce serait transformer une désynchronisation en
+  // silence. Cas synthétique ici ; le vrai croisement est fait dans `main`
+  // sur les fichiers réels (`exclusionsMasquantes`).
+  _verifie('exclusion qui masque une valeur serveur → détectée',
+      exclusionsMasquantes({'a', 'b'}, const {'b': 'raison'}).toList(), ['b']);
+  _verifie('exclusion légitime → rien à signaler',
+      exclusionsMasquantes({'a'}, const {'__unknown__': 'repli'}).toList(), []);
 
-  const casRefus = 6;
+  const casRefus = 9;
   final total = _ok + _echecs.length;
   stdout.writeln('auto-test : $total cas, dont $casRefus refus');
   for (final e in _echecs) {
@@ -256,6 +294,14 @@ bool selfTest() {
   stdout.writeln('  $_ok/$total');
   return _echecs.isEmpty;
 }
+
+/// Les exclusions `appSeules` qui recouvrent une valeur **réellement servie**
+/// par le backend — c'est-à-dire une désynchronisation qu'on aurait rendue
+/// muette. Toujours vide en régime normal ; non vide = le contrôle a été
+/// désarmé, pas satisfait.
+Iterable<String> exclusionsMasquantes(
+        Set<String> valeursServeur, Map<String, String> appSeules) =>
+    appSeules.keys.where(valeursServeur.contains);
 
 void modeMutation() {
   stdout.writeln('''
@@ -310,8 +356,22 @@ void main(List<String> args) {
       continue;
     }
 
+    // Une exclusion qui recouvre une valeur réellement servie masquerait une
+    // désynchronisation : elle est refusée, pas appliquée.
+    final masquantes = exclusionsMasquantes(ts, p.appSeules).toList()..sort();
+    if (masquantes.isNotEmpty) {
+      problemes++;
+      stdout.writeln('  ❌ ${p.libelle} — exclusion(s) app-seule(s) qui '
+          'masquent une valeur servie par le serveur : ${masquantes.join(', ')}');
+      continue;
+    }
+
     final manquants = ts.difference(dart).toList()..sort();
-    final enTrop = dart.difference(ts).toList()..sort();
+    final enTrop = dart
+        .difference(ts)
+        .difference(p.appSeules.keys.toSet())
+        .toList()
+      ..sort();
     if (repliSilencieux(sourceDart)) replis.add(p.libelle);
 
     if (manquants.isEmpty && enTrop.isEmpty) {

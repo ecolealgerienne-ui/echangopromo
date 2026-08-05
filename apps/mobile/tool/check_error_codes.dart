@@ -73,8 +73,15 @@ const _exclusions = <String, String>{
 ///
 /// Légitimement présents dans les tables et absents de l'enum serveur : un
 /// échec réseau n'a pas de réponse HTTP à porter un code.
+/// ⚠️ Ces codes sont **exigés dans les trois tables**, au même titre que ceux
+/// du serveur. Jusqu'au 2026-08-05 ils n'étaient utilisés que pour taire un
+/// « en trop » : ils n'étaient donc **jamais vérifiés présents**, et retirer
+/// `NETWORK_ERROR` de `error_messages_ar.dart` rendait « ✅ accord complet ».
+/// Le code le plus affiché sur un marché à couverture réseau variable était le
+/// seul qu'aucun contrôle ne défendait (règle #28).
 const _codesClientSeuls = <String, String>{
   'NETWORK_ERROR': 'apps/mobile/lib/data/api/api_exception.dart',
+  'SERVER_UNAVAILABLE': 'apps/mobile/lib/data/api/api_exception.dart',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -161,6 +168,21 @@ void _verifie(String libelle, Object obtenu, Object attendu) {
   }
 }
 
+/// Les codes qu'une table devrait porter et ne porte pas — extrait ici pour
+/// être éprouvable par l'auto-test, la règle de composition (serveur − exclus
+/// **+ client-seuls**) étant précisément celle qui était fausse.
+Iterable<String> manquantsPour({
+  required Set<String> serveur,
+  required Map<String, String> exclusions,
+  required Map<String, String> clientSeuls,
+  required Set<String> table,
+}) {
+  final attendus = serveur
+      .difference(exclusions.keys.toSet())
+      .union(clientSeuls.keys.toSet());
+  return attendus.difference(table).toList()..sort();
+}
+
 bool selfTest() {
   // ── Doivent PASSER ────────────────────────────────────────────────────────
   _verifie(
@@ -204,8 +226,30 @@ bool selfTest() {
   final sansRaison =
       _exclusions.entries.where((e) => e.value.trim().isEmpty).toList();
   _verifie('toute exclusion porte une raison', sansRaison.length, 0);
+  // Même exigence sur les codes client-seuls : sans origine déclarée, on ne
+  // peut pas vérifier qu'ils sont bien émis quelque part.
+  _verifie('tout code client-seul porte son origine',
+      _codesClientSeuls.values.where((v) => v.trim().isEmpty).length, 0);
+  // ⚠️ Le cas qui prouve le correctif du 2026-08-05 : un code client-seul
+  // absent d'une table doit MANQUER, pas être ignoré.
+  _verifie(
+      'code client-seul absent d’une table → manquant',
+      manquantsPour(
+          serveur: {'A'},
+          exclusions: const {},
+          clientSeuls: const {'NETWORK_ERROR': 'x'},
+          table: {'A'}).toList(),
+      ['NETWORK_ERROR']);
+  _verifie(
+      'code client-seul présent → rien à signaler',
+      manquantsPour(
+          serveur: {'A'},
+          exclusions: const {},
+          clientSeuls: const {'NETWORK_ERROR': 'x'},
+          table: {'A', 'NETWORK_ERROR'}).toList(),
+      []);
 
-  const casRefus = 7;
+  const casRefus = 9;
   final total = _ok + _echecs.length;
   stdout.writeln('auto-test : $total cas, dont $casRefus refus');
   for (final e in _echecs) {
@@ -260,9 +304,17 @@ void main(List<String> args) {
     exit(2);
   }
 
-  final attendus = serveur.difference(_exclusions.keys.toSet());
+  // Les codes client-seuls rejoignent les attendus : ils sont émis par
+  // `ApiException.fromDioError` et doivent être traduits partout, exactement
+  // comme un code serveur. Les compter seulement en « en trop » revenait à ne
+  // jamais les défendre.
+  final attendus = serveur
+      .difference(_exclusions.keys.toSet())
+      .union(_codesClientSeuls.keys.toSet());
   stdout.writeln('serveur : ${serveur.length} codes '
-      '− ${_exclusions.length} exclusion(s) épinglée(s) = ${attendus.length} à traduire\n');
+      '− ${_exclusions.length} exclusion(s) épinglée(s) '
+      '+ ${_codesClientSeuls.length} code(s) client-seul(s) '
+      '= ${attendus.length} à traduire\n');
 
   var problemes = 0;
   _tablesApp.forEach((langue, chemin) {

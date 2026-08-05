@@ -43,6 +43,8 @@ const Map<String, String> errorMessagesFr = {
       'La photo est trop volumineuse. Réessayez avec une autre photo.',
   'STORAGE_PURPOSE_NOT_ALLOWED':
       "Ce type d'upload n'est pas autorisé pour ce compte.",
+  'STORAGE_KEY_NOT_OWNED':
+      "Cette photo n'a pas été envoyée depuis ce compte. Renvoyez-la.",
 
   'HIGHLIGHT_NOT_FOUND': 'Mise en avant introuvable.',
   'HIGHLIGHT_EMPTY_CONTENT':
@@ -79,13 +81,24 @@ const Map<String, String> errorMessagesFr = {
       "Ce document n'appartient pas à ce commerçant.",
   'COMMERCANT_PROFILE_PENDING_REVIEW':
       'Les modifications de votre profil doivent être validées par un administrateur avant de pouvoir publier des promos.',
+  'COMMERCANT_ACCOUNT_INACTIVE':
+      'Ce compte commerçant est suspendu ou supprimé.',
 
   'RATE_LIMITED': 'Trop de tentatives. Réessayez dans quelques instants.',
   'HTTP_ERROR': 'Une erreur est survenue.',
   'INTERNAL_ERROR': 'Une erreur inattendue est survenue. Réessayez plus tard.',
 
   /// Pas un `ErrorCode` backend — utilisé par [ApiException.fromDioError]
-  /// quand la requête n'a même pas atteint le serveur (pas de réponse HTTP).
+  /// quand la requête n'a même pas atteint le serveur (**aucune** réponse
+  /// HTTP). Ne doit jamais servir de fourre-tout : voir [SERVER_UNAVAILABLE].
   'NETWORK_ERROR':
       'Impossible de contacter le serveur. Vérifiez votre connexion.',
+
+  /// Pas un `ErrorCode` backend non plus — une réponse HTTP est bien arrivée,
+  /// mais elle ne porte pas le contrat `{statusCode, code, message}` (page
+  /// d'erreur HTML d'un frontal, 502/504 de Traefik...). Distinct de
+  /// `NETWORK_ERROR` : dire « vérifiez votre connexion » quand la connexion
+  /// marche envoie l'utilisateur chercher une panne chez lui.
+  'SERVER_UNAVAILABLE':
+      'Le serveur est momentanément indisponible. Réessayez dans un instant.',
 };

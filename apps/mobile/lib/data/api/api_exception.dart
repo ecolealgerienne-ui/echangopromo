@@ -29,9 +29,21 @@ class ApiException implements Exception {
       return ApiException(statusCode, code, message);
     }
 
-    // Pas de réponse HTTP du tout (hors ligne, timeout...) — code dédié,
-    // non émis par le backend, pour rester localisable comme les autres
-    // (voir `error_messages_fr.dart`).
+    // ⚠️ Deux causes distinctes, deux codes — un repli unique détruisait
+    // l'information qui compte (règle #29). « Rien reçu » et « reçu quelque
+    // chose d'illisible » n'appellent pas le même geste : un 502 en text/html
+    // renvoyé par le frontal Traefik affichait « Vérifiez votre connexion »,
+    // envoyant l'utilisateur couper sa 4G et conclure que l'app est cassée,
+    // alors que son réseau marchait et que la panne était côté serveur
+    // (revue 2026-08-05). Ni l'un ni l'autre n'est un `ErrorCode` backend :
+    // les deux sont localisés côté app (voir `error_messages_fr.dart`).
+    if (error.response != null) {
+      return ApiException(
+        statusCode,
+        'SERVER_UNAVAILABLE',
+        'Le serveur est momentanément indisponible. Réessayez dans un instant.',
+      );
+    }
     return ApiException(
       statusCode,
       'NETWORK_ERROR',

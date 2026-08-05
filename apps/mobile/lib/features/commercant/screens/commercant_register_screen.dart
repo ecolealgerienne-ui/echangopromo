@@ -113,11 +113,9 @@ class _CommercantRegisterScreenState
           longitude: _longitude,
           acceptedTerms: _acceptedTerms,
         );
-        await ref.read(authControllerProvider.notifier).loginThenResolveId(
-              role: AppRole.commercant,
-              token: token,
-              fetchId: () async => (await api.me()).id,
-            );
+        await ref
+            .read(authControllerProvider.notifier)
+            .login(AuthSession(role: AppRole.commercant, token: token));
       }
 
       final storage = ref.read(storageApiProvider);

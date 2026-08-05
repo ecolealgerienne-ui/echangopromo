@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Repository } from 'typeorm';
+import { In, IsNull, QueryFailedError, Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
 import {
   BadRequestAppException,
@@ -90,6 +90,41 @@ export class CommercantService {
   }
 
   /**
+   * `assertPhoneAvailable` est un « vérifier puis insérer » (règle #13) : deux
+   * inscriptions simultanées sur le même numéro lisent toutes les deux
+   * « libre », et la seconde heurte l'index unique partiel
+   * `UQ_commercant_telephone_active`. Ce `23505` n'était rattrapé **nulle
+   * part** dans le backend — il remontait en 500 `INTERNAL_ERROR`, laissant
+   * croire à une panne là où le refus métier existe déjà et est traduit dans
+   * les trois langues (revue 2026-08-05).
+   *
+   * Le nom de l'index est vérifié plutôt que le seul code `23505` : une autre
+   * contrainte d'unicité ajoutée plus tard ne doit pas se retrouver déguisée
+   * en « numéro déjà pris ».
+   */
+  private async saveNewAccount(commercant: Commercant): Promise<Commercant> {
+    try {
+      return await this.commercants.save(commercant);
+    } catch (error) {
+      const driverError = (error as QueryFailedError)?.driverError as {
+        code?: string;
+        constraint?: string;
+      };
+      if (
+        error instanceof QueryFailedError &&
+        driverError?.code === '23505' &&
+        driverError.constraint === 'UQ_commercant_telephone_active'
+      ) {
+        throw new ConflictAppException(
+          ErrorCode.COMMERCANT_PHONE_TAKEN,
+          'Ce numéro de téléphone est déjà enregistré',
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Auto-inscription (specs §3.2, voie 1) — pas de passage agent requis, et
    * pas d'OTP (décision produit) : le compte est `autonome` dès la saisie du
    * PIN, sans preuve de possession du numéro de téléphone. `acceptedTerms`
@@ -106,7 +141,7 @@ export class CommercantService {
     }
 
     const { pin, ...rest } = dto;
-    return this.commercants.save(
+    return this.saveNewAccount(
       this.commercants.create({
         ...rest,
         telephone: dto.telephone,
@@ -133,7 +168,7 @@ export class CommercantService {
     await this.assertPhoneAvailable(dto.telephone);
     const { pin, ...rest } = dto;
 
-    return this.commercants.save(
+    return this.saveNewAccount(
       this.commercants.create({
         ...rest,
         pinHash: await this.authService.hash(pin),
@@ -254,6 +289,19 @@ export class CommercantService {
     dto: UpdateCommercantDto,
   ): Promise<Commercant> {
     const commercant = await this.findByIdOrFail(commercantId);
+    // `photoKey` revient du client et la clé d'un tiers est publique
+    // (`GET /commercant/:id/public` sert `photoUrl`, donc la clé littérale) :
+    // sans cette garde, poser la clé d'un concurrent puis la remplacer d'un
+    // second PATCH la faisait supprimer de S3 par le `deleteObject` ci-dessous
+    // — et l'affichait sur sa propre fiche entre les deux (revue 2026-08-05).
+    // `requestRegistreVerification` fait déjà exactement ce contrôle sur
+    // `registreKey`, deux méthodes plus bas : c'est la règle #10, une garde
+    // écrite mais non appliquée aux autres champs de clé.
+    if (dto.photoKey) {
+      this.storageService.assertKeyOwnedBy(dto.photoKey, 'commercant-photos', [
+        commercantId,
+      ]);
+    }
     const previousPhotoKey = commercant.photoKey;
     const definedFields = Object.fromEntries(
       Object.entries(dto).filter(([, value]) => value !== undefined),
@@ -422,17 +470,35 @@ export class CommercantService {
    * admin/agent, décision produit 2026-07-12) — `undefined` = vue globale
    * (admin), même convention que `AdminController.scopedCommuneIds`.
    */
+  /**
+   * **Le filtre « compte vivant » commun à tous les compteurs de dashboard.**
+   *
+   * Le bug avait été trouvé le 2026-07-14 et corrigé sur `countActive`
+   * **seul** — les deux autres compteurs recopiaient le même `where` sans
+   * lui, et gardaient donc leurs anomalies : un `registresEnAttente: 1`
+   * affiché indéfiniment pour un compte supprimé, que le vider notifiait un
+   * destinataire mort (revue 2026-08-05, règle #9 — trois copies d'une même
+   * règle, une seule corrigée).
+   *
+   * Un compte **suspendu** est exclu au même titre qu'un supprimé : ces
+   * compteurs comptent ce qu'un admin doit traiter, et un compte suspendu
+   * n'attend pas une validation de registre mais une décision de
+   * réactivation, qui rendra son dossier à la file.
+   */
+  private aliveAccountWhere(communeIds?: string[]) {
+    return {
+      deletedAt: IsNull(),
+      suspendedAt: IsNull(),
+      ...(communeIds ? { communeId: In(communeIds) } : {}),
+    };
+  }
+
   async countActive(communeIds?: string[]): Promise<number> {
     if (communeIds && communeIds.length === 0) return 0;
     return this.commercants.count({
       where: {
         accountState: CommercantAccountState.AUTONOME,
-        // Ni supprimé ni suspendu (bug trouvé 2026-07-14 : ce compteur
-        // ignorait deletedAt/suspendedAt, comptant donc aussi les comptes
-        // inactifs dans "commerces actifs" du dashboard).
-        deletedAt: IsNull(),
-        suspendedAt: IsNull(),
-        ...(communeIds ? { communeId: In(communeIds) } : {}),
+        ...this.aliveAccountWhere(communeIds),
       },
     });
   }
@@ -443,7 +509,7 @@ export class CommercantService {
     return this.commercants.count({
       where: {
         registreStatus: RegistreStatus.EN_ATTENTE,
-        ...(communeIds ? { communeId: In(communeIds) } : {}),
+        ...this.aliveAccountWhere(communeIds),
       },
     });
   }
@@ -454,7 +520,7 @@ export class CommercantService {
     return this.commercants.count({
       where: {
         profilePendingReview: true,
-        ...(communeIds ? { communeId: In(communeIds) } : {}),
+        ...this.aliveAccountWhere(communeIds),
       },
     });
   }
@@ -627,6 +693,25 @@ export class CommercantService {
       throw new ForbiddenAppException(
         ErrorCode.COMMERCANT_PROFILE_PENDING_REVIEW,
         'Les modifications de votre profil doivent être validées par un administrateur avant de pouvoir publier des promos',
+      );
+    }
+  }
+
+  /**
+   * Compte supprimé ou suspendu (soft dans les deux cas). Le commerçant
+   * lui-même est déjà arrêté en amont — suspension et suppression révoquent
+   * son token (`tokenVersion`) — mais **pas l'agent ni l'admin**, qui
+   * agissent avec le leur : `PromoService.create`/`publish` acceptaient donc
+   * de republier pour un commerçant suspendu, défaisant la cascade qui venait
+   * de repasser ses promos en brouillon (revue 2026-08-05). Invisible côté
+   * client grâce aux gardes défensives des lectures, mais l'état en base
+   * contredisait alors la décision de modération.
+   */
+  assertAccountActive(commercant: Commercant): void {
+    if (commercant.deletedAt || commercant.suspendedAt) {
+      throw new ForbiddenAppException(
+        ErrorCode.COMMERCANT_ACCOUNT_INACTIVE,
+        'Ce compte commerçant est suspendu ou supprimé',
       );
     }
   }

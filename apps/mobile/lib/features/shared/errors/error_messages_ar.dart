@@ -18,6 +18,7 @@ const Map<String, String> errorMessagesAr = {
   'STORAGE_INVALID_IMAGE': 'الملف المرسل ليس صورة صالحة. أعد المحاولة بصورة.',
   'STORAGE_FILE_TOO_LARGE': 'الصورة كبيرة جدًا. أعد المحاولة بصورة أخرى.',
   'STORAGE_PURPOSE_NOT_ALLOWED': 'نوع الرفع هذا غير مسموح لهذا الحساب.',
+  'STORAGE_KEY_NOT_OWNED': 'لم يتم رفع هذه الصورة من هذا الحساب. أعد رفعها.',
   'HIGHLIGHT_NOT_FOUND': 'الإبراز غير موجود.',
   'HIGHLIGHT_EMPTY_CONTENT':
       'يجب أن يستهدف الإبراز عرضًا أو أن يحمل صورة مستوردة.',
@@ -44,8 +45,10 @@ const Map<String, String> errorMessagesAr = {
   'COMMERCANT_REGISTRE_KEY_MISMATCH': 'هذا المستند لا يخص هذا التاجر.',
   'COMMERCANT_PROFILE_PENDING_REVIEW':
       'يجب أن يصادق مسؤول على تعديلات ملفك الشخصي قبل أن تتمكن من نشر العروض.',
+  'COMMERCANT_ACCOUNT_INACTIVE': 'حساب التاجر هذا موقوف أو محذوف.',
   'RATE_LIMITED': 'عدد كبير جدًا من المحاولات. أعد المحاولة بعد قليل.',
   'HTTP_ERROR': 'حدث خطأ ما.',
   'INTERNAL_ERROR': 'حدث خطأ غير متوقع. أعد المحاولة لاحقًا.',
   'NETWORK_ERROR': 'تعذّر الاتصال بالخادم. تحقق من اتصالك.',
+  'SERVER_UNAVAILABLE': 'الخادم غير متاح مؤقتًا. أعد المحاولة بعد لحظات.',
 };

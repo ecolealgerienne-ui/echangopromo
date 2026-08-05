@@ -78,9 +78,12 @@ class MyPromosScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final promosAsync = ref.watch(myPromosProvider);
     final dateFormat = DateFormat('dd/MM/yyyy');
-    final activeCount =
-        promosAsync.valueOrNull?.where((p) => p.isPublished).length ?? 0;
-    final atCap = activeCount >= kMaxPromosActives;
+    // Le decompte d'emplacements vient du serveur (`GET /promo/me/slots`) :
+    // le derivait d'ici comptait les `publiee` d'une page de 100 promos tous
+    // statuts confondus, et incluait les expirees pas encore basculees par le
+    // cron (revue 2026-08-05).
+    final slots = ref.watch(promoSlotsProvider).valueOrNull;
+    final atCap = slots?.auPlafond ?? false;
 
     return Scaffold(
       appBar: AppBar(
@@ -118,18 +121,18 @@ class MyPromosScreen extends ConsumerWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        l10n.activeCountLabel(activeCount),
+                        l10n.activeCountLabel(slots?.enLigne ?? 0),
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
                     ),
-                    for (var i = 0; i < kMaxPromosActives; i++)
+                    for (var i = 0; i < (slots?.plafond ?? 0); i++)
                       Padding(
                         padding: const EdgeInsetsDirectional.only(start: 4),
                         child: Container(
                           width: 14,
                           height: 6,
                           decoration: BoxDecoration(
-                            color: i < activeCount
+                            color: i < (slots?.enLigne ?? 0)
                                 ? Theme.of(context).colorScheme.primary
                                 : Theme.of(context)
                                     .colorScheme

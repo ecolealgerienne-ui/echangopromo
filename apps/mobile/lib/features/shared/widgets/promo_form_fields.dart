@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../app/theme.dart';
 import '../../../domain/enums/categorie.dart';
+import '../../../domain/promo_rules.dart';
 import '../../../l10n/app_localizations.dart';
 import 'category_dropdown.dart';
 import 'form_section.dart';
@@ -32,7 +33,7 @@ class PromoFormFields extends StatelessWidget {
     required this.onCategorieChanged,
     this.dureeJours,
     this.onDureeJoursChanged,
-    this.maxDureeJours = 7,
+    this.maxDureeJours = promoMaxDureeJours,
   });
 
   final List<PhotoSlotItem> photoItems;

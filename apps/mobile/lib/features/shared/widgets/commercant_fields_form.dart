@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../client/providers/commune_providers.dart';
+import 'api_error_text.dart';
 import 'category_dropdown.dart';
 import 'form_section.dart';
 import 'commune_cascade_field.dart';
@@ -102,7 +103,13 @@ class CommercantFieldsForm extends ConsumerWidget {
             const SizedBox(height: 12),
             communesAsync.when(
               loading: () => const LinearProgressIndicator(),
-              error: (error, _) => Text(l10n.communesError(error.toString())),
+              // Dernier `error.toString()` du dépôt — et sur le tout premier
+              // écran de saisie du produit : un `GET /commune` en échec y
+              // affichait le message backend, **toujours en français**, quelle
+              // que soit la langue choisie, plus le dump Dio en première ligne.
+              // Les 15 autres sites passent par ce widget depuis longtemps
+              // (revue 2026-08-05, règle #26).
+              error: (error, _) => ApiErrorText(error),
               data: (communes) => CommuneCascadeField(
                 communes: communes,
                 selectedCommuneId: communeId,

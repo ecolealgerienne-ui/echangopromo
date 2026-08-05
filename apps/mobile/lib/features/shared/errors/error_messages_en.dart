@@ -19,6 +19,8 @@ const Map<String, String> errorMessagesEn = {
       'The uploaded file is not a valid image. Try again with a photo.',
   'STORAGE_FILE_TOO_LARGE':
       'The photo is too large. Try again with another photo.',
+  'STORAGE_KEY_NOT_OWNED':
+      'This photo was not uploaded from this account. Please upload it again.',
   'STORAGE_PURPOSE_NOT_ALLOWED':
       'This upload type is not allowed for this account.',
   'HIGHLIGHT_NOT_FOUND': 'Featured card not found.',
@@ -51,8 +53,12 @@ const Map<String, String> errorMessagesEn = {
       'This document does not belong to this merchant.',
   'COMMERCANT_PROFILE_PENDING_REVIEW':
       'Your profile changes must be validated by an administrator before you can publish promos.',
+  'COMMERCANT_ACCOUNT_INACTIVE':
+      'This merchant account is suspended or deleted.',
   'RATE_LIMITED': 'Too many attempts. Please try again shortly.',
   'HTTP_ERROR': 'An error occurred.',
   'INTERNAL_ERROR': 'An unexpected error occurred. Please try again later.',
   'NETWORK_ERROR': 'Could not reach the server. Check your connection.',
+  'SERVER_UNAVAILABLE':
+      'The server is temporarily unavailable. Please try again in a moment.',
 };

@@ -37,7 +37,6 @@
   "communeLabel": "Municipality",
   "filterAllOption": "All",
   "communeRequired": "Municipality required",
-  "communesError": "Municipalities error: {error}",
 
   "locationEnableService": "Enable location on your phone.",
   "locationPermissionDenied": "Location permission denied.",
@@ -405,5 +404,13 @@
   "highlightSearchPromoTitle": "Pick a promo",
   "highlightSearchPromoHint": "Product or shop name",
   "highlightNoPromoSelected": "No promo — poster only",
-  "highlightContentRequired": "Pick a promo or upload an image."
+  "highlightContentRequired": "Pick a promo or upload an image.",
+
+  "notificationPromoHidden": "Your promo “{promo}” was hidden after reports.",
+  "notificationPromoWarned": "Your promo “{promo}” received several reports and was moved back to draft. Review it, then publish it again.",
+  "notificationPromoVerified": "Your promo “{promo}” was reviewed and approved.",
+  "notificationPromoExpiringSoon": "Your promo “{promo}” expires soon. Consider publishing it again.",
+  "notificationRegistreValidated": "Your trade register was approved — you can now publish promos.",
+  "notificationRegistreRejected": "Your trade register was rejected. Please send a readable document.",
+  "notificationProfileValidated": "Your profile changes were approved by an administrator."
 }

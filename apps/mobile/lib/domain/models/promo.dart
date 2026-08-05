@@ -1,6 +1,7 @@
 import '../enums/categorie.dart';
 import '../enums/promo_lifecycle_status.dart';
 import '../enums/promo_moderation_status.dart';
+import '../promo_rules.dart';
 
 class Promo {
   const Promo({
@@ -97,15 +98,21 @@ class Promo {
   bool get isStopped => lifecycleStatus == PromoLifecycleStatus.arretee;
   bool get isDeleted => lifecycleStatus == PromoLifecycleStatus.supprimee;
   bool get isExpired =>
-      lifecycleStatus == PromoLifecycleStatus.expiree ||
-      (dateFin != null && dateFin!.isBefore(DateTime.now()));
+      promoEstExpiree(lifecycleStatus: lifecycleStatus, dateFin: dateFin);
 
-  /// Même fenêtre que `PromoService.notifyExpiringSoonCron` côté backend —
-  /// une seule définition de "bientôt" dans tout le produit.
+  /// Copie de `EXPIRING_SOON_WINDOW_HOURS` (`PromoService`, backend), qui pilote
+  /// la notification « expire bientôt ».
+  ///
+  /// ⚠️ Le commentaire disait « une seule définition de "bientôt" dans tout le
+  /// produit ». Il y en avait deux, et **une phrase ne tient pas un
+  /// invariant** : changer la cadence du cron aurait allumé ce badge sans
+  /// notification correspondante (revue 2026-08-05, règle #30). Les deux
+  /// valeurs sont nommées et comparées par `tool/check_server_rules.dart`.
   bool get isExpiringSoon =>
       !isExpired &&
       dateFin != null &&
-      dateFin!.isBefore(DateTime.now().add(const Duration(hours: 24)));
+      dateFin!.isBefore(
+          DateTime.now().add(const Duration(hours: promoExpiringSoonHours)));
 
   double get discountPercent => (prixAvant - prixApres) / prixAvant * 100;
 }

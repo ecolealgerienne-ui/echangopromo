@@ -39,8 +39,6 @@
   "communeLabel": "Commune",
   "filterAllOption": "Toutes",
   "communeRequired": "Commune requise",
-  "communesError": "Erreur communes : {error}",
-  "@communesError": { "placeholders": { "error": { "type": "String" } } },
 
   "locationEnableService": "Active la localisation sur ton téléphone.",
   "locationPermissionDenied": "Permission de localisation refusée.",
@@ -421,5 +419,17 @@
   "highlightSearchPromoTitle": "Choisir une promo",
   "highlightSearchPromoHint": "Nom du produit ou du commerce",
   "highlightNoPromoSelected": "Aucune promo — affiche seule",
-  "highlightContentRequired": "Choisissez une promo ou importez une image."
+  "highlightContentRequired": "Choisissez une promo ou importez une image.",
+
+  "notificationPromoHidden": "Votre promo « {promo} » a été masquée suite à des signalements.",
+  "@notificationPromoHidden": { "placeholders": { "promo": { "type": "String" } } },
+  "notificationPromoWarned": "Votre promo « {promo} » a reçu plusieurs signalements et a été repassée en brouillon. Vérifiez-la puis republiez-la.",
+  "@notificationPromoWarned": { "placeholders": { "promo": { "type": "String" } } },
+  "notificationPromoVerified": "Votre promo « {promo} » a été vérifiée et validée.",
+  "@notificationPromoVerified": { "placeholders": { "promo": { "type": "String" } } },
+  "notificationPromoExpiringSoon": "Votre promo « {promo} » expire bientôt. Pensez à la republier.",
+  "@notificationPromoExpiringSoon": { "placeholders": { "promo": { "type": "String" } } },
+  "notificationRegistreValidated": "Votre registre de commerce a été validé — vous pouvez maintenant publier vos promos.",
+  "notificationRegistreRejected": "Votre registre de commerce a été rejeté. Renvoyez un document lisible.",
+  "notificationProfileValidated": "Les modifications de votre profil ont été validées par un administrateur."
 }

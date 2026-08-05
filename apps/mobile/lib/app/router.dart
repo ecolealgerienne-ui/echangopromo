@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -96,8 +97,14 @@ final _appRoutes = <_AppRoute>[
       (context, state) => const LegalDocumentScreen.privacy()),
   // TEMPORAIRE — écran de test pour basculer entre profils, à supprimer
   // avant l'ouverture publique (voir commentaire en tête du fichier).
-  _AppRoute(
-      '/dev/profiles', (context, state) => const DevProfileSwitcherScreen()),
+  //
+  // ⚠️ `kDebugMode` plutôt qu'un commentaire « à supprimer » : la phrase
+  // existait depuis la création du fichier et n'a rien tenu — un commentaire
+  // ne peut pas échouer (règle #30). La route n'est plus **construite** en
+  // release, elle ne peut donc plus être atteinte même par URL directe.
+  if (kDebugMode)
+    _AppRoute(
+        '/dev/profiles', (context, state) => const DevProfileSwitcherScreen()),
   _AppRoute(
     '/promo/:id',
     (context, state) => PromoDetailScreen(promoId: state.pathParameters['id']!),

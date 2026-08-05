@@ -1,6 +1,7 @@
 import '../enums/categorie.dart';
 import '../enums/promo_lifecycle_status.dart';
 import '../enums/promo_moderation_status.dart';
+import '../promo_rules.dart';
 
 /// Entrée de la file de modération admin/agent (promo signalée, `GET
 /// /admin/moderation/queue`) ou de la vue globale (`GET /admin/promo`,
@@ -20,6 +21,7 @@ class ModerationItem {
     required this.commercantId,
     required this.commercantNom,
     required this.commercantTelephone,
+    this.dateFin,
     this.activeReportCount,
     this.reasonBreakdown,
   });
@@ -41,6 +43,11 @@ class ModerationItem {
         commercantId: json['commercantId'] as String,
         commercantNom: json['commercantNom'] as String,
         commercantTelephone: json['commercantTelephone'] as String,
+        // Servi par `toAdminPromoJson` depuis toujours, jamais lu ici : les
+        // écrans admin passaient `isExpired: false` en dur (règle #31).
+        dateFin: json['dateFin'] == null
+            ? null
+            : DateTime.parse(json['dateFin'] as String),
         activeReportCount: json['activeReportCount'] as int?,
         reasonBreakdown: (json['reasonBreakdown'] as Map<String, dynamic>?)
             ?.map((key, value) => MapEntry(key, value as int)),
@@ -61,7 +68,13 @@ class ModerationItem {
   final String commercantId;
   final String commercantNom;
   final String commercantTelephone;
+  final DateTime? dateFin;
   final int? activeReportCount;
+
+  /// Même calcul que `Promo.isExpired` — la définition vit dans
+  /// `promoEstExpiree`, pas recopiée ici.
+  bool get isExpired =>
+      promoEstExpiree(lifecycleStatus: lifecycleStatus, dateFin: dateFin);
 
   /// Photo principale — seule affichée en liste (`PromoModerationTile`).
   String? get photoUrl => photoUrls.isEmpty ? null : photoUrls.first;

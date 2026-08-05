@@ -50,12 +50,29 @@ export class Notification {
   @Column({ type: 'enum', enum: NotificationRecipientType })
   recipientType: NotificationRecipientType;
 
-  @Index()
-  @Column()
+  /**
+   * ⚠️ **Types explicites, et pas d'`@Index()` : l'entité doit décrire la
+   * base telle qu'elle est.** `synchronize` est coupé — le schéma ne vient
+   * que des migrations — donc un décorateur absent de
+   * `1783680000000-CreateNotificationEntity` ne crée rien : c'est un
+   * commentaire déguisé en index. Pire, il rendait le prochain
+   * `migration:generate` **destructeur** : il aurait émis les `CREATE INDEX`
+   * manquants *et*, `@CreateDateColumn()` valant `TIMESTAMP` sans fuseau
+   * par défaut alors que la table est en `timestamptz`, un `ALTER COLUMN
+   * "createdAt" TYPE TIMESTAMP` — perte du fuseau sur tout l'historique,
+   * glissée dans une migration qu'on aurait crue purement additive (revue
+   * 2026-08-05, règle #12).
+   *
+   * Les deux `@Index()` retirés plutôt que créés par migration : **aucune
+   * requête ne les emprunterait.** Les six accès de `NotificationService`
+   * filtrent tous sur `recipientType` + `recipientId` ensemble, couverts par
+   * l'index composite ci-dessus, et rien ne lit jamais par `promoId` seul.
+   * `report.entity.ts:38` est le jumeau déjà aligné.
+   */
+  @Column({ type: 'uuid' })
   recipientId: string; // commercantId, agentId, or adminId selon recipientType
 
-  @Column({ nullable: true })
-  @Index()
+  @Column({ type: 'uuid', nullable: true })
   promoId?: string; // NULL si la notification n'est pas liée à une promo
 
   @Column()
@@ -68,9 +85,9 @@ export class Notification {
   @Column({ type: 'timestamptz', nullable: true })
   readAt: Date | null;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }

@@ -47,7 +47,8 @@ class PromoModerationTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final secondLine = item.activeReportCount != null
         ? l10n.reportCountLabel(item.activeReportCount!)
-        : promoLifecycleLabel(context, item.lifecycleStatus, isExpired: false);
+        : promoLifecycleLabel(context, item.lifecycleStatus,
+            isExpired: item.isExpired);
     final reasonText = _reasonBreakdownText(context);
     final subtitle = [
       '${item.commercantNom} · ${item.commercantTelephone}',

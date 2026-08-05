@@ -46,6 +46,20 @@ import {
 const MAX_PROMOS_ACTIVES = 5;
 
 /**
+ * Fenêtre « expire bientôt », alignée sur la cadence quotidienne du cron :
+ * chaque promo ne peut la croiser qu'une fois (pas de doublon, pas de promo
+ * manquée).
+ *
+ * ⚠️ **Recopiée côté app** (`Promo.isExpiringSoon`, qui allume le badge). Le
+ * commentaire mobile affirmait « une seule définition de bientôt dans tout le
+ * produit » — il y en avait deux, et rien ne les tenait : changer la cadence
+ * du cron aurait fait afficher le badge sans notification correspondante,
+ * ou l'inverse. Nommée des deux côtés et tenue par
+ * `apps/mobile/tool/check_server_rules.dart` depuis le 2026-08-05 (règle #30).
+ */
+const EXPIRING_SOON_WINDOW_HOURS = 24;
+
+/**
  * Plafond de commerçants renvoyés pour une zone de carte. Au-delà, la carte
  * serait de toute façon illisible et la réponse inutilement lourde : le
  * client reçoit `truncated: true` et invite à zoomer, plutôt que de perdre
@@ -88,14 +102,87 @@ export class PromoService {
     return this.configService.get<number>('PROMO_REPUBLISH_COOLDOWN_HOURS', 24);
   }
 
-  /** Calcule/valide la date de fin — jamais plus loin que `PROMO_MAX_DURATION_DAYS`. */
-  private resolveDateFin(requested?: Date): Date {
+  /**
+   * **L'unique définition de « promo visible par un client ».**
+   *
+   * Cinq conditions orthogonales : publiée, modération non bloquante, non
+   * expirée, commerçant ni supprimé ni suspendu. Elles étaient recopiées dans
+   * quatre méthodes et appliquées partiellement dans une cinquième — la revue
+   * du 2026-08-05 a trouvé `countVisible` sans les deux gardes commerçant
+   * (une promo republiée pour un compte suspendu comptait au dashboard sans
+   * qu'aucun client ne la voie) et `PromoController.detail` avec **une seule**
+   * des cinq (un lien partagé servait encore une promo arrêtée ou expirée).
+   * Le commentaire disant « la définition ne vit qu'ici » existait déjà : il
+   * ne tenait rien, un commentaire ne pouvant pas échouer (règle #30).
+   *
+   * Exige que `commercant` soit déjà joint sous cet alias.
+   */
+  private applyVisibleConditions(
+    qb: SelectQueryBuilder<Promo>,
+  ): SelectQueryBuilder<Promo> {
+    return qb
+      .andWhere('promo.lifecycleStatus = :visibleLifecycleStatus', {
+        visibleLifecycleStatus: PromoLifecycleStatus.PUBLIEE,
+      })
+      .andWhere('promo.moderationStatus IN (:...visibleModerationStatuses)', {
+        visibleModerationStatuses: VISIBLE_MODERATION_STATUSES,
+      })
+      .andWhere('promo.dateFin > NOW()')
+      .andWhere('commercant.deletedAt IS NULL')
+      .andWhere('commercant.suspendedAt IS NULL');
+  }
+
+  /**
+   * Est-elle réellement en ligne *maintenant* ? Le cron d'expiration ne passe
+   * qu'à 1h : entre son expiration et ce passage, une promo garde
+   * `lifecycleStatus = PUBLIEE` alors qu'elle n'est plus visible nulle part.
+   * Sans cette distinction elle occupait quand même un des 5 emplacements et
+   * `publish` la refusait en `PROMO_ALREADY_PUBLISHED` — jusqu'à 24 h pendant
+   * lesquelles le commerçant ne pouvait ni la republier ni en créer une autre
+   * (revue 2026-08-05, règle #8 : le cycle de vie ne se lit pas sur le seul
+   * enum, la date en fait partie).
+   */
+  private isEnLigne(promo: Promo): boolean {
+    return (
+      promo.lifecycleStatus === PromoLifecycleStatus.PUBLIEE &&
+      promo.dateFin !== null &&
+      promo.dateFin.getTime() > Date.now()
+    );
+  }
+
+  /**
+   * Calcule/valide la date de fin — jamais plus loin que
+   * `PROMO_MAX_DURATION_DAYS`.
+   *
+   * `dureeJours` est la voie **normale** depuis le 2026-08-05 : la date est
+   * alors dérivée de l'horloge du serveur, la seule qui valide. `requested`
+   * (date absolue calculée par le client) reste accepté pour les clients déjà
+   * installés — il perd l'arbitrage quand les deux arrivent.
+   */
+  private resolveDateFin(requested?: Date, dureeJours?: number): Date {
     const now = Date.now();
     const max = new Date(now + this.maxDureeJours() * 24 * 60 * 60 * 1000);
     const dateFin =
-      requested ??
+      (dureeJours !== undefined
+        ? new Date(now + dureeJours * 24 * 60 * 60 * 1000)
+        : requested) ??
       new Date(now + this.defaultDureeJours() * 24 * 60 * 60 * 1000);
 
+    // ⚠️ **Une date invalide passe les deux comparaisons qui suivent.** Un
+    // `dureeJours` énorme (1e30) déborde l'intervalle représentable et rend
+    // `new Date(...)` → `Invalid Date`, dont `getTime()` vaut `NaN` : `NaN <=
+    // now` et `NaN > max` sont **tous les deux faux**, et la date atterrissait
+    // en base. Le chemin `dateFin` n'avait pas ce trou (`@IsDate` de
+    // class-validator rejette déjà une `Invalid Date`) — c'est l'ajout de
+    // `dureeJours` le 2026-08-05 qui l'a ouvert. Toute comparaison numérique
+    // sur une valeur venue du réseau doit d'abord établir qu'elle est un
+    // nombre.
+    if (!Number.isFinite(dateFin.getTime())) {
+      throw new BadRequestAppException(
+        ErrorCode.PROMO_DATE_FIN_EXCEEDS_MAX,
+        `La durée demandée dépasse ${this.maxDureeJours()} jours`,
+      );
+    }
     if (dateFin.getTime() <= now) {
       throw new BadRequestAppException(
         ErrorCode.PROMO_DATE_FIN_NOT_FUTURE,
@@ -122,8 +209,15 @@ export class PromoService {
     manager: EntityManager,
     commercantId: string,
   ): Promise<void> {
+    // `dateFin > maintenant` en plus du statut : une promo expirée mais pas
+    // encore basculée par le cron de 1h n'occupe plus d'emplacement (voir
+    // `isEnLigne`).
     const activeCount = await manager.count(Promo, {
-      where: { commercantId, lifecycleStatus: PromoLifecycleStatus.PUBLIEE },
+      where: {
+        commercantId,
+        lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
+        dateFin: MoreThan(new Date()),
+      },
     });
     if (activeCount >= MAX_PROMOS_ACTIVES) {
       throw new BadRequestAppException(
@@ -182,6 +276,34 @@ export class PromoService {
   }
 
   /**
+   * Les clés de photo arrivent du client dans le DTO et ne sont validées que
+   * comme des chaînes non vides — or elles sont publiques (`GET /promo` sert
+   * l'URL complète, donc la clé littérale, de n'importe quelle promo). Sans
+   * cette garde, un commerçant pouvait poser la clé d'un concurrent sur sa
+   * propre promo — l'IDOR de `assertCanManage` restant satisfait, la promo
+   * lui appartenant bien — puis la retirer d'un second `PATCH` pour la faire
+   * supprimer de S3 par `removedKeys` (revue 2026-08-05, règles #1 et #10).
+   *
+   * `actorId` : pour une promo créée/éditée par un agent ou un admin, les
+   * clés portent le `sub` de l'acteur (voir `StorageController.upload`), pas
+   * celui du commerçant — les deux préfixes sont donc légitimes.
+   */
+  private assertPhotoKeysOwned(
+    keys: string[],
+    commercantId: string,
+    actorId?: string,
+  ): void {
+    const allowedOwnerIds = actorId ? [commercantId, actorId] : [commercantId];
+    for (const key of keys) {
+      this.storageService.assertKeyOwnedBy(
+        key,
+        'promo-photos',
+        allowedOwnerIds,
+      );
+    }
+  }
+
+  /**
    * Best-effort : une miniature manquante ne doit jamais bloquer la
    * création/édition d'une promo — `PromoController.toClientJson` retombe
    * sur la photo complète si `null` (échec réseau S3 transitoire par ex.).
@@ -233,13 +355,23 @@ export class PromoService {
   async create(
     commercantId: string,
     dto: CreatePromoDto,
-    options?: { trustedActor?: boolean },
+    options?: { trustedActor?: boolean; actorId?: string },
   ): Promise<Promo> {
     const commercant =
       await this.commercantService.findByIdOrFail(commercantId);
-    this.commercantService.assertRegistreValidated(commercant);
-    this.commercantService.assertProfileValidated(commercant);
+    this.commercantService.assertAccountActive(commercant);
+    // Les deux gardes de publication ne s'appliquent qu'à la branche qui
+    // publie. Posées ici pour tout le monde, elles refusaient aussi
+    // « Enregistrer comme brouillon » — avec un message parlant de publier,
+    // sur un geste qui ne publie pas : un commerçant dont le profil est en
+    // relecture ne pouvait plus rien préparer en attendant (revue
+    // 2026-08-05). `publish` les rappelle de toute façon.
+    if (!dto.asDraft) {
+      this.commercantService.assertRegistreValidated(commercant);
+      this.commercantService.assertProfileValidated(commercant);
+    }
     this.assertPriceOrder(dto.prixAvant, dto.prixApres);
+    this.assertPhotoKeysOwned(dto.photoKeys, commercantId, options?.actorId);
     const thumbnailKey = await this.tryGenerateThumbnail(dto.photoKeys[0]);
 
     const base = {
@@ -267,7 +399,7 @@ export class PromoService {
       });
     }
 
-    const dateFin = this.resolveDateFin(dto.dateFin);
+    const dateFin = this.resolveDateFin(dto.dateFin, dto.dureeJours);
     return this.withCommercantLock(commercantId, async (manager) => {
       await this.assertUnderCap(manager, commercantId);
       if (!options?.trustedActor) {
@@ -301,7 +433,7 @@ export class PromoService {
     options?: { trustedActor?: boolean },
   ): Promise<Promo> {
     const promo = await this.findByIdOrFail(promoId);
-    if (promo.lifecycleStatus === PromoLifecycleStatus.PUBLIEE) {
+    if (this.isEnLigne(promo)) {
       throw new BadRequestAppException(
         ErrorCode.PROMO_ALREADY_PUBLISHED,
         'Cette promo est déjà publiée',
@@ -313,6 +445,7 @@ export class PromoService {
     const commercant = await this.commercantService.findByIdOrFail(
       promo.commercantId,
     );
+    this.commercantService.assertAccountActive(commercant);
     this.commercantService.assertRegistreValidated(commercant);
     this.commercantService.assertProfileValidated(commercant);
 
@@ -349,23 +482,16 @@ export class PromoService {
   async findActiveForClient(
     query: ListPromoQueryDto,
   ): Promise<PaginatedResult<Promo>> {
-    const qb = this.promos
-      .createQueryBuilder('promo')
-      .innerJoinAndSelect('promo.commercant', 'commercant')
-      .where('promo.lifecycleStatus = :lifecycleStatus', {
-        lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
-      })
-      .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
-        moderationStatuses: VISIBLE_MODERATION_STATUSES,
-      })
-      .andWhere('promo.dateFin > NOW()')
-      // Compte commerçant supprimé ou suspendu (soft, 2026-07-14) : garde
-      // défensive en plus de la cascade posée par CommercantService
-      // (suspend/deleteCommercant/deleteAccount repassent déjà les promos en
-      // BROUILLON/SUPPRIMEE), pour ne jamais dépendre uniquement de cette
-      // cascade ayant réussi.
-      .andWhere('commercant.deletedAt IS NULL')
-      .andWhere('commercant.suspendedAt IS NULL');
+    // Les cinq conditions de visibilité viennent de `applyVisibleConditions`
+    // et de nulle part ailleurs — dont les gardes commerçant, défensives en
+    // plus de la cascade posée par `CommercantService` (suspend/delete
+    // repassent déjà les promos en BROUILLON/SUPPRIMEE), pour ne jamais
+    // dépendre uniquement de cette cascade ayant réussi.
+    const qb = this.applyVisibleConditions(
+      this.promos
+        .createQueryBuilder('promo')
+        .innerJoinAndSelect('promo.commercant', 'commercant'),
+    );
 
     if (query.communeIds?.length) {
       qb.andWhere('commercant.communeId IN (:...communeIds)', {
@@ -635,20 +761,59 @@ export class PromoService {
    */
   async findVisibleByIds(ids: string[]): Promise<Promo[]> {
     if (ids.length === 0) return [];
-    return this.promos
-      .createQueryBuilder('promo')
-      .innerJoinAndSelect('promo.commercant', 'commercant')
-      .where('promo.id IN (:...ids)', { ids })
-      .andWhere('promo.lifecycleStatus = :lifecycleStatus', {
+    return this.applyVisibleConditions(
+      this.promos
+        .createQueryBuilder('promo')
+        .innerJoinAndSelect('promo.commercant', 'commercant')
+        .where('promo.id IN (:...ids)', { ids }),
+    ).getMany();
+  }
+
+  /**
+   * Variante unitaire pour la route publique de lien partagé (`/p/:id`) —
+   * `findByIdOrFail` ne filtre par construction aucun statut (les flux
+   * commerçant/agent doivent atteindre leurs propres promos quel qu'il soit),
+   * et le contrôleur n'en réappliquait qu'une condition sur cinq : une promo
+   * arrêtée, expirée, en brouillon, ou d'un commerçant suspendu restait
+   * intégralement consultable par quiconque avait le lien — une offre périmée
+   * se présentant comme en cours, une suspension ne coupant pas les liens
+   * déjà en circulation (revue 2026-08-05).
+   */
+  async findVisibleByIdOrFail(id: string): Promise<Promo> {
+    const [promo] = await this.findVisibleByIds([id]);
+    if (!promo) {
+      throw new NotFoundAppException(
+        ErrorCode.PROMO_NOT_FOUND,
+        'Promo introuvable',
+      );
+    }
+    return promo;
+  }
+
+  /**
+   * Nombre de promos occupant réellement un emplacement du plafond, et le
+   * plafond lui-même — servis à `GET /commercant/me`.
+   *
+   * L'app le dérivait d'une page de `GET /promo/me/all` limitée à 100, **tous
+   * statuts confondus**, en comptant les `publiee`. Deux erreurs : au-delà de
+   * 100 promos cumulées le compte devient faux sans rien dire (le tableau de
+   * bord annonçait « 2 emplacements restants » pendant que le serveur refusait
+   * en `PROMO_ACTIVE_CAP_REACHED`), et une promo expirée mais pas encore
+   * basculée par le cron y comptait alors qu'elle n'occupe plus rien
+   * (`isEnLigne`). Le plafond voyage aussi, pour que l'app cesse de recopier
+   * `5` (revue 2026-08-05, règles #29 et #32).
+   */
+  async getSlotUsage(
+    commercantId: string,
+  ): Promise<{ enLigne: number; plafond: number }> {
+    const enLigne = await this.promos.count({
+      where: {
+        commercantId,
         lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
-      })
-      .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
-        moderationStatuses: VISIBLE_MODERATION_STATUSES,
-      })
-      .andWhere('promo.dateFin > NOW()')
-      .andWhere('commercant.deletedAt IS NULL')
-      .andWhere('commercant.suspendedAt IS NULL')
-      .getMany();
+        dateFin: MoreThan(new Date()),
+      },
+    });
+    return { enLigne, plafond: MAX_PROMOS_ACTIVES };
   }
 
   async listByCommercant(
@@ -729,7 +894,7 @@ export class PromoService {
         moderationStatus: In(VISIBLE_MODERATION_STATUSES),
         dateFin: Between(
           new Date(),
-          new Date(Date.now() + 24 * 60 * 60 * 1000),
+          new Date(Date.now() + EXPIRING_SOON_WINDOW_HOURS * 60 * 60 * 1000),
         ),
       },
     });
@@ -741,6 +906,10 @@ export class PromoService {
         promo.commercantId,
         `Votre promo « ${promo.description} » expire bientôt. Pensez à la republier.`,
         promo.id,
+        // Seul site de notification qui ne passait pas la description en
+        // métadonnée : sans elle, l'app ne peut pas composer la phrase
+        // localisée et retombe sur le `message` français.
+        { promoDescription: promo.description },
       );
     }
     this.logger.log(`${expiring.length} promo(s) notifiée(s) avant expiration`);
@@ -779,13 +948,17 @@ export class PromoService {
    * explicitement via `publish` (pas de republication automatique).
    */
   async resolveAvertir(promoId: string): Promise<void> {
-    const promo = await this.findByIdOrFail(promoId);
+    // Le déblocage ne visait que `SIGNALEE`, jamais `MASQUEE` : « avertir »
+    // après « masquer » laissait le masque en place tout en notifiant
+    // « republiez-la ». Le commerçant republiait, consommait un de ses 5
+    // emplacements, obtenait 0 vue, et n'avait aucun moyen de le voir —
+    // `moderationStatus` n'est affiché sur aucun écran commerçant (revue
+    // 2026-08-05, règle #8). L'avertissement lève donc tout statut bloquant :
+    // c'est le retour en brouillon qui porte la sanction, pas le masque.
     await this.promos.update(
       { id: promoId },
       {
-        ...(promo.moderationStatus === PromoModerationStatus.SIGNALEE
-          ? { moderationStatus: PromoModerationStatus.NORMALE }
-          : {}),
+        moderationStatus: PromoModerationStatus.NORMALE,
         lifecycleStatus: PromoLifecycleStatus.BROUILLON,
         dateFin: null,
       },
@@ -798,38 +971,66 @@ export class PromoService {
    * qui constitue le "geste actif" des specs, pas une restriction sur
    * l'édition elle-même.
    */
-  async update(promoId: string, dto: UpdatePromoDto): Promise<Promo> {
+  async update(
+    promoId: string,
+    dto: UpdatePromoDto,
+    options?: { actorId?: string },
+  ): Promise<Promo> {
     const promo = await this.findByIdOrFail(promoId);
     const prixAvant = dto.prixAvant ?? Number(promo.prixAvant);
     const prixApres = dto.prixApres ?? Number(promo.prixApres);
     this.assertPriceOrder(prixAvant, prixApres);
+    if (dto.photoKeys) {
+      this.assertPhotoKeysOwned(
+        dto.photoKeys,
+        promo.commercantId,
+        options?.actorId,
+      );
+    }
     const previousPhotoKeys = promo.photoKeys;
     const previousThumbnailKey = promo.thumbnailKey;
+    let thumbnailKey = previousThumbnailKey;
     // Régénérée uniquement si la 1ère photo change (pas juste réordonnée à
     // l'identique) — évite un aller-retour S3 (download + resize + upload)
     // inutile à chaque édition de description/prix.
     if (dto.photoKeys && dto.photoKeys[0] !== previousPhotoKeys[0]) {
-      promo.thumbnailKey = await this.tryGenerateThumbnail(dto.photoKeys[0]);
+      thumbnailKey = await this.tryGenerateThumbnail(dto.photoKeys[0]);
     }
 
-    // `dto` (transformé par `ValidationPipe`) porte une propriété propre
-    // `undefined` pour chaque champ optionnel non fourni (comportement
-    // TypeScript `useDefineForClassFields`) — un `{...dto}` direct
-    // écraserait donc les champs non envoyés (ex. `description`/`categorie`
-    // lors d'un simple changement de photo) avec `undefined`. TypeORM
-    // ignore ces `undefined` dans l'UPDATE SQL (la base reste correcte),
-    // mais pas l'objet renvoyé au client — même bug que
-    // `CommercantService.updateProfile`, trouvé le 2026-07-12 sur ce
-    // même cas de figure côté commerçant.
-    const definedFields = Object.fromEntries(
-      Object.entries(dto).filter(([, value]) => value !== undefined),
+    // **UPDATE ciblé, jamais `save(promo)`.** `promo` est un instantané pris
+    // AVANT l'aller-retour S3 de `tryGenerateThumbnail` (plusieurs secondes
+    // sur une connexion lente) ; un `save` de l'entité complète réécrit
+    // toutes ses colonnes depuis cet instantané périmé, dont
+    // `moderationStatus` et `lifecycleStatus`. Une décision de modération
+    // prise pendant cette fenêtre — « masquer » sur une promo signalée —
+    // était donc annulée par l'édition, sans erreur, l'admin croyant la
+    // promo masquée (revue 2026-08-05, règle #13). N'écrire que les colonnes
+    // de contenu laisse la modération et le cycle de vie à leurs
+    // propriétaires (`resolveMasquer`, `publish`, `stop`, le cron).
+    //
+    // `dto` porte une propriété propre `undefined` pour chaque champ
+    // optionnel non fourni (`useDefineForClassFields`) — d'où le filtrage,
+    // sans quoi TypeORM recevrait des `undefined` et l'objet renvoyé au
+    // client perdrait `description`/`categorie` lors d'un simple changement
+    // de photo (même bug que `CommercantService.updateProfile`, 2026-07-12).
+    const contentFields = Object.fromEntries(
+      Object.entries({
+        description: dto.description,
+        categorie: dto.categorie,
+        photoKeys: dto.photoKeys,
+        prixAvant: dto.prixAvant?.toFixed(2),
+        prixApres: dto.prixApres?.toFixed(2),
+        thumbnailKey:
+          thumbnailKey === previousThumbnailKey ? undefined : thumbnailKey,
+      }).filter(([, value]) => value !== undefined),
     );
-    Object.assign(promo, {
-      ...definedFields,
-      prixAvant: dto.prixAvant?.toFixed(2) ?? promo.prixAvant,
-      prixApres: dto.prixApres?.toFixed(2) ?? promo.prixApres,
-    });
-    const saved = await this.promos.save(promo);
+    if (Object.keys(contentFields).length > 0) {
+      await this.promos.update({ id: promoId }, contentFields);
+    }
+    // Relecture plutôt que l'instantané modifié : la réponse doit porter le
+    // `moderationStatus`/`lifecycleStatus` réel, y compris s'il a changé
+    // pendant l'édition.
+    const saved = await this.findByIdOrFail(promoId);
     // Le mobile envoie toujours le tableau complet résolu (clés inchangées
     // réutilisées telles quelles, voir `PromoFormScreen`) — une clé absente
     // du nouveau tableau a donc été explicitement retirée ou remplacée, et
@@ -843,7 +1044,7 @@ export class PromoService {
         await this.storageService.deleteObject(key);
       }
     }
-    if (previousThumbnailKey && previousThumbnailKey !== promo.thumbnailKey) {
+    if (previousThumbnailKey && previousThumbnailKey !== thumbnailKey) {
       await this.storageService.deleteObject(previousThumbnailKey);
     }
     return saved;
@@ -900,21 +1101,18 @@ export class PromoService {
   async countVisible(communeIds?: string[]): Promise<number> {
     if (communeIds && communeIds.length === 0) return 0;
 
-    const qb = this.promos
-      .createQueryBuilder('promo')
-      .where('promo.lifecycleStatus = :lifecycleStatus', {
-        lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
-      })
-      .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
-        moderationStatuses: VISIBLE_MODERATION_STATUSES,
-      })
-      .andWhere('promo.dateFin > NOW()');
+    // La jointure sur `commercant` est désormais inconditionnelle : elle ne
+    // servait qu'au filtre par commune, si bien que la vue admin (sans
+    // `communeIds`) comptait les promos de comptes supprimés ou suspendus —
+    // le dashboard annonçait des promos publiées qu'aucun client ne voyait.
+    const qb = this.applyVisibleConditions(
+      this.promos
+        .createQueryBuilder('promo')
+        .innerJoin('promo.commercant', 'commercant'),
+    );
 
     if (communeIds) {
-      qb.innerJoin('promo.commercant', 'commercant').andWhere(
-        'commercant.communeId IN (:...communeIds)',
-        { communeIds },
-      );
+      qb.andWhere('commercant.communeId IN (:...communeIds)', { communeIds });
     }
     return qb.getCount();
   }

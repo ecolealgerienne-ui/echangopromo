@@ -60,23 +60,18 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
           email: _telephoneController.text.trim(),
           password: _pinController.text,
         );
-        await ref.read(authControllerProvider.notifier).loginThenResolveId(
-              role: AppRole.admin,
-              token: token,
-              fetchId: () async => (await api.me()).id,
-            );
+        await ref
+            .read(authControllerProvider.notifier)
+            .login(AuthSession(role: AppRole.admin, token: token));
         if (mounted) context.go('/admin/dashboard');
       } else {
         final token = await ref.read(commercantApiProvider).login(
               telephone: _telephoneController.text.trim(),
               pin: _pinController.text.trim(),
             );
-        await ref.read(authControllerProvider.notifier).loginThenResolveId(
-              role: AppRole.commercant,
-              token: token,
-              fetchId: () async =>
-                  (await ref.read(commercantApiProvider).me()).id,
-            );
+        await ref
+            .read(authControllerProvider.notifier)
+            .login(AuthSession(role: AppRole.commercant, token: token));
         if (mounted) context.go('/commercant/dashboard');
       }
     } catch (error) {

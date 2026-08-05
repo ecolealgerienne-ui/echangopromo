@@ -35,16 +35,22 @@ class _DevProfileSwitcherScreenState
   static const _keyAdminEmail = 'dev_switcher_admin_email';
   static const _keyAdminPassword = 'dev_switcher_admin_password';
 
-  // Identifiants du pilote pré-remplis pour ne pas avoir à les ressaisir à
-  // chaque test — écrasés par les valeurs sauvegardées si elles diffèrent
-  // (voir _loadSaved).
-  final _commercantTelephone = TextEditingController(text: '0555545352');
-  final _commercantPin = TextEditingController(text: '010203');
-  final _agentEmail = TextEditingController(text: 'agent1@echangopromo.com');
-  final _agentPassword = TextEditingController(text: '123456789');
-  final _adminEmail =
-      TextEditingController(text: 'superadmin@echangopromo.com');
-  final _adminPassword = TextEditingController(text: '123456789');
+  // ⚠️ **Aucune valeur par défaut ici, jamais.** Ces six champs portaient les
+  // identifiants réels du pilote en dur — dont le compte `superadmin`, seul
+  // admin de la V0 et à droits d'écriture larges. Un littéral Dart finit dans
+  // le snapshot AOT : `strings base.apk | grep echangopromo.com` les rendait
+  // sur un APK déjà distribué en test interne, sans avoir à atteindre l'écran
+  // (revue 2026-08-05). `_loadSaved` remplit déjà les champs depuis le
+  // stockage sécurisé — la commodité est conservée, la fuite non.
+  //
+  // La suppression du code ne rappelle pas les binaires déjà installés : le
+  // mot de passe admin doit être changé côté serveur, pas seulement ici.
+  final _commercantTelephone = TextEditingController();
+  final _commercantPin = TextEditingController();
+  final _agentEmail = TextEditingController();
+  final _agentPassword = TextEditingController();
+  final _adminEmail = TextEditingController();
+  final _adminPassword = TextEditingController();
 
   bool _loading = false;
   String? _busyProfile;
@@ -78,9 +84,9 @@ class _DevProfileSwitcherScreenState
       _storage.read(key: _keyAdminPassword),
     ]);
     if (!mounted) return;
-    // Ne remplace le préremplissage par défaut que si une valeur a déjà été
-    // sauvegardée explicitement — sinon `read()` renvoie `null` et
-    // effacerait les identifiants pilote pré-remplis ci-dessus.
+    // `read()` rend `null` tant que rien n'a été saisi une première fois — les
+    // champs restent alors vides, ce qui est l'état voulu depuis le retrait
+    // des identifiants en dur.
     if (values[0] != null) _commercantTelephone.text = values[0]!;
     if (values[1] != null) _commercantPin.text = values[1]!;
     if (values[2] != null) _agentEmail.text = values[2]!;
@@ -116,11 +122,9 @@ class _DevProfileSwitcherScreenState
         telephone: _commercantTelephone.text.trim(),
         pin: _commercantPin.text.trim(),
       );
-      await ref.read(authControllerProvider.notifier).loginThenResolveId(
-            role: AppRole.commercant,
-            token: token,
-            fetchId: () async => (await api.me()).id,
-          );
+      await ref
+          .read(authControllerProvider.notifier)
+          .login(AuthSession(role: AppRole.commercant, token: token));
       // `push` plutôt que `go` : contrairement aux écrans de connexion
       // normaux, ici on veut explicitement pouvoir revenir en arrière vers
       // le sélecteur de profil pour enchaîner les tests (`go` viderait la
@@ -144,11 +148,9 @@ class _DevProfileSwitcherScreenState
       final api = ref.read(agentApiProvider);
       final token = await api.login(
           email: _agentEmail.text.trim(), password: _agentPassword.text);
-      await ref.read(authControllerProvider.notifier).loginThenResolveId(
-            role: AppRole.agent,
-            token: token,
-            fetchId: () async => (await api.me()).id,
-          );
+      await ref
+          .read(authControllerProvider.notifier)
+          .login(AuthSession(role: AppRole.agent, token: token));
       if (mounted) context.push('/agent/dashboard');
     } catch (error) {
       _showError(error);
@@ -168,11 +170,9 @@ class _DevProfileSwitcherScreenState
       final api = ref.read(adminApiProvider);
       final token = await api.login(
           email: _adminEmail.text.trim(), password: _adminPassword.text);
-      await ref.read(authControllerProvider.notifier).loginThenResolveId(
-            role: AppRole.admin,
-            token: token,
-            fetchId: () async => (await api.me()).id,
-          );
+      await ref
+          .read(authControllerProvider.notifier)
+          .login(AuthSession(role: AppRole.admin, token: token));
       if (mounted) context.push('/admin/dashboard');
     } catch (error) {
       _showError(error);

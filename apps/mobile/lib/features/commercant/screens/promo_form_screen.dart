@@ -10,16 +10,14 @@ import '../../shared/widgets/loading_button.dart';
 import '../../shared/widgets/multi_photo_picker_field.dart';
 import '../../shared/widgets/promo_form_fields.dart';
 import '../../../providers/core_providers.dart';
-
-const _defaultDureeJours = 5;
-const _maxDureeJours = 7;
+import '../../../domain/promo_rules.dart';
 
 final _promoFormMeProvider =
     FutureProvider.autoDispose((ref) => ref.watch(commercantApiProvider).me());
 
 /// Création (brouillon ou publication immédiate) ou édition d'une promo par
 /// le commerçant lui-même (specs §3.2). Durée de validité choisie entre 1 et
-/// `_maxDureeJours` jours à la publication — non applicable en édition, où
+/// `promoMaxDureeJours` jours à la publication — non applicable en édition, où
 /// seul le contenu change (le cycle de vie se gère depuis `my_promos_screen`).
 class PromoFormScreen extends ConsumerStatefulWidget {
   const PromoFormScreen({super.key, this.existingPromo});
@@ -41,7 +39,7 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
   late final _prixApresController =
       TextEditingController(text: widget.existingPromo?.prixApres.toString());
   Categorie? _categorie;
-  int _dureeJours = _defaultDureeJours;
+  int _dureeJours = promoDefaultDureeJours;
   List<PhotoSlotItem> _photoItems = [];
   bool _loading = false;
   String? _error;
@@ -130,8 +128,9 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
           prixApres: double.parse(_prixApresController.text.trim()),
           categorie: _categorie!,
           photoKeys: photoKeys,
-          dateFin:
-              asDraft ? null : DateTime.now().add(Duration(days: _dureeJours)),
+          // Une duree, pas une date : c'est l'horloge du serveur qui
+          // valide, donc c'est elle qui doit calculer (revue 2026-08-05).
+          dureeJours: asDraft ? null : _dureeJours,
           asDraft: asDraft,
         );
       }
@@ -183,9 +182,9 @@ class _PromoFormScreenState extends ConsumerState<PromoFormScreen> {
               categorie: _categorie,
               onCategorieChanged: (v) => setState(() => _categorie = v),
               dureeJours: _isEditing ? null : _dureeJours,
-              maxDureeJours: _maxDureeJours,
+              maxDureeJours: promoMaxDureeJours,
               onDureeJoursChanged: (v) =>
-                  setState(() => _dureeJours = v ?? _defaultDureeJours),
+                  setState(() => _dureeJours = v ?? promoDefaultDureeJours),
             ),
             ErrorText(_error),
           ],

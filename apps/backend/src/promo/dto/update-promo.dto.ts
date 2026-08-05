@@ -7,10 +7,12 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  Max,
   MaxLength,
   MinLength,
 } from 'class-validator';
 import { Categorie } from '../../common/enums/categorie.enum';
+import { PRIX_MAX } from '../entities/promo.entity';
 
 export class UpdatePromoDto {
   @IsOptional()
@@ -22,11 +24,13 @@ export class UpdatePromoDto {
   @IsOptional()
   @IsNumber()
   @IsPositive()
+  @Max(PRIX_MAX)
   prixAvant?: number;
 
   @IsOptional()
   @IsNumber()
   @IsPositive()
+  @Max(PRIX_MAX)
   prixApres?: number;
 
   @IsOptional()

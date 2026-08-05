@@ -419,6 +419,33 @@ permet de reconnaître un cas nouveau relevant de la même règle.
     perdrait), et laisser passer les `HttpException` dans les `catch`
     génériques.
 
+    ⚠️ **Un DTO décoré n'est pas un DTO borné, et c'est là que ça casse.**
+    Mesuré le 2026-08-05 : la discipline tient toujours (100 % des `@Body` en
+    DTO de classe, 100 % des `@Query` en DTO, 100 % des `@Param` via
+    `UuidParam`), mais **le type n'a jamais été une borne**. Deux défauts réels
+    trouvés ce jour-là, tous deux produisant un `500` là où un refus de
+    validation était dû :
+    - `prixAvant`/`prixApres` portaient `@IsNumber() @IsPositive()` sans
+      maximum, alors que la colonne est `numeric(10, 2)` : au-delà de
+      99 999 999,99, Postgres lève `22003` et personne ne le rattrape. **Ce que
+      la base refuse, l'entrée doit le refuser d'abord** — et la borne se nomme
+      une fois (`PRIX_MAX`, à côté de la colonne), pas dans chaque DTO ;
+    - `dureeJours`, ajouté le jour même, débordait l'intervalle de dates
+      représentable : `new Date(now + 1e30 * 86400000)` rend `Invalid Date`,
+      dont `getTime()` vaut `NaN` — et **`NaN <= x` comme `NaN > y` sont tous
+      les deux faux**, donc la valeur traversait les deux gardes. Toute
+      comparaison numérique sur une donnée venue du réseau doit d'abord établir
+      que c'est un nombre fini (`Number.isFinite`), jamais le supposer d'un
+      `@IsNumber` en amont.
+
+    Le critère : *pour chaque champ, quelle valeur extrême le fait sortir de ce
+    que la base, le calcul ou l'affichage savent encaisser ?* Un `@IsPositive`
+    sans plafond, un `@IsString` sans `@MaxLength`, un `@IsArray` sans
+    `@ArrayMaxSize` sont des bornes manquantes, pas des choix. **Et un refus
+    d'entrée non éprouvé ne compte pas** : `create-promo.dto.spec.ts` porte
+    autant de cas qui doivent échouer que de cas qui passent, et le `@Max` y a
+    été prouvé par mutation (règle 28).
+
 35. **Une couleur sémantique vient du thème ; les espacements sont recensés,
     pas encore normés.** L'app bascule clair/sombre depuis fin juillet 2026 —
     une couleur écrite en dur **ne suit pas le basculement**, et l'écran est

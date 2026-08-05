@@ -118,12 +118,32 @@ export class AdminController {
   @Throttle(SENSITIVE_ACTION_THROTTLE)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
+  /**
+   * Seule route d'écriture de ce contrôleur qui n'injectait même pas
+   * `@CurrentUser()` : elle était structurellement incapable de journaliser,
+   * alors qu'elle **élargit le périmètre IDOR** consommé ensuite par
+   * `assertCommuneMatches` — et que `transfer-communes`, au même effet,
+   * journalise cinquante lignes plus bas (revue 2026-08-05, règle #11).
+   */
   @Patch('agent/:id/communes')
   async assignCommunes(
+    @CurrentUser() user: AuthTokenPayload,
     @UuidParam('id') agentId: string,
     @Body() dto: AssignCommunesDto,
   ) {
-    return this.agentService.assignCommunes(agentId, dto.communeIds);
+    const agent = await this.agentService.assignCommunes(
+      agentId,
+      dto.communeIds,
+    );
+    await this.auditLogService.record({
+      actorType: AuditActorType.ADMIN,
+      actorId: user.sub,
+      action: 'assign_agent_communes',
+      targetType: 'agent',
+      targetId: agentId,
+      metadata: { communeIds: dto.communeIds },
+    });
+    return agent;
   }
 
   /** Révoque les JWT déjà émis pour cet agent (device perdu/volé, départ — audit règle #6). */

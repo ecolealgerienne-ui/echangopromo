@@ -9,9 +9,7 @@ import '../../shared/widgets/loading_button.dart';
 import '../../shared/widgets/multi_photo_picker_field.dart';
 import '../../shared/widgets/promo_form_fields.dart';
 import '../../../providers/core_providers.dart';
-
-const _defaultDureeJours = 5;
-const _maxDureeJours = 7;
+import '../../../domain/promo_rules.dart';
 
 /// Création/mise à jour d'une promo par l'agent. Photo obligatoirement
 /// prise dans l'app (pas de galerie), avec horodatage côté serveur — preuve
@@ -37,7 +35,7 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
   final _prixAvantController = TextEditingController();
   final _prixApresController = TextEditingController();
   Categorie? _categorie;
-  int _dureeJours = _defaultDureeJours;
+  int _dureeJours = promoDefaultDureeJours;
   List<PhotoSlotItem> _photoItems = [];
   bool _loading = false;
   String? _error;
@@ -97,7 +95,7 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
             prixApres: double.parse(_prixApresController.text.trim()),
             categorie: _categorie!,
             photoKeys: photoKeys,
-            dateFin: DateTime.now().add(Duration(days: _dureeJours)),
+            dureeJours: _dureeJours,
           );
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
@@ -137,9 +135,9 @@ class _AgentPromoFormScreenState extends ConsumerState<AgentPromoFormScreen> {
                 categorie: _categorie,
                 onCategorieChanged: (v) => setState(() => _categorie = v),
                 dureeJours: _dureeJours,
-                maxDureeJours: _maxDureeJours,
+                maxDureeJours: promoMaxDureeJours,
                 onDureeJoursChanged: (v) =>
-                    setState(() => _dureeJours = v ?? _defaultDureeJours),
+                    setState(() => _dureeJours = v ?? promoDefaultDureeJours),
               ),
               ErrorText(_error),
               const SizedBox(height: 16),

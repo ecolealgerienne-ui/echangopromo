@@ -50,6 +50,73 @@ class Borne {
   final String motifApp;
 }
 
+/// Une borne serveur qui ne vit pas dans un décorateur de DTO mais dans un
+/// **défaut de configuration** (`configService.get<number>('X', 7)`).
+///
+/// ⚠️ Ajoutée le 2026-08-05 : le vérificateur ne savait lire que les
+/// décorateurs, si bien que les durées de promo — recopiées en **trois**
+/// exemplaires côté app — n'étaient tenues par rien. Ce qu'on ne sait pas lire
+/// ne se signale pas tout seul comme non couvert : c'est le silence qui
+/// ressemble le plus à un accord.
+class BorneConfig {
+  const BorneConfig(this.libelle, this.sourceTs, this.cleConfig,
+      this.fichierApp, this.motifApp);
+
+  final String libelle;
+  final String sourceTs;
+
+  /// La clé lue par `configService.get(...)`, ex. `PROMO_MAX_DURATION_DAYS`.
+  final String cleConfig;
+  final String fichierApp;
+  final String motifApp;
+}
+
+const _bornesConfig = <BorneConfig>[
+  BorneConfig(
+      'durée de promo par défaut (jours)',
+      'apps/backend/src/promo/promo.service.ts',
+      'PROMO_DEFAULT_DURATION_DAYS',
+      'apps/mobile/lib/domain/promo_rules.dart',
+      r'promoDefaultDureeJours\s*=\s*(\d+)'),
+  BorneConfig(
+      'durée de promo maximale (jours)',
+      'apps/backend/src/promo/promo.service.ts',
+      'PROMO_MAX_DURATION_DAYS',
+      'apps/mobile/lib/domain/promo_rules.dart',
+      r'promoMaxDureeJours\s*=\s*(\d+)'),
+];
+
+/// Constantes serveur qui ne passent ni par un DTO ni par la configuration —
+/// une simple `const` dans un service, recopiée côté app.
+const _bornesConstantes = <BorneConfig>[
+  // `cleConfig` sert ici de nom de constante TypeScript.
+  BorneConfig(
+      'fenêtre « expire bientôt » (heures)',
+      'apps/backend/src/promo/promo.service.ts',
+      'EXPIRING_SOON_WINDOW_HOURS',
+      'apps/mobile/lib/domain/promo_rules.dart',
+      r'promoExpiringSoonHours\s*=\s*(\d+)'),
+];
+
+/// La valeur d'une `const NOM = 42;` TypeScript.
+int? constanteServeur(String source, String nom) {
+  final m = RegExp('const\\s+$nom\\s*=\\s*(\\d+)')
+      .firstMatch(_sansCommentaires(source));
+  return m == null ? null : int.parse(m.group(1)!);
+}
+
+/// Le **défaut** d'un `configService.get<number>('CLE', 7)`.
+///
+/// C'est bien le défaut qu'on compare, pas la valeur déployée : l'app ne peut
+/// connaître que celui-là. Une variable d'environnement qui s'en écarte en
+/// production reste hors de portée de ce contrôle — dit ici plutôt que laissé
+/// croire couvert.
+int? borneConfigServeur(String source, String cle) {
+  final m = RegExp("get<number>\\(\\s*['\"]$cle['\"]\\s*,\\s*(\\d+)\\s*\\)")
+      .firstMatch(_sansCommentaires(source));
+  return m == null ? null : int.parse(m.group(1)!);
+}
+
 const _bornes = <Borne>[
   Borne(
       'description de promo (max)',
@@ -64,14 +131,19 @@ const _bornes = <Borne>[
       'titre',
       'MaxLength',
       'apps/mobile/lib/features/admin/screens/admin_highlight_form_screen.dart',
-      r'maxLength:\s*(\d+)'),
+      // ⚠️ Ancré sur le contrôleur du champ, pas sur `maxLength:` seul. Les
+      // deux bornes de cet écran lisaient le même fichier avec le même motif
+      // et comparaient à l'ENSEMBLE des nombres trouvés ({60, 100}) : chacune
+      // « passait » sur la valeur de l'autre, et intervertir titre et
+      // sous-titre restait vert (revue 2026-08-05, règle #28).
+      r'_titreController[\s\S]{0,200}?maxLength:\s*(\d+)'),
   Borne(
       'sous-titre de mise en avant (max)',
       'apps/backend/src/highlight/dto/create-highlight.dto.ts',
       'sousTitre',
       'MaxLength',
       'apps/mobile/lib/features/admin/screens/admin_highlight_form_screen.dart',
-      r'maxLength:\s*(\d+)'),
+      r'_sousTitreController[\s\S]{0,200}?maxLength:\s*(\d+)'),
   Borne(
       'mot de passe agent (min) — création',
       'apps/backend/src/agent/dto/create-agent.dto.ts',
@@ -267,8 +339,39 @@ export class D {
       nombresApp('rien ici', r'maxLength:\s*(\d+)').toList(), []);
   _verifie(
       'motif introuvable → null', motifRegex('const autre = 1;', 'P'), null);
+  _verifie(
+      'défaut de configuration lu',
+      borneConfigServeur(
+          "return this.configService.get<number>('PROMO_MAX_DURATION_DAYS', 7);",
+          'PROMO_MAX_DURATION_DAYS'),
+      7);
+  _verifie(
+      'clé de configuration absente → null',
+      borneConfigServeur("this.configService.get<number>('AUTRE', 7);",
+          'PROMO_MAX_DURATION_DAYS'),
+      null);
+  _verifie(
+      'défaut de configuration en commentaire ignoré',
+      borneConfigServeur(
+          "// this.configService.get<number>('PROMO_MAX_DURATION_DAYS', 7);",
+          'PROMO_MAX_DURATION_DAYS'),
+      null);
+  _verifie(
+      'constante serveur lue',
+      constanteServeur('const EXPIRING_SOON_WINDOW_HOURS = 24;',
+          'EXPIRING_SOON_WINDOW_HOURS'),
+      24);
+  _verifie(
+      'constante absente → null',
+      constanteServeur('const AUTRE = 24;', 'EXPIRING_SOON_WINDOW_HOURS'),
+      null);
+  _verifie(
+      'constante en commentaire ignorée',
+      constanteServeur('// const EXPIRING_SOON_WINDOW_HOURS = 24;',
+          'EXPIRING_SOON_WINDOW_HOURS'),
+      null);
 
-  const casRefus = 6;
+  const casRefus = 10;
   final total = _ok + _echecs.length;
   stdout.writeln('auto-test : $total cas, dont $casRefus refus');
   for (final e in _echecs) {
@@ -319,9 +422,56 @@ void main(List<String> args) {
       problemes++;
       continue;
     }
+    // ⚠️ Un motif qui rend PLUSIEURS valeurs ne désigne pas une borne : il
+    // désigne une zone. `app.contains(serveur)` y devient un test « la bonne
+    // valeur est quelque part dans le fichier », que deux bornes voisines
+    // satisfont mutuellement — c'est exactement ce qui laissait passer
+    // l'interversion titre/sous-titre. Un motif ambigu est refusé, pas toléré.
+    if (app.length > 1) {
+      stdout.writeln('  ❌ ${b.libelle}');
+      stdout.writeln(
+          '       motif ambigu : ${app.length} valeurs trouvées ${app.toList()..sort()}');
+      stdout.writeln(
+          '       (motif : ${b.motifApp}) — l\'ancrer sur le champ, pas sur le fichier.');
+      problemes++;
+      continue;
+    }
     if (!app.contains(serveur)) {
       stdout.writeln('  ❌ ${b.libelle}');
       stdout.writeln('       serveur $serveur, app ${app.toList()..sort()}');
+      problemes++;
+      continue;
+    }
+    stdout.writeln('  ✅ ${b.libelle.padRight(42)} $serveur');
+  }
+
+  stdout.writeln('\n── bornes de configuration et constantes ──');
+  for (final b in [..._bornesConfig, ..._bornesConstantes]) {
+    final estConstante = _bornesConstantes.contains(b);
+    final source = lire(b.sourceTs);
+    final serveur = estConstante
+        ? constanteServeur(source, b.cleConfig)
+        : borneConfigServeur(source, b.cleConfig);
+    if (serveur == null) {
+      stdout.writeln('  ❌ ${b.libelle}');
+      stdout.writeln(estConstante
+          ? '       `const ${b.cleConfig} = …` introuvable dans ${b.sourceTs}'
+          : '       `get<number>(\'${b.cleConfig}\', …)` introuvable dans ${b.sourceTs}');
+      problemes++;
+      continue;
+    }
+    final app = nombresApp(lire(b.fichierApp), b.motifApp);
+    if (app.length != 1) {
+      stdout.writeln('  ❌ ${b.libelle}');
+      stdout.writeln(app.isEmpty
+          ? '       aucune valeur trouvée (motif : ${b.motifApp})'
+          : '       motif ambigu : ${app.toList()..sort()}');
+      problemes++;
+      continue;
+    }
+    if (!app.contains(serveur)) {
+      stdout.writeln('  ❌ ${b.libelle}');
+      stdout.writeln('       serveur $serveur, app ${app.toList()}');
       problemes++;
       continue;
     }
@@ -353,6 +503,7 @@ void main(List<String> args) {
     stdout.writeln('❌ $problemes borne(s) divergente(s) ou introuvable(s).');
     exit(1);
   }
-  stdout.writeln('✅ ${_bornes.length} bornes et ${_motifs.length} motifs '
-      'sont d\'accord avec le serveur.');
+  stdout.writeln(
+      '✅ ${_bornes.length + _bornesConfig.length + _bornesConstantes.length} '
+      'bornes et ${_motifs.length} motifs sont d\'accord avec le serveur.');
 }

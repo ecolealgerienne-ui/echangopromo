@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../data/api/promo_api.dart';
 import '../../../app/theme.dart';
 import '../../../domain/enums/commercant_origin_verification.dart';
 import '../../../domain/enums/promo_lifecycle_status.dart';
@@ -40,8 +41,11 @@ class CommercantDashboardScreen extends ConsumerWidget {
     final profileViewsAsync = ref.watch(commercantProfileViewsProvider);
 
     final promos = promosAsync.valueOrNull ?? const <Promo>[];
-    final activeCount = countActivePromos(promos);
-    final atCap = activeCount >= kMaxPromosActives;
+    // Le compte d'emplacements vient du serveur, pas d'un filtre sur la page
+    // de promos : celle-ci est plafonnee a 100, tous statuts confondus.
+    final slotsAsync = ref.watch(promoSlotsProvider);
+    final slots = slotsAsync.valueOrNull;
+    final atCap = slots?.auPlafond ?? false;
 
     return Scaffold(
       appBar: AppBar(
@@ -110,8 +114,7 @@ class CommercantDashboardScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            _QuotaCard(
-                activeCount: activeCount, loading: promosAsync.isLoading),
+            _QuotaCard(slots: slots, loading: slotsAsync.isLoading),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -307,9 +310,13 @@ class _InitialsBox extends StatelessWidget {
 /// règle serveur appliquée à tout le monde ; l'afficher évite au commerçant
 /// de ne le découvrir qu'au moment d'un refus de publication.
 class _QuotaCard extends StatelessWidget {
-  const _QuotaCard({required this.activeCount, required this.loading});
+  const _QuotaCard({required this.slots, required this.loading});
 
-  final int activeCount;
+  /// `null` tant que `GET /promo/me/slots` n'a pas repondu — ou s'il a
+  /// echoue. Le decompte n'est alors PAS affiche : un « 0 / 5 » de repli
+  /// dirait au commercant que ses emplacements sont libres alors qu'on n'en
+  /// sait rien (regle #29).
+  final PromoSlots? slots;
   final bool loading;
 
   @override
@@ -317,7 +324,11 @@ class _QuotaCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final remaining = kMaxPromosActives - activeCount;
+    // `slots` reste nul tant que la mesure serveur n'est pas là — chargement
+    // en cours, ou échec. Dans les deux cas on n'affiche pas de décompte :
+    // un « 0 / 5 » de repli annoncerait des emplacements libres sans rien en
+    // savoir (règle #29).
+    final mesure = slots;
 
     return Container(
       decoration: BoxDecoration(
@@ -345,7 +356,7 @@ class _QuotaCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    if (loading)
+                    if (mesure == null)
                       const SizedBox(
                         height: 28,
                         width: 28,
@@ -357,11 +368,11 @@ class _QuotaCard extends StatelessWidget {
                     else
                       Text.rich(
                         TextSpan(
-                          text: '$activeCount',
+                          text: '${mesure.enLigne}',
                           style: textTheme.headlineMedium,
                           children: [
                             TextSpan(
-                              text: ' / $kMaxPromosActives',
+                              text: ' / ${mesure.plafond}',
                               style: textTheme.titleMedium?.copyWith(
                                   color: colorScheme.onSurfaceVariant),
                             ),
@@ -371,10 +382,10 @@ class _QuotaCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (!loading)
+              if (mesure != null)
                 Flexible(
                   child: Text(
-                    l10n.dashboardSlotsLeft(remaining),
+                    l10n.dashboardSlotsLeft(mesure.restants),
                     textAlign: TextAlign.end,
                     style: textTheme.bodySmall
                         ?.copyWith(color: colorScheme.onSurfaceVariant),
@@ -384,16 +395,18 @@ class _QuotaCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           // Une barre par emplacement : le commerçant compte d'un regard,
-          // sans lire le chiffre.
+          // sans lire le chiffre. Le nombre de barres vient du plafond
+          // serveur — aucune barre tant qu'il est inconnu, plutôt que cinq
+          // barres vides qui affirmeraient un plafond non mesuré.
           Row(
             children: [
-              for (var i = 0; i < kMaxPromosActives; i++) ...[
+              for (var i = 0; i < (mesure?.plafond ?? 0); i++) ...[
                 if (i > 0) const SizedBox(width: 5),
                 Expanded(
                   child: Container(
                     height: 7,
                     decoration: BoxDecoration(
-                      color: i < activeCount
+                      color: i < mesure!.enLigne
                           ? colorScheme.primary
                           : colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(AppRadii.pill),
@@ -770,7 +783,7 @@ class _AlertCard extends StatelessWidget {
                 const SizedBox(width: 9),
                 Expanded(
                   child: Text(
-                    notification.message,
+                    notificationLabel(context, notification),
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: textTheme.bodySmall,
