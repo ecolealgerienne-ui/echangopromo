@@ -406,6 +406,22 @@ permet de reconnaître un cas nouveau relevant de la même règle.
     aussi être une saisie. En général : **si ce qu'on cherche peut venir du
     test lui-même, l'assertion ne mesure rien.**
 
+    ⚠️ **Et l'autre bout : une assertion d'ABSENCE est satisfaite par le
+    chargement.** « La carte a disparu » est vrai pendant la seconde où la
+    liste se recharge — le test passe sans que rien n'ait disparu. *Trouvé le
+    2026-08-05 : le parcours de signalement affirmait qu'une promo signalée
+    quittait la liste, et il était vert alors qu'elle était toujours publique
+    (il faut TROIS signalements d'appareils distincts pour la retirer).*
+    Chercher ce qui ne doit plus être là ne vaut que si l'on a d'abord établi
+    que le reste est là.
+
+    ⚠️ **Et une contre-mesure qui jette la réponse du serveur ne peut pas
+    savoir qu'elle a échoué.** *Même parcours, même journée : deux
+    signalements complémentaires envoyés vers `/dev/null` étaient refusés en
+    400 (motif inventé), et la contre-mesure en concluait que le geste de
+    l'app n'avait pas compté — sur un produit correct.* Un `curl -o /dev/null`
+    dans un banc est un aveu : on a décidé de ne pas savoir.
+
 29. **Un défaut n'a pas de valeur par défaut.** Une valeur de repli détruit
     l'information d'absence, et l'absence est presque toujours l'information
     qui compte. Le critère : *si cette valeur est fausse, est-ce que quelque

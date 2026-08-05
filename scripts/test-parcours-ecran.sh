@@ -42,6 +42,9 @@
 #                      COMPTEUR DE VUES monte côté serveur.
 #   agent-creation     l'agent crée un commerçant DANS SA COMMUNE : le compte
 #                      se connecte ensuite, et il est bien dans sa zone.
+#   signalement        un client signale une promo : elle SORT du public
+#                      (404) et entre dans la file de modération. ⚠️ MODIFIE le
+#                      décor — passe avant `moderation`, qui s'en nourrit.
 #   moderation         masquer une promo signalée depuis la file admin, et
 #                      vérifier qu'elle disparaît AUSSI de ce que le public
 #                      reçoit. ⚠️ MODIFIE le décor — passe en dernier.
@@ -77,11 +80,11 @@ DEVICE_ID="parcours-ecran-0001"
 
 CHOIX="${1:-tous}"
 case "$CHOIX" in
-  tous|premier-lancement|plafond|creation|admin|agent|moderation|client|inscription|agent-creation|commune) ;;
+  tous|premier-lancement|plafond|creation|admin|agent|moderation|client|inscription|agent-creation|commune|signalement) ;;
   *) echo "❌ Parcours inconnu : « $CHOIX »."
      echo "   Attendu : premier-lancement | plafond | creation | admin | agent"
      echo "             | moderation | client | inscription | agent-creation"
-     echo "             | commune"
+     echo "             | commune | signalement"
      echo "             (rien = tous)"
      exit 2 ;;
 esac
@@ -92,7 +95,7 @@ esac
 BESOIN_COMMERCANT=non
 # `inscription` a besoin du décor UNIQUEMENT pour mesurer le plafond auprès du
 # serveur — le compte qu'il crée, lui, est neuf.
-case "$CHOIX" in tous|plafond|creation|client|inscription|commune) BESOIN_COMMERCANT=oui ;; esac
+case "$CHOIX" in tous|plafond|creation|client|inscription|commune|signalement) BESOIN_COMMERCANT=oui ;; esac
 BESOIN_PRO=non
 case "$CHOIX" in tous|admin|agent|moderation|agent-creation) BESOIN_PRO=oui ;; esac
 
@@ -207,6 +210,39 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "creation" ]; then
   fi
 fi
 fi  # BESOIN_COMMERCANT
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "signalement" ]; then
+# ── 2 quinquies. Une promo à signaler, et son état de départ ───────────────
+echo
+echo "── 2 quinquies. Signalement ──"
+SIG_CID="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ id)"
+SIG_COMMUNE="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ communeId)"
+[ -n "$SIG_CID" ] && [ -n "$SIG_COMMUNE" ] || { echo "❌ /commercant/me illisible."; exit 2; }
+
+SIG_DESC="Parcours signalement $(date +%H%M%S)"
+SIG_CREEE="$(curl -s -X POST "$API_URL/promo"   -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"   -H "Authorization: Bearer $JETON"   -d "{\"description\":\"$SIG_DESC\",\"prixAvant\":900,\"prixApres\":600,      \"categorie\":\"alimentation\",\"photoKeys\":[\"promo-photos/$SIG_CID/parcours.jpg\"],      \"dureeJours\":5}")"
+SIG_PROMO="$(echo "$SIG_CREEE" | lire_champ id)"
+if [ -z "$SIG_PROMO" ]; then
+  echo "❌ création de la promo à signaler refusée : $(echo "$SIG_CREEE" | head -c 200)"
+  echo "   ⚠️ PROMO_ACTIVE_CAP_REACHED / PROMO_DAILY_CAP_REACHED : reposer le décor."
+  exit 2
+fi
+
+# ⚠️ **L'état de DÉPART se mesure, il ne se suppose pas** (règle #38) : si la
+# promo n'était pas publique avant, l'assertion « elle devient 404 » ne
+# prouverait rien. On exige donc 200 ici.
+SIG_AVANT="$(curl -s -o /dev/null -w '%{http_code}' "$API_URL/promo/$SIG_PROMO"   -H "X-Device-Id: $DEVICE_ID")"
+if [ "$SIG_AVANT" != "200" ]; then
+  echo "❌ la promo à signaler n'est pas publique au départ (HTTP $SIG_AVANT) :"
+  echo "   son passage en 404 ne prouverait rien."
+  exit 2
+fi
+
+JETON_ADMIN_SIG="$(curl -s -X POST "$API_URL/admin/login"   -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"   -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}"   | lire_champ accessToken)"
+[ -n "$JETON_ADMIN_SIG" ] || { echo "❌ connexion admin refusée (429 déguisé ?)"; exit 2; }
+SIG_FILE_AVANT="$(curl -s "$API_URL/admin/moderation/queue"   -H "Authorization: Bearer $JETON_ADMIN_SIG" -H "X-Device-Id: $DEVICE_ID"   | lire_champ total)"
+[ -n "$SIG_FILE_AVANT" ] || { echo "❌ file de modération illisible."; exit 2; }
+echo "✅ « $SIG_DESC » publique (200) · file de modération : $SIG_FILE_AVANT"
+fi
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "commune" ]; then
 # ── 2 quater. La commune du commerçant, par son NOM, et une de ses promos ───
 echo
@@ -677,6 +713,70 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "client" ]; then
           noter "contre-mesure vues" 1
         fi ;;
     esac
+  fi
+  echo
+fi
+
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "signalement" ]; then
+  jouer parcours_signalement_test.dart "client — signaler une promo"     --dart-define=TEST_PROMO_DESC="$SIG_DESC"     --dart-define=TEST_COMMUNE_ID="$SIG_COMMUNE"
+  CODE_SIG=$?
+  noter "client — signaler une promo" $CODE_SIG
+
+  # ── Contre-mesure : le signalement de l'APP a-t-il compté ? ─────────────
+  #
+  # ⚠️ Un signalement ne masque rien : il en faut TROIS, d'appareils distincts
+  # (MODERATION_THRESHOLD, specs §5.4). On en envoie donc deux de plus, depuis
+  # deux appareils qui ne sont pas celui de l'app. Deux ne suffisent pas — si
+  # la promo sort du public, c'est que celui de l'app a été compté.
+  #
+  # La première version exigeait la sortie du public après le seul signalement
+  # de l'app : elle accusait le produit sur une règle qu'elle avait inventée
+  # (règle #38).
+  if [ "$CODE_SIG" -eq 0 ]; then
+    echo
+    echo "── contre-mesure : deux signalements de plus, puis le seuil ──"
+    # ⚠️ **On LIT la réponse.** La première version envoyait vers /dev/null :
+    # les deux compléments étaient refusés en 400 (motif inventé — les motifs
+    # valides sont perime/arnaque/photo_trompeuse/autre) et la contre-mesure
+    # concluait « le signalement de l'app n'a pas compté » sur un produit
+    # correct. Une contre-mesure qui jette la réponse du serveur ne peut pas
+    # savoir qu'elle a échoué (règle #29).
+    COMPLEMENTS_OK=oui
+    for appareil in complement-0001 complement-0002; do
+      reponse="$(curl -s -w '
+%{http_code}' -X POST "$API_URL/report"         -H 'Content-Type: application/json' -H "X-Device-Id: $appareil"         -d "{\"promoId\":\"$SIG_PROMO\",\"reason\":\"arnaque\"}")"
+      code="${reponse##*$'
+'}"
+      case "$code" in
+        2*) ;;
+        *) echo "⚠️  signalement complémentaire refusé (HTTP $code) : $(echo "$reponse" | head -1 | head -c 160)"
+           COMPLEMENTS_OK=non ;;
+      esac
+    done
+    if [ "$COMPLEMENTS_OK" = "non" ]; then
+      echo "    Le seuil de 3 ne peut pas être atteint : la contre-mesure n'a"
+      echo "    PAS eu lieu. Ce n'est pas un échec du parcours."
+      noter "contre-mesure signalement (non concluante)" 1
+    else
+    SIG_APRES="$(curl -s -o /dev/null -w '%{http_code}' "$API_URL/promo/$SIG_PROMO"       -H "X-Device-Id: $DEVICE_ID")"
+    SIG_FILE_APRES="$(curl -s "$API_URL/admin/moderation/queue"       -H "Authorization: Bearer $JETON_ADMIN_SIG" -H "X-Device-Id: $DEVICE_ID"       | lire_champ total)"
+    if [ "$SIG_APRES" = "200" ]; then
+      echo "❌ la promo répond toujours 200 après TROIS signalements : celui de"
+      echo "   l'app n'a pas été compté (les deux du script ne suffisent pas)."
+      noter "contre-mesure signalement" 1
+    elif [ -z "$SIG_FILE_APRES" ]; then
+      echo "⚠️  file illisible après coup — contre-mesure incomplète."
+      noter "contre-mesure signalement (non concluante)" 1
+    elif [ "$SIG_FILE_APRES" -ne $((SIG_FILE_AVANT + 1)) ]; then
+      echo "❌ la promo est sortie du public (HTTP $SIG_APRES) mais la file de"
+      echo "   modération compte $SIG_FILE_APRES au lieu de $((SIG_FILE_AVANT + 1))."
+      noter "contre-mesure signalement" 1
+    else
+      echo "✅ public 200 → $SIG_APRES · file $SIG_FILE_AVANT → $SIG_FILE_APRES"
+      echo "   (2 signalements du script + 1 de l'app = seuil de 3 atteint)"
+      noter "contre-mesure signalement" 0
+    fi
+    fi
   fi
   echo
 fi

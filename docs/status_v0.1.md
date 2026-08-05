@@ -712,6 +712,43 @@ C'est la démonstration de l'avertissement que ce fichier porte en tête : *un
 état périmé est pire qu'aucun état, il fait conclure*. Ici il a fait écrire un
 test qui éprouvait un chemin que personne n'emprunte.
 
+#### Le signalement client — et un défaut qui se déclenche à chaque frappe
+
+Onzième parcours : **la seule écriture d'un client**. Elle porte loin — une
+promo signalée sort du public — et c'est la surface d'abus la plus exposée
+(`POST /report` n'est protégé que par un `X-Device-Id` déclaratif).
+
+**Défaut produit trouvé** : `PromoListController` écrit `state = …` après un
+`await` **sans vérifier `mounted`**. Or `promoListProvider` est
+`.autoDispose` et se recrée à chaque changement de commune, catégorie, favoris
+**ou recherche** : taper dans la barre de recherche détruit le contrôleur
+précédent pendant que sa requête est en vol, et la réponse lève
+« Tried to use PromoListController after dispose was called ». Autrement dit,
+le défaut se déclenche **à chaque frappe**, pas seulement dans un test.
+Corrigé par la garde après chaque `await`. Les cinq autres `StateNotifier` du
+dépôt écrivent aussi après un `await`, mais **aucun n'est `autoDispose`** — ils
+ne peuvent pas rencontrer ce cas, et n'ont donc pas été touchés.
+
+⚠️ **Deux erreurs à moi, et les deux méritent la règle 28.**
+
+La première est la pire : **mon assertion d'écran affirmait qu'une promo
+signalée quitte la liste, et elle était verte alors que la promo était toujours
+publique.** Il faut **trois** signalements d'appareils distincts
+(`MODERATION_THRESHOLD`, specs §5.4) — un seul ne masque rien. Elle passait
+parce qu'**une assertion d'absence est satisfaite par l'écran de chargement** :
+la carte n'était pas encore revenue.
+
+La seconde : ma contre-mesure envoyait deux signalements complémentaires vers
+`/dev/null`. Ils étaient **refusés en 400** (motif inventé — les motifs valides
+sont `perime`, `arnaque`, `photo_trompeuse`, `autre`), et elle en concluait que
+le geste de l'app n'avait pas compté. Un `curl -o /dev/null` dans un banc est un
+aveu : on a décidé de ne pas savoir.
+
+La contre-mesure finale est en revanche solide, et c'est la seule forme
+possible ici : le script envoie **deux** signalements valides depuis deux
+appareils distincts. Deux ne suffisent pas ; si la promo sort du public, c'est
+que **celui de l'app a compté**. Mesuré : public `200 → 404`, file `0 → 1`.
+
 #### 🔓 Fermé — l'agent entre désormais par la porte de l'admin
 
 Point produit tranché par l'utilisateur : *« l'agent, c'est comme l'admin,

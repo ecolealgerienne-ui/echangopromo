@@ -159,6 +159,12 @@ class PromoListController extends StateNotifier<PromoListState> {
     state = const PromoListState(status: PromoListStatus.loading);
     try {
       final result = await _fetch(page: 1);
+      // ⚠️ **`mounted` après CHAQUE `await`.** Quitter l'accueil pendant qu'une
+      // requête est en vol détruit ce contrôleur ; la réponse arrive ensuite et
+      // `state = …` lève « Tried to use PromoListController after dispose was
+      // called ». Trouvé le 2026-08-05 par le parcours de signalement, qui
+      // ouvre une fiche juste après avoir tapé une recherche.
+      if (!mounted) return;
       state = PromoListState(
         status: PromoListStatus.loaded,
         items: result.items,
@@ -166,6 +172,7 @@ class PromoListController extends StateNotifier<PromoListState> {
         page: 1,
       );
     } catch (error) {
+      if (!mounted) return;
       state = PromoListState(status: PromoListStatus.error, error: error);
     }
   }
@@ -186,6 +193,7 @@ class PromoListController extends StateNotifier<PromoListState> {
     try {
       final nextPage = state.page + 1;
       final result = await _fetch(page: nextPage);
+      if (!mounted) return;
       state = state.copyWith(
         items: [...state.items, ...result.items],
         total: result.total,
@@ -193,6 +201,9 @@ class PromoListController extends StateNotifier<PromoListState> {
         loadingMore: false,
       );
     } catch (error) {
+      // Même garde : sans elle, une erreur réseau survenant après un départ
+      // d'écran lèverait à son tour, en masquant l'erreur d'origine.
+      if (!mounted) return;
       state = state.copyWith(loadingMore: false);
       rethrow;
     }
