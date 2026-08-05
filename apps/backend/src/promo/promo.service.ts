@@ -15,6 +15,7 @@ import {
 } from 'typeorm';
 import { CommercantService } from '../commercant/commercant.service';
 import { Commercant } from '../commercant/entities/commercant.entity';
+import { withTimeout } from '../common/async/with-timeout';
 import { configNumber } from '../common/config/config-number';
 import {
   BadRequestAppException,
@@ -77,6 +78,15 @@ const EXPIRING_SOON_WINDOW_HOURS = 24;
  * silencieusement des commerces (règle d'audit #15).
  */
 const MAX_MAP_COMMERCANTS = 300;
+
+/**
+ * Délai au-delà duquel on renonce à la miniature (P9). Mesuré : une génération
+ * saine prend **88 ms** contre MinIO en local, en incluant le
+ * téléchargement de l'original et le réencodage. Cinq secondes laissent donc
+ * une marge de deux ordres de grandeur — c'est un filet contre un stockage
+ * injoignable, pas un budget de performance à respecter au plus juste.
+ */
+const THUMBNAIL_TIMEOUT_MS = 5_000;
 
 @Injectable()
 export class PromoService {
@@ -363,7 +373,22 @@ export class PromoService {
     sourceKey: string,
   ): Promise<string | null> {
     try {
-      return await this.storageService.generateThumbnail(sourceKey);
+      // ⚠️ **Borné, sinon « best-effort » ne veut rien dire.** Cette génération
+      // est facultative — la promo se crée sans elle — mais elle vit DANS le
+      // chemin de création : son attente est celle de l'utilisateur. Le
+      // 2026-08-04, un `S3_ENDPOINT` injoignable depuis le serveur a fait durer
+      // une création **plus de 300 secondes** (P9) : le SDK AWS n'impose pas de
+      // délai court, et le `catch` ci-dessous attrapait l'échec sans jamais
+      // borner l'attente.
+      //
+      // Le délai est posé ICI et non sur le `S3Client` : un upload légitime de
+      // 500 Ko peut dépasser 5 s sans que ce soit une panne. Seul l'accessoire
+      // est borné.
+      return await withTimeout(
+        this.storageService.generateThumbnail(sourceKey),
+        THUMBNAIL_TIMEOUT_MS,
+        `miniature de ${sourceKey}`,
+      );
     } catch (error) {
       this.logger.warn(
         `Échec de génération de la miniature pour ${sourceKey} : ${error}`,

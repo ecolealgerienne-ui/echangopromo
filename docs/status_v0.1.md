@@ -185,7 +185,7 @@ findOne({ where: { telephone, deletedAt: IsNull() } })
 (`resetPin`, `findByPhone`…) appliquent-elles le filtre ? Une seule corrigée
 laisserait la règle 5 ouverte ailleurs.
 
-### P9 — `S3_ENDPOINT` sert deux rôles incompatibles 🆕 *contourné en local*
+### P9 — `S3_ENDPOINT` sert deux rôles incompatibles ✅ *fermé le 2026-08-05*
 
 **Trouvé le 2026-08-04** en instrumentant le banc de concurrence : une création
 de promo prenait **plus de 300 secondes**.
@@ -214,10 +214,30 @@ S3_CDN_BASE_URL=http://10.0.2.2:9000/echango-promo    # ce que le CLIENT reçoit
 
 Création de promo : **300 s → 88 ms**.
 
-⚠️ **Ce n'est qu'un contournement local** (`.env`, non versionné). Deux
-questions restent ouvertes pour l'équipe : le `.env.example` devrait-il porter
-cette séparation, et la génération de miniature — best-effort, mais **dans le
-chemin de création** — mérite-t-elle un timeout court plutôt que celui du SDK ?
+~~⚠️ Ce n'est qu'un contournement local~~ — **tranché le 2026-08-05, les deux
+questions par l'affirmative.**
+
+- **Le `.env.example` porte désormais la séparation.** Il annonçait encore
+  `S3_ENDPOINT=http://10.0.2.2:9000` avec `S3_CDN_BASE_URL=` vide : autrement
+  dit, toute personne partant du fichier d'exemple retombait exactement dans les
+  300 s. Les deux rôles y sont maintenant nommés côte à côte, avec la mesure.
+  Même rappel ajouté à `.env.production.example`, où les valeurs sont correctes
+  — pour qu'on ne « simplifie » pas en les fusionnant.
+- **La miniature est bornée à 5 s** (`THUMBNAIL_TIMEOUT_MS`, `withTimeout`).
+  Le délai est posé sur le seul chemin best-effort, **pas sur le `S3Client`** :
+  un upload légitime de 500 Ko peut dépasser 5 s sans être une panne. Mesure de
+  référence : une génération saine prend 88 ms, la marge est de deux ordres de
+  grandeur — c'est un filet, pas un budget.
+
+⚠️ Le filet ne dispense pas d'une configuration juste : avec un `S3_ENDPOINT`
+faux, la création ne bloque plus mais la miniature manque toujours.
+
+⚠️ **Un correctif écrit puis retiré, à noter.** `withTimeout` portait d'abord un
+`promesse.catch(() => undefined)` « pour éviter un `unhandledRejection` ». La
+mutation l'a démenti : le retirer ne fait échouer aucun test, parce que
+`Promise.race` s'abonne déjà au perdant et qu'un rejet tardif y est donc géré.
+Ligne supprimée plutôt que gardée au cas où — et le test qui l'accompagnait
+requalifié, pour qu'il ne compte pas à tort comme un cas de refus.
 
 ### P4 — Le verrou du plafond de 5 promos ✅ *fermé le 2026-08-04*
 
@@ -265,7 +285,7 @@ par route**) fait que **la route qu'on oublie est ouverte**.
 
 </details>
 
-### P7 — Cinq miroirs d'enum avalent une valeur inconnue 🆕
+### P7 — Cinq miroirs d'enum avalent une valeur inconnue ✅ *fermé le 2026-08-05*
 
 **Trouvé le 2026-08-04** par `tool/check_enums.dart`, qui le signale sans
 bloquer.
@@ -284,8 +304,24 @@ Les trois autres (`RegistreStatus`, `AuditActorType`,
 `CommercantOriginVerification`) lèvent — comportement plus bruyant, donc plus
 sûr.
 
-**C'est un choix à rendre, pas un défaut à corriger d'office** : un repli peut
-être délibéré. Mais aujourd'hui rien ne dit lequel l'est.
+~~**C'est un choix à rendre**~~ — **rendu, et déjà appliqué** : le repli est
+**conservé**, mais il **parle**.
+
+Lever sur une valeur inconnue ferait planter une liste entière à cause d'une
+seule ligne, chez l'utilisateur, au pire moment ; et pour au moins deux de ces
+enums le repli est un choix produit (une catégorie inconnue affichée comme
+« autre »). Ce qui manquait n'était pas le refus, c'était le **signal**.
+
+`fromApiValue` (`domain/enums/api_enum.dart`) porte désormais les cinq miroirs
+concernés et journalise en debug/test : *« PromoLifecycleStatus : valeur « x »
+inconnue du miroir Dart — repli sur … Vérifier avec `tool/check_enums.dart` »*.
+Muet en production, où l'utilisateur n'a rien à faire de ce message. C'est le
+critère de la règle 29 appliqué tel quel : *si cette valeur est fausse, est-ce
+que quelque chose le dira ?* — oui, au moment où quelqu'un peut encore agir.
+
+Les trois qui lèvent (`RegistreStatus`, `AuditActorType`,
+`CommercantOriginVerification`) continuent de lever : plus bruyant, donc plus
+sûr, et aucun d'eux n'alimente une liste entière.
 
 ### P8 — La règle 19 est contournée dans les écrans 🆕
 
@@ -520,9 +556,10 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
    étrangères et des index de `agent_communes` fait encore du bruit dans
    `migration:generate` — sans danger (chaque `DROP` a sa recréation dans le
    même `up()`), mais à silencier avant qu'il ne recache autre chose.
-2. **Trancher P9** (séparation S3 dans `.env.example`) et **P7** (les replis
-   silencieux des miroirs). ~~**P8** (les comparaisons littérales)~~ — sans
-   objet, mesuré à zéro le 2026-08-05.
+2. ~~**Trancher P9 et P7**~~ — **fait le 2026-08-05.** P9 : les deux rôles de
+   `S3_ENDPOINT` séparés jusque dans les fichiers d'exemple, et la miniature
+   bornée à 5 s. P7 : le repli des miroirs est **conservé mais parlant**
+   (`fromApiValue`). ~~**P8**~~ — sans objet, mesuré à zéro le 2026-08-05.
 3. **Étape 3** — les parcours écran. La base est désormais assez peuplée pour
    qu'ils aient quelque chose à montrer, et `harness.dart` attend dans
    `docs/methode-test/`.
