@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Autorise le HTTP EN CLAIR vers la machine de développement, et vers elle
+  seule.
+
+  ── Pourquoi ce fichier existe ────────────────────────────────────────────
+
+  Android bloque le trafic en clair par défaut depuis l'API 28, et ce projet
+  cible l'API 36. Un build pointé sur `http://10.0.2.2:3000` (le backend local,
+  vu depuis l'émulateur) échouait donc à chaque requête — sans que la cause
+  soit lisible côté app : Dio rend une erreur réseau ordinaire, exactement
+  celle d'un serveur éteint. On cherche le backend, alors que c'est le
+  système qui refuse (constaté le 2026-08-05).
+
+  ── Pourquoi cette forme, et pas `usesCleartextTraffic="true"` ────────────
+
+  L'attribut global autoriserait le clair vers N'IMPORTE QUEL hôte. Ici seuls
+  trois domaines sont ouverts, et `cleartextTrafficPermitted` reste `false`
+  partout ailleurs — un appel HTTP accidentel vers un autre serveur échoue
+  toujours, ce qui est le comportement voulu.
+
+  ⚠️ Ce fichier vit dans `src/debug/`, donc il n'entre QUE dans les builds de
+  debug. Il n'est pas fusionné dans un build de release : la production ne
+  parle qu'en HTTPS, et rien ici ne peut l'assouplir. C'est la raison du
+  placement — le mettre dans `src/main/` aurait suivi jusqu'au Play Store.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- L'hôte, vu depuis l'émulateur Android (jamais `localhost`, qui
+             désigne le téléphone lui-même). -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <!-- Utile pour un backend joint via `adb reverse tcp:3000 tcp:3000`. -->
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>
