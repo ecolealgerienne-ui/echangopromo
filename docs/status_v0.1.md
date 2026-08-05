@@ -582,10 +582,20 @@ arrivant après le centrage sur la commune reprenne la main.
 recomposent un point qui ne correspond à aucune répartition réelle. La moyenne
 se prend sur une sous-requête qui dédoublonne d'abord par `commercant.id`.
 
-⚠️ **Non vérifié contre une base vivante** : la sous-requête enveloppant
-`getQueryAndParameters()` n'a pas pu être exercée depuis Windows (le backend
-tourne sous WSL). Même patron que `ReportService.countPendingModeration`, mais
-à passer au banc — c'est le seul point de ce lot qui n'est pas prouvé.
+~~⚠️ Non vérifié contre une base vivante~~ — **fait le 2026-08-05 à 11h10**,
+backend démarré depuis WSL sur la base du pilote :
+
+| Vérification | Résultat |
+|---|---|
+| route montée | `Mapped {/promo/map/center, GET}` |
+| la sous-requête SQL | `200` → `{"center":{"latitude":34.6594,"longitude":3.263}}` |
+| erreur SQL au journal | aucune |
+| refus — identifiant non-UUID | `400 VALIDATION_ERROR` |
+| refus — plus de 4 communes | `400`, `must contain no more than 4 elements` |
+| refus — paramètre absent | `400` |
+
+Le centre obtenu tombe sur Djelfa, cohérent avec l'ancien repli écrit en dur
+(34,6703 / 3,2630) — mais dérivé, lui, des positions réelles des commerçants.
 
 **Vérifications** : `flutter analyze` 0 · `flutter test` 14 · `check_all` 4/4 ·
 `dart format` 0 · `tsc` propre · `eslint` 0 sur `src/promo` · `jest` 49 tests.
