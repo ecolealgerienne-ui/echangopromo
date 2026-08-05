@@ -32,7 +32,10 @@ import { Promo } from '../../promo/entities/promo.entity';
  * le bandeau ne disparaît jamais faute de configuration.
  */
 @Entity()
-@Index(['active', 'position'])
+// Nommé comme en base (`1783820000000-CreateHighlight`) — sans ça TypeORM
+// calcule un nom de hachage, ne reconnaît plus l'index et propose de le
+// remplacer par le sien à chaque `migration:generate` (2026-08-05).
+@Index('IDX_highlight_active_position', ['active', 'position'])
 export class Highlight {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -60,8 +63,9 @@ export class Highlight {
   promo: Promo | null;
 
   // PostgreSQL n'indexe pas automatiquement une clé étrangère (CLAUDE.md
-  // #12) — celle-ci sert de jointure à chaque chargement du bandeau.
-  @Index()
+  // #12) — celle-ci sert de jointure à chaque chargement du bandeau. Nommé
+  // comme en base, même raison que l'index composite ci-dessus.
+  @Index('IDX_highlight_promo')
   @Column({ type: 'uuid', nullable: true })
   promoId: string | null;
 

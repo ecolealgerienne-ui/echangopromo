@@ -39,7 +39,19 @@ export enum NotificationRecipientType {
 }
 
 @Entity()
-@Index(['recipientType', 'recipientId', 'readAt'])
+// ⚠️ **Nommé, et nommé EXACTEMENT comme en base** (2026-08-05). Sans nom
+// explicite, TypeORM en calcule un par hachage, ne reconnaît plus l'index posé
+// par `1783680000000-CreateNotificationEntity` et propose de le supprimer pour
+// le recréer sous son propre nom. Inoffensif pris isolément — mais c'est ce
+// bruit, répété sur cinq index, qui a masqué pendant des semaines un
+// `DROP INDEX "UQ_commercant_telephone_active"` sans recréation dans le même
+// diff. Une sortie de `migration:generate` qu'on parcourt en diagonale est une
+// sortie qu'on ne lit pas.
+@Index('IDX_notification_recipientType_recipientId_readAt', [
+  'recipientType',
+  'recipientId',
+  'readAt',
+])
 export class Notification {
   @PrimaryGeneratedColumn('uuid')
   id: string;

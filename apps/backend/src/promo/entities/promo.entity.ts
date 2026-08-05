@@ -111,8 +111,18 @@ export class Promo {
    * `GET /promo/me/all` (propriétaire authentifié uniquement) pour permettre
    * l'édition sans réuploader les photos inchangées.
    */
+  /**
+   * ⚠️ `default: '{}'` déclaré parce que **la colonne le porte en base**
+   * (`1783750000000-AddPromoPhotoKeys`, où il servait à remplir les lignes
+   * existantes lors du passage de `photoKey` à `photoKeys`). Sans cette
+   * déclaration, chaque `migration:generate` proposait
+   * `ALTER COLUMN "photoKeys" DROP DEFAULT` — du bruit, mais du bruit dans
+   * lequel une ligne dangereuse peut passer inaperçue (2026-08-05).
+   *
+   * Ce défaut n'est jamais utilisé en pratique : le DTO exige 1 à 3 clés.
+   */
   @Exclude()
-  @Column('text', { array: true })
+  @Column('text', { array: true, default: () => "'{}'" })
   photoKeys: string[];
 
   /**

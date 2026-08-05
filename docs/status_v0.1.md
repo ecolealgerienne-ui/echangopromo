@@ -514,15 +514,12 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
 
 ### Par où reprendre
 
-1. **Rejouer les cinq bancs** — la revue multi-agents du 2026-08-05 a modifié
-   des chemins qu'ils traversent (visibilité des promos, plafond de 5, file de
-   modération, décor), **et changé le contrat sur trois points** : `POST /promo`
-   reçoit `dureeJours`, `GET /notifications` rend `promoDescription` au lieu
-   d'une phrase, `GET /promo/me/slots` est neuf. Rien n'a été exécuté depuis :
-   c'est le premier geste. Trois vérifications rapides à faire au passage —
-   `migration:generate` à sec (le diff destructeur sur `Notification` doit avoir
-   disparu), `strings base.apk` (quels binaires portent encore les identifiants
-   admin), et `countPendingModeration` qui doit rendre **2** là où il rendait 6.
+1. ~~**Rejouer les cinq bancs**~~ — **fait le 2026-08-05 au soir**, les quatre
+   bancs au vert et **P10 fermé** ; les trois vérifications rapides faites aussi
+   (voir le journal du jour). Ce qu'il reste de cet item : le renommage des clés
+   étrangères et des index de `agent_communes` fait encore du bruit dans
+   `migration:generate` — sans danger (chaque `DROP` a sa recréation dans le
+   même `up()`), mais à silencier avant qu'il ne recache autre chose.
 2. **Trancher P9** (séparation S3 dans `.env.example`) et **P7** (les replis
    silencieux des miroirs). ~~**P8** (les comparaisons littérales)~~ — sans
    objet, mesuré à zéro le 2026-08-05.
@@ -536,6 +533,65 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
 ---
 
 ## Journal
+
+### 2026-08-05 (soir, suite) — Les trois vérifications rapides, et un DROP orphelin
+
+Les trois contrôles annexes de l'item 1 sont faits. Deux confirment ce qu'on
+attendait ; le premier a trouvé autre chose.
+
+**1. `migration:generate` à sec — le diff destructeur sur `Notification` a bien
+disparu.** Plus aucun `ALTER COLUMN "createdAt" TYPE TIMESTAMP` : la correction
+d'entité du matin (timestamptz explicite, colonnes `uuid` typées) a tenu.
+
+⚠️ **Mais la même sortie contenait un `DROP` orphelin, autrement grave :**
+
+```
+DROP INDEX "public"."UQ_commercant_telephone_active"
+```
+
+…sans aucune recréation dans le `up()` — seul le `down()` le remettait.
+Appliquer cette migration aurait supprimé en silence la garantie « un seul
+commerçant actif par numéro » : celle que `test-cycle-commercant.sh` venait de
+valider, et dont l'absence avait produit **P10**.
+
+La cause est le **miroir de la règle 12** : `telephone` ne portait aucun
+`@Index` sur l'entité, l'index partiel n'existant que dans
+`1783770000000-CommercantTelephoneUniqueActiveOnly`. TypeORM le voyait donc
+« en base mais pas dans le modèle ». Un `@Index()` sans migration est un
+commentaire — **et un index en base sans `@Index()` est un candidat à la
+suppression**. Les deux sens doivent être tenus.
+
+Le commentaire du champ y a contribué : il disait que l'index partiel n'était
+« pas exprimable par ce décorateur seul », ce qui se lisait comme
+*inexprimable* — alors que la forme **de classe** l'exprime très bien, et que
+le fichier l'utilisait déjà dix lignes plus haut pour `IDX_commercant_position`.
+
+**Le bruit était le vrai complice.** La sortie faisait 19 opérations, dont 18 de
+renommage cosmétique — c'est là-dedans que la ligne dangereuse passait. Les
+index de `notification`, `highlight` et le défaut de `promo.photoKeys` sont
+désormais déclarés **avec le nom exact qu'ils portent en base** : la sortie
+tombe à 10 opérations, et **chacune a sa contrepartie dans le même `up()`**
+(plus aucun `DROP` orphelin). Le résidu est le renommage des clés étrangères et
+des index de la table de jointure `agent_communes`, non nommables depuis un
+décorateur.
+
+⚠️ **Aucune migration n'a été ajoutée** : le schéma est inchangé, ces
+déclarations ne font que faire dire la même chose au modèle et à la base.
+`synchronize` reste coupé.
+
+**2. Identifiants dans le binaire compilé** — `superadmin@echangopromo.com` :
+**0 occurrence**. Aucun identifiant en dur dans `lib/` (`654321`, `123456789`
+absents des sources ; leurs occurrences dans le binaire viennent du SDK). Les
+deux seules occurrences de `echango.com` sont le défaut d'`API_BASE_URL` et un
+commentaire sur les App Links. *Mesuré sur un build de **debug**, qui embarque
+le texte source : un build de release en porterait moins, pas plus.*
+
+**3. `countPendingModeration`** — l'invariant tient : `signalementsEnAttente`
+(1) = `total` de la file (1) = items rendus (1) = identifiants distincts (1).
+C'est exactement ce qui était faux quand le compteur rendait 6 pour 2 promos —
+il comptait des lignes de signalement là où la file compte des promos.
+
+---
 
 ### 2026-08-05 (soir) — Les quatre bancs rejoués, tous au vert, P10 fermé
 

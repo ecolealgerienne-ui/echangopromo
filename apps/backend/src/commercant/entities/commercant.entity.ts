@@ -52,6 +52,26 @@ export enum RegistreStatus {
 @Index('IDX_commercant_position', ['latitude', 'longitude'], {
   where: '"latitude" IS NOT NULL AND "longitude" IS NOT NULL',
 })
+/**
+ * ⚠️ **Unicité du numéro parmi les comptes actifs** — même raison que
+ * ci-dessus, et le défaut s'était bel et bien produit : au 2026-08-05,
+ * `migration:generate` émettait `DROP INDEX "UQ_commercant_telephone_active"`
+ * **sans jamais le recréer dans le `up()`** (seul le `down()` le remettait).
+ * Appliquer cette migration aurait silencieusement supprimé la garantie « un
+ * seul commerçant actif par numéro » — celle qui vient d'être éprouvée par
+ * `test-cycle-commercant.sh`, et dont l'absence avait produit P10.
+ *
+ * C'est le miroir de la règle 12 : un `@Index()` sans migration est un
+ * commentaire, **et un index en base sans `@Index()` est un candidat à la
+ * suppression**. Les deux sens doivent être tenus.
+ *
+ * Posé à l'origine par `1783770000000-CommercantTelephoneUniqueActiveOnly` ;
+ * déclaré ici pour que le modèle et la base disent la même chose.
+ */
+@Index('UQ_commercant_telephone_active', ['telephone'], {
+  unique: true,
+  where: '"deletedAt" IS NULL',
+})
 @Entity()
 export class Commercant {
   @PrimaryGeneratedColumn('uuid')
@@ -59,8 +79,16 @@ export class Commercant {
 
   /**
    * Unique parmi les comptes actifs uniquement — index partiel
-   * `WHERE "deletedAt" IS NULL` posé par migration (pas exprimable par ce
-   * décorateur seul), pas une contrainte `unique` classique. Sans ça, un
+   * `WHERE "deletedAt" IS NULL`, pas une contrainte `unique` classique.
+   *
+   * ⚠️ Il est déclaré **sur la classe** (voir plus haut), pas ici : le
+   * décorateur de propriété ne sait pas porter de clause `WHERE`. La version
+   * précédente de ce commentaire disait « pas exprimable par ce décorateur
+   * seul » et s'arrêtait là — ce qui se lisait comme « inexprimable », alors
+   * que la forme de classe l'exprime très bien. L'index n'a donc jamais été
+   * déclaré, et `migration:generate` proposait de le supprimer (2026-08-05).
+   *
+   * Sans ça, un
    * commerçant suspendu bloquait définitivement son numéro : impossible de
    * le donner ensuite au vrai propriétaire en cas de changement de main du
    * commerce (bug trouvé 2026-07-13, `assertPhoneAvailable` ne filtrait
