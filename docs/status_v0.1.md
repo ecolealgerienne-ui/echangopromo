@@ -590,6 +590,31 @@ tourne sous WSL). Même patron que `ReportService.countPendingModeration`, mais
 **Vérifications** : `flutter analyze` 0 · `flutter test` 14 · `check_all` 4/4 ·
 `dart format` 0 · `tsc` propre · `eslint` 0 sur `src/promo` · `jest` 49 tests.
 
+**Trouvé en testant, dans la foulée : la sélection de communes était
+impossible.** `SelectedCommuneStore` garde des UUID bruts en préférences, que
+**rien ne confrontait jamais au référentiel**. Une base réamorcée
+(`seed:communes`, les bancs) leur donne de nouveaux identifiants ; l'app
+conservait les anciens indéfiniment. Quatre identifiants fantômes suffisaient
+alors à atteindre `kMaxSelectedCommunes` : *toutes* les cases se désactivaient,
+et aucune n'apparaissait cochée puisqu'ils ne désignaient plus rien. Une liste
+pleine, rien de coché, rien de cochable — sans message ni erreur, un
+identifiant périmé étant indiscernable d'un valide.
+
+Ça masquait aussi le message ajouté le jour même : la sélection n'était pas
+*vide* mais *fantôme*, donc l'accueil interrogeait quatre communes inexistantes
+et affichait « aucune promo active ».
+
+Corrigé par `selectionEffective(enregistrees, referentiel)`, appliquée à
+l'affichage **et** persistée. ⚠️ Un référentiel **vide ne réduit rien** — il
+veut dire « je ne sais pas » (requête en cours, en échec, seed non passé), pas
+« aucune des tiennes n'existe » ; élaguer sur ce silence effacerait une
+sélection valide (règle 29). Éprouvé : 6 cas, et la mutation qui retire cette
+garde fait tomber le test. `flutter test` passe de 14 à **20**.
+
+⚠️ **Correction côté app uniquement** : un parc déjà installé garde ses
+identifiants périmés jusqu'à la mise à jour. Pour débloquer un appareil de
+test tout de suite, effacer les données de l'app.
+
 ---
 
 ### 2026-08-05 (suite) — Le plafond de 5 sort du binaire, et un piège de configuration

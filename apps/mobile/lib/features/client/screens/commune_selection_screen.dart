@@ -56,52 +56,92 @@ class _CommuneSelectionScreenState
       body: communesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: ApiErrorText(error)),
-        data: (communes) => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(l10n.maxCommunesHint(kMaxSelectedCommunes),
-                      style: textTheme.bodyMedium),
-                  const SizedBox(height: 8),
-                  // Compteur vivant plutôt qu'une consigne figée : le client
-                  // voit combien il lui reste de choix au lieu de découvrir
-                  // le plafond en butant dessus.
-                  Row(
-                    children: [
-                      Icon(Icons.info_outline,
-                          size: 15, color: colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          l10n.communesSelectedCount(
-                              _selectedCommuneIds.length),
-                          style: textTheme.bodySmall
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+        data: (communes) {
+          // ⚠️ **Les identifiants enregistrés ne valaient rien tant qu'on ne
+          // les confrontait pas au référentiel.** `SelectedCommuneStore` garde
+          // des UUID bruts dans les préférences ; une base réamorcée
+          // (`seed:communes`, les bancs de test) leur en donne de nouveaux, et
+          // l'app conserve les anciens indéfiniment. Personne ne le signalait :
+          // un identifiant périmé est indiscernable d'un valide.
+          //
+          // L'écran devenait alors **inutilisable** : 4 identifiants fantômes
+          // ⇒ `atCap` vrai ⇒ toutes les cases désactivées, et aucune cochée
+          // puisqu'ils ne désignent plus rien. Une liste pleine, rien de
+          // coché, rien de cochable (constaté le 2026-08-05).
+          //
+          // ⚠️ Seulement si le référentiel a répondu quelque chose. Une liste
+          // vide veut dire « je ne sais pas », pas « aucune des tiennes
+          // n'existe » — élaguer sur ce silence effacerait une sélection
+          // parfaitement valide (règle #29).
+          final effectif = selectionEffective(_selectedCommuneIds, communes);
+          if (effectif.length != _selectedCommuneIds.length) {
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              if (!mounted) return;
+              setState(() => _selectedCommuneIds = effectif);
+              // Persisté aussi, sinon le reste de l'app continue d'interroger
+              // des communes qui n'existent plus — et reçoit zéro promo sans
+              // que rien ne dise pourquoi.
+              await ref
+                  .read(selectedCommunesProvider.notifier)
+                  .select(effectif.toList());
+            });
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(l10n.maxCommunesHint(kMaxSelectedCommunes),
+                        style: textTheme.bodyMedium),
+                    const SizedBox(height: 8),
+                    // Compteur vivant plutôt qu'une consigne figée : le client
+                    // voit combien il lui reste de choix au lieu de découvrir
+                    // le plafond en butant dessus.
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            size: 15, color: colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            // `effectif`, pas `_selectedCommuneIds` : le
+                            // nettoyage n'est appliqué à l'état qu'à la frame
+                            // suivante, et compter les fantômes ici afficherait
+                            // « 4 sélectionnées » sur un écran où rien n'est
+                            // coché.
+                            l10n.communesSelectedCount(effectif.length),
+                            style: textTheme.bodySmall
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: CommuneMultiSelectField(
-                  communes: communes,
-                  selectedCommuneIds: _selectedCommuneIds,
-                  maxSelection: kMaxSelectedCommunes,
-                  constrainListHeight: false,
-                  onChanged: (ids) => setState(() => _selectedCommuneIds = ids),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
-        ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: CommuneMultiSelectField(
+                    communes: communes,
+                    // Idem : sans ça, le plafond serait calculé sur les fantômes
+                    // et désactiverait toutes les cases dès cette première
+                    // frame — exactement le blocage qu'on corrige.
+                    selectedCommuneIds: effectif,
+                    maxSelection: kMaxSelectedCommunes,
+                    constrainListHeight: false,
+                    onChanged: (ids) =>
+                        setState(() => _selectedCommuneIds = ids),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
       // Confirmation fixée en bas : la liste des communes défile sur
       // plusieurs écrans, le bouton disparaissait dès qu'on cherchait.
