@@ -587,6 +587,52 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
 
 ## Journal
 
+### 2026-08-05 (après-midi) — La rotation du mot de passe admin était IMPOSSIBLE
+
+Le registre porte « faire tourner le mot de passe `superadmin` » depuis que
+l'APK de test s'est révélé embarquer les identifiants en clair. En allant
+l'exécuter, j'ai découvert pourquoi il n'avait pas bougé : **c'était
+irréalisable.**
+
+- `seed:admin` **refuse** un compte déjà existant — il ne sait que créer ;
+- aucune route ne le permet : `POST /admin/agent/:id/reset-password` ne vise
+  que les **agents** ;
+- il ne restait que du SQL direct.
+
+Un point de sécurité qu'on ne peut pas exécuter reste ouvert indéfiniment. Ce
+n'était pas un oubli d'intendance, c'était une **capacité absente**.
+
+**`seed:admin` accepte désormais `--rotate`**, et le geste **coupe les
+sessions** : changer le mot de passe sans incrémenter `tokenVersion` ne protège
+de rien, un jeton déjà volé restant valide 30 jours (`JWT_EXPIRES_IN`,
+règle 6). On aurait fermé la porte en laissant la fenêtre ouverte.
+
+⚠️ **Pas une route en libre-service, et c'est délibéré.** Un
+`PATCH /admin/me/password` exigerait le mot de passe **actuel** — celui qui a
+fuité. L'attaquant s'en servirait pour verrouiller le propriétaire dehors. Un
+script exécuté avec l'accès base suppose un accès qu'il n'a pas.
+
+**Éprouvé de bout en bout sur un admin jetable**, jamais sur celui du décor :
+
+```
+1. création                                    Admin créé
+2. connexion, ancien mot de passe               jeton obtenu
+3. sans --rotate, compte existant               refusé, et dit comment faire
+4. avec --rotate                                remplacé, tokenVersion → 1
+5. l'ANCIEN mot de passe                        400 AUTH_INVALID_CREDENTIALS
+6. le NOUVEAU                                   201, jeton
+7. la session d'AVANT la rotation               401 AUTH_TOKEN_REVOKED
+```
+
+La 7ᵉ est celle qui distingue une rotation d'un simple changement de champ.
+
+⚠️ **La rotation elle-même reste à faire sur le VPS** : ce commit la rend
+possible, il ne l'exécute pas. La commande est
+`npm run seed:admin:prod -- <email> <nouveau-mdp> <nom> --rotate`, et il faudra
+prévenir avant : elle déconnecte l'admin partout.
+
+---
+
 ### 2026-08-05 (après-midi) — Les cinq clés `PROMO_*` sont dans le `.env` qui tourne
 
 Action **hors dépôt**, consignée ici parce que la règle 36 l'exige : sans ça,
