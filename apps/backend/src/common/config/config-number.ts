@@ -33,12 +33,53 @@ import { Logger } from '@nestjs/common';
 
 const logger = new Logger('configNumber');
 
+/**
+ * Replis déjà signalés, pour ne le dire **qu'une fois par clé**.
+ *
+ * ⚠️ Ces fonctions sont appelées **par requête**, pas au démarrage
+ * (`activeCap()` l'est depuis `assertUnderCap`). Sans cette mémoire, un `.env`
+ * incomplet produirait une ligne de journal à chaque publication de promo —
+ * et un avertissement répété mille fois est un avertissement qu'on filtre,
+ * donc un repli redevenu silencieux par un autre chemin.
+ */
+const dejaSignale = new Set<string>();
+
+function signaler(cle: string | undefined, message: string): void {
+  const empreinte = `${cle ?? '?'}|${message}`;
+  if (dejaSignale.has(empreinte)) return;
+  dejaSignale.add(empreinte);
+  logger.warn(message);
+}
+
+/** Réservé aux tests — la mémoire des replis signalés est un état de module. */
+export function _resetConfigNumberLog(): void {
+  dejaSignale.clear();
+}
+
 export function configNumber(
   brut: unknown,
   defaut: number,
   cle?: string,
 ): number {
-  if (brut === undefined || brut === null) return defaut;
+  // ⚠️ **L'absence se dit, elle aussi.** Elle ne se distingue autrement en
+  // rien d'une clé présente valant exactement le défaut : le backend démarre,
+  // sert la bonne valeur, et le jour où l'on change la variable sans effet on
+  // conclura que le réglage est cassé plutôt qu'absent. C'est le cas réel de
+  // `PROMO_ACTIVE_CAP`, ajouté aux `.env.example` mais pas au `.env` de WSL
+  // qui, lui, tourne (règle #36).
+  // `String(brut).trim()` serait tentant, mais `String([])` vaut `''` : un
+  // tableau vide serait rapporté « absent » au lieu de « type inattendu ».
+  if (
+    brut === undefined ||
+    brut === null ||
+    (typeof brut === 'string' && brut.trim() === '')
+  ) {
+    signaler(
+      cle,
+      `${cle ?? 'valeur'} absente de la configuration — valeur retenue : ${defaut}`,
+    );
+    return defaut;
+  }
 
   // ⚠️ N'accepter QUE `number` et `string`. `Number()` est bien trop
   // accueillant pour servir de garde : `Number(true)` vaut 1, `Number([5])`
@@ -46,12 +87,12 @@ export function configNumber(
   // filtrer le type d'abord, c'est convertir des choses qui n'étaient pas des
   // nombres au lieu de les refuser.
   if (typeof brut !== 'number' && typeof brut !== 'string') {
-    logger.warn(
+    signaler(
+      cle,
       `${cle ?? 'valeur'} de configuration d'un type inattendu (${typeof brut}) — repli sur ${defaut}`,
     );
     return defaut;
   }
-  if (typeof brut === 'string' && brut.trim() === '') return defaut;
 
   const n = Number(brut);
 
@@ -60,7 +101,8 @@ export function configNumber(
     // **et** pour `Infinity`, effaçant du journal la seule chose qu'il doit
     // montrer. Ce message est la contrepartie du repli — s'il est illisible,
     // le repli redevient silencieux (règle #29).
-    logger.warn(
+    signaler(
+      cle,
       `${cle ?? 'valeur'} de configuration illisible (${String(brut)}) — repli sur ${defaut}`,
     );
     return defaut;

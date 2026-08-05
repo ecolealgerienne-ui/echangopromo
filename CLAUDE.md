@@ -514,6 +514,32 @@ permet de reconnaître un cas nouveau relevant de la même règle.
     `ThemeExtension` à deux variantes. Le défaut « deux thèmes sont deux copies
     que personne ne compare » n'existe pas ici.
 
+36. **Une clé de configuration n'existe pas tant qu'elle n'est pas dans le
+    `.env` qui tourne.** `.env.example` est un document, pas une source : il
+    n'est lu par aucun processus. Le `.env` réel vit **uniquement dans le clone
+    WSL** (voir § Environnement), n'est pas versionné, et ne se met pas à jour
+    en tirant une branche. Ajouter une clé au seul `.env.example` produit donc
+    exactement l'inverse de ce qu'on croit avoir fait : le dépôt annonce un
+    réglage que l'environnement qui tourne ignore.
+
+    Et le défaut est **silencieux par construction**, parce que le repli
+    fonctionne : le backend démarre, sert la bonne valeur, et rien ne distingue
+    « la clé est absente, je retombe sur 5 » de « la clé vaut 5 ». C'est
+    précisément le cas où l'on croira le réglage cassé en le changeant, alors
+    qu'il n'aura jamais été branché. *Trouvé le 2026-08-05 : `PROMO_ACTIVE_CAP`
+    ajouté aux deux `.env.example` pour rendre le plafond de promos réglable
+    sans redéploiement — il ne l'est dans aucun environnement tant que le `.env`
+    de WSL ne le porte pas.*
+
+    **En pratique** : toute clé ajoutée l'est dans les **trois** endroits dans
+    le même commit — `apps/backend/.env.example`, `.env.production.example`, et
+    le `.env` de WSL (hors dépôt, donc à faire à la main et à **dire** dans le
+    message de commit ou le journal, sinon personne ne saura que ça reste à
+    faire). Corollaire de la règle 29 : si un repli est prévu, la valeur
+    effectivement retenue doit être **journalisée au démarrage** — sans ça,
+    l'absence de la clé est indiscernable de sa présence, et c'est le
+    diagnostic qu'on n'aura pas le jour où le réglage « ne marche pas ».
+
 ### Règles de `echango-delivery` volontairement **non** reprises
 
 Une exclusion non écrite est indiscernable d'un oubli.

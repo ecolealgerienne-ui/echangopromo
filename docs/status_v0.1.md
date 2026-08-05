@@ -603,6 +603,20 @@ Faussement suspectes, à ne pas recompter : `maxLength: 12` sur les téléphones
 `_targetBytes = 250 Ko` vs `MAX_UPLOAD_BYTES = 500 Ko` (volontairement
 différents, documentés).
 
+**⛔ ACTION HORS DÉPÔT, NON FAITE — `PROMO_ACTIVE_CAP` dans le `.env` de WSL.**
+La clé n'existe que dans les deux `.env.example`, qui ne sont lus par aucun
+processus. Le `.env` réel vit dans `~/projects/echangopromo` et n'est pas
+versionné : **le plafond n'est réglable dans aucun environnement tant que
+personne ne l'y ajoute à la main.** Le backend tourne quand même (repli sur 5),
+et c'est bien ça le problème — on croira le réglage cassé en le changeant,
+alors qu'il n'aura jamais été branché. Devenu la **règle 36** de CLAUDE.md.
+
+Le repli est désormais **journalisé au démarrage** (« PROMO_ACTIVE_CAP absente
+de la configuration — valeur retenue : 5 »), une fois par clé et non par
+requête : sans ça, une clé absente reste indiscernable d'une clé présente
+valant exactement le défaut. Éprouvé — `config-number.spec.ts` monte à 16 cas,
+et la mutation qui rend ce repli silencieux fait tomber 3 tests.
+
 ---
 
 ### 2026-08-05 — Revue multi-agents par spécialité, et ses correctifs

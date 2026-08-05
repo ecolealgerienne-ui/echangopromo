@@ -1,4 +1,5 @@
-import { configNumber } from './config-number';
+import { Logger } from '@nestjs/common';
+import { _resetConfigNumberLog, configNumber } from './config-number';
 
 /**
  * **Ce que ce banc prouve : que la lecture de configuration sait REFUSER.**
@@ -65,5 +66,72 @@ describe('configNumber — lecture d’un nombre de configuration', () => {
 
   it('refuse un booléen — Number(true) vaudrait 1', () => {
     expect(configNumber(true, 5)).toBe(5);
+  });
+});
+
+/**
+ * **Le journal fait partie du contrat, pas de l'agrément.**
+ *
+ * Le repli de `configNumber` va contre la règle #29, et sa seule contrepartie
+ * est de laisser une trace : sans elle, une clé absente est indiscernable
+ * d'une clé présente valant exactement le défaut — c'est le diagnostic qui
+ * manquera le jour où le réglage « ne marche pas » (règle #36, cas réel de
+ * `PROMO_ACTIVE_CAP`). Un journal non éprouvé n'est donc pas un détail de
+ * confort : c'est la moitié du mécanisme.
+ */
+describe('configNumber — la trace laissée par le repli', () => {
+  let warn: jest.SpyInstance;
+  // Les messages sont collectés ici plutôt que relus dans `warn.mock.calls` :
+  // ce dernier est typé `any`, et les assertions dessus ne vaudraient rien.
+  let messages: string[];
+
+  beforeEach(() => {
+    _resetConfigNumberLog();
+    messages = [];
+    warn = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation((message: unknown) => {
+        messages.push(typeof message === 'string' ? message : '');
+      });
+  });
+
+  afterEach(() => warn.mockRestore());
+
+  it('signale une clé ABSENTE — sinon elle ressemble au défaut', () => {
+    expect(configNumber(undefined, 5, 'PROMO_ACTIVE_CAP')).toBe(5);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain('PROMO_ACTIVE_CAP');
+    expect(messages[0]).toContain('absente');
+  });
+
+  it('signale une valeur illisible en la montrant telle quelle', () => {
+    configNumber('abc', 5, 'PROMO_ACTIVE_CAP');
+    expect(messages[0]).toContain('abc');
+  });
+
+  it('montre NaN et Infinity — JSON.stringify les rendrait tous deux "null"', () => {
+    configNumber(NaN, 5, 'A');
+    configNumber(Infinity, 5, 'B');
+    expect(messages[0]).toContain('NaN');
+    expect(messages[1]).toContain('Infinity');
+  });
+
+  it('ne dit rien quand la valeur est lisible', () => {
+    expect(configNumber('7', 5, 'PROMO_MAX_DURATION_DAYS')).toBe(7);
+    expect(messages).toHaveLength(0);
+  });
+
+  // ⚠️ Ces fonctions sont appelées PAR REQUÊTE. Un avertissement répété à
+  // chaque publication de promo serait filtré par qui lit les journaux — donc
+  // un repli redevenu silencieux par un autre chemin.
+  it('ne répète pas le même avertissement à chaque appel', () => {
+    for (let i = 0; i < 50; i++) configNumber(undefined, 5, 'PROMO_ACTIVE_CAP');
+    expect(messages).toHaveLength(1);
+  });
+
+  it('mais ne confond pas deux clés différentes', () => {
+    configNumber(undefined, 5, 'PROMO_ACTIVE_CAP');
+    configNumber(undefined, 7, 'PROMO_MAX_DURATION_DAYS');
+    expect(messages).toHaveLength(2);
   });
 });
