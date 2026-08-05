@@ -712,6 +712,53 @@ C'est la démonstration de l'avertissement que ce fichier porte en tête : *un
 état périmé est pire qu'aucun état, il fait conclure*. Ici il a fait écrire un
 test qui éprouvait un chemin que personne n'emprunte.
 
+### 2026-08-05 (soir) — Le seuil de modération devient réglable, avec un plancher
+
+`MODERATION_THRESHOLD = 3`, constante en dur dans `report.service.ts`, devient
+`MODERATION_REPORT_THRESHOLD` — lue par `configNumber`, **avec un minimum de 2**.
+
+**Pourquoi un plancher.** Le seuil avait été abaissé à 1 le 2026-07-12 pour une
+phase de test : un seul signalement suffisait alors à masquer la promo d'un
+concurrent, `X-Device-Id` n'étant jamais vérifié côté serveur et donc
+trivialement rejouable. Remis à 3 deux jours plus tard. Rendre la valeur
+réglable **sans borne**, c'est rendre ce réglage possible depuis un fichier,
+sans revue. `configNumber` accepte désormais une option `minimum` : en dessous,
+il refuse **et journalise**.
+
+**Le terrain était favorable, et ça valait d'être vérifié avant de commencer** :
+le mobile ne connaît pas ce nombre, et les CGU disent « au-delà d'un seuil de
+signalements distincts » **sans le nommer**. Aucune traduction à refaire —
+l'inverse exact du « Plafond de 5 promos » qu'il avait fallu déloger des trois
+`.arb`.
+
+**Prouvé par mutation, en situation**, deux passages sur la même action :
+
+| Réglage | Après DEUX signalements | Ce que ça montre |
+|---|---|---|
+| `=2` | promo **200 → 404** | la clé est lue **et utilisée** |
+| `=1` | promo **reste 200** | le plancher **refuse** ; journal : *« sous le minimum autorisé (1 < 2) — repli sur 3 »* |
+
+Le second passage est celui qui compte : il montre le contrôle en train de
+refuser, pas seulement d'accepter (règle #28). Et il distingue « la clé est
+lue » de « la clé est ignorée » — sans la ligne de journal, les deux
+donneraient le même résultat.
+
+⚠️ **Le seuil est évalué à la lecture**, pas au moment du signalement :
+l'abaisser fait entrer en file, rétroactivement, toutes les promos qui
+atteignent déjà la nouvelle valeur. C'est voulu, mais ça se décide en
+connaissance de cause.
+
+La clé est posée dans les **trois** endroits (règle #36) : `.env.example`,
+`.env.production.example` (à la racine, pas sous `apps/backend`) et le `.env` de
+WSL — ce dernier à la main, puisqu'il n'est pas versionné.
+
+**Non fait, et c'est délibéré** : le plafond de promos **par commerçant**. Le
+global est déjà réglable (`PROMO_ACTIVE_CAP=5`, présent dans le `.env` qui
+tourne) et **servi à l'app** par `GET /promo/me/slots` — donc le jour où une
+colonne `promoActiveCap` nullable arrivera sur `commercant`, **l'app n'aura rien
+à changer**. Poser la colonne aujourd'hui, sans écran pour la remplir, serait le
+module non branché que la règle #11 interdit.
+
 ### 2026-08-05 (soir) — Refus d'Apple 5.1.1(iv) : la localisation demandée deux fois
 
 App Store Connect, soumission `3d2aab99`, testée sur iPad Air 11" (M3). Motif :

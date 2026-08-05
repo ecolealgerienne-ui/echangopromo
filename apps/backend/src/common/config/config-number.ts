@@ -60,6 +60,20 @@ export function configNumber(
   brut: unknown,
   defaut: number,
   cle?: string,
+  options?: {
+    /**
+     * Valeur minimale acceptée. En dessous, on retombe sur [defaut] **en le
+     * journalisant** — comme pour une valeur illisible.
+     *
+     * ⚠️ **Un plancher n'est pas un détail de validation, c'est une règle
+     * métier qui a déjà coûté.** Le seuil de modération avait été abaissé à 1
+     * le 2026-07-12 pour une phase de test : un seul signalement suffisait
+     * alors à masquer la promo d'un concurrent, `X-Device-Id` n'étant jamais
+     * vérifié côté serveur. Rendre une valeur réglable sans borne, c'est
+     * rendre ce genre de réglage possible **depuis un fichier**, sans revue.
+     */
+    minimum?: number;
+  },
 ): number {
   // ⚠️ **L'absence se dit, elle aussi.** Elle ne se distingue autrement en
   // rien d'une clé présente valant exactement le défaut : le backend démarre,
@@ -96,6 +110,8 @@ export function configNumber(
 
   const n = Number(brut);
 
+  const plancher = options?.minimum ?? Number.MIN_VALUE;
+
   if (!Number.isFinite(n) || n <= 0) {
     // ⚠️ `String`, pas `JSON.stringify` : ce dernier rend `null` pour `NaN`
     // **et** pour `Infinity`, effaçant du journal la seule chose qu'il doit
@@ -107,5 +123,14 @@ export function configNumber(
     );
     return defaut;
   }
+
+  if (n < plancher) {
+    signaler(
+      cle,
+      `${cle ?? 'valeur'} de configuration sous le minimum autorisé (${n} < ${plancher}) — repli sur ${defaut}`,
+    );
+    return defaut;
+  }
+
   return n;
 }

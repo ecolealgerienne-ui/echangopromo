@@ -79,6 +79,33 @@ describe('configNumber — lecture d’un nombre de configuration', () => {
  * `PROMO_ACTIVE_CAP`). Un journal non éprouvé n'est donc pas un détail de
  * confort : c'est la moitié du mécanisme.
  */
+describe('configNumber — le plancher', () => {
+  beforeEach(() => _resetConfigNumberLog());
+
+  it('accepte une valeur égale au minimum', () => {
+    expect(configNumber('2', 3, 'SEUIL', { minimum: 2 })).toBe(2);
+  });
+
+  it('accepte une valeur au-dessus du minimum', () => {
+    expect(configNumber('7', 3, 'SEUIL', { minimum: 2 })).toBe(7);
+  });
+
+  // ⚠️ Le cas qui justifie tout le reste : un seuil de modération à 1 laisse
+  // UN signalement masquer la promo d'un concurrent (2026-07-12). Sans
+  // plancher, ce réglage redeviendrait possible depuis un fichier.
+  it('refuse une valeur sous le minimum et retombe sur le défaut', () => {
+    expect(configNumber('1', 3, 'SEUIL', { minimum: 2 })).toBe(3);
+  });
+
+  it('refuse un décimal sous le minimum', () => {
+    expect(configNumber('1.9', 3, 'SEUIL', { minimum: 2 })).toBe(3);
+  });
+
+  it('sans minimum, le comportement ne change pas', () => {
+    expect(configNumber('1', 3, 'SEUIL')).toBe(1);
+  });
+});
+
 describe('configNumber — la trace laissée par le repli', () => {
   let warn: jest.SpyInstance;
   // Les messages sont collectés ici plutôt que relus dans `warn.mock.calls` :

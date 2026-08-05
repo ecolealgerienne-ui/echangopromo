@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Commercant } from '../commercant/entities/commercant.entity';
 import { Commune } from '../commune/entities/commune.entity';
 import { ConflictAppException } from '../common/errors/app-exception';
+import { configNumber } from '../common/config/config-number';
 import { ErrorCode } from '../common/errors/error-code.enum';
 import {
   PaginatedResult,
@@ -13,11 +15,6 @@ import { Promo, PromoModerationStatus } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
 import { Report, ReportReason } from './entities/report.entity';
 
-// Remis à 3 (specs §5.4) le 2026-07-14 — avait été temporairement abaissé à
-// 1 le 2026-07-12 pour une phase de test, ce qui laissait un seul
-// signalement (X-Device-Id jamais vérifié côté serveur, trivialement
-// rejouable) suffire à masquer la promo d'un concurrent.
-const MODERATION_THRESHOLD = 3;
 const IGNORE_WINDOW_DAYS = 30;
 
 @Injectable()
@@ -30,9 +27,37 @@ export class ReportService {
     // CommercantModule pour la même raison, voir commercant.module.ts).
     @InjectRepository(Promo) private readonly promos: Repository<Promo>,
     private readonly promoService: PromoService,
+    private readonly configService: ConfigService,
   ) {}
 
-  /** 1 signalement par device par promo, seuil de 3 devices distincts (specs §5.4). */
+  /**
+   * Nombre d'appareils distincts qui doivent avoir signalé une promo pour
+   * qu'elle entre en file de modération (specs §5.4).
+   *
+   * ⚠️ **Un plancher à 2, et il n'est pas décoratif.** Le seuil avait été
+   * abaissé à 1 le 2026-07-12 pour une phase de test : un seul signalement
+   * suffisait alors à masquer la promo d'un concurrent, `X-Device-Id` n'étant
+   * jamais vérifié côté serveur et donc trivialement rejouable. Remis à 3 le
+   * 2026-07-14. Le rendre réglable sans borne rendrait ce réglage possible
+   * **depuis un fichier**, sans revue — d'où le minimum, qui refuse et
+   * journalise.
+   *
+   * ⚠️ Le seuil est évalué **à la lecture**, pas au moment du signalement :
+   * l'abaisser fait entrer en file, rétroactivement, toutes les promos qui
+   * atteignent déjà la nouvelle valeur. C'est voulu — le contraire
+   * demanderait de figer le seuil sur chaque signalement — mais ça se décide
+   * en connaissance de cause.
+   */
+  private seuilModeration(): number {
+    return configNumber(
+      this.configService.get('MODERATION_REPORT_THRESHOLD'),
+      3,
+      'MODERATION_REPORT_THRESHOLD',
+      { minimum: 2 },
+    );
+  }
+
+  /** 1 signalement par device par promo ; le seuil vient de `seuilModeration()`. */
   async createReport(
     promoId: string,
     deviceId: string,
@@ -53,7 +78,7 @@ export class ReportService {
     await this.reports.save(this.reports.create({ promoId, deviceId, reason }));
 
     const activeCount = await this.countActiveReports(promoId);
-    if (activeCount >= MODERATION_THRESHOLD) {
+    if (activeCount >= this.seuilModeration()) {
       await this.promoService.markSignalee(promoId);
     }
   }
@@ -137,7 +162,7 @@ export class ReportService {
       )
       .groupBy('report.promoId')
       .having('COUNT(DISTINCT report.deviceId) >= :threshold', {
-        threshold: MODERATION_THRESHOLD,
+        threshold: this.seuilModeration(),
       });
 
     if (communeIds || filter?.communeId || filter?.wilaya) {
