@@ -570,11 +570,57 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
    prouvé par mutation). Le prochain le plus rentable : `test-notifications`
    ~~`test-notifications`~~ **écrit le 2026-08-05** — 8 contrôles, 0 échec, et
    **un défaut trouvé à son premier passage** (`markAsRead` rendait 201 sur un
-   geste sans effet). Restent 21 bancs de la matrice §6.
+   geste sans effet). ~~`test-admin-audit-log`~~ **écrit le 2026-08-05** —
+   7 contrôles, 0 échec, et une sonde corrigée après mutation. Restent 20
+   bancs de la matrice §6.
 
 ---
 
 ## Journal
+
+### 2026-08-05 (nuit) — `test-admin-audit-log`, et la sonde qui regardait le passé
+
+Troisième banc métier. `AuditLogModule` est le **cas fondateur de la règle 11**
+— existant, bien conçu, jamais branché. Le seul contrôle qui vaille : faire
+l'action, puis regarder si elle est dans le journal.
+
+**Verdict : 7 contrôles, 0 échec.** Le module est bel et bien branché
+aujourd'hui. Auto-test 16 cas dont 11 refus.
+
+⚠️ **Mais la première version de ce banc regardait le passé.** La mutation
+(retirer l'appel `record()` de `commercant_reactivate`) a été détectée — **par
+la mauvaise sonde**. « Réactivation tracée » restait **verte** : elle cherchait
+« une entrée portant cette action », et le journal en contient de toutes les
+exécutions précédentes, y compris celles des autres bancs qui suspendent le
+même commerçant. Ce qui a signalé la mutation, c'est la sonde d'**ordre**, pour
+une raison sans rapport avec ce qu'elle mesure.
+
+Corrigé : les identifiants du journal sont relevés **avant** d'agir, et la
+trace doit être **neuve**. Des identifiants plutôt qu'un horodatage — aucune
+comparaison d'horloge, donc aucune tolérance à choisir, et aucune dépendance au
+tri, qui est lui-même l'objet d'une autre sonde. La même mutation fait
+désormais tomber la bonne : *« commercant_reactivate n'apparaît que dans des
+entrées ANTÉRIEURES à l'action — rien n'a été tracé cette fois »*.
+
+**Deux fois dans la soirée**, une mutation a montré qu'une sonde verte mesurait
+autre chose que ce qu'elle annonçait (l'autre : `test-admin-highlight`, où deux
+gardes indépendantes produisaient le même effet). Un banc peut détecter un
+défaut **tout en ayant tort sur lequel** — et c'est indétectable sans mutation.
+
+Les quatre autres sondes : la trace **nomme son auteur** (un journal qui dit
+« quelqu'un a suspendu ce commerce » ne sert à rien le jour où l'on cherche
+qui), le filtre `actorType` **filtre réellement**, l'ordre est **vérifié et non
+supposé**, et **aucun nom de champ évoquant un secret** n'apparaît à quelque
+profondeur que ce soit — le journal est lisible par tout admin et conservé
+longtemps.
+
+⚠️ **Non joué, et déclaré** : 12 des 14 actions tracées.
+`commercant_reset_pin` changerait le PIN du décor sous les autres bancs,
+`revoke_own_token` couperait la session au milieu du banc,
+`registre_valider` porte sur un registre déjà validé. Deux actions suffisent à
+répondre à la question posée — le module est-il branché.
+
+---
 
 ### 2026-08-05 (nuit, fin) — `test-notifications` trouve un défaut à son premier passage
 
