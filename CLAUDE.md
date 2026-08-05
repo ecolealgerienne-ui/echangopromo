@@ -559,6 +559,31 @@ permet de reconnaître un cas nouveau relevant de la même règle.
     l'absence de la clé est indiscernable de sa présence, et c'est le
     diagnostic qu'on n'aura pas le jour où le réglage « ne marche pas ».
 
+37. **`autoDispose` répare le symptôme et cache le défaut : un provider qui
+    n'est jamais invalidé a l'air juste.** Il se recharge quand l'écran est
+    construit de zéro — donc il est juste au premier affichage, juste après un
+    changement d'onglet, juste dans toutes les manipulations qu'on fait en
+    développant. Il n'est faux qu'**au retour d'un écran poussé par-dessus**,
+    c'est-à-dire exactement après l'action qui vient de changer la donnée.
+    *Trouvé le 2026-08-05, au premier passage de
+    `parcours_creation_promo_test.dart` : `promoSlotsProvider` n'était invalidé
+    **nulle part**. Après publication depuis le tableau de bord, le serveur
+    comptait 2 promos en ligne et l'écran affichait « 1 / 5 » et « il vous reste
+    4 emplacements » — indéfiniment. Le voisin `my_promos_screen` faisait bien
+    `await push` puis `invalidate`, mais sur la liste seulement, jamais sur le
+    compteur.*
+
+    **En pratique** : tout `context.push` vers un écran qui écrit se lit en
+    `await` avec son résultat, et l'invalidation des providers concernés se
+    fait par **une fonction nommée** (`invalidateAfterPromoChange`), jamais par
+    une liste d'`invalidate` recopiée dans chaque écran — six écrans tenant six
+    listes à la main, c'est celui qu'on oublie qui affiche un chiffre périmé,
+    sans erreur ni journal (règle #30).
+
+    ⚠️ **Aucun test hors appareil ne voit ça** : ni `flutter test`, ni les
+    vérificateurs statiques, ni un banc HTTP — le serveur, lui, a toujours
+    raison. Il faut un parcours qui **revienne** sur l'écran d'avant.
+
 ### Règles de `echango-delivery` volontairement **non** reprises
 
 Une exclusion non écrite est indiscernable d'un oubli.
@@ -611,6 +636,14 @@ entre deux bancs plutôt que chercher un bug d'authentification.
 - **L'analyse HTTPS d'un antivirus casse Gradle** en `PKIX path building
   failed` : la racine de l'antivirus est dans le magasin Windows, pas dans le
   truststore Java. Symptôme reconnaissable — PowerShell télécharge, Java non.
+  ⚠️ **Et ça revient tout seul, sans qu'une ligne ait bougé** : le plugin
+  `integration_test` déclare ses dépendances de test en version **dynamique**
+  (`espresso-core:3.+`), que Gradle revalide toutes les 24 h. Un parcours qui
+  passait hier échoue aujourd'hui sur `maven-metadata.xml`. Contourné sur ce
+  poste par `~/.gradle/init.gradle` (hors dépôt : c'est un défaut de la
+  machine, pas du produit) qui porte le cache des versions dynamiques à un an.
+  Le remède de fond reste d'importer la racine de l'antivirus dans les
+  `cacerts` de la JVM.
 - **`S3_ENDPOINT` sert deux rôles** : point d'accès du client S3 *du serveur*
   **et** base de l'URL publique servie au mobile. Le régler sur `10.0.2.2:9000`
   pour l'émulateur rend chaque création de promo dépendante d'un timeout TCP

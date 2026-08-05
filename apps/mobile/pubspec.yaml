@@ -72,6 +72,15 @@ dev_dependencies:
   # `integration_test/`, lancé par `scripts/test-parcours-ecran.sh`.
   integration_test:
     sdk: flutter
+  # Uniquement pour DOUBLER la galerie du système dans le parcours de création
+  # de promo (`integration_test/faux_selecteur_photo.dart`) : `integration_test`
+  # pilote notre arbre de widgets, pas les applications tierces qui s'ouvrent
+  # par-dessus. Déjà présent comme dépendance transitive d'`image_picker` —
+  # ici seulement pour avoir le droit de l'importer.
+  #
+  # Contrainte large et non épinglée : c'est `image_picker` qui commande la
+  # version réellement résolue (règle #18).
+  image_picker_platform_interface: ^2.10.0
   flutter_lints: ^5.0.0
 
 flutter:

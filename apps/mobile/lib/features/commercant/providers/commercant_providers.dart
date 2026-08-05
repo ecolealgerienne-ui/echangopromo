@@ -34,6 +34,28 @@ final commercantProfileViewsProvider = FutureProvider.autoDispose(
 final myPromosProvider =
     FutureProvider.autoDispose((ref) => ref.watch(promoApiProvider).listMine());
 
+/// À appeler après **toute** action qui change le nombre de promos actives :
+/// création, publication d'un brouillon, arrêt, suppression, édition.
+///
+/// ── Pourquoi une fonction et pas deux `invalidate` sur place ─────────────
+///
+/// La liste des promos et le compteur d'emplacements décrivent **le même
+/// fait**. Les invalider séparément, c'est tenir deux listes à la main dans
+/// six écrans : celui qu'on oublie affiche un chiffre périmé, sans erreur ni
+/// journal (règle #30 — si l'un change, l'autre doit changer, donc un seul
+/// endroit).
+///
+/// *Trouvé le 2026-08-05 par `parcours_creation_promo_test.dart`, à son
+/// premier passage : `promoSlotsProvider` n'était invalidé **nulle part**.
+/// Après publication depuis le tableau de bord, le serveur comptait 2 promos
+/// en ligne et l'écran affichait toujours « 1 / 5 » et « il vous reste 4
+/// emplacements ». Il n'était juste que parce qu'`autoDispose` le recharge
+/// quand l'écran est reconstruit de zéro — jamais après un simple retour.*
+void invalidateAfterPromoChange(WidgetRef ref) {
+  ref.invalidate(myPromosProvider);
+  ref.invalidate(promoSlotsProvider);
+}
+
 /// Somme des vues de toutes les promos. `viewCount` n'est renseigné que par
 /// `GET /promo/me/all` (propriétaire authentifié) — d'où le repli à zéro.
 int totalPromoViews(List<Promo> promos) =>

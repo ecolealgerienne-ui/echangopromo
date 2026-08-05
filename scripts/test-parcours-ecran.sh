@@ -17,6 +17,25 @@
 # empêcher : le plafond était figé dans les fichiers de traduction, et personne
 # ne s'en apercevait parce que le chiffre était juste ce jour-là.
 #
+# ── Les trois parcours ───────────────────────────────────────────────────────
+#
+#   premier-lancement  splash → choix du rôle → localisation → accueil, et ce
+#                      qui en reste dans le magasin natif. Aucun décor : il ne
+#                      touche pas au serveur.
+#   plafond            le compteur d'emplacements affiche le plafond DU SERVEUR.
+#   creation           publier une promo de bout en bout — formulaire, photo,
+#                      upload, création, retour, compteur incrémenté.
+#
+# ⚠️ **L'ordre n'est pas cosmétique.** `creation` publie une promo et change
+# donc `enLigne` ; il passe en dernier, après `plafond` qui compare à la mesure
+# d'avant. Les inverser ferait échouer `plafond` sur un chiffre périmé — et
+# l'échec accuserait l'écran.
+#
+# ⚠️ **Un `flutter drive` par parcours, et c'est nécessaire**, pas une
+# commodité : `splashShownThisLaunch` est une variable de PROCESSUS
+# (`lib/app/launch_state.dart`). Deux parcours dans le même lancement d'app et
+# le second ne reverrait jamais le splash.
+#
 # ── Prérequis ────────────────────────────────────────────────────────────────
 #
 #   · le backend tourne (voir docs/status_v0.1.md — § Environnement)
@@ -24,7 +43,8 @@
 #
 # ── Usage ────────────────────────────────────────────────────────────────────
 #
-#   ./scripts/test-parcours-ecran.sh
+#   ./scripts/test-parcours-ecran.sh                    # les trois
+#   ./scripts/test-parcours-ecran.sh creation           # un seul
 #   API_URL=http://10.0.2.2:3000 ./scripts/test-parcours-ecran.sh
 set -u
 
@@ -35,8 +55,20 @@ API_URL="${API_URL:-http://localhost:3000}"
 API_URL_APP="${API_URL_APP:-http://10.0.2.2:3000}"
 DEVICE_ID="parcours-ecran-0001"
 
+CHOIX="${1:-tous}"
+case "$CHOIX" in
+  tous|premier-lancement|plafond|creation) ;;
+  *) echo "❌ Parcours inconnu : « $CHOIX »."
+     echo "   Attendu : premier-lancement | plafond | creation | (rien = tous)"
+     exit 2 ;;
+esac
+
+# `premier-lancement` seul ne parle à personne : ni décor, ni mesure.
+BESOIN_SERVEUR=oui
+[ "$CHOIX" = "premier-lancement" ] && BESOIN_SERVEUR=non
+
 echo "════════════════════════════════════════════════════════════════"
-echo "  Parcours écran — décor, mesure, puis flutter drive"
+echo "  Parcours écran ($CHOIX) — décor, mesure, puis flutter drive"
 echo "════════════════════════════════════════════════════════════════"
 echo
 
@@ -44,6 +76,7 @@ command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1 || {
   echo "❌ python3 requis (lecture du JSON)."; exit 2; }
 PY=$(command -v python3 || command -v python)
 
+if [ "$BESOIN_SERVEUR" = "oui" ]; then
 # ── 1. Décor ────────────────────────────────────────────────────────────────
 #
 # ⚠️ **Ce script vit à cheval sur deux machines, et il faut le dire.** Sur le
@@ -97,9 +130,13 @@ v = d.get('$1')
 print('' if v is None else v)"
 }
 
-JETON="$(curl -s -X POST "$API_URL/commercant/login" \
-  -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID" \
-  -d "{\"telephone\":\"$TEL\",\"pin\":\"$PIN\"}" | lire_champ accessToken)"
+connexion() { # → jeton du commerçant du décor, vide si refus
+  curl -s -X POST "$API_URL/commercant/login" \
+    -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID" \
+    -d "{\"telephone\":\"$TEL\",\"pin\":\"$PIN\"}" | lire_champ accessToken
+}
+
+JETON="$(connexion)"
 if [ -z "$JETON" ]; then
   echo "❌ Connexion du commerçant du décor impossible."
   echo "   ⚠️ Un 429 se déguise en « identifiants incorrects » : le décor vient"
@@ -107,37 +144,155 @@ if [ -z "$JETON" ]; then
   exit 2
 fi
 
-SLOTS="$(curl -s "$API_URL/promo/me/slots" \
-  -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID")"
-PLAFOND="$(echo "$SLOTS" | lire_champ plafond)"
-EN_LIGNE="$(echo "$SLOTS" | lire_champ enLigne)"
-# ⚠️ Chaîne vide et non « 0 » quand le champ manque : une réponse illisible
-# doit s'arrêter ici, pas produire un zéro qui ferait échouer le parcours en
-# accusant l'écran (règle #29).
-if [ -z "$PLAFOND" ] || [ -z "$EN_LIGNE" ]; then
-  echo "❌ /promo/me/slots illisible : $(echo "$SLOTS" | head -c 200)"
-  exit 2
-fi
+lire_slots() { # → "enLigne plafond", vide si la réponse est illisible
+  local reponse enligne plafond
+  reponse="$(curl -s "$API_URL/promo/me/slots" \
+    -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID")"
+  plafond="$(echo "$reponse" | lire_champ plafond)"
+  enligne="$(echo "$reponse" | lire_champ enLigne)"
+  # ⚠️ Chaîne vide et non « 0 » quand le champ manque : une réponse illisible
+  # doit s'arrêter là, pas produire un zéro qui ferait échouer le parcours en
+  # accusant l'écran (règle #29).
+  if [ -z "$plafond" ] || [ -z "$enligne" ]; then
+    echo "ILLISIBLE $(echo "$reponse" | head -c 200)"
+    return 1
+  fi
+  echo "$enligne $plafond"
+}
+
+MESURE="$(lire_slots)" || { echo "❌ /promo/me/slots — $MESURE"; exit 2; }
+EN_LIGNE="${MESURE% *}"
+PLAFOND="${MESURE#* }"
 echo "✅ enLigne=$EN_LIGNE  plafond=$PLAFOND"
 
-# ── 3. Le parcours ──────────────────────────────────────────────────────────
-echo
-echo "── 3. flutter drive ──"
-cd "$RACINE/apps/mobile" || exit 2
-flutter drive \
-  --driver=test_driver/integration_test.dart \
-  --target=integration_test/parcours_plafond_commercant_test.dart \
-  --dart-define=API_BASE_URL="$API_URL_APP" \
-  --dart-define=TEST_COMMERCANT_TEL="$TEL" \
-  --dart-define=TEST_COMMERCANT_PIN="$PIN" \
-  --dart-define=TEST_PLAFOND="$PLAFOND" \
-  --dart-define=TEST_EN_LIGNE="$EN_LIGNE"
-CODE=$?
-
-echo
-if [ $CODE -eq 0 ]; then
-  echo "✅ parcours écran : le compteur affiche bien $EN_LIGNE / $PLAFOND"
-else
-  echo "❌ parcours écran en échec (code $CODE)"
+# ⚠️ Ce contrôle-ci n'est pas une précaution, c'est le seul moyen de ne pas
+# accuser le mauvais coupable : au plafond, le bouton de création est
+# DÉSACTIVÉ. Le parcours `creation` attendrait alors un formulaire qui ne
+# s'ouvre pas, et son message parlerait du formulaire.
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "creation" ]; then
+  if [ "$EN_LIGNE" -ge "$PLAFOND" ]; then
+    echo "❌ Le commerçant du décor est au plafond ($EN_LIGNE/$PLAFOND)."
+    echo "   Le parcours « creation » n'a pas de place pour publier — il n'y a"
+    echo "   rien à éprouver, et son échec parlerait du formulaire."
+    exit 2
+  fi
 fi
-exit $CODE
+fi  # BESOIN_SERVEUR
+
+# ── 3. Les parcours ─────────────────────────────────────────────────────────
+echo
+cd "$RACINE/apps/mobile" || exit 2
+
+# ⚠️ **L'appareil se choisit, il ne se devine pas.** Ce poste voit quatre
+# cibles (émulateur, Windows, Chrome, Edge) : sans `-d`, `flutter drive` peut
+# partir sur le bureau ou le navigateur, où l'app se lance et où le parcours
+# échoue sur des écrans qui n'ont rien à voir. On prend l'unique appareil
+# Android s'il n'y en a qu'un, et **on refuse** au lieu d'en élire un.
+APPAREIL="${PARCOURS_DEVICE:-}"
+if [ -z "$APPAREIL" ]; then
+  CANDIDATS="$(flutter devices 2>/dev/null \
+    | awk -F'•' '/android-/ {gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}')"
+  NB="$(echo "$CANDIDATS" | grep -c '[^[:space:]]')"
+  if [ "$NB" -eq 0 ]; then
+    echo "❌ Aucun appareil Android vu par flutter. Démarrer l'émulateur, ou"
+    echo "   PARCOURS_DEVICE=<id> $0"
+    exit 2
+  fi
+  if [ "$NB" -gt 1 ]; then
+    echo "❌ Plusieurs appareils Android — lequel ?"
+    echo "$CANDIDATS" | sed 's/^/     /'
+    echo "   PARCOURS_DEVICE=<id> $0"
+    exit 2
+  fi
+  APPAREIL="$CANDIDATS"
+fi
+echo "   appareil : $APPAREIL"
+echo
+
+jouer() { # FICHIER LIBELLE [defines…]
+  local fichier="$1" libelle="$2"; shift 2
+  echo "── $libelle ──"
+  flutter drive \
+    -d "$APPAREIL" \
+    --driver=test_driver/integration_test.dart \
+    --target="integration_test/$fichier" \
+    --dart-define=API_BASE_URL="$API_URL_APP" \
+    "$@"
+}
+
+ECHECS=""
+RESUME=""
+noter() { # LIBELLE CODE
+  if [ "$2" -eq 0 ]; then
+    RESUME="$RESUME
+  ✅ $1"
+  else
+    RESUME="$RESUME
+  ❌ $1 (code $2)"
+    ECHECS="$ECHECS $1"
+  fi
+}
+
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "premier-lancement" ]; then
+  jouer parcours_premier_lancement_test.dart "premier lancement"
+  noter "premier lancement" $?
+  echo
+fi
+
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "plafond" ]; then
+  jouer parcours_plafond_commercant_test.dart "compteur d'emplacements" \
+    --dart-define=TEST_COMMERCANT_TEL="$TEL" \
+    --dart-define=TEST_COMMERCANT_PIN="$PIN" \
+    --dart-define=TEST_PLAFOND="$PLAFOND" \
+    --dart-define=TEST_EN_LIGNE="$EN_LIGNE"
+  noter "compteur d'emplacements ($EN_LIGNE / $PLAFOND)" $?
+  echo
+fi
+
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "creation" ]; then
+  jouer parcours_creation_promo_test.dart "création d'une promo" \
+    --dart-define=TEST_COMMERCANT_TEL="$TEL" \
+    --dart-define=TEST_COMMERCANT_PIN="$PIN" \
+    --dart-define=TEST_PLAFOND="$PLAFOND" \
+    --dart-define=TEST_EN_LIGNE="$EN_LIGNE"
+  CODE_CREATION=$?
+  noter "création d'une promo" $CODE_CREATION
+
+  # ── Contre-mesure côté serveur ────────────────────────────────────────────
+  #
+  # Le parcours a vu l'ÉCRAN afficher n+1. Reste à savoir si le serveur est
+  # d'accord : un écran qui incrémente son compteur localement sans que la
+  # promo existe donnerait exactement le même vert. Deux témoins qui ne
+  # regardent pas par la même fenêtre.
+  if [ "$CODE_CREATION" -eq 0 ]; then
+    echo
+    echo "── contre-mesure : ce que le serveur compte maintenant ──"
+    APRES="$(lire_slots)"
+    if [ -z "${APRES##ILLISIBLE*}" ]; then
+      echo "⚠️  /promo/me/slots illisible après coup — la contre-mesure n'a PAS"
+      echo "    eu lieu. Ce n'est pas un échec du parcours, c'est une absence"
+      echo "    de vérification : $APRES"
+      noter "contre-mesure serveur (non concluante)" 1
+    else
+      EN_LIGNE_APRES="${APRES% *}"
+      ATTENDU=$((EN_LIGNE + 1))
+      if [ "$EN_LIGNE_APRES" -eq "$ATTENDU" ]; then
+        echo "✅ le serveur compte $EN_LIGNE_APRES promo(s) en ligne (avant : $EN_LIGNE)"
+        noter "contre-mesure serveur" 0
+      else
+        echo "❌ l'écran affichait $ATTENDU, le serveur en compte $EN_LIGNE_APRES."
+        echo "   L'écran et la base ne disent pas la même chose."
+        noter "contre-mesure serveur" 1
+      fi
+    fi
+  fi
+  echo
+fi
+
+echo "════════════════════════════════════════════════════════════════"
+echo "  Parcours écran — résultat$RESUME"
+echo "════════════════════════════════════════════════════════════════"
+if [ -n "$ECHECS" ]; then
+  exit 1
+fi
+exit 0

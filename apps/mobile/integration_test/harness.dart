@@ -111,21 +111,47 @@ Future<void> pomperJusquaVrai(
   // ⚠️ Le message dit ce qu'il y avait à l'écran : « Timeout » seul envoie
   // chercher au mauvais endroit.
   fail('$raison — non atteint en ${limite.inSeconds}s.\n'
-      'à l\'écran : ${textesVisibles()}');
+      'à l\'écran : ${textesRendus()}');
 }
 
-/// Tous les textes présents dans l'arbre — pour les messages d'échec
-/// uniquement, **jamais pour une assertion**.
-List<String> textesVisibles() {
-  final textes = <String>[];
+/// Tous les textes présents dans l'arbre, **spans compris**.
+///
+/// ⚠️ `Text.data` vaut `null` sur un `Text.rich`, et le compteur du tableau de
+/// bord en est un (« 3 » en grand, « / 5 » en petit). S'en tenir à `.data`
+/// rendait les parcours aveugles à la seule valeur qu'ils doivent surveiller.
+///
+/// ⚠️ **Ce qu'on a le droit d'en asserter.** Un CHIFFRE rendu, oui : il ne
+/// dépend pas de la langue. Un LIBELLÉ, non : l'assertion passerait ici et
+/// échouerait sur un appareil en arabe, pour une raison sans rapport avec le
+/// défaut cherché. Pour désigner un widget, c'est l'icône ou le type — voir
+/// l'en-tête de ce fichier.
+///
+/// Vivait dans `parcours_plafond_commercant_test.dart` jusqu'au 2026-08-05,
+/// remontée ici quand un deuxième parcours en a eu besoin : le jour où un
+/// compteur passe à `Text.rich`, un seul endroit doit s'en apercevoir.
+List<String> textesRendus() {
+  final rendus = <String>[];
   for (final element in find.byType(Text).evaluate()) {
-    final widget = element.widget;
-    if (widget is Text && (widget.data?.trim().isNotEmpty ?? false)) {
-      textes.add(widget.data!.trim());
-    }
+    final widget = element.widget as Text;
+    final texte = widget.data ?? widget.textSpan?.toPlainText();
+    if (texte != null && texte.trim().isNotEmpty) rendus.add(texte.trim());
   }
-  return textes;
+  return rendus;
 }
+
+/// Ramène les espaces d'un compteur (« 3 / 5 ») à des espaces ordinaires.
+///
+/// ⚠️ Flutter rend l'espace fine insécable (U+202F) et l'insécable (U+00A0)
+/// là où la typographie française les demande. Comparer à `'3 / 5'` écrit au
+/// clavier échoue alors sur une différence **invisible dans le message
+/// d'erreur** — on cherche le défaut pendant une heure avant de comprendre que
+/// les deux chaînes se ressemblent sans être égales.
+///
+/// `\s` suffit, et c'est voulu : la classe est celle d'ECMAScript, qui inclut
+/// déjà U+00A0 et U+202F. Recopier ces caractères en dur dans la source les
+/// rendrait invisibles à la relecture et fragiles au copier-coller.
+String normaliserCompteur(String texte) =>
+    texte.replaceAll(RegExp(r'\s+'), ' ').trim();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Désignation
@@ -151,7 +177,7 @@ Future<void> taper(WidgetTester tester, Finder cible) async {
 Future<void> saisir(WidgetTester tester, int rang, String valeur) async {
   final champs = find.byType(TextFormField);
   expect(champs.evaluate().length, greaterThan(rang),
-      reason: 'Champ de rang $rang absent — à l\'écran : ${textesVisibles()}');
+      reason: 'Champ de rang $rang absent — à l\'écran : ${textesRendus()}');
   await tester.enterText(champs.at(rang), valeur);
   await tester.pump(const Duration(milliseconds: 200));
 }

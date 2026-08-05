@@ -94,7 +94,7 @@ class CommercantDashboardScreen extends ConsumerWidget {
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(commercantMeProvider);
-          ref.invalidate(myPromosProvider);
+          invalidateAfterPromoChange(ref);
           ref.invalidate(commercantProfileViewsProvider);
         },
         child: ListView(
@@ -173,7 +173,20 @@ class CommercantDashboardScreen extends ConsumerWidget {
       // Une seule action mise en avant, fixée en bas : publier est ce qu'un
       // commerçant vient faire, tout le reste en découle.
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: atCap ? null : () => context.push('/commercant/promos/new'),
+        // ⚠️ `await` puis invalidation, jamais un `push` sec : sans ça l'écran
+        // reste sur son chiffre d'avant après la publication — le serveur
+        // compte 2 promos en ligne, le tableau de bord affiche « 1 / 5 » et
+        // « il vous reste 4 emplacements ». Trouvé par le parcours de création
+        // le 2026-08-05.
+        onPressed: atCap
+            ? null
+            : () async {
+                final created =
+                    await context.push<bool>('/commercant/promos/new');
+                if (created == true && context.mounted) {
+                  invalidateAfterPromoChange(ref);
+                }
+              },
         backgroundColor: atCap
             ? Theme.of(context).colorScheme.surfaceContainerHighest
             : null,

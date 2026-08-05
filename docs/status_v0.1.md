@@ -603,10 +603,22 @@ ne peut pas se lire à deux vitesses : on la refait, on ne l'annote pas.
    qu'il pose ne sont pas nommables — on aurait silencié 4 opérations sur 10 et
    gardé le bruit.
 
-3. **Écrire d'autres parcours écran** (étape 3). Un seul existe — le compteur
-   d'emplacements. Les deux suivants, par ce qu'ils protègent : le **premier
-   lancement** (onboarding, explicitement hors périmètre du premier parcours)
-   et la **création de promo de bout en bout**.
+3. ~~**Écrire d'autres parcours écran** (étape 3).~~ — **fait le 2026-08-05.**
+   Trois parcours au lieu d'un : le compteur d'emplacements, le **premier
+   lancement** et la **création de promo de bout en bout**. Les trois se
+   lancent par `./scripts/test-parcours-ecran.sh [nom]`, qui pose le décor,
+   mesure la référence auprès du serveur et choisit l'appareil (il **refuse**
+   plutôt que d'en élire un s'il y en a plusieurs).
+
+   **Le parcours de création a trouvé un défaut réel à son premier passage** —
+   voir le journal du jour. Il n'a donc pas eu besoin d'une mutation pour
+   prouver qu'il sait refuser (règle #28) : il a refusé pour de bon, sur un
+   écran qui mentait.
+
+   **Ce qui reste à écrire**, par ordre d'intérêt : la branche « commerçant »
+   du choix de rôle (un `flutter drive` séparé — voir l'en-tête du parcours de
+   premier lancement pour la raison, qui n'est pas un oubli), et le
+   **brouillon** (`Enregistrer sans publier`), autre branche de `_submit`.
 
 4. ~~**La dette mineure de P6**~~ — **traitée le 2026-08-05.** Les 4
    vulnérabilités npm sont à **0** (dont `sharp`, la seule sur un chemin
@@ -671,6 +683,82 @@ reste distinguable d'un oubli :
 ---
 
 ## Journal
+
+### 2026-08-05 (clôture, suite) — Deux parcours écran de plus, et le compteur qui mentait
+
+Point 3 de « par où reprendre ». Deux parcours ajoutés au seul qui existait :
+le **premier lancement** et la **création de promo de bout en bout**.
+
+#### Le parcours de création a trouvé un défaut à son premier passage
+
+Publication depuis le tableau de bord : la promo part, le serveur la crée, on
+revient sur le tableau de bord — et le compteur affiche toujours **« 1 / 5 »**
+et « il vous reste 4 emplacements », pendant que `GET /promo/me/slots` en
+compte **2**. Vérifié directement en base après coup : la promo existe, le
+serveur n'a jamais eu tort.
+
+La cause : **`promoSlotsProvider` n'était invalidé nulle part**. Ni après une
+création, ni après une publication de brouillon, ni après un arrêt, ni même
+par le « tirer pour rafraîchir » du tableau de bord — qui en invalidait trois
+autres. Le voisin `my_promos_screen` faisait pourtant bien
+`await context.push` puis `invalidate`, mais sur la **liste** seulement.
+
+Ce qui rend ce défaut instructif, c'est **pourquoi personne ne l'avait vu** :
+`autoDispose` recharge le provider quand l'écran est construit de zéro. Il est
+donc juste au premier affichage, juste après un changement d'onglet, juste
+dans toutes les manipulations qu'on fait en développant. Il n'est faux qu'**au
+retour d'un écran poussé par-dessus** — c'est-à-dire précisément après l'action
+qui vient de changer le chiffre. Aucun `flutter test`, aucun vérificateur
+statique, aucun banc HTTP ne peut le voir : il faut un parcours qui
+**revienne**. C'est la règle 37.
+
+Corrigé par une fonction nommée, `invalidateAfterPromoChange`, appelée par les
+six endroits qui changent le nombre de promos actives — pas par six listes
+d'`invalidate` recopiées (règle #30). Rejoué : l'écran passe de `2 / 5` à
+`3 / 5`, et la contre-mesure serveur du script confirme 3.
+
+⚠️ **Ce parcours n'a donc pas eu besoin d'une mutation pour prouver qu'il sait
+refuser** (règle #28) : il a refusé pour de bon, au premier passage, sur un
+écran qui mentait. Rouge avant le correctif, vert après, sans autre changement.
+
+#### Le parcours d'onboarding, lui, m'a corrigé moi
+
+Écrit avec un écran de trop en moins : je croyais que « Plus tard » terminait
+l'onboarding, alors qu'il mène à un **écran de seconde chance** (délibéré — un
+refus sur nos écrans ne consomme pas la permission système, contrairement à un
+refus sur la boîte native, définitif). Le parcours a échoué en **écrivant ce
+qu'il avait sous les yeux** (« Activer la localisation / Continuer sans »), ce
+qui a suffi à comprendre. Le message d'échec qui liste les textes de l'écran
+n'est pas un ornement.
+
+#### Et un piège d'environnement qui revient tout seul
+
+Premier lancement du parcours : `PKIX path building failed` sur
+`espresso-core`. C'est l'analyse HTTPS de l'antivirus, déjà documentée — mais
+la nouveauté est **qu'elle revient sans qu'une ligne ait bougé** : le plugin
+`integration_test` déclare ses dépendances de test en version **dynamique**
+(`3.+`), que Gradle revalide toutes les 24 h. Le parcours qui passait hier
+échoue aujourd'hui. Contourné par un `~/.gradle/init.gradle` **hors dépôt** —
+c'est un défaut de cette machine, pas du produit — qui porte le cache des
+versions dynamiques à un an. Le remède de fond reste d'importer la racine de
+l'antivirus dans les `cacerts` de la JVM.
+
+#### Ce qui a été mutualisé, et ce qui est déclaré non couvert
+
+`textesRendus()` et la normalisation des espaces (Flutter rend des insécables
+que l'œil ne distingue pas dans un message d'échec) vivaient dans le premier
+parcours ; elles sont remontées dans `harness.dart` dès qu'un deuxième en a eu
+besoin. Le script porte désormais les trois parcours, refuse de deviner
+l'appareil quand il y en a plusieurs, et **refuse de lancer la création quand
+le commerçant est déjà au plafond** — sinon le bouton est désactivé et l'échec
+parlerait du formulaire.
+
+Non couvert, et écrit comme tel : la galerie Android (remplacée par un double
+qui ne simule **que** le système — `faux_selecteur_photo.dart` dit ce qui reste
+réel), le bouton « Activer » de la localisation (boîte système), la branche
+« commerçant » du choix de rôle (impossible dans le même processus :
+`splashShownThisLaunch` est une variable de processus, le second parcours ne
+reverrait jamais le splash), et le brouillon.
 
 ### 2026-08-05 (clôture) — `migration:generate` se tait, et le harnais reproduit le défaut qu'il corrigeait
 

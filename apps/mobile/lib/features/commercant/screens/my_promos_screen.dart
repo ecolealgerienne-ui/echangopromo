@@ -28,7 +28,7 @@ class MyPromosScreen extends ConsumerWidget {
     final updated =
         await context.push<bool>('/commercant/promos/new', extra: promo);
     if (updated == true && context.mounted) {
-      ref.invalidate(myPromosProvider);
+      invalidateAfterPromoChange(ref);
     }
   }
 
@@ -37,7 +37,7 @@ class MyPromosScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     try {
       await ref.read(promoApiProvider).publish(promo.id);
-      ref.invalidate(myPromosProvider);
+      invalidateAfterPromoChange(ref);
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -57,7 +57,7 @@ class MyPromosScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     try {
       await ref.read(promoApiProvider).stop(promo.id);
-      ref.invalidate(myPromosProvider);
+      invalidateAfterPromoChange(ref);
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -106,7 +106,7 @@ class MyPromosScreen extends ConsumerWidget {
                 final created =
                     await context.push<bool>('/commercant/promos/new');
                 if (created == true && context.mounted) {
-                  ref.invalidate(myPromosProvider);
+                  invalidateAfterPromoChange(ref);
                 }
               },
       ),

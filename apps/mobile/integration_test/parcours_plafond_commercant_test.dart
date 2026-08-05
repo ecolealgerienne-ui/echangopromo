@@ -40,21 +40,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'harness.dart';
 
-/// Le texte rendu par un `Text`, **spans compris**.
-///
-/// ⚠️ `Text.data` vaut `null` sur un `Text.rich`, et le compteur du tableau de
-/// bord en est un (« 3 » en grand, « / 5 » en petit). Se contenter de `.data`
-/// aurait rendu ce parcours aveugle à la seule valeur qu'il doit surveiller.
-List<String> textesRendus() {
-  final rendus = <String>[];
-  for (final element in find.byType(Text).evaluate()) {
-    final widget = element.widget as Text;
-    final texte = widget.data ?? widget.textSpan?.toPlainText();
-    if (texte != null && texte.trim().isNotEmpty) rendus.add(texte.trim());
-  }
-  return rendus;
-}
-
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -104,7 +89,7 @@ void main() {
     final attendu = '$enLigneAttendu / $plafondAttendu';
     await pomperJusquaVrai(
       tester,
-      () => textesRendus().any((t) => t.replaceAll(' ', ' ') == attendu),
+      () => textesRendus().any((t) => normaliserCompteur(t) == attendu),
       raison: 'le compteur d’emplacements n’a jamais affiché « $attendu » '
           '(mesure servie par GET /promo/me/slots)',
       limite: const Duration(seconds: 40),
@@ -116,7 +101,7 @@ void main() {
     // l'écran et le parcours doit le refuser — pas se contenter d'avoir trouvé
     // le bon quelque part.
     final concurrents = textesRendus()
-        .map((t) => t.replaceAll(' ', ' '))
+        .map(normaliserCompteur)
         .where((t) => RegExp(r'^\d+ / \d+$').hasMatch(t))
         .where((t) => t != attendu)
         .toList();
