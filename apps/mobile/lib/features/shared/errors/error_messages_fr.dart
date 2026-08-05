@@ -83,6 +83,7 @@ const Map<String, String> errorMessagesFr = {
       'Les modifications de votre profil doivent être validées par un administrateur avant de pouvoir publier des promos.',
   'COMMERCANT_ACCOUNT_INACTIVE':
       'Ce compte commerçant est suspendu ou supprimé.',
+  'NOTIFICATION_NOT_FOUND': 'Cette notification n’est plus disponible.',
 
   'RATE_LIMITED': 'Trop de tentatives. Réessayez dans quelques instants.',
   'HTTP_ERROR': 'Une erreur est survenue.',

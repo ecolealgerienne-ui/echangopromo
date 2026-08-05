@@ -55,6 +55,7 @@ const Map<String, String> errorMessagesEn = {
       'Your profile changes must be validated by an administrator before you can publish promos.',
   'COMMERCANT_ACCOUNT_INACTIVE':
       'This merchant account is suspended or deleted.',
+  'NOTIFICATION_NOT_FOUND': 'This notification is no longer available.',
   'RATE_LIMITED': 'Too many attempts. Please try again shortly.',
   'HTTP_ERROR': 'An error occurred.',
   'INTERNAL_ERROR': 'An unexpected error occurred. Please try again later.',

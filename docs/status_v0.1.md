@@ -568,12 +568,60 @@ Ce banc doit être rejoué pour confirmer qu'il repasse au vert.
 4. **Étape 4** — les bancs métier, matrice complète en `TEST_PROMO.md` §6.
    ~~`test-admin-highlight`~~ **écrit le 2026-08-05** (8 contrôles, 0 échec,
    prouvé par mutation). Le prochain le plus rentable : `test-notifications`
-   — module entier sans couverture, et dont le miroir d'enum a perdu *toutes*
-   les notifications jusqu'au 2026-08-05.
+   ~~`test-notifications`~~ **écrit le 2026-08-05** — 8 contrôles, 0 échec, et
+   **un défaut trouvé à son premier passage** (`markAsRead` rendait 201 sur un
+   geste sans effet). Restent 21 bancs de la matrice §6.
 
 ---
 
 ## Journal
+
+### 2026-08-05 (nuit, fin) — `test-notifications` trouve un défaut à son premier passage
+
+Second banc métier de l'étape 4. Module entier resté **sans aucune couverture**.
+Quatre règles sondées : le compteur égale la file, le cloisonnement par
+destinataire, `promoDescription` servi, aucun champ interne dans la projection.
+
+**Verdict du premier passage : 7 ✅ / 1 ❌.**
+
+```
+❌ marquer lue la notification d'autrui a RÉUSSI (HTTP 201)
+   — la liste est cloisonnée, l'action ne l'est pas
+```
+
+`POST /notifications/:id/read` rendait `201` avec un jeton d'un **autre rôle**
+sur une notification de commerçant.
+
+**Ce n'était PAS une altération de données**, et il faut le dire précisément :
+le `update` est cadré par `{id, recipientType, recipientId}`, donc l'appel de
+l'agent ne modifiait **aucune ligne**. Pas d'IDOR au sens fort. Ce qui restait :
+un **succès annoncé sur un geste sans effet** — l'appelant ne pouvait
+distinguer « marquée lue » de « pas la tienne » ni de « effacée par la purge de
+rétention », et l'app rafraîchissait son badge en croyant l'avoir changé
+(règle 29).
+
+**Corrigé** : `markAsRead` refuse quand `affected === 0`, avec
+`NOTIFICATION_NOT_FOUND` — un seul code pour les deux causes, délibérément :
+les distinguer dirait à un tiers qu'un identifiant est valide. Le refus ne
+remonte pas jusqu'à l'écran : `NotificationController.markAsRead` l'absorbe,
+parce que l'état visé (elle n'est plus là) est atteint dans les deux cas.
+Trois mappings mobiles dans le même commit (règle 26).
+
+Après correctif : **8 contrôles, 0 échec** — *« liste vide, action refusée en
+404 »*.
+
+⚠️ **Ce banc n'a pas eu besoin d'une mutation pour prouver qu'il mord** : il a
+trouvé un défaut réel dès son premier passage. C'est la preuve la plus forte
+qu'un banc puisse donner — et l'exact inverse de `test-admin-highlight`, vert
+du premier coup et dont il a fallu une mutation pour découvrir qu'il regardait
+la mauvaise garde.
+
+⚠️ **Non couvert, et déclaré** : la notification « expire bientôt » est posée
+par un cron quotidien à 1h. La déclencher demanderait de manipuler l'horloge ou
+d'appeler le cron en direct — et un banc qui appelle une méthode interne
+n'éprouve plus le chemin réel.
+
+---
 
 ### 2026-08-05 (nuit, suite) — Étape 4 : `test-admin-highlight`, et une sonde qui ne prouvait rien
 
