@@ -47,6 +47,17 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Utilisée pour enregistrer la position de votre commerce, afin que les clients puissent le trouver facilement.</string>
+	<!-- Exigée par Apple (avertissement ITMS-90683 au dépôt du build 1.0.0(10))
+	     bien que l'app ne demande jamais la localisation en arrière-plan :
+	     le code du plugin `geolocator` référence l'API « Always », et Apple
+	     réclame une justification dès qu'une API sensible est référencée,
+	     qu'elle soit appelée ou non. Le texte dit donc explicitement que
+	     l'app ne s'en sert pas — mentir ici, ou recopier le texte
+	     « When In Use », est un motif de refus en revue. Aucune entrée
+	     `UIBackgroundModes: location` n'accompagne cette clé, ce qui reste
+	     cohérent avec l'usage réel. -->
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Utilisée uniquement pendant que vous utilisez l'application, pour enregistrer la position de votre commerce. Aucune position n'est relevée en arrière-plan.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Utilisée pour prendre la photo de votre commerce ou d'une promo.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
