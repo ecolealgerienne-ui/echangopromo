@@ -684,6 +684,85 @@ reste distinguable d'un oubli :
 
 ## Journal
 
+### 2026-08-08 — Second refus d'Apple 5.1.1(iv) : le message ne doit pas décider
+
+App Store Connect, **même soumission `3d2aab99`**, revue du 07/08/2026, version
+1.0 (10), iPad Air 11" (M3). *« The issues we previously identified still need
+your attention. »* Deux griefs, tous deux sur l'écran de localisation :
+
+> - A custom message appears before the permission request, and to proceed users
+>   press a **"Activer la localisation"** button. Use words like "Continue" or
+>   "Next" on the button instead.
+> - A custom message appears before the permission request, and the user can
+>   **close the message and delay** the permission request with the "Continuer"
+>   button. The user should always proceed to the permission request after the
+>   message.
+
+**Ce que la correction du 2026-08-05 avait manqué.** On avait lu le premier
+refus comme *« un libellé de report sur le bouton d'avancement »*, et corrigé
+« Plus tard » → « Continuer » sur le bouton **secondaire**, tout en gardant le
+bouton principal « Activer la localisation ». L'écran gardait donc **deux**
+issues, et chacune porte exactement un des deux griefs : le principal
+**encourage** (« Activer »), le secondaire **reporte** (il terminait
+l'onboarding sans demander quoi que ce soit).
+
+La règle qu'Apple applique ne porte pas sur les mots seuls : **un message maison
+a le droit d'expliquer, pas de décider.** La seule décision est celle prise dans
+la boîte du système. Tout ce qui permet de la contourner — un second bouton, une
+croix, un lien « plus tard » — est un refus, quel que soit son libellé.
+
+**Trois corrections, et une suppression.**
+
+1. `LocationPermissionScreen` n'a plus **qu'un** bouton, libellé « Continuer » /
+   « Continue » / « متابعة », et il mène toujours à `requestLocationAndFinish`.
+   `skipLocationAndFinish` est **supprimée** — la garder, c'était garder la
+   porte que le refus vise (règle #31).
+2. Les textes passent de l'impératif au descriptif. « Activez la localisation
+   pour voir… » encourage autant qu'un bouton ; le sous-titre dit désormais ce
+   que l'app fait de la position **et** que l'écran suivant est celui du
+   téléphone, c'est-à-dire là où le choix se fait.
+3. **Le bandeau de la carte est supprimé lui aussi**, et c'est le point le moins
+   évident. Il était la correction du premier refus — la proposition faite « là
+   où la fonction ne marche pas sans position », ce qu'Apple suggère. Mais il
+   portait **les deux griefs de ce second refus** : bouton « Activer la
+   localisation » (le même libellé, la même clé `onboardingLocationEnable`) et
+   une croix pour l'écarter sans demander. Un reviewer qui ouvre la carte
+   retrouvait mot pour mot ce qu'il venait de refuser.
+
+   À la place, le geste standard : le bouton **« me localiser »** de la carte
+   s'affiche aussi quand la position est inconnue mais **encore demandable**, et
+   le toucher déclenche la demande système — sans texte intercalaire. On touche
+   la fonction, le système demande. Il n'y a plus de message à écarter, donc
+   plus rien à refuser.
+
+   `LocationInviteStore` et `mapLocationInvite` disparaissent avec lui : le
+   drapeau « invitation écartée » n'a plus d'objet, et une capacité sans
+   appelant se supprime.
+
+⚠️ **Ce qui reste, et ne doit pas être confondu avec un message maison** :
+`LocationCaptureField` (côté commerçant) demande la position au toucher d'un
+bouton « Localiser mon commerce » — c'est déjà le geste standard, aucun écran
+intercalaire, rien à corriger.
+
+**Le parcours écran a dû changer de forme, et le dire.** Avec une seule issue,
+« premier lancement » **traverse forcément la boîte système**, qu'`integration_test`
+ne peut pas toucher : il resterait bloqué puis échouerait en accusant l'écran, sur
+un produit correct (règle #38). `scripts/test-parcours-ecran.sh` accorde donc la
+permission par `adb shell pm grant` avant de jouer, et **refuse de jouer** si
+l'octroi échoue plutôt que de tenter sa chance. Le parcours vérifie en retour ce
+que le refus a rendu vérifiable :
+
+- l'écran porte **un** `FilledButton` et **aucun** `TextButton`/`OutlinedButton`
+  — une assertion d'absence, bornée par la présence qui lui donne un sens
+  (règle #28) ;
+- la permission accordée mène à la **carte**, pas à l'accueil : c'est ce qui
+  prouve que la demande a bien eu lieu et abouti.
+
+⚠️ **Non rejoué dans cette session** : ni `flutter analyze`, ni `flutter test`,
+ni les parcours — le SDK Flutter n'est pas installé dans l'environnement où ces
+modifications ont été écrites. À rejouer depuis le poste Windows avant de
+resoumettre, `premier-lancement` en premier.
+
 ### 2026-08-05 (clôture, addendum) — L'espace pro sur l'appareil, et une porte qui manque
 
 Deux parcours de plus, **admin** et **agent**, dans un seul fichier joué deux
@@ -804,6 +883,13 @@ colonne `promoActiveCap` nullable arrivera sur `commercant`, **l'app n'aura rien
 module non branché que la règle #11 interdit.
 
 ### 2026-08-05 (soir) — Refus d'Apple 5.1.1(iv) : la localisation demandée deux fois
+
+⚠️ **Cette correction n'a pas suffi : Apple a refusé une seconde fois le
+2026-08-07** (voir l'entrée du 2026-08-08, en tête de journal). Les points 1 et
+2 ci-dessous décrivent un état **qui n'existe plus** — le bouton « Activer la
+localisation » et le bandeau de la carte, qui portaient chacun un des deux
+griefs du second refus, ont été supprimés. Le point 3 (la justification iOS)
+tient toujours.
 
 App Store Connect, soumission `3d2aab99`, testée sur iPad Air 11" (M3). Motif :
 *« The app encourages or directs users to allow the app to access the location…

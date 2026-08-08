@@ -4,8 +4,23 @@ import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../onboarding_navigation.dart';
 
-/// Demande de localisation « maison », affichée avant la boîte de dialogue
-/// système (voir `requestLocationAndFinish` pour le pourquoi de cet ordre).
+/// Écran d'explication affiché avant la boîte de dialogue système.
+///
+/// ⚠️ **Un seul bouton, et il mène TOUJOURS à la demande système.** C'est la
+/// condition posée par Apple le 2026-08-07 (deuxième refus 5.1.1(iv)) : un
+/// message maison a le droit d'expliquer *pourquoi*, il n'a pas le droit de
+/// devenir une décision. Deux boutons — « Activer » et « Continuer » — en
+/// faisaient une : le second permettait de fermer le message **sans** que la
+/// demande système ait lieu, et le premier portait un libellé qui pousse à
+/// accepter. Le choix appartient à la boîte du système, à elle seule.
+///
+/// Trois choses sont donc interdites ici, et chacune a été refusée nommément :
+///   · un libellé de bouton qui encourage (« Activer la localisation ») —
+///     Apple demande « Continue » ou « Next » ;
+///   · un second bouton, un lien, une croix, un geste de retour qui quitte
+///     l'écran sans demander ;
+///   · un texte à l'impératif (« Activez la localisation pour… »), qui
+///     encourage tout autant qu'un bouton.
 class LocationPermissionScreen extends ConsumerWidget {
   const LocationPermissionScreen({super.key});
 
@@ -51,18 +66,11 @@ class LocationPermissionScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               _Perk(label: l10n.onboardingLocationPerkPrivacy),
               const Spacer(),
+              // ⚠️ **Le seul bouton de l'écran, et il n'a qu'une issue.**
+              // En ajouter un second — « plus tard », « passer », une croix —
+              // recréerait exactement ce qu'Apple a refusé le 2026-08-07.
               FilledButton(
                 onPressed: () => requestLocationAndFinish(context, ref),
-                child: Text(l10n.onboardingLocationEnable),
-              ),
-              const SizedBox(height: 4),
-              TextButton(
-                // ⚠️ **Ce bouton TERMINE l'onboarding.** Il menait à un
-                // second écran qui redemandait la même chose — ce qu'Apple a
-                // refusé le 2026-08-05 (5.1.1(iv) : « encourages users to
-                // allow »). La proposition existe toujours, mais là où elle a
-                // un sens : sur la carte, qui ne fonctionne pas sans position.
-                onPressed: () => skipLocationAndFinish(context, ref),
                 child: Text(l10n.onboardingLocationContinue),
               ),
             ],
