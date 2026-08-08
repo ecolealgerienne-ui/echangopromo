@@ -452,6 +452,10 @@
     }
   },
   "mapRecenter": "Recentrer sur ma position",
+  "mapLocateMe": "Me localiser",
+  "mapLocationDenied": "La localisation est refusée pour echango. Vous pouvez l'autoriser dans les réglages de votre téléphone pour voir les commerces autour de vous.",
+  "mapLocationServiceOff": "La localisation est désactivée sur cet appareil.",
+  "locationOpenSettings": "Réglages",
   "themeSwitchToDark": "Passer en mode sombre",
   "themeSwitchToLight": "Passer en mode clair",
   "commercantLoginSubtitle": "Connectez-vous pour publier et suivre vos promos.",

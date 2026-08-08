@@ -377,6 +377,10 @@
     }
   },
   "mapRecenter": "العودة إلى موقعي",
+  "mapLocateMe": "تحديد موقعي",
+  "mapLocationDenied": "تحديد الموقع مرفوض لتطبيق echango. يمكنك السماح به في إعدادات هاتفك لرؤية المحلات القريبة منك.",
+  "mapLocationServiceOff": "تحديد الموقع معطّل على هذا الجهاز.",
+  "locationOpenSettings": "الإعدادات",
   "themeSwitchToDark": "التبديل إلى الوضع الداكن",
   "themeSwitchToLight": "التبديل إلى الوضع الفاتح",
   "commercantLoginSubtitle": "سجّل الدخول لنشر عروضك ومتابعتها.",

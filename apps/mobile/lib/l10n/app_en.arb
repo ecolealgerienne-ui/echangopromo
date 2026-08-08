@@ -377,6 +377,10 @@
     }
   },
   "mapRecenter": "Recentre on my position",
+  "mapLocateMe": "Locate me",
+  "mapLocationDenied": "Location is turned off for echango. You can allow it in your phone's settings to see the shops around you.",
+  "mapLocationServiceOff": "Location is switched off on this device.",
+  "locationOpenSettings": "Settings",
   "themeSwitchToDark": "Switch to dark mode",
   "themeSwitchToLight": "Switch to light mode",
   "commercantLoginSubtitle": "Sign in to publish and track your deals.",

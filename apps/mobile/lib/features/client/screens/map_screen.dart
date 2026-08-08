@@ -132,6 +132,61 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _map.move(position, zoom ?? (_zoom < 14 ? 15.0 : _zoom));
   }
 
+  /// Le geste « me localiser », et ses trois issues.
+  ///
+  /// ⚠️ **La troisième est celle qui manquait, et elle enfermait l'utilisateur
+  /// dehors.** Tant que la carte ne montrait ce bouton qu'avec une permission
+  /// encore *demandable*, un client qui avait touché « Ne pas autoriser » ne
+  /// voyait plus jamais rien — ni bouton, ni message. Or **sur iOS ce refus
+  /// arrive dès le premier geste** (`deniedForever` immédiat, voir
+  /// [LocationOutcome.denied]) : le cas rare était en fait le cas normal.
+  ///
+  /// Le bouton est donc toujours là, et chaque état a sa sortie : recentrer,
+  /// demander, ou ouvrir les réglages. Aucun n'est un cul-de-sac — c'est la
+  /// différence entre un bouton inerte (que la carte refusait à juste titre)
+  /// et un bouton qui répond.
+  Future<void> _localiser(LatLng? userPosition) async {
+    if (userPosition != null) {
+      _recenterOn(userPosition, zoom: 15);
+      return;
+    }
+
+    final l10n = AppLocalizations.of(context)!;
+    final issue = await demanderPermissionLocalisation();
+    if (!mounted) return;
+
+    switch (issue) {
+      case LocationOutcome.granted:
+        // Le recentrage suit tout seul : `build` centre sur la position dès
+        // qu'elle arrive (`_centeredOnUser`).
+        ref.invalidate(userPositionProvider);
+      case LocationOutcome.serviceOff:
+        _proposerReglages(
+            l10n.mapLocationServiceOff, ouvrirReglagesLocalisation);
+      case LocationOutcome.denied:
+        _proposerReglages(l10n.mapLocationDenied, ouvrirReglagesApplication);
+    }
+  }
+
+  /// Dit ce qui bloque **et** ouvre l'endroit où le débloquer.
+  ///
+  /// ⚠️ Le message seul ne suffit pas : « la localisation est refusée » sans
+  /// chemin vers les réglages, c'est un constat, pas une sortie. C'est
+  /// exactement la forme qu'Apple décrit dans sa réponse du 2026-08-07 —
+  /// informer, et fournir un lien vers Réglages.
+  void _proposerReglages(String message, Future<void> Function() ouvrir) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 8),
+        action: SnackBarAction(
+          label: AppLocalizations.of(context)!.locationOpenSettings,
+          onPressed: () => unawaited(ouvrir()),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openCluster(ShopCluster cluster) async {
     if (cluster.isSingle) {
       setState(() => _selected = cluster.single);
@@ -179,10 +234,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         bounds == null ? null : ref.watch(mapShopsProvider(bounds));
     final userPosition = ref.watch(userPositionProvider).valueOrNull;
     final communeCenter = ref.watch(mapCenterForCommunesProvider).valueOrNull;
-    // `?? false` : tant qu'on ne sait pas, le bouton « me localiser » reste
-    // masqué — apparu puis retiré, il ferait douter d'une panne.
-    final peutDemander =
-        ref.watch(peutDemanderLocalisationProvider).valueOrNull ?? false;
 
     // Premier centrage sur l'utilisateur dès que sa position est connue —
     // après le premier rendu, sinon `MapController` n'est pas encore relié
@@ -378,42 +429,33 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
           // ── « Me localiser » ─────────────────────────────────────────────
           //
-          // Un seul bouton pour deux états, et c'est le cœur de la mise en
-          // conformité 5.1.1(iv) : **plus aucun message maison n'annonce la
-          // demande de localisation**. Un bandeau vivait ici, avec un bouton
+          // **Le seul chemin vers la localisation depuis la carte**, et c'est
+          // le cœur de la mise en conformité 5.1.1(iv) : plus aucun message
+          // maison n'annonce la demande. Un bandeau vivait ici, avec un bouton
           // « Activer la localisation » et une croix pour l'écarter — les deux
           // défauts qu'Apple a nommés le 2026-08-07 (libellé qui encourage,
           // possibilité de fermer le message sans demander). Le remplaçant est
           // le geste standard : l'utilisateur touche la fonction, le système
           // demande. Aucun texte intercalaire à écarter, donc rien à refuser.
           //
-          // ⚠️ **Masqué, jamais inerte.** Sans position ET sans possibilité de
-          // demander (`deniedForever`, service coupé), le bouton ne ferait
-          // rien : il laisserait croire à une panne alors que la localisation
-          // a simplement été refusée. On ne l'affiche pas — et le refus se
-          // rouvre depuis les réglages du système, pas depuis nos écrans.
-          if (_selected == null && (userPosition != null || peutDemander))
+          // ⚠️ **Toujours affiché, et jamais inerte** — les deux vont ensemble.
+          // La carte le masquait sans position, au motif qu'« un bouton présent
+          // mais inerte laisse croire à une panne » : c'était vrai du bouton
+          // d'alors, qui ne savait que recentrer. Celui-ci répond dans les
+          // trois cas (recentrer, demander, ouvrir les réglages), donc le
+          // masquer ne protège plus de rien — ça ne fait qu'enfermer dehors
+          // celui qui a refusé. Voir `_localiser`.
+          if (_selected == null)
             PositionedDirectional(
               end: 16,
               bottom: 24,
               child: _RoundButton(
                 icon: Icons.my_location,
-                tooltip: l10n.mapRecenter,
-                onTap: () async {
-                  if (userPosition != null) {
-                    _recenterOn(userPosition, zoom: 15);
-                    return;
-                  }
-                  await demanderPermissionLocalisation();
-                  if (!context.mounted) return;
-                  // Les deux providers, et pas seulement la position : c'est
-                  // `peutDemanderLocalisationProvider` qui décide de garder ce
-                  // bouton à l'écran, et un refus définitif doit le faire
-                  // disparaître. Le recentrage suit tout seul, par le premier
-                  // centrage de `build` (`_centeredOnUser`).
-                  ref.invalidate(userPositionProvider);
-                  ref.invalidate(peutDemanderLocalisationProvider);
-                },
+                // Le libellé suit ce que le bouton fait : « recentrer » sur une
+                // carte qui n'a pas encore de position promettrait autre chose.
+                tooltip:
+                    userPosition == null ? l10n.mapLocateMe : l10n.mapRecenter,
+                onTap: () => unawaited(_localiser(userPosition)),
               ),
             ),
 

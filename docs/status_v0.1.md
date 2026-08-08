@@ -729,15 +729,54 @@ croix, un lien « plus tard » — est un refus, quel que soit son libellé.
    une croix pour l'écarter sans demander. Un reviewer qui ouvre la carte
    retrouvait mot pour mot ce qu'il venait de refuser.
 
-   À la place, le geste standard : le bouton **« me localiser »** de la carte
-   s'affiche aussi quand la position est inconnue mais **encore demandable**, et
-   le toucher déclenche la demande système — sans texte intercalaire. On touche
-   la fonction, le système demande. Il n'y a plus de message à écarter, donc
-   plus rien à refuser.
+   À la place, le geste standard : le bouton **« me localiser »** de la carte.
+   On touche la fonction, le système demande. Il n'y a plus de message à
+   écarter, donc plus rien à refuser.
 
    `LocationInviteStore` et `mapLocationInvite` disparaissent avec lui : le
    drapeau « invitation écartée » n'a plus d'objet, et une capacité sans
    appelant se supprime.
+
+#### Le trou que la première rédaction de ce correctif laissait ouvert
+
+La première version n'affichait ce bouton **que si la permission était encore
+demandable** (`peutDemanderLocalisationProvider`), en reprenant le raisonnement
+que la carte tenait déjà : *« un bouton présent mais inerte laisse croire à une
+panne »*. Question posée juste après : **« comment le client active-t-il la
+localisation, alors ? »** — et il n'y avait pas de réponse.
+
+**Sur iOS, ce cas n'est pas le cas rare : c'est le cas normal.** Le plugin
+traduit `notDetermined` en `LocationPermission.denied` et le refus utilisateur
+en `deniedForever`. Donc dès le **premier** « Ne pas autoriser » — y compris
+celui de l'onboarding, que tout le monde voit — `requestPermission()` ne rouvre
+plus jamais de boîte, la condition d'affichage devient fausse, et le client ne
+voit plus **ni bouton ni message**. L'ancien bandeau avait exactement la même
+condition : le trou existait déjà, il était seulement caché par le fait que
+l'onboarding proposait un contournement (« Plus tard ») — celui-là même qu'Apple
+vient de faire retirer.
+
+Le raisonnement d'origine était juste sur sa prémisse et faux sur sa
+conclusion : **un bouton n'est inerte que si on ne lui donne rien à faire.**
+`demanderPermissionLocalisation` rendait un booléen, et « pas accordée » y
+recouvrait trois situations aux sorties incompatibles. Elle rend maintenant un
+`LocationOutcome` à trois valeurs, et le bouton est **toujours** affiché :
+
+| État | Ce que fait le bouton |
+|---|---|
+| position connue | recentre la carte dessus |
+| permission demandable | déclenche la boîte système |
+| refusée (`deniedForever`) | message + action **Réglages** (`openAppSettings`) |
+| service de localisation coupé | message + action **Réglages** (`openLocationSettings`) |
+
+Les deux derniers sont littéralement ce qu'Apple propose dans sa réponse :
+*« include a notification to inform the user and provide a link to the Settings
+app »*. Un message qui constate sans ouvrir de porte n'est pas une sortie.
+
+⚠️ **À regarder sur l'appareil** : le bouton rond (bas-droite) et les bandeaux
+de la carte (erreur de chargement, « trop de commerces ») partagent `bottom: 24`.
+Le chevauchement était déjà possible quand la position était connue ; il devient
+plus fréquent maintenant que le bouton est toujours là. La mise en page n'a pas
+été retouchée — la corriger sans voir l'écran risquait pire que le défaut.
 
 ⚠️ **Ce qui reste, et ne doit pas être confondu avec un message maison** :
 `LocationCaptureField` (côté commerçant) demande la position au toucher d'un
