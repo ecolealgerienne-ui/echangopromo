@@ -5,10 +5,13 @@ import 'package:latlong2/latlong.dart';
 /// Position de l'utilisateur, ou `null` si elle n'est pas disponible
 /// (localisation refusée, service désactivé, matériel qui ne répond pas).
 ///
-/// Ne **demande jamais** la permission : c'est le rôle de l'onboarding
-/// (`onboarding_navigation.dart`), qui l'expose au bon moment avec une
-/// explication. La redemander ici ferait surgir une boîte système au milieu
-/// de la carte, sans contexte, et brûlerait la permission en cas de refus.
+/// Ne **demande jamais** la permission : la demander depuis un provider de
+/// lecture ferait surgir une boîte système au milieu de la carte, sans que
+/// l'utilisateur ait rien touché — et brûlerait la permission en cas de refus.
+/// La demande part de deux gestes explicites, et de ceux-là seulement :
+/// l'onboarding (`onboarding_navigation.dart`) et le bouton « me localiser »
+/// de la carte, qui passent tous deux par
+/// [demanderPermissionLocalisation].
 ///
 /// Toute erreur retombe sur `null` plutôt que de remonter : la carte et les
 /// fiches doivent fonctionner sans position, seule la distance disparaît.
@@ -72,27 +75,60 @@ double? distanceTo(LatLng? from, double? latitude, double? longitude) {
       from.latitude, from.longitude, latitude, longitude);
 }
 
-/// Vrai quand la localisation peut encore être **demandée** — service activé
-/// et permission simplement `denied`.
+/// Ce qu'un geste « me localiser » a produit — trois issues, trois remèdes
+/// **différents**.
 ///
-/// ⚠️ `deniedForever` rend `false` **exprès** : à ce stade, `requestPermission`
-/// ne fait plus rien. Proposer un bouton qui n'a aucun effet, c'est le même
-/// défaut que la carte évite déjà pour « me localiser » — *« un bouton présent
-/// mais inerte laisse croire à une panne »*. Mieux vaut ne rien montrer.
-final peutDemanderLocalisationProvider = FutureProvider<bool>((ref) async {
-  if (!await Geolocator.isLocationServiceEnabled()) return false;
-  return await Geolocator.checkPermission() == LocationPermission.denied;
-});
+/// ⚠️ **Un booléen ne suffisait pas, et c'est ce qui a fabriqué une impasse.**
+/// `demanderPermissionLocalisation` rendait `true`/`false` : « pas accordée »
+/// couvrait alors trois situations qui n'ont pas du tout la même sortie —
+/// redemander, activer le service, ou passer par les réglages du système. Sans
+/// les distinguer, l'app ne pouvait proposer que la première, celle qui ne
+/// marche justement plus une fois le refus posé.
+enum LocationOutcome {
+  /// Accordée — `userPositionProvider` va pouvoir rendre une position.
+  granted,
 
-/// Demande la permission et rend `true` si elle est accordée.
+  /// Le service de localisation de l'appareil est coupé : aucune permission
+  /// n'y changerait quoi que ce soit, c'est un réglage système.
+  serviceOff,
+
+  /// Refusée, et plus rien à demander.
+  ///
+  /// ⚠️ **Sur iOS, c'est l'état dès le premier « Ne pas autoriser ».** Le
+  /// plugin traduit `notDetermined` en `denied` et le vrai refus utilisateur
+  /// en `deniedForever` : `requestPermission()` ne rouvre alors plus jamais de
+  /// boîte. La seule sortie est l'app Réglages — ce qu'Apple nomme lui-même
+  /// dans sa réponse du 2026-08-07 (*« provide a link to the Settings app »*).
+  denied,
+}
+
+/// Demande la position **au moment où l'utilisateur touche la fonction**.
 ///
-/// Sans navigation : contrairement à l'onboarding, l'appelant est déjà sur
-/// l'écran qui en a besoin et n'a nulle part où aller.
-Future<bool> demanderPermissionLocalisation() async {
+/// L'état est relu à chaque appel plutôt que mémorisé : l'utilisateur peut
+/// être allé changer le réglage dans le système et être revenu, et un état
+/// gardé en cache lui répondrait alors avec l'ancien monde.
+Future<LocationOutcome> demanderPermissionLocalisation() async {
+  if (!await Geolocator.isLocationServiceEnabled()) {
+    return LocationOutcome.serviceOff;
+  }
   var permission = await Geolocator.checkPermission();
   if (permission == LocationPermission.denied) {
     permission = await Geolocator.requestPermission();
   }
   return permission == LocationPermission.whileInUse ||
-      permission == LocationPermission.always;
+          permission == LocationPermission.always
+      ? LocationOutcome.granted
+      : LocationOutcome.denied;
+}
+
+/// Ouvre la fiche de l'app dans les réglages du système — la seule porte qui
+/// reste après un refus. Enveloppées ici, et pas appelées directement depuis
+/// un écran : `geolocator` ne franchit pas la frontière des providers.
+Future<void> ouvrirReglagesApplication() async {
+  await Geolocator.openAppSettings();
+}
+
+/// Ouvre les réglages de localisation de l'appareil (service coupé).
+Future<void> ouvrirReglagesLocalisation() async {
+  await Geolocator.openLocationSettings();
 }

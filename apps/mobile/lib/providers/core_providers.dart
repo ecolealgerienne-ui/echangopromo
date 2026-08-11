@@ -14,7 +14,6 @@ import '../data/api/notification_api.dart';
 import '../data/local/auth_session_store.dart';
 import '../data/local/device_id_store.dart';
 import '../data/local/favorites_store.dart';
-import '../data/local/location_invite_store.dart';
 import '../data/local/onboarding_store.dart';
 import '../data/local/selected_commune_store.dart';
 import 'auth_provider.dart';
@@ -39,9 +38,6 @@ final selectedCommuneStoreProvider = Provider(
 
 final favoritesStoreProvider =
     Provider((ref) => FavoritesStore(ref.watch(sharedPreferencesProvider)));
-
-final locationInviteStoreProvider = Provider(
-    (ref) => LocationInviteStore(ref.watch(sharedPreferencesProvider)));
 
 final onboardingStoreProvider =
     Provider((ref) => OnboardingStore(ref.watch(sharedPreferencesProvider)));
