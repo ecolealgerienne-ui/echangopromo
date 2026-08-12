@@ -274,7 +274,7 @@ def main():
         print("  %s %-40s %s" % (marque, libelle, explication))
         resultats.append(verdict)
 
-    print("\n── 1. sans commune ──")
+    print("\n── 1. sans point de recherche ──")
     st, sans = appeler("/highlight")
     if st != 200:
         noter("GET /highlight", "non_concluant",
@@ -282,6 +282,20 @@ def main():
         return 1
     noter("bandeau homogène et sous plafond", *verdict_homogene(sans.get("items")))
     noter("aucun champ interne", *verdict_fuite(sans))
+    time.sleep(PACE)
+
+    print("\n── 2. le REPLI suit le point (avant toute curation) ──")
+    # ⚠️ Mesuré ICI, et pas plus bas, parce que la réponse contient **soit** la
+    # curation **soit** le repli, jamais les deux : une fois la diapositive
+    # curée posée, il n'y a plus de repli à faire varier. Les deux sondes de ce
+    # banc portent donc sur deux états successifs du serveur, pas sur le même.
+    #
+    # Point volontairement à ~1500 km (Tamanrasset) : un point voisin rendrait
+    # le même repli, et on ne distinguerait plus « ça suit » de « rien n'a
+    # bougé ».
+    _, loin = appeler("/highlight?latitude=22.785&longitude=5.523&radiusKm=5")
+    noter("le repli suit le point",
+          *verdict_repli_suit(sans.get("items"), loin.get("items")))
     time.sleep(PACE)
 
     # ── La curation, posée PAR CE BANC ────────────────────────────────────
@@ -311,35 +325,20 @@ def main():
     if hid is None:
         print("  ⓘ  curation impossible a poser — la globalite ne conclura pas")
 
-    print("\n── 2. avec un point de recherche ──")
-    # ⚠️ Un point VOLONTAIREMENT loin du décor (Tamanrasset, ~1500 km), pour que
-    # la variation soit réelle. Un point voisin rendrait le même repli que sans
-    # point, et la sonde ne distinguerait plus « la curation est globale » de
-    # « rien n'a changé parce que rien n'a bougé ».
-    # ⚠️ On relit « sans point » APRÈS la pose : sinon la comparaison porte
-    # sur une photo d'avant la curation — deux états du serveur au lieu de
-    # deux cadrages (règle #38 : mesurer au plus près du geste).
-    _, sans = appeler("/highlight")
+
+    print("\n── 3. la CURATION, elle, ne suit pas le point ──")
+    # ⚠️ Les deux lectures sont refaites APRÈS la pose : comparer avec une
+    # lecture d'avant mesurerait deux états du serveur au lieu de deux
+    # cadrages — la différence viendrait de la curation qu'on vient d'ajouter
+    # (règle #38 : mesurer au plus près du geste).
+    st, sans2 = appeler("/highlight")
     st, avec = appeler("/highlight?latitude=22.785&longitude=5.523&radiusKm=5")
     if st != 200:
         noter("GET /highlight avec un point", "non_concluant",
               "HTTP %s %s" % (st, avec.get("code")))
         return 1
-    # ⚠️ **Pas d'homogénéité ici.** Le point est volontairement à 1500 km du
-    # décor : le bandeau y est vide, et demander « est-il homogène ? » à un
-    # bandeau vide ne peut rendre qu'un « je ne sais pas ». Une sonde qui ne
-    # peut pas conclure là où on l'a placée n'est pas une sonde prudente,
-    # c'est une sonde mal placée — l'homogénéité est déjà éprouvée en §1, sur
-    # un bandeau qui a du contenu.
     noter("la curation ne dépend pas du point",
-          *verdict_globalite(sans.get("items"), avec.get("items")))
-    # ⚠️ La contrepartie, et c'est elle qui donne son sens à la sonde
-    # précédente : le REPLI, lui, DOIT suivre le point. Prise seule, la
-    # globalité est satisfaite par un serveur qui IGNORE le paramètre — il
-    # rendrait la même chose partout. On prouverait l'immobilité en croyant
-    # prouver la globalité (règle #38).
-    noter("le repli, lui, suit le point",
-          *verdict_repli_suit(sans.get("items"), avec.get("items")))
+          *verdict_globalite(sans2.get("items"), avec.get("items")))
 
     # ── Nettoyage : ne rien laisser derrière soi ─────────────────────────
     if hid and ja:
