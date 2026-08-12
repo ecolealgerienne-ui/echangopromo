@@ -2809,20 +2809,85 @@ référence exacte à 95 % se lit comme exacte à 100 %. Les erreurs n'étaient 
 de la négligence : c'étaient des endroits où le raisonnement était allé **plus
 loin que la lecture**.
 
+#### Le lot 2, et ce que la vérification en vrai a appris
+
+`GET /promo` apprend `latitude`/`longitude`/`radiusKm`. **Le rayon est centré
+sur un point, jamais sur une ville** — aucun centroïde de commune n'intervient.
+
+**La contrainte qui a dicté le code n'est pas la nouvelle fonctionnalité, c'est
+l'app déjà installée.** Le point par défaut ne s'applique **que** si la requête
+ne porte aucun autre périmètre : sans cette exception, une requête portant les
+`communeIds` de Djelfa serait croisée avec un rayon autour du point par défaut
+et n'afficherait plus rien. Même raison pour `commercantId` (« autres promos du
+magasin » interroge une fiche, pas un voisinage).
+
+**Trois pièges que seule l'exécution réelle pouvait fermer :**
+
+- **`acos` déborde de son domaine quand le commerçant est exactement sur le
+  point de référence.** L'arithmétique flottante pousse l'argument juste
+  au-dessus de 1 et Postgres lève `input is out of range` — un 500 sur le cas le
+  plus banal qui soit, chercher depuis l'intérieur du commerce. Mesuré après
+  correction (`LEAST(1, GREATEST(-1, …))`) : **distance à soi-même = 0.000000**
+  pour les neuf commerçants positionnés.
+- **Le cosinus de la latitude n'est pas un raffinement.** À Djelfa (34,7°) un
+  degré de longitude ne vaut plus que ~91 km. L'omettre donne un cadre trop
+  étroit d'est en ouest, qui **exclut** des commerces réellement dans le rayon —
+  un manque, donc invisible à l'usage.
+- **`?latitude=` (présent, vide) valait l'équateur.** `Number('')` rend `0`, et
+  `@IsLatitude()` **accepte** zéro. Une requête cassée aurait cherché au large du
+  Gabon sans une erreur. Vérifié en vrai : `400` désormais. ⚠️ Le plan de
+  bascule décrivait, lui, un piège `NaN` sur paramètre **absent** — qui n'existe
+  pas (`class-transformer` n'appelle pas le transform d'une clé absente). Le vrai
+  piège était son miroir exact, et c'est la relecture adversariale qui l'a vu.
+
+**Mesuré contre le serveur qui tourne** : `GET /promo/config` sert des
+**nombres** (pas des chaînes) lus depuis le `.env` de WSL ; la requête
+haversine + bbox + `addSelect` + `getManyAndCount` **s'exécute** (200) — le §12
+du plan la donnait comme non vérifiée ; le dépassement de rayon rend
+`400 VALIDATION_ERROR` avec le plafond **venu de la configuration** ; une
+latitude sans longitude rend 400. Distances de contrôle depuis Djelfa : 0,5 à
+2,5 km pour les huit commerces locaux, **1571 km** pour « Lala » — qui est en
+Île-de-France, une donnée de test à nettoyer.
+
+#### La mesure qui manquait, et ce qu'elle dit vraiment
+
+**44 commerçants sans position sur 53** (83 %), mais **zéro promo en ligne**
+parmi eux. Sur cette base, le basculement n'éteindrait donc **rien**.
+
+⚠️ **Et ce chiffre ne répond pas à la question qu'on lui posait.** C'est la base
+de **développement**, pas le terrain : elle ne dit pas si la régularisation du
+parc réel est une campagne ou trois appels. Ce qu'elle dit, en revanche, est
+plus utile — **40 des 44 ont été créés APRÈS le correctif du 2026-08-05**. Ils
+viennent donc des modules de `scripts/lib/`, qui ne posent aucune coordonnée :
+**c'est le harnais de test qui fabrique les commerçants sans position**. Cela
+confirme d'un coup les deux exigences du plan : corriger les 9 sites dans le
+même commit que le blocage (§5.5, règle #38), et rendre la position obligatoire
+sur l'écran de création par l'agent (§5.11), par lequel ces 9 sites passent tous.
+
+**Toute la base a expiré** (promos du 2026-08-05, durée 5 à 7 jours) : 90 promos
+publiées, **aucune non expirée**. Les vérifications ci-dessus rendent donc des
+listes vides. ⚠️ **Elles prouvent que les requêtes s'exécutent, pas que le
+filtrage sélectionne** — une liste vide satisfait n'importe quelle assertion
+d'absence (règle #28). Le contrôle qui manque est celui du §9.2 du plan : un
+point **dans le carré et hors du cercle**, à écrire dans `client_liste.py`.
+
 #### Points ouverts à la clôture
 
-- 🔴 **Non mesuré : combien de commerçants sont sans position en base.** Docker
-  Desktop n'était pas démarré, le conteneur Postgres n'existait pas. C'est le
-  préalable au lot 4 (la requête est dans le §12 du plan) : il dit si la
-  régularisation du parc est une campagne ou trois appels téléphoniques.
-- ⚠️ **Les six nouvelles clés ne sont dans aucun `.env` qui tourne.** Elles sont
-  dans les deux `.env.example` ; le `.env` du clone WSL n'est pas versionné et
-  reste **à faire à la main** (règle #36). Tant que ce n'est pas fait, les replis
-  s'appliquent — et ils fonctionnent, ce qui est exactement le problème.
+- ✅ **Les six clés sont désormais dans le `.env` du clone WSL**, réglées sur
+  **Djelfa** (34.6703 / 3.2630) et non Alger : c'est l'environnement du pilote,
+  et un rayon de 5 km autour d'Alger y rendrait toute liste vide — ce qui se lit
+  comme un bug, pas comme un réglage.
+- ⚠️ **Le décor et les bancs restent à refaire** avant toute mesure de filtrage :
+  base expirée, et `client_liste.py` n'a aujourd'hui aucun paramètre géographique.
+- ⚠️ **Le clone WSL portait 2 fichiers modifiés non commités** (`provision-decor.sh`,
+  `seed-demo.sh`) — le **même** travail que le commit `aa7154a` déjà sur `origin`,
+  refait localement et jamais poussé. Mis en `git stash` (récupérable), pas
+  supprimé. C'est la divergence des deux clones que `CLAUDE.md` annonce, prise
+  sur le fait.
 - **`@aws-sdk/s3-request-presigner` manquait de `node_modules`** sur ce poste
   (déclaré dans `package.json`, jamais installé) : `highlight.service.spec.ts`
-  ne se chargeait pas. Réglé par `npm install`. La suite complète rend **95
-  tests verts sur 9 fichiers**.
+  ne se chargeait pas. Réglé par `npm install`. La suite complète rend **107
+  tests verts sur 10 fichiers**.
 
 ---
 
