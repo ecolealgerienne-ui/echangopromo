@@ -663,20 +663,17 @@ export class CommercantService {
     );
   }
 
-  /** Garde IDOR : un agent ne peut agir que sur les commerçants de ses propres communes. */
-  async assertCommuneMatches(
-    commercantId: string,
-    agentCommuneIds: string[],
-  ): Promise<Commercant> {
-    const commercant = await this.findByIdOrFail(commercantId);
-    if (!agentCommuneIds.includes(commercant.communeId)) {
-      throw new ForbiddenAppException(
-        ErrorCode.COMMERCANT_NOT_IN_AGENT_COMMUNES,
-        "Ce commerçant n'est dans aucune des communes de cet agent",
-      );
-    }
-    return commercant;
-  }
+  // ⚠️ **`assertCommuneMatches` a été retirée le 2026-08-13** (chantier
+  // « agent global »). Elle était la garde IDOR de 14 écritures : 3 de
+  // modération, 7 de gestion de commerçant, 3 sur les promos, plus l'appel en
+  // propre de `PromoController.createByAgent` — le seul qui ne passait pas par
+  // un wrapper, et donc le seul que deux relectures ont manqué.
+  //
+  // Elle faisait aussi `findByIdOrFail` avant de comparer. **Ce n'est PAS une
+  // perte** : les quatorze appelants revérifient l'existence par eux-mêmes,
+  // soit dans le service appelé, soit avant la garde. Vérifié site par site le
+  // 2026-08-13 — l'inverse avait été supposé, et supposer aurait fait écrire
+  // quatorze vérifications inutiles.
 
   /**
    * Un commerçant auto-inscrit (`AUTO_INSCRIT`) ne peut créer/publier de

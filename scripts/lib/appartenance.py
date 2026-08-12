@@ -246,6 +246,49 @@ def main():
     if "--self-test" in sys.argv:
         sys.exit(0 if self_test() else 1)
 
+    # ⚠️ **Ce banc est SUSPENDU depuis le 2026-08-13, et il ne doit pas être
+    # supprimé.** Son sujet — « l'agent B est refusé sur le territoire de A » —
+    # a été retiré du produit par le chantier « agent global ». Laissé tel
+    # quel, il rendrait ❌ sur ses 14 sondes, sur un produit parfaitement
+    # correct : le faux négatif le plus coûteux, parce qu'on le croit et qu'on
+    # part corriger un code qui n'a rien (règle 38).
+    #
+    # Il s'arrête donc en 2 (« pas de verdict »), jamais en 0 : une absence de
+    # mesure n'est pas une réussite, et un banc qui se tairait en vert serait
+    # exactement le défaut que la règle 28 dénonce.
+    #
+    # **Pourquoi le garder** : il est le seul du parc à exercer ces 14 routes
+    # avec un jeton d'agent. Réécrit, il prouvera l'inverse — que l'agent y est
+    # ACCEPTÉ partout. Sans lui, une régression posant un `@Roles('admin')` par
+    # erreur fermerait une route à l'agent sans que personne ne le voie.
+    #
+    # ⚠️ **Et la réécriture n'est pas une ligne.** Ses 14 sondes sont
+    # aujourd'hui sans effet de bord PARCE QU'ELLES SONT REFUSÉES (voir
+    # l'en-tête : « la sonde `delete` supprimerait réellement le commerçant du
+    # décor »). Prouver l'acceptation les rend toutes destructives — suspendre,
+    # supprimer, réinitialiser le PIN, masquer, avertir, publier, pour de vrai
+    # et en séquence. Le décor devra être jetable par sonde, ou les sondes
+    # ordonnées de la moins destructive à la plus. C'est le lot L5.
+    print("⚠️  Banc suspendu — son sujet a été retiré du produit le 2026-08-13.")
+    print()
+    print("   Il éprouvait le cloisonnement de l'agent par commune. Le chantier")
+    print("   « agent global » supprime cette frontière : les 14 sondes")
+    print("   rendraient ❌ sur un produit correct.")
+    print()
+    print("   À RÉÉCRIRE (lot L5), pas à supprimer : c'est le seul banc qui")
+    print("   exerce ces 14 routes avec un jeton d'agent. Il devra prouver")
+    print("   l'ACCEPTATION — voir le commentaire dans `main()` pour le prix.")
+    print()
+    print("   En attendant : aucune couverture sur ces 14 routes. Sortie 2,")
+    print("   pas 0 — une absence de mesure n'est pas une réussite.")
+    # ⚠️ `sys.exit`, pas `return` : ce module se termine par `main()` **sans**
+    # `sys.exit(main())`, donc une valeur rendue est purement décorative. Écrit
+    # d'abord en `return 2`, le banc sortait en **0** — il annonçait sa
+    # suspension tout en la déclarant réussie. Vu en vérifiant le code de
+    # sortie plutôt que la sortie texte ; c'est la même famille de défaut que
+    # le module de frontière vidé, et elle ne se voit pas à la lecture.
+    sys.exit(2)
+
     cid = _exiger("COMMERCANT_ID")
     pid = _exiger("PROMO_ID")
     a = jeton_agent(_exiger("AGENT_EMAIL"), _exiger("AGENT_PASSWORD"), "A (légitime)")

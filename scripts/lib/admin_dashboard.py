@@ -67,70 +67,76 @@ def verdict_coherence(compteur, reference, quoi):
     return "ok", "%d = %d" % (compteur, reference)
 
 
-def verdict_cloisonnement(valeur_agent, valeur_admin, quoi):
-    """Ce que voit l'agent est un SOUS-ensemble de ce que voit l'admin.
+def verdict_compteurs_egaux(valeur_a, valeur_b, valeur_admin, quoi):
+    """Portée globale ⇒ les deux agents et l'admin annoncent le MÊME compteur.
 
-    ⚠️ L'assertion porte sur la relation, pas sur des nombres : le banc ne sait
-    pas combien de commerces existent, et une attente chiffrée finirait
-    ajustée à chaque passage jusqu'à ne plus rien tester.
-    """
-    if valeur_agent is None or valeur_admin is None:
-        return "non_concluant", "%s illisible — pas de verdict" % quoi
-    if valeur_agent > valeur_admin:
-        return ("echec",
-                "%s : l'agent voit %d, l'admin %d — l'agent voit PLUS que la "
-                "vue globale, son périmètre n'est pas restreint"
-                % (quoi, valeur_agent, valeur_admin))
-    return "ok", "agent %d ≤ admin %d" % (valeur_agent, valeur_admin)
+    ⚠️ **Remplace `verdict_somme_disjointe` le 2026-08-13.** L'ancienne sonde
+    exigeait `A + B ≤ admin` pour deux agents aux communes disjointes ; son
+    propre docstring notait déjà que l'égalité « est aussi le résultat qu'on
+    obtient quand le périmètre a purement disparu ». C'est exactement ce qui
+    vient d'arriver — elle ne pourrait donc plus refuser.
 
-
-def verdict_somme_disjointe(valeur_a, valeur_b, valeur_admin, quoi):
-    """Deux agents aux communes DISJOINTES ne peuvent pas totaliser plus que
-    la vue globale.
-
-    ⚠️ **C'est cette sonde qui rend le cloisonnement vérifiable.** Comparer un
-    agent à l'admin par `≤` ne prouve rien : si l'agent couvre presque tout le
-    territoire, l'égalité est le résultat normal — et c'est aussi le résultat
-    qu'on obtient quand le périmètre a purement disparu. Mesuré le 2026-08-05 :
-    « agent 48 ≤ admin 48 » passait, et serait passé à l'identique sans aucun
-    cloisonnement.
-
-    Deux agents disjoints, en revanche, ne peuvent pas voir chacun la totalité
-    sans que leur somme ne dépasse le tout.
+    L'égalité stricte, elle, refuse : tout reliquat de filtrage sur l'un des
+    deux agents fait diverger son compteur.
     """
     if None in (valeur_a, valeur_b, valeur_admin):
         return "non_concluant", "%s illisible — pas de verdict" % quoi
-    if valeur_a + valeur_b > valeur_admin:
+    if valeur_a != valeur_b:
         return ("echec",
-                "%s : agents disjoints A=%d et B=%d, total %d > %d vus par "
-                "l'admin — au moins l'un des deux voit hors de ses communes"
-                % (quoi, valeur_a, valeur_b, valeur_a + valeur_b, valeur_admin))
-    return "ok", "A %d + B %d ≤ admin %d" % (valeur_a, valeur_b, valeur_admin)
-
-
-def verdict_disjonction(ids_a, ids_b, quoi):
-    """Communes disjointes ⇒ listes disjointes. Sans semantique à interpréter."""
-    if not ids_a and not ids_b:
-        return "non_concluant", "%s : les deux listes sont vides" % quoi
-    communs = sorted(ids_a & ids_b)
-    if communs:
+                "%s : agent A annonce %d, agent B %d — deux agents sans "
+                "territoire doivent compter la même chose ; un filtre de "
+                "périmètre a survécu" % (quoi, valeur_a, valeur_b))
+    if valeur_a != valeur_admin:
         return ("echec",
-                "%s : %d élément(s) vus par les DEUX agents alors que leurs "
-                "communes sont disjointes (ex. %s)"
-                % (quoi, len(communs), communs[0][:8]))
-    return "ok", "A %d, B %d, aucun en commun" % (len(ids_a), len(ids_b))
+                "%s : les agents annoncent %d, l'admin %d — les agents ne "
+                "voient pas le parc entier" % (quoi, valeur_a, valeur_admin))
+    return "ok", "A = B = admin = %d" % valeur_a
 
 
-def verdict_projection(ids_vus, ids_autorises, quoi):
-    """Aucun élément hors du périmètre de l'agent."""
-    if not ids_vus:
-        return "non_concluant", "%s : rien à examiner" % quoi
-    intrus = sorted(ids_vus - ids_autorises)
-    if intrus:
+def verdict_meme_vue(ids_a, ids_b, ids_admin, quoi):
+    """Portée globale ⇒ deux agents voient la MÊME chose, égale à l'admin.
+
+    ⚠️ **Remplace `verdict_disjonction` le 2026-08-13, et c'est son inverse
+    exact.** L'ancienne sonde exigeait que deux agents aux communes disjointes
+    n'aient aucun élément en commun ; le chantier « agent global » supprime la
+    frontière, donc elle rendait ❌ sur un produit correct (règle 38).
+
+    ⚠️ **Il fallait la remplacer, pas la supprimer.** « L'agent voit tout » est
+    indiscernable de « l'agent voit ce qu'il voyait » tant qu'on n'observe
+    qu'un seul agent — c'est le cas exact de la règle 28 : la sonde ne pourrait
+    pas refuser. Avec deux agents, un filtre résiduel oublié quelque part fait
+    diverger les deux listes, et c'est le seul contrôle du parc qui le verrait.
+
+    La comparaison à l'admin est le second pied : deux agents également bridés
+    seraient égaux entre eux sans être complets.
+    """
+    if not ids_admin:
+        return "non_concluant", "%s : l'admin lui-même ne voit rien" % quoi
+    if ids_a != ids_b:
+        seul_a = sorted(ids_a - ids_b)
+        seul_b = sorted(ids_b - ids_a)
         return ("echec",
-                "%s : %d élément(s) hors des communes de l'agent (ex. %s)"
-                % (quoi, len(intrus), intrus[0][:8]))
-    return "ok", "%d élément(s), tous dans son périmètre" % len(ids_vus)
+                "%s : les deux agents ne voient PAS la même chose — %d vu(s) "
+                "par A seul (ex. %s), %d par B seul (ex. %s). Un filtre de "
+                "périmètre a survécu quelque part."
+                % (quoi, len(seul_a), seul_a[0][:8] if seul_a else "—",
+                   len(seul_b), seul_b[0][:8] if seul_b else "—"))
+    if ids_a != ids_admin:
+        manquants = sorted(ids_admin - ids_a)
+        return ("echec",
+                "%s : les agents voient la même chose (%d) mais PAS ce que "
+                "voit l'admin (%d) — %d élément(s) leur échappent (ex. %s)"
+                % (quoi, len(ids_a), len(ids_admin), len(manquants),
+                   manquants[0][:8]))
+    return "ok", "A = B = admin, %d élément(s)" % len(ids_a)
+
+
+# ⚠️ `verdict_projection` a été retiré le 2026-08-13 avec la section 3 :
+# « aucun élément hors du périmètre de l'agent » n'a plus de sens quand il n'y a
+# plus de périmètre. C'était le SEUL contrôle de projection du parc — sa
+# disparition est une perte de couverture assumée, pas un nettoyage. Ce qui la
+# compense en partie est la section 4 : deux agents doivent voir la même chose
+# que l'admin, ce qu'un filtre résiduel ferait échouer.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -187,16 +193,10 @@ def self_test():
     # ── Doivent PASSER ───────────────────────────────────────────────────────
     _v("compteur cohérent", verdict_coherence(3, 3, "x")[0], "ok")
     _v("compteur cohérent à zéro", verdict_coherence(0, 0, "x")[0], "ok")
-    _v("agent strictement inférieur",
-       verdict_cloisonnement(2, 5, "x")[0], "ok")
-    _v("agent égal à l'admin (une seule commune peuplée)",
-       verdict_cloisonnement(5, 5, "x")[0], "ok")
-    _v("projection propre",
-       verdict_projection({"a"}, {"a", "b"}, "x")[0], "ok")
-    _v("somme de deux agents disjoints",
-       verdict_somme_disjointe(2, 3, 10, "x")[0], "ok")
-    _v("listes disjointes",
-       verdict_disjonction({"a"}, {"b"}, "x")[0], "ok")
+    _v("les deux agents et l'admin comptent pareil",
+       verdict_compteurs_egaux(7, 7, 7, "x")[0], "ok")
+    _v("les deux agents voient la même liste que l'admin",
+       verdict_meme_vue({"a", "b"}, {"a", "b"}, {"a", "b"}, "x")[0], "ok")
 
     # ── Doivent REFUSER ──────────────────────────────────────────────────────
     # ⚠️ Le cas fondateur de la règle 8 : le tableau de bord surcompte.
@@ -204,25 +204,25 @@ def self_test():
     _v("sous-compte", verdict_coherence(1, 2, "x")[0], "echec")
     _v("compteur illisible → non concluant",
        verdict_coherence(None, 2, "x")[0], "non_concluant")
-    # ⚠️ L'agent voit plus large que la vue globale : son périmètre a sauté.
-    _v("agent au-dessus de l'admin",
-       verdict_cloisonnement(7, 5, "x")[0], "echec")
-    _v("valeur d'agent illisible → non concluant",
-       verdict_cloisonnement(None, 5, "x")[0], "non_concluant")
-    _v("élément hors périmètre",
-       verdict_projection({"a", "z"}, {"a"}, "x")[0], "echec")
-    _v("rien à examiner → non concluant",
-       verdict_projection(set(), {"a"}, "x")[0], "non_concluant")
-    # ⚠️ LE cas que le « ≤ » laissait passer : deux agents disjoints voyant
-    # chacun la totalité. C'est la signature d'un périmètre disparu.
-    _v("deux agents voyant chacun tout",
-       verdict_somme_disjointe(10, 10, 10, "x")[0], "echec")
-    _v("un commerçant vu par les deux agents",
-       verdict_disjonction({"a", "z"}, {"z"}, "x")[0], "echec")
-    _v("deux listes vides → non concluant",
-       verdict_disjonction(set(), set(), "x")[0], "non_concluant")
+    # ⚠️ **LE cas que ce chantier doit pouvoir attraper** : un filtre de
+    # périmètre oublié quelque part, qui fait diverger les deux agents. C'est
+    # la seule signature observable d'une suppression incomplète.
+    _v("les deux agents ne comptent pas pareil",
+       verdict_compteurs_egaux(7, 5, 7, "x")[0], "echec")
+    _v("les agents comptent pareil, mais moins que l'admin",
+       verdict_compteurs_egaux(5, 5, 9, "x")[0], "echec")
+    _v("compteur d'agent illisible → non concluant",
+       verdict_compteurs_egaux(None, 5, 5, "x")[0], "non_concluant")
+    _v("un élément vu par un seul des deux agents",
+       verdict_meme_vue({"a", "z"}, {"a"}, {"a", "z"}, "x")[0], "echec")
+    _v("les deux agents d'accord, mais l'admin voit plus",
+       verdict_meme_vue({"a"}, {"a"}, {"a", "z"}, "x")[0], "echec")
+    # ⚠️ Une base vide satisfait n'importe quelle égalité — c'est la même
+    # famille que « une liste vide satisfait toute assertion d'absence ».
+    _v("admin ne voit rien → non concluant",
+       verdict_meme_vue(set(), set(), set(), "x")[0], "non_concluant")
 
-    refus = 10
+    refus = 8
     total = _ok + len(_echecs)
     print("auto-test : %d cas, dont %d refus" % (total, refus))
     for e in _echecs:
@@ -242,7 +242,7 @@ def main():
     agent_b_password = _exiger("AGENT_B_PASSWORD")
 
     print("═" * 64)
-    print("  Tableau de bord — cohérence des compteurs, cloisonnement des vues")
+    print("  Tableau de bord — cohérence des compteurs, portée globale")
     print("═" * 64)
 
     def connecter(chemin, corps, qui):
@@ -293,74 +293,59 @@ def main():
                              "signalements en attente"))
     time.sleep(PACE)
 
-    # ── 2. Le cloisonnement des compteurs ──────────────────────────────────
-    print("\n── 2. l'agent ne voit pas plus large que la vue globale ──")
+    # ── 2. Les compteurs de l'agent ────────────────────────────────────────
+    #
+    # ⚠️ **Ce que prouvaient les sections 2 et 3 n'existe plus.** Elles
+    # établissaient que l'agent voit un SOUS-ensemble de l'admin (compteurs)
+    # et que ses listes ne débordent pas de son périmètre (projections). Le
+    # chantier « agent global » du 2026-08-13 supprime le périmètre : les deux
+    # relations deviennent des assertions qui **ne peuvent plus refuser**, et
+    # `verdict_somme_disjointe` l'écrivait déjà — « c'est aussi le résultat
+    # qu'on obtient quand le périmètre a purement disparu ».
+    #
+    # Les laisser au vert aurait été le pire des deux mondes : une couverture
+    # affichée sans mesure (règle 28). Elles sont **remplacées**, pas
+    # supprimées — la section 4 porte désormais la charge de la preuve, à
+    # l'endroit exact où elle est vérifiable.
+    print("\n── 2. lecture des vues de l'agent A (matière de la section 4) ──")
     _, tb_agent = appeler("GET", "/admin/dashboard", jg)
     time.sleep(PACE)
-    for cle in ("commercesActifs", "promosPubliees", "signalementsEnAttente"):
-        noter(cle, *verdict_cloisonnement(tb_agent.get(cle),
-                                          tb_admin.get(cle), cle))
 
-    # ── 3. Le cloisonnement des LISTES ─────────────────────────────────────
-    #
-    # Un agent qui ne peut rien faire ailleurs mais qui VOIT tout n'est pas
-    # cloisonné. `test-appartenance` éprouve les actions ; ceci éprouve les
-    # projections.
-    print("\n── 3. et ses listes ne débordent pas non plus ──")
     _, mes_commercants = appeler("GET", "/admin/commercant?limit=100", jg)
     autorises = {c["id"] for c in mes_commercants.get("items", [])}
     time.sleep(PACE)
 
-    _, promos_agent = appeler("GET", "/admin/promo?limit=100", jg)
-    vus = {p.get("commercantId") for p in promos_agent.get("items", [])
-           if p.get("commercantId")}
-    noter("GET /admin/promo (agent A)",
-          *verdict_projection(vus, autorises, "promos listées"))
-    time.sleep(PACE)
-
-    # ── 4. Deux agents disjoints — la sonde qui ne passe pas par accident ──
-    print("\n── 4. deux agents aux communes disjointes ──")
-    # ⚠️ **La prémisse est vérifiée, pas supposée** (2026-08-05). Ces deux
-    # sondes n'ont de sens que si les territoires sont réellement disjoints —
-    # et ils ne l'étaient pas : le décor n'assignait les communes qu'à la
-    # CRÉATION de l'agent, si bien qu'agent A en avait accumulé quatre, dont
-    # celle de l'agent B. Les sondes accusaient alors un cloisonnement
-    # parfaitement correct.
+    # ── 4. Deux agents — la sonde qui ne passe pas par accident ──
+    print("\n── 4. deux agents, portée globale ──")
+    # ⚠️ **Retournée le 2026-08-13.** Cette section prouvait le cloisonnement
+    # entre deux agents aux communes disjointes. Le chantier « agent global »
+    # supprime la notion même de commune : elle prouve désormais l'inverse —
+    # que les deux voient **exactement la même chose**, et que cette chose est
+    # ce que voit l'admin.
     #
-    # Le décor le garantit désormais (`assurer_communes`). On le revérifie
-    # quand même ici : une sonde qui dépend d'une prémisse doit la lire, pas en
-    # hériter. Si elle ne tient pas, on ne conclut pas — on ne rougit pas non
-    # plus.
-    _, moi_a = appeler("GET", "/agent/me", jg)
-    _, moi_b = appeler("GET", "/agent/me", jb)
-    com_a = {c["id"] for c in (moi_a.get("communes") or [])}
-    com_b = {c["id"] for c in (moi_b.get("communes") or [])}
-    time.sleep(PACE)
-    if not com_a or not com_b or (com_a & com_b):
-        noter("prémisse : communes disjointes", "non_concluant",
-              "A=%d commune(s), B=%d, %d en commun — relancer "
-              "provision-decor.sh" % (len(com_a), len(com_b),
-                                      len(com_a & com_b)))
-        print("\n" + "═" * 64)
-        print("%d contrôles, %d échec(s), %d non concluant(s)"
-              % (len(resultats), resultats.count("echec"),
-                 resultats.count("non_concluant")))
-        return 1
-    noter("prémisse : communes disjointes", "ok",
-          "A %d, B %d, aucune en commun" % (len(com_a), len(com_b)))
-
+    # ⚠️ **L'agent B du décor reste indispensable, et pour la même raison
+    # qu'avant.** Avec un seul agent, « il voit tout » est indiscernable de
+    # « il voit ce qu'il voyait » : la sonde ne pourrait pas refuser (règle
+    # 28). C'est le second agent qui fait la mesure, hier comme aujourd'hui.
+    #
+    # ⚠️ Plus de prémisse « communes disjointes » à établir — il n'y a plus de
+    # communes. La prémisse restante est que l'admin voie quelque chose, et
+    # `verdict_meme_vue` la vérifie plutôt que de la supposer.
     _, tb_agent_b = appeler("GET", "/admin/dashboard", jb)
     time.sleep(PACE)
-    noter("commercesActifs : A + B ≤ admin",
-          *verdict_somme_disjointe(tb_agent.get("commercesActifs"),
+    noter("commercesActifs : agent B = agent A = admin",
+          *verdict_compteurs_egaux(tb_agent.get("commercesActifs"),
                                    tb_agent_b.get("commercesActifs"),
                                    tb_admin.get("commercesActifs"),
                                    "commercesActifs"))
 
     _, commercants_b = appeler("GET", "/admin/commercant?limit=100", jb)
     autorises_b = {c["id"] for c in commercants_b.get("items", [])}
-    noter("aucun commerçant vu par les deux",
-          *verdict_disjonction(autorises, autorises_b, "listes de commerçants"))
+    _, commercants_admin = appeler("GET", "/admin/commercant?limit=100", ja)
+    autorises_admin = {c["id"] for c in commercants_admin.get("items", [])}
+    noter("les deux agents voient la même liste que l'admin",
+          *verdict_meme_vue(autorises, autorises_b, autorises_admin,
+                            "listes de commerçants"))
 
     print("\n" + "═" * 64)
     echecs = resultats.count("echec")

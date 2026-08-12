@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 #
-# Banc du tableau de bord — cohérence des compteurs, cloisonnement des vues.
+# Banc du tableau de bord — cohérence des compteurs, portée globale de l'agent.
+#
+# ⚠️ **Retourné le 2026-08-13.** Il prouvait le cloisonnement de l'agent ; le
+# chantier « agent global » le supprime, et les sections 2 et 3 sont devenues
+# des assertions incapables de refuser. La section 4 prouve désormais
+# l'inverse : deux agents distincts voient exactement la même chose, égale à ce
+# que voit l'admin. Un filtre de périmètre oublié quelque part les ferait
+# diverger — c'est le seul contrôle du parc qui le verrait.
 #
 # Le tableau de bord est le seul endroit du produit où l'on regarde des NOMBRES
 # plutôt que des objets. C'est ce qui le rend dangereux : un chiffre faux a
