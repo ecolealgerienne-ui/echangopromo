@@ -545,6 +545,28 @@ export class CommercantService {
 
     const qb = this.commercants
       .createQueryBuilder('commercant')
+      // ⚠️ **Ce filtre manquait, et c'était la QUATRIÈME copie du même oubli**
+      // (2026-08-13). `deletedAt` est une colonne ordinaire, pas un
+      // `@DeleteDateColumn` : TypeORM ne masque donc rien tout seul, et cette
+      // liste servait les comptes supprimés — visibles, comptés, et
+      // actionnables (suspendre, réinitialiser le PIN, revalider un registre
+      // sur un compte qui n'existe plus).
+      //
+      // Le tableau de bord, lui, les excluait déjà via `aliveAccountWhere` :
+      // le compteur et la liste qu'il est censé résumer disaient deux choses
+      // différentes du même parc. Mesuré en supprimant deux comptes de banc,
+      // qui sont restés dans la liste en `autonome`.
+      //
+      // Le docstring d'`aliveAccountWhere` décrit exactement cette famille
+      // (règle #9, « trois copies d'une même règle, une seule corrigée ») —
+      // il en manquait une quatrième, celle-ci.
+      //
+      // ⚠️ **`suspendedAt` n'est PAS filtré ici**, contrairement aux
+      // compteurs. Un compte suspendu doit rester visible : c'est
+      // précisément l'écran depuis lequel on le réactive. Les compteurs
+      // l'excluent parce qu'ils comptent ce qui attend un traitement ; une
+      // liste de gestion, elle, doit montrer ce qui se gère.
+      .where('commercant.deletedAt IS NULL')
       .orderBy('commercant.createdAt', 'DESC');
 
     if (communeIds) {
