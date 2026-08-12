@@ -3000,12 +3000,27 @@ fausse coûte un refus — et il y en a déjà eu un sur ce sujet le 2026-08-05.
   **Djelfa** (34.6703 / 3.2630) et non Alger : c'est l'environnement du pilote,
   et un rayon de 5 km autour d'Alger y rendrait toute liste vide — ce qui se lit
   comme un bug, pas comme un réglage.
-- ⚠️ **`client_liste.py` n'éprouve toujours aucun rayon.** Le cas décisif du
-  §9.2 du plan — **un point dans le carré mais hors du cercle** — n'est pas
-  couvert : c'est le seul qui distingue une bbox d'un rayon, donc le seul qui
-  attraperait un rognage des coins oublié. Et la base de décor est expirée
-  (promos du 5 août, durée 5 à 7 jours), donc toute mesure de filtrage rendrait
-  des listes vides — qui satisfont n'importe quelle assertion d'absence.
+- ✅ **Le cas « dans le carré, hors du cercle » est couvert** —
+  `scripts/test-client-rayon.sh`, écrit et passé le 2026-08-12. Banc dédié
+  plutôt qu'une extension de `client_liste.py` : celui-ci couvre la
+  **visibilité** et n'a aucune raison de fabriquer deux commerces à des
+  distances calculées.
+
+  Il pose lui-même son décor via l'agent — route qui **exige** désormais une
+  position, donc un décor bancal y est refusé franchement au lieu de produire
+  des commerces invisibles. Mesuré : proche à 1,00 km **présent** au rayon 3 ;
+  coin à 3,90 km **absent** au rayon 3 et **présent** au rayon 10. Ce second
+  point est la prémisse (règle #38) : sans lui, l'absence au rayon 3 pourrait
+  venir de n'importe quelle autre cause.
+
+  ⚠️ Son auto-test bloquant ne vérifie pas que les verdicts savent refuser, il
+  vérifie **aussi la géométrie du décor** : que le point posé est bien dans le
+  cadre et hors du cercle. Un décor qui viserait à côté rendrait vert un
+  serveur cassé — et rien d'autre ne le dirait.
+
+  ⚠️ **La base de décor reste expirée par ailleurs** (promos du 5 août) : toute
+  autre mesure de filtrage y rendrait des listes vides, qui satisfont n'importe
+  quelle assertion d'absence.
 - ⚠️ **Rien n'a été exécuté sur appareil.** L'app compile, `analyze` rend 0
   problème et les 4 vérificateurs passent, mais aucun parcours d'intégration
   n'a tourné depuis la bascule. Ceux qui posaient `selected_commune_ids` ont été
