@@ -436,7 +436,12 @@ step "6. Le commerçant du décor est bien SUR la carte"
 # décor, et exige d'y trouver CE commerçant. L'ancien se contentait d'un
 # barycentre de commune — il pouvait être non nul sans que celui-ci y soit.
 bbox="north=34.72&south=34.62&east=3.32&west=3.21"
-sur_la_carte="$(api GET "/promo/map?$bbox" | jq -r --arg id "$CID"   '[.items[]? | select(.commercant.id == $id)] | length')"
+# ⚠️ `.id` et non `.commercant.id` : la projection de `/promo/map` est PLATE —
+# le commerçant EST l'item, ses promos sont imbriquées dessous. Écrit à
+# l'aveugle la première fois, ce contrôle a rendu ❌ sur un décor parfaitement
+# posé (2026-08-12). Il a échoué franchement au lieu de rendre 0 en silence,
+# ce qui est la seule raison pour laquelle on l'a vu.
+sur_la_carte="$(api GET "/promo/map?$bbox" | jq -r --arg id "$CID"   '[.items[]? | select(.id == $id)] | length')"
 [ "${sur_la_carte:-0}" -ge 1 ] || fail "Le commerçant du décor n'est pas sur la carte"   "pas de coordonnées, ou aucune promo visible — le parcours « carte » ne pourra pas partir"
 pass "Commerçant présent dans le cadre du décor"
 
