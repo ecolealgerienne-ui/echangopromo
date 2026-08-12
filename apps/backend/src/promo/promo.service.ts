@@ -10,6 +10,7 @@ import {
   LessThan,
   MoreThan,
   Not,
+  ObjectLiteral,
   Repository,
   SelectQueryBuilder,
 } from 'typeorm';
@@ -314,6 +315,85 @@ export class PromoService {
       .andWhere('commercant.deletedAt IS NULL')
       .andWhere('commercant.suspendedAt IS NULL');
   }
+
+  /**
+   * Cadre rectangulaire sur la position du commerçant.
+   *
+   * **Une seule définition, deux appelants** : la carte (`findActiveForMap`) et
+   * la liste au rayon (`findActiveForClient`). Le critère de la règle #30 est
+   * « si l'un change, l'autre doit-il changer ? » — ici oui, c'est la même
+   * question posée deux fois, et un commentaire « même filtre que la carte »
+   * n'aurait rien tenu.
+   *
+   * ⚠️ C'est ce `BETWEEN`, et lui seul, qui emprunte `IDX_commercant_position`
+   * (btree partiel sur `latitude, longitude`). L'ordre par distance, lui,
+   * porte sur une expression calculée et ne peut pas être servi par un btree :
+   * le cadre est donc ce qui rend le tri abordable, pas un raffinement.
+   *
+   * Exige que `commercant` soit déjà joint sous cet alias.
+   */
+  private applyBoundingBox<T extends ObjectLiteral>(
+    qb: SelectQueryBuilder<T>,
+    bornes: { north: number; south: number; east: number; west: number },
+  ): SelectQueryBuilder<T> {
+    return qb
+      .andWhere('commercant.latitude BETWEEN :bboxSouth AND :bboxNorth', {
+        bboxSouth: bornes.south,
+        bboxNorth: bornes.north,
+      })
+      .andWhere('commercant.longitude BETWEEN :bboxWest AND :bboxEast', {
+        bboxWest: bornes.west,
+        bboxEast: bornes.east,
+      });
+  }
+
+  /**
+   * Cadre englobant un rayon, en degrés.
+   *
+   * 111.32 km par degré de latitude ; en longitude, ce même degré rétrécit
+   * avec le cosinus de la latitude. À Djelfa (34.7°) un degré de longitude ne
+   * vaut plus que ~91 km : dériver le cadre sans ce cosinus donnerait une
+   * boîte trop étroite d'est en ouest, qui **exclurait des commerces réellement
+   * dans le rayon** — un manque, jamais un excès, donc invisible à l'usage.
+   *
+   * Le cadre est volontairement **plus large que le cercle** (ses coins en
+   * dépassent). C'est le tri fin par distance qui rogne ces coins, §9.2 du
+   * plan : un banc doit éprouver un point dans le carré et hors du cercle,
+   * sinon une implémentation qui oublie le rognage rend vert.
+   */
+  private cadreAutour(
+    latitude: number,
+    longitude: number,
+    rayonKm: number,
+  ): { north: number; south: number; east: number; west: number } {
+    const deltaLat = rayonKm / 111.32;
+    // Aux pôles le cosinus tend vers 0 et le delta exploserait ; on borne le
+    // cadre au globe plutôt que de produire des bornes infinies.
+    const cosLat = Math.max(Math.cos((latitude * Math.PI) / 180), 0.01);
+    const deltaLon = rayonKm / (111.32 * cosLat);
+    return {
+      north: Math.min(latitude + deltaLat, 90),
+      south: Math.max(latitude - deltaLat, -90),
+      east: Math.min(longitude + deltaLon, 180),
+      west: Math.max(longitude - deltaLon, -180),
+    };
+  }
+
+  /**
+   * Distance à vol d'oiseau en kilomètres, en SQL (haversine).
+   *
+   * ⚠️ Le `LEAST(1, GREATEST(-1, …))` n'est pas décoratif : l'argument d'`acos`
+   * doit rester dans [-1, 1], et l'arithmétique flottante le fait déborder
+   * d'un epsilon quand le commerçant est **exactement** sur le point de
+   * référence. Sans la borne, Postgres lève `input is out of range` — donc un
+   * 500 sur le cas le plus banal qui soit : le client cherche depuis
+   * l'intérieur du commerce.
+   */
+  private readonly distanceKmSql = `(6371 * acos(LEAST(1, GREATEST(-1,
+      sin(radians(:refLat)) * sin(radians(commercant.latitude))
+      + cos(radians(:refLat)) * cos(radians(commercant.latitude))
+        * cos(radians(commercant.longitude) - radians(:refLng))
+    ))))`;
 
   /**
    * Est-elle réellement en ligne *maintenant* ? Le cron d'expiration ne passe
@@ -700,6 +780,74 @@ export class PromoService {
         .innerJoinAndSelect('promo.commercant', 'commercant'),
     );
 
+    // ── Périmètre géographique (bascule 2026-08-12) ────────────────────────
+    //
+    // ⚠️ Le rayon est centré sur **un point**, jamais sur une ville : aucun
+    // centroïde de commune n'intervient nulle part ici. Le point vient du
+    // client (celui qu'il a enregistré) ou, à défaut, de la configuration
+    // serveur.
+    //
+    // ⚠️ **Et le défaut ne s'applique QUE si la requête ne porte aucun autre
+    // périmètre.** Sans cette exception, l'app déjà installée — qui envoie les
+    // `communeIds` de Djelfa et aucune position — verrait ses communes croisées
+    // avec un rayon autour du point par défaut et n'afficherait plus rien. Même
+    // raison pour `commercantId` : « autres promos du magasin » interroge une
+    // fiche précise, pas un voisinage (§5.6 du plan).
+    const perimetreExplicite =
+      Boolean(query.commercantId) || Boolean(query.communeIds?.length);
+
+    const config = this.getClientConfig();
+
+    if (query.radiusKm !== undefined && query.radiusKm > config.maxRadiusKm) {
+      // Refus, jamais un rabotage silencieux : l'app lit `maxRadiusKm` sur
+      // `GET /promo/config` et n'a aucune raison de dépasser. Une requête qui
+      // dépasse est soit un client cassé, soit un abus — dans les deux cas
+      // c'est une information, pas quelque chose à corriger en douce
+      // (règle #29).
+      throw new BadRequestAppException(
+        ErrorCode.VALIDATION_ERROR,
+        `Rayon de recherche trop grand (${query.radiusKm} km) — maximum ${config.maxRadiusKm} km`,
+      );
+    }
+
+    const position =
+      query.latitude !== undefined && query.longitude !== undefined
+        ? { latitude: query.latitude, longitude: query.longitude }
+        : perimetreExplicite
+          ? null
+          : {
+              latitude: config.defaultLatitude,
+              longitude: config.defaultLongitude,
+            };
+
+    // Une recherche textuelle **ignore le rayon** : chercher est un acte
+    // intentionnel avec une cible, et la borner au voisinage rendrait le
+    // produit structurellement moins capable qu'avant la bascule (le client
+    // suivait jusqu'à 4 communes). Le tri par distance reste actif, donc le
+    // proche remonte quand même en tête (R8 du plan).
+    const rayonKm = query.search
+      ? null
+      : (query.radiusKm ?? config.defaultRadiusKm);
+
+    if (position) {
+      qb.setParameters({
+        refLat: position.latitude,
+        refLng: position.longitude,
+      });
+    }
+
+    if (position && rayonKm !== null) {
+      // Le cadre d'abord (il emprunte l'index), la distance ensuite (elle
+      // rogne les coins du carré). L'ordre des deux conditions n'a pas
+      // d'importance pour Postgres, mais leur présence conjointe si : le
+      // cadre seul rendrait des commerces jusqu'à 41 % trop loin en diagonale.
+      this.applyBoundingBox(
+        qb,
+        this.cadreAutour(position.latitude, position.longitude, rayonKm),
+      );
+      qb.andWhere(`${this.distanceKmSql} <= :rayonKm`, { rayonKm });
+    }
+
     if (query.communeIds?.length) {
       qb.andWhere('commercant.communeId IN (:...communeIds)', {
         communeIds: query.communeIds,
@@ -738,6 +886,13 @@ export class PromoService {
         'discount_ratio',
       ).orderBy('discount_ratio', 'DESC');
       qb.addOrderBy('promo.publishedAt', 'DESC', 'NULLS LAST');
+      // Départage final — voir le commentaire de la branche par défaut : deux
+      // promos de même remise et même instant de publication s'ordonnaient
+      // arbitrairement, et `skip/take` faisait alors réapparaître ou
+      // disparaître des lignes d'une page à l'autre. Le défaut existait déjà
+      // ici avant la bascule ; le corriger d'un seul côté aurait laissé
+      // l'autre (règle #30).
+      qb.addOrderBy('promo.id', 'ASC');
       qb.skip((query.page - 1) * query.limit).take(query.limit);
       const [items, total] = await qb.getManyAndCount();
       return toPaginatedResult(items, total, query.page, query.limit);
@@ -755,11 +910,33 @@ export class PromoService {
       ).setParameter('favoriteIds', query.favoriteIds);
       qb.orderBy('favorite_rank', 'ASC');
     }
+
+    // Le tri par distance ne se demande pas, il se déduit : `sort` n'a **pas**
+    // de valeur par défaut dans le DTO, donc `undefined` veut dire « le client
+    // n'a rien demandé » et se distingue d'un `recent` explicite. Un client
+    // déjà installé, qui n'envoie pas de position, garde donc exactement
+    // l'ordre d'avant — ce que `list-promo-query.dto.ts` interdit de changer.
+    //
+    // Les favoris restent devant : c'est un choix explicite de l'utilisateur,
+    // la proximité n'a pas à le lui reprendre.
+    if (position && query.sort === undefined) {
+      qb.addSelect(this.distanceKmSql, 'distance_km');
+      qb.addOrderBy('distance_km', 'ASC');
+    }
+
     // NULLS LAST : toutes les promos ici sont PUBLIEE donc publishedAt est
     // normalement toujours renseigné, mais une ligne pré-migration mal
     // backfillée ne doit pas remonter en tête d'un tri DESC (comportement
     // par défaut de Postgres pour NULL en DESC).
     qb.addOrderBy('promo.publishedAt', 'DESC', 'NULLS LAST');
+    // ⚠️ **Départage déterministe, sans quoi la pagination n'est pas stable.**
+    // Toutes les promos d'un même commerçant ont **exactement** la même
+    // distance : sans ce dernier critère, l'ordre entre elles est arbitraire et
+    // Postgres est libre de le changer d'une requête à l'autre — donc entre la
+    // page 1 et la page 2, où `skip/take` fait alors réapparaître ou disparaître
+    // des lignes. La pagination existait déjà (règle #15) ; c'est sa
+    // **stabilité** qui manquait.
+    qb.addOrderBy('promo.id', 'ASC');
     qb.skip((query.page - 1) * query.limit).take(query.limit);
 
     const [items, total] = await qb.getManyAndCount();
@@ -800,21 +977,16 @@ export class PromoService {
         .andWhere('commercant.deletedAt IS NULL')
         .andWhere('commercant.suspendedAt IS NULL');
 
-    const commercantsQb = visiblePromoConditions(
-      this.promos
-        .createQueryBuilder('promo')
-        .innerJoin('promo.commercant', 'commercant'),
+    const commercantsQb = this.applyBoundingBox(
+      visiblePromoConditions(
+        this.promos
+          .createQueryBuilder('promo')
+          .innerJoin('promo.commercant', 'commercant'),
+      )
+        .andWhere('commercant.latitude IS NOT NULL')
+        .andWhere('commercant.longitude IS NOT NULL'),
+      query,
     )
-      .andWhere('commercant.latitude IS NOT NULL')
-      .andWhere('commercant.longitude IS NOT NULL')
-      .andWhere('commercant.latitude BETWEEN :south AND :north', {
-        south: query.south,
-        north: query.north,
-      })
-      .andWhere('commercant.longitude BETWEEN :west AND :east', {
-        west: query.west,
-        east: query.east,
-      })
       .select('commercant.id', 'id')
       .distinct(true)
       // +1 pour détecter le dépassement sans seconde requête de comptage.

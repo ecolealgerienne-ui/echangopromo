@@ -60,6 +60,26 @@ export class PromoController {
       id: promo.id,
       commercantId: promo.commercantId,
       commercantNom: promo.commercant?.nom ?? null,
+      /**
+       * Position du commerce — pour que l'app puisse **afficher** la distance
+       * dans la liste (bascule 2026-08-12, A7 du plan).
+       *
+       * Le serveur **ordonne** par distance, l'app **affiche** : la valeur
+       * calculée en SQL sert au `ORDER BY` et n'est jamais rendue, parce que
+       * `getManyAndCount()` jette les colonnes brutes d'un `addSelect` et que
+       * la seule alternative — fusionner `{...promo, distanceKm}` — est le bug
+       * fondateur de la règle #4 (le spread désactive les `@Exclude()`).
+       *
+       * ⚠️ L'ordre affiché reste **celui du serveur** : `distanceTo` côté app
+       * sert au libellé, jamais à re-trier. Deux tris qui divergeraient d'un
+       * epsilon donneraient une liste dont l'ordre contredit ses propres
+       * étiquettes.
+       *
+       * N'ouvre aucune surface nouvelle : ces coordonnées sont déjà publiques
+       * via `GET /promo/map`, qui les sert pour placer les épingles.
+       */
+      commercantLatitude: promo.commercant?.latitude ?? null,
+      commercantLongitude: promo.commercant?.longitude ?? null,
       description: promo.description,
       prixAvant: promo.prixAvant,
       prixApres: promo.prixApres,
