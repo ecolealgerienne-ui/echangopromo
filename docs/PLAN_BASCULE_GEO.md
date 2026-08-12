@@ -490,9 +490,23 @@ silencieusement du périmètre de tout agent.
 > ⚠️ **Et une perte irréversible à traiter AVANT la migration** : mesuré le
 > 2026-08-13, 78 commerçants actifs, 66 avec une adresse. **Douze n'ont que leur
 > commune** comme information de lieu. Supprimer la colonne la détruit
-> définitivement, et l'adresse étant facultative, rien ne la reconstituera. Le
-> remède est une recopie `wilaya, commune → adresse` quand celle-ci est vide,
-> dans la même migration.
+> définitivement, et l'adresse étant facultative, rien ne la reconstituera.
+>
+> ✅ **Tranché le 2026-08-13 : la recopie se fait.** `« commune, wilaya »` est
+> versé dans `adresse` **uniquement quand celle-ci est vide**, dans la même
+> migration que la suppression — écraser une adresse saisie par le commerçant
+> par un nom de commune serait un recul, pas une préservation.
+>
+> Trois précisions qui font la différence entre une migration et une perte :
+> - elle porte sur **toutes** les lignes, y compris les comptes supprimés
+>   (`deletedAt IS NOT NULL`) : leur historique disparaîtrait aussi, et le coût
+>   d'inclure est nul ;
+> - elle s'exécute **avant** le `DROP`, dans la même transaction — TypeORM
+>   enveloppe déjà toutes les migrations en attente dans une seule (règle 12) ;
+> - ce qu'on écrit n'est **pas une adresse**, c'est une localité. Le commerçant
+>   doit pouvoir la corriger : le champ reste libre et modifiable, et le `down()`
+>   ne saura pas la distinguer d'une adresse saisie — **la migration n'est donc
+>   pas réversible**, et ça doit être écrit dans son en-tête plutôt que découvert.
 
 ### 4.2 La commune est la frontière d'autorisation de l'agent
 
