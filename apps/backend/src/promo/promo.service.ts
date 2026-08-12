@@ -299,6 +299,17 @@ export class PromoService {
    * Le commentaire disant « la définition ne vit qu'ici » existait déjà : il
    * ne tenait rien, un commentaire ne pouvant pas échouer (règle #30).
    *
+   * ⚠️ **Et il ne le tenait toujours pas jusqu'au 2026-08-12.** Ce même fichier
+   * portait une sixième copie, locale à `findActiveForMap` — cinq conditions
+   * identiques, réécrites 650 lignes plus bas, sous d'autres noms de paramètres.
+   * Le titre ci-dessus l'affirmait, le code le démentait, et personne ne l'avait
+   * vu parce que **les deux copies disaient la même chose** : une duplication
+   * n'échoue pas, elle attend. Trouvée par relecture au moment d'ajouter une
+   * sixième condition (la position du commerçant, bascule géographique) — qui
+   * n'aurait porté que sur l'une des deux, donc sur la liste et pas sur la
+   * carte. Fusionnée avant, pas après : on n'ajoute rien à une définition qui
+   * n'est pas la seule.
+   *
    * Exige que `commercant` soit déjà joint sous cet alias.
    */
   private applyVisibleConditions(
@@ -965,20 +976,8 @@ export class PromoService {
     // une liste tronquée.
     const plafond = this.maxMapCommercants();
 
-    const visiblePromoConditions = (qb: SelectQueryBuilder<Promo>) =>
-      qb
-        .where('promo.lifecycleStatus = :lifecycleStatus', {
-          lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
-        })
-        .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
-          moderationStatuses: VISIBLE_MODERATION_STATUSES,
-        })
-        .andWhere('promo.dateFin > NOW()')
-        .andWhere('commercant.deletedAt IS NULL')
-        .andWhere('commercant.suspendedAt IS NULL');
-
     const commercantsQb = this.applyBoundingBox(
-      visiblePromoConditions(
+      this.applyVisibleConditions(
         this.promos
           .createQueryBuilder('promo')
           .innerJoin('promo.commercant', 'commercant'),
@@ -1004,7 +1003,7 @@ export class PromoService {
     if (commercantIds.length === 0)
       return { commercants: [], truncated: false };
 
-    const promosQb = visiblePromoConditions(
+    const promosQb = this.applyVisibleConditions(
       this.promos
         .createQueryBuilder('promo')
         .innerJoinAndSelect('promo.commercant', 'commercant'),
