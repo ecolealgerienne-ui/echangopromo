@@ -2751,6 +2751,81 @@ exclure le domaine de l'inspection HTTPS.
 
 ---
 
+### 2026-08-12 — Bascule géographique : décision, plan, et les deux premiers lots
+
+**Décision produit.** L'ancrage du produit passe de la hiérarchie
+administrative (wilaya → commune) au **point GPS**. Motif : ne plus maintenir
+un référentiel saisi à la main (`seed-communes.ts`, 35 communes reconstituées
+par recherche web, avec un avertissement en tête disant que la liste n'est pas
+vérifiée) et pouvoir sortir d'Algérie sans réécrire le modèle.
+
+**Le plan est dans `docs/PLAN_BASCULE_GEO.md`** — 12 décisions actées, 7
+arbitrages tranchés, 12 pièges, 9 lots. Ne pas le résumer ici : deux sources
+divergeraient.
+
+**Ce qui a été fait** : lot 0 (`configNumber` accepte les intervalles signés) et
+lot 1 (les clés de configuration géographiques + `GET /promo/config`).
+
+#### Ce qu'on a appris, et qui vaut plus que les commits
+
+**Un garde-fou juste peut devenir faux sans qu'une ligne bouge — il suffit que
+le domaine change.** `configNumber` refusait `n <= 0` **avant** d'évaluer
+`options.minimum` (`config-number.ts`, ligne 115 contre 127) : le plancher s'y
+**ajoutait** au lieu de le remplacer. Irréprochable tant que la configuration ne
+portait que des plafonds et des durées. Le jour où elle porte une **coordonnée**,
+ça devient : *toute longitude ouest retombe sur le repli*. Oran (−0.64), Tlemcen
+(−1.31), Sidi Bel Abbès (−0.63) — le backend démarre, sert Alger, et laisse une
+ligne de journal que personne ne relit (règle #36 : le repli qui fonctionne rend
+l'absence indiscernable de la présence). **Aucun test ne l'aurait signalé, parce
+que le comportement était volontaire et éprouvé.**
+
+**Et une capacité correcte, appelée avec les mauvaises options, ne produit
+aucune erreur.** Corriger `configNumber` ne suffisait pas : encore fallait-il que
+`getClientConfig` lui passe `{ minimum: -180 }`. C'est le trou de la règle #31
+transposé aux paramètres — d'où `promo.service.client-config.spec.ts`, dont le
+cas central est « `CLIENT_DEFAULT_LONGITUDE=-0.64` doit ressortir à −0.64 ».
+Éprouvé par mutation : retirer l'option fait rougir 3 cas. Sans ce banc, rien
+dans le dépôt ne l'aurait dit.
+
+**Le plan lui-même a été relu de façon adversariale, et il était faux sur une
+quinzaine de points.** Deux relecteurs indépendants ont contrôlé ~70 et ~60
+références `fichier:ligne`. Le socle a tenu ; le reste, non. Les trois plus
+coûteux, tous consignés dans le §11 du plan :
+- il affirmait que `applyVisibleConditions` était « l'unique définition » de
+  *visible* — `findActiveForMap` la **redéclare** (`promo.service.ts:681-691`).
+  Une duplication règle #30 **préexistante**, que le commentaire de `:186-196`
+  dément 500 lignes plus bas ;
+- son plan de vérification **ne pouvait pas prouver ce qu'il prétendait** :
+  retirer la position d'un commerçant passe par `PATCH /commercant/me`, qui
+  allume `profilePendingReview` — le banc aurait constaté le mauvais code
+  d'erreur en étant **vert pour la mauvaise raison** ;
+- il décrivait un piège `NaN` qui **n'existe pas** (`class-transformer` n'appelle
+  pas le `@Transform` d'une clé absente), en manquant le vrai, qui est son
+  miroir : `?latitude=` vide vaut `0`, et `@IsLatitude()` l'accepte.
+
+⚠️ **La leçon n'est pas « faire relire ».** C'est qu'un document dense en
+`fichier:ligne` *inspire confiance en proportion de sa précision*, et qu'une
+référence exacte à 95 % se lit comme exacte à 100 %. Les erreurs n'étaient pas
+de la négligence : c'étaient des endroits où le raisonnement était allé **plus
+loin que la lecture**.
+
+#### Points ouverts à la clôture
+
+- 🔴 **Non mesuré : combien de commerçants sont sans position en base.** Docker
+  Desktop n'était pas démarré, le conteneur Postgres n'existait pas. C'est le
+  préalable au lot 4 (la requête est dans le §12 du plan) : il dit si la
+  régularisation du parc est une campagne ou trois appels téléphoniques.
+- ⚠️ **Les six nouvelles clés ne sont dans aucun `.env` qui tourne.** Elles sont
+  dans les deux `.env.example` ; le `.env` du clone WSL n'est pas versionné et
+  reste **à faire à la main** (règle #36). Tant que ce n'est pas fait, les replis
+  s'appliquent — et ils fonctionnent, ce qui est exactement le problème.
+- **`@aws-sdk/s3-request-presigner` manquait de `node_modules`** sur ce poste
+  (déclaré dans `package.json`, jamais installé) : `highlight.service.spec.ts`
+  ne se chargeait pas. Réglé par `npm install`. La suite complète rend **95
+  tests verts sur 9 fichiers**.
+
+---
+
 ## Comment tenir ce fichier
 
 - **Une entrée de journal par session**, datée, qui dit ce qui a été fait **et

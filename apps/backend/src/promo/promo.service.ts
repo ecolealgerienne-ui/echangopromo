@@ -78,8 +78,51 @@ const EXPIRING_SOON_WINDOW_HOURS = 24;
  * serait de toute façon illisible et la réponse inutilement lourde : le
  * client reçoit `truncated: true` et invite à zoomer, plutôt que de perdre
  * silencieusement des commerces (règle d'audit #15).
+ *
+ * ⚠️ **Ce n'est plus une constante, c'est un repli** : la valeur effective est
+ * lue par `maxMapCommercants()` depuis `MAX_MAP_COMMERCANTS` (`.env`).
+ *
+ * Elle n'est **pas** servie à l'app, et c'est délibéré : `client_carte.py` la
+ * **déduit** de la réponse (`truncated` + taille de la liste) au lieu de la
+ * recopier, ce qui permet de la changer sans toucher au banc (règle #32).
  */
-const MAX_MAP_COMMERCANTS = 300;
+const DEFAUT_MAX_MAP_COMMERCANTS = 300;
+
+/**
+ * Repères géographiques servis au client (`GET /promo/config`).
+ *
+ * ── Pourquoi ces valeurs vivent dans le `.env` du serveur ─────────────────
+ *
+ * Parce que le mobile n'a pas de `.env` : `lib/config/env.dart` n'expose que
+ * des `String.fromEnvironment`, compilés dans le binaire — et `CLAUDE.md`
+ * documente qu'un `--dart-define` **se perd silencieusement** selon la façon
+ * dont `flutter` est lancé. Une valeur compilée ne se change qu'en republiant
+ * sur les deux stores.
+ *
+ * Le cas concret qui l'impose : le défaut est **Alger** et le pilote est à
+ * **Djelfa**. Un rayon de 5 km autour d'Alger rend la liste vide pour tout
+ * client du pilote qui n'a pas enregistré son point. C'est une ligne de `.env`
+ * à changer, pas une soumission au store.
+ *
+ * ⚠️ Ces quatre-là sont des **replis journalisés**, pas la valeur servie :
+ * `getClientConfig()` lit la configuration à chaque appel (même contrat que
+ * `plafondActif` pour `PROMO_ACTIVE_CAP`).
+ */
+const DEFAUT_CLIENT_LATITUDE = 36.7538; // Alger
+const DEFAUT_CLIENT_LONGITUDE = 3.0588; // Alger
+const DEFAUT_CLIENT_RADIUS_KM = 5;
+
+/**
+ * Plafond du rayon acceptable sur `GET /promo`.
+ *
+ * ⚠️ **Ce n'est pas un confort, c'est une borne de sécurité** : le rayon
+ * dérive une bbox sur une route **publique et non authentifiée**. Sans
+ * plafond, `?radiusKm=100000` demande un parcours complet de la table à
+ * volonté (règle #34, second temps : « un DTO décoré n'est pas un DTO
+ * borné »). 50 km couvre une agglomération et sa périphérie ; au-delà, c'est
+ * la recherche textuelle qui prend le relais, elle qui ignore le rayon.
+ */
+const DEFAUT_CLIENT_MAX_RADIUS_KM = 50;
 
 /**
  * Délai au-delà duquel on renonce à la miniature (P9). Mesuré : une génération
@@ -163,6 +206,66 @@ export class PromoService {
       5,
       'PROMO_ACTIVE_CAP',
     );
+  }
+
+  /** Voir `DEFAUT_MAX_MAP_COMMERCANTS` — non servi à l'app, déduit de la réponse. */
+  private maxMapCommercants(): number {
+    return configNumber(
+      this.configService.get('MAX_MAP_COMMERCANTS'),
+      DEFAUT_MAX_MAP_COMMERCANTS,
+      'MAX_MAP_COMMERCANTS',
+      { minimum: 1 },
+    );
+  }
+
+  /**
+   * Repères géographiques servis à l'app (`GET /promo/config`).
+   *
+   * ⚠️ **C'est cette réponse, et non une copie compilée, qui fait foi côté
+   * app** — même contrat que `plafond` dans `getSlotUsage`. Recopier l'une de
+   * ces valeurs dans le mobile la ferait diverger au premier changement de
+   * `.env`, et `check_server_rules.dart` ne saurait même pas le voir : ses
+   * regex capturent `(\d+)` et font `int.parse`, donc `36.7538` y serait lu
+   * `36` **en rendant vert** (revue 2026-08-12, règle #32).
+   *
+   * ⚠️ Les latitudes et longitudes passent un intervalle **signé** :
+   * `{ minimum: -180 }` est ce qui lève le refus de zéro et du négatif dans
+   * `configNumber`. Sans lui, toute longitude ouest — Oran, Tlemcen, Sidi Bel
+   * Abbès — retomberait sur le repli, en silence pour qui ne lit pas les
+   * journaux.
+   */
+  getClientConfig(): {
+    defaultLatitude: number;
+    defaultLongitude: number;
+    defaultRadiusKm: number;
+    maxRadiusKm: number;
+  } {
+    return {
+      defaultLatitude: configNumber(
+        this.configService.get('CLIENT_DEFAULT_LATITUDE'),
+        DEFAUT_CLIENT_LATITUDE,
+        'CLIENT_DEFAULT_LATITUDE',
+        { minimum: -90, maximum: 90 },
+      ),
+      defaultLongitude: configNumber(
+        this.configService.get('CLIENT_DEFAULT_LONGITUDE'),
+        DEFAUT_CLIENT_LONGITUDE,
+        'CLIENT_DEFAULT_LONGITUDE',
+        { minimum: -180, maximum: 180 },
+      ),
+      defaultRadiusKm: configNumber(
+        this.configService.get('CLIENT_DEFAULT_RADIUS_KM'),
+        DEFAUT_CLIENT_RADIUS_KM,
+        'CLIENT_DEFAULT_RADIUS_KM',
+        { minimum: 1 },
+      ),
+      maxRadiusKm: configNumber(
+        this.configService.get('CLIENT_MAX_RADIUS_KM'),
+        DEFAUT_CLIENT_MAX_RADIUS_KM,
+        'CLIENT_MAX_RADIUS_KM',
+        { minimum: 1 },
+      ),
+    };
   }
 
   /**
@@ -678,6 +781,13 @@ export class PromoService {
     commercants: { commercant: Commercant; promos: Promo[] }[];
     truncated: boolean;
   }> {
+    // Lu une fois pour toute la méthode : les trois usages (limite SQL, seuil
+    // de troncature, découpe) doivent parler du **même** plafond. Trois
+    // lectures de configuration indépendantes pourraient diverger si la valeur
+    // changeait entre-temps, et la réponse dirait alors `truncated: false` sur
+    // une liste tronquée.
+    const plafond = this.maxMapCommercants();
+
     const visiblePromoConditions = (qb: SelectQueryBuilder<Promo>) =>
       qb
         .where('promo.lifecycleStatus = :lifecycleStatus', {
@@ -708,7 +818,7 @@ export class PromoService {
       .select('commercant.id', 'id')
       .distinct(true)
       // +1 pour détecter le dépassement sans seconde requête de comptage.
-      .limit(MAX_MAP_COMMERCANTS + 1);
+      .limit(plafond + 1);
 
     if (query.categorie) {
       commercantsQb.andWhere('promo.categorie = :categorie', {
@@ -717,10 +827,8 @@ export class PromoService {
     }
 
     const rows = await commercantsQb.getRawMany<{ id: string }>();
-    const truncated = rows.length > MAX_MAP_COMMERCANTS;
-    const commercantIds = rows
-      .slice(0, MAX_MAP_COMMERCANTS)
-      .map((row) => row.id);
+    const truncated = rows.length > plafond;
+    const commercantIds = rows.slice(0, plafond).map((row) => row.id);
     if (commercantIds.length === 0)
       return { commercants: [], truncated: false };
 

@@ -174,6 +174,37 @@ export class PromoController {
   }
 
   /**
+   * Repères géographiques dont l'app a besoin **avant** de pouvoir demander
+   * quoi que ce soit : où centrer la vue quand le client n'a rien enregistré,
+   * quel rayon appliquer, et jusqu'où il peut l'élargir.
+   *
+   * ── Pourquoi une route, et pas des valeurs compilées ──────────────────────
+   *
+   * Le mobile n'a pas de `.env` (`lib/config/env.dart` n'expose que des
+   * `String.fromEnvironment`, figés au build — et qui **se perdent
+   * silencieusement** selon la façon dont `flutter` est lancé, voir
+   * `CLAUDE.md` § Environnement). Une valeur compilée ne se change qu'en
+   * republiant sur les deux stores. Ici, c'est une ligne de `.env`.
+   *
+   * ⚠️ **Route publique et non authentifiée : elle ne doit jamais porter autre
+   * chose que ces quatre nombres.** Tout ce qu'on y ajouterait par commodité
+   * serait servi au monde entier. Elle est épinglée à ce titre dans
+   * `scripts/lib/frontiere_http.py` (règle #33).
+   *
+   * Pas de `@Throttle` dédié : la limite globale (60/min/IP) suffit largement
+   * pour un appel émis une fois au démarrage, et la réponse ne touche pas la
+   * base. C'est un choix, pas un oubli.
+   *
+   * DOIT rester déclarée **avant** `@Get(':id')` — `config` est un segment
+   * unique, il serait sinon capté comme un identifiant (même raison que
+   * `@Get('map')`).
+   */
+  @Get('config')
+  getClientConfig() {
+    return this.promoService.getClientConfig();
+  }
+
+  /**
    * Route publique, non authentifiée (accessible via lien partagé/App Links
    * `/p/:id`). Le filtre de visibilité était réécrit ici et ne reprenait
    * qu'une des cinq conditions (`VISIBLE_MODERATION_STATUSES`) : une promo

@@ -28,8 +28,9 @@ export const SENSITIVE_ACTION_THROTTLE = {
  *
  * Reste bornée plutôt qu'illimitée : l'endpoint est non authentifié. Le
  * coût unitaire d'une requête est faible et son résultat plafonné
- * (`MAX_MAP_COMMERCANTS`), ce qui justifie d'être plus permissif ici sans
- * ouvrir la porte à un abus.
+ * (`MAX_MAP_COMMERCANTS`, clé de `.env` depuis le 2026-08-12 — le plafond
+ * reste, seule sa provenance change), ce qui justifie d'être plus permissif
+ * ici sans ouvrir la porte à un abus.
  *
  * La vraie économie est côté client : la carte n'émet plus qu'une requête
  * par geste (temporisation) et ne redemande que le terrain qu'elle n'a pas
