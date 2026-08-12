@@ -80,7 +80,7 @@ ces quatre données quitte l'appareil.
 | ① | Le **cadre visible de la carte** (bbox) | Ce que l'utilisateur *regarde*. Ne dit rien d'où il est — il peut naviguer sur Oran depuis Alger | **Oui**, et c'est déjà le cas aujourd'hui (`GET /promo/map`), sans consentement et sans grief |
 | ② | Le **point par défaut de configuration** | Une constante du serveur, identique pour tous les clients | Ne quitte rien : **il vient** du serveur |
 | ③ | Le **point que le client enregistre lui-même** | 🔑 Une **préférence saisie**, pas une mesure. Le client la choisit sur la carte ; **rien ne dit que c'est là où il se trouve, ni là où il habite** | **Oui, après consentement** (décision 10) |
-| ④ | La **position du capteur GPS** | Donnée personnelle de localisation, lue sur l'appareil | 🔴 **NON. JAMAIS.** Elle sert *uniquement*, et *sur l'appareil*, à centrer la carte et à calculer les distances affichées |
+| ④ | La **position du capteur GPS** | Donnée personnelle de localisation, lue sur l'appareil | **Jamais en continu, et jamais d'elle-même.** Elle sert à centrer la carte et à calculer les distances affichées, **sur l'appareil**. Elle ne quitte l'appareil que si le client s'en sert pour poser ③ — un geste, une fois (§2.1.1) |
 
 **Comment le client pose ③ — deux chemins, un seul geste final.**
 
@@ -151,8 +151,23 @@ Google Play et App Store porteront sur une description fausse.
 
 | | Google Play « Sécurité des données » | App Store « Confidentialité » |
 |---|---|---|
-| Le point enregistré ③ | À **déclarer** en localisation approximative, **fournie par l'utilisateur**, finalité « fonctionnalité de l'app », **non partagée**, non utilisée pour le suivi publicitaire | Idem — catégorie *Coarse Location*, liée à l'identifiant d'appareil, **usage : fonctionnalité de l'app**, **pas de suivi** |
-| La position du capteur ④ | **Ne pas déclarer comme collectée** — elle ne quitte pas l'appareil. La déclarer par excès de prudence serait *faux* et se retournerait contre nous | Idem |
+| Le point enregistré ③ | À **déclarer** comme localisation collectée, finalité « fonctionnalité de l'app », **non partagée**, **non utilisée pour le suivi** | Idem — catégorie *Location*, liée à l'identifiant d'appareil, usage « fonctionnalité de l'app », **pas de suivi** |
+| La position du capteur ④ | **Couverte par la même déclaration**, puisqu'elle peut alimenter ③. Ce qu'on ne déclare pas, c'est un **suivi** : aucune lecture continue, aucun envoi en arrière-plan, aucun historique | Idem |
+
+⚠️ **Correction du 2026-08-12.** Une version antérieure de ce document disait
+« ne pas déclarer ④ comme collectée, elle ne quitte pas l'appareil ». **C'était
+faux dès lors que le client peut poser ③ depuis sa position GPS** — le parcours
+le plus naturel des deux. Des coordonnées dérivées du capteur et transmises
+restent de la localisation collectée, même envoyées une seule fois et sur un
+geste explicite. Sous-déclarer est le seul risque réellement coûteux ici : la
+déclaration « collectée, sans suivi » n'ôte rien au produit, une déclaration
+fausse coûte un refus.
+
+**Ce qui reste vrai, et qui est l'essentiel** : pas de suivi, pas de lecture en
+arrière-plan, pas d'historique de positions, et **l'app reste utilisable sans
+jamais accorder la permission** — le client peut poser son point sur la carte.
+C'est cette phrase-là qui doit figurer dans les CGU et qui tient devant une
+revue.
 
 ⚠️ **Deux fichiers manquent et bloqueront la soumission, indépendamment de ce
 chantier** : il n'existe **aucun `PrivacyInfo.xcprivacy`** dans `apps/mobile/ios`
@@ -235,7 +250,7 @@ décision 12, **trois d'entre elles restent vraies** :
 | Politique de confidentialité, §1 (`app_fr.arb:367`, `legalPrivacyContent`, + `_en`, `_ar`) | « Client : aucune donnée personnelle ni compte requis » | 🟠 **À compléter** — le point enregistré doit y figurer comme donnée fournie par l'utilisateur. C'est un ajout, plus une contradiction |
 | Justification iOS (`ios/Runner/Info.plist:48-49`) | « pour vous montrer les promotions les plus proches de vous » | ✅ **Reste vraie** — elle décrit ④, un calcul de distance sur l'appareil. **Ne pas la réécrire** |
 | Onboarding (`app_fr.arb:379`, `onboardingLocationPerkPrivacy`) | « Aucune donnée partagée avec les commerçants » | ✅ **Reste vraie** |
-| Le code (`location_providers.dart:66-68`) | « Calculée sur l'appareil … le backend n'a pas besoin de connaître la position du client » | ✅ **Reste vraie** — elle décrit ④, pas ③ |
+| Le code (`location_providers.dart:66-68`) | « Calculée sur l'appareil … le backend n'a pas besoin de connaître la position du client » | 🟡 **À préciser.** Vraie pour le **calcul de distance**, qu'elle décrit. Trompeuse comme énoncé général, puisque le point enregistré — éventuellement issu du GPS — part bien au serveur. À restreindre explicitement à `distanceTo` |
 
 ⇒ Le seul texte à modifier est la **politique de confidentialité**, et c'est un
 **ajout**, pas un démenti. La justification iOS — celle qui a coûté le refus 5.1.1(iv)
