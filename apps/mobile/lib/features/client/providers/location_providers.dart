@@ -6,7 +6,7 @@ import 'package:latlong2/latlong.dart';
 /// (localisation refusée, service désactivé, matériel qui ne répond pas).
 ///
 /// Ne **demande jamais** la permission : c'est le rôle de l'onboarding
-/// (`onboarding_navigation.dart`), qui l'expose au bon moment avec une
+/// (l'invitation contextuelle de la carte), qui l'expose au bon moment avec une
 /// explication. La redemander ici ferait surgir une boîte système au milieu
 /// de la carte, sans contexte, et brûlerait la permission en cas de refus.
 ///

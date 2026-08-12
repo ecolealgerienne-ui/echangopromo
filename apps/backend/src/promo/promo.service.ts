@@ -807,8 +807,22 @@ export class PromoService {
     // avec un rayon autour du point par défaut et n'afficherait plus rien. Même
     // raison pour `commercantId` : « autres promos du magasin » interroge une
     // fiche précise, pas un voisinage (§5.6 du plan).
+    // ⚠️ L'onglet Favoris est un périmètre à part entière, et **le plus
+    // explicite de tous** : le client a désigné ces promos une par une. Les
+    // recadrer géographiquement les lui retirerait au premier déménagement du
+    // point de recherche.
+    const favorisSeuls =
+      query.favoritesOnly === true && Boolean(query.favoriteIds?.length);
+    if (favorisSeuls) {
+      qb.andWhere('promo.id IN (:...favoritesOnlyIds)', {
+        favoritesOnlyIds: query.favoriteIds,
+      });
+    }
+
     const perimetreExplicite =
-      Boolean(query.commercantId) || Boolean(query.communeIds?.length);
+      favorisSeuls ||
+      Boolean(query.commercantId) ||
+      Boolean(query.communeIds?.length);
 
     const config = this.getClientConfig();
 

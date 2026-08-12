@@ -189,7 +189,9 @@ describe('HighlightService', () => {
   });
 
   describe('findForClient', () => {
-    const COMMUNE = ['11111111-1111-4111-8111-111111111111'];
+    // Le repli est cadré par un POINT depuis le 2026-08-12, plus par des
+    // communes — voir `buildFallbackSlides`.
+    const POINT = { latitude: 34.6703, longitude: 3.263, radiusKm: 5 };
 
     it("retombe sur le classement calculé quand aucune curation n'existe", async () => {
       highlights.find.mockResolvedValue([]);
@@ -200,7 +202,7 @@ describe('HighlightService', () => {
         limit: 8,
       });
 
-      const slides = await service.findForClient(COMMUNE);
+      const slides = await service.findForClient(POINT);
 
       expect(slides).toHaveLength(1);
       expect(slides[0].curated).toBe(false);
@@ -208,7 +210,7 @@ describe('HighlightService', () => {
       expect(slides[0].id).toBe('auto-p1');
     });
 
-    it('transmet bien la commune au classement de repli', async () => {
+    it('transmet bien le point au classement de repli', async () => {
       highlights.find.mockResolvedValue([]);
       promoService.findActiveForClient.mockResolvedValue({
         items: [],
@@ -217,26 +219,46 @@ describe('HighlightService', () => {
         limit: 8,
       });
 
-      await service.findForClient(COMMUNE);
+      await service.findForClient(POINT);
 
       const [query] = promoService.findActiveForClient.mock
-        .calls[0] as unknown as [{ communeIds?: string[] }];
-      expect(query.communeIds).toEqual(COMMUNE);
+        .calls[0] as unknown as [
+        { latitude?: number; longitude?: number; radiusKm?: number },
+      ];
+      expect(query.latitude).toBe(POINT.latitude);
+      expect(query.longitude).toBe(POINT.longitude);
+      expect(query.radiusKm).toBe(POINT.radiusKm);
     });
 
-    // ⚠️ Le cas fondateur (2026-08-05). `findActiveForClient` traite
-    // `communeIds` vide comme AUCUN FILTRE, pas comme AUCUNE COMMUNE : le
-    // repli composait donc une vitrine « Top promos » tirée de toutes les
-    // communes pour un client qui n'en a choisi aucune. Mieux vaut ne rien
-    // montrer que montrer faux — et l'app replie d'elle-même un bandeau vide.
-    it('ne compose AUCUN repli sans commune — une vitrine vide plutôt que fausse', async () => {
+    // ⚠️ **Ce cas a changé de sens le 2026-08-12, et c'est délibéré.**
+    //
+    // Il exigeait auparavant qu'AUCUN repli ne soit composé sans commune :
+    // `findActiveForClient` traitait `communeIds: []` comme AUCUN FILTRE, donc
+    // le repli aurait tiré une vitrine « Top promos » de tout le pays. Une
+    // vitrine vide valait mieux qu'une vitrine fausse.
+    //
+    // Avec le cadrage par point, cette alternative n'existe plus : sans
+    // coordonnées, le serveur applique **son propre point par défaut**. Le
+    // repli reste donc local, et il n'y a plus de raison de priver de vitrine
+    // un client qui n'a rien enregistré. Ce qu'on continue d'interdire, c'est
+    // un repli SANS aucun cadrage (A6 du plan) — garanti désormais par
+    // `findActiveForClient`, et éprouvé chez lui.
+    it('compose un repli même sans point — le serveur cadre alors sur son défaut', async () => {
       highlights.find.mockResolvedValue([]);
+      promoService.findActiveForClient.mockResolvedValue({
+        items: [makePromo()],
+        total: 1,
+        page: 1,
+        limit: 8,
+      });
 
-      expect(await service.findForClient()).toEqual([]);
-      expect(await service.findForClient([])).toEqual([]);
-      // Décisif : la requête ne part même pas. La tester par son résultat
-      // seul laisserait passer un filtre appliqué puis ignoré.
-      expect(promoService.findActiveForClient).not.toHaveBeenCalled();
+      expect(await service.findForClient()).toHaveLength(1);
+      // Décisif : la requête part, et **sans coordonnées** — c'est ce qui
+      // laisse le serveur appliquer son défaut au lieu d'en inventer un ici.
+      const [query] = promoService.findActiveForClient.mock
+        .calls[0] as unknown as [{ latitude?: number; longitude?: number }];
+      expect(query.latitude).toBeUndefined();
+      expect(query.longitude).toBeUndefined();
     });
 
     it("écarte une diapositive dont la promo n'est plus visible, et bascule sur le repli si plus rien ne reste", async () => {
@@ -249,7 +271,7 @@ describe('HighlightService', () => {
         limit: 8,
       });
 
-      const slides = await service.findForClient(COMMUNE);
+      const slides = await service.findForClient(POINT);
 
       expect(slides).toHaveLength(1);
       expect(slides[0].curated).toBe(false);

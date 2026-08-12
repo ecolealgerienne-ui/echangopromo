@@ -78,10 +78,28 @@ const String promoDescription = String.fromEnvironment('TEST_PROMO_DESC');
 
 /// Commune à poser dans le magasin local avant le parcours client.
 ///
-/// ⚠️ Sans elle, l'accueil n'affiche aucune promo : il montre « Choisissez vos
-/// communes ». C'est la commune du commerçant du décor, servie par
-/// `GET /commercant/me`.
+/// ⚠️ **Elle ne cadre plus l'accueil depuis le 2026-08-12** : le client cherche
+/// autour d'un point, plus dans des communes. Elle reste utile aux parcours
+/// **agent**, dont le périmètre d'autorisation est toujours la commune.
 const String communeCible = String.fromEnvironment('TEST_COMMUNE_ID');
+
+/// Point du décor, posé dans les préférences par les parcours client à la
+/// place de l'ancienne sélection de communes.
+///
+/// ⚠️ Ce sont les coordonnées du commerçant du décor, pas un lieu quelconque :
+/// un point à quelques kilomètres de lui ferait sortir ses promos du rayon, et
+/// l'accueil vide accuserait la liste alors que c'est le décor qui viserait à
+/// côté (règle #38).
+/// ⚠️ `String.fromEnvironment` et non `double.fromEnvironment` : ce dernier
+/// n'existe pas en Dart. Les coordonnées voyagent donc en texte et sont
+/// converties ici — avec un repli explicite, parce qu'un décor sans point
+/// n'aurait aucun sens (règle #29 : le repli est nommé, pas subi).
+const String _decorLat =
+    String.fromEnvironment('TEST_DECOR_LAT', defaultValue: '34.6714');
+const String _decorLng =
+    String.fromEnvironment('TEST_DECOR_LNG', defaultValue: '3.2630');
+final double decorLatitude = double.parse(_decorLat);
+final double decorLongitude = double.parse(_decorLng);
 
 /// Wilaya et commune **de l'agent**, par leur nom, pour la cascade du
 /// formulaire de création de commerçant.

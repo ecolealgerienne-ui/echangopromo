@@ -15,8 +15,8 @@ import '../../shared/utils/categorie_asset.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/promo_discount_badge.dart';
-import '../providers/commune_providers.dart';
 import '../providers/favorites_provider.dart';
+import '../providers/position_providers.dart';
 import '../providers/promo_providers.dart';
 import '../widgets/promo_card.dart';
 import '../widgets/promo_filter_sheet.dart';
@@ -63,7 +63,7 @@ class PromoListScreen extends ConsumerWidget {
     final search = ref.watch(searchQueryProvider);
     final expanded = ref.watch(listExpandedProvider);
     final density = ref.watch(promoDensityProvider);
-    final selectedCommunes = ref.watch(selectedCommunesProvider);
+    final pointEnregistre = ref.watch(clientPositionProvider);
 
     // Liste en plein écran : soit le client a filtré (catégorie, recherche,
     // favoris) et cherche donc quelque chose de précis, soit il a simplement
@@ -80,6 +80,10 @@ class PromoListScreen extends ConsumerWidget {
         child: Column(
           children: [
             const _TopBar(),
+            // ⚠️ Non masquable tant qu'aucun point n'est enregistré : ce que
+            // le client voit est plausible et peut-être ailleurs. Il disparaît
+            // de lui-même dès qu'il a choisi.
+            if (pointEnregistre == null) const _PointParDefautBanner(),
             // AnimatedSize plutôt qu'une hauteur figée : le bandeau se
             // replie sans que la liste ne saute d'un coup.
             AnimatedSize(
@@ -98,81 +102,78 @@ class PromoListScreen extends ConsumerWidget {
               count: promos.length,
             ),
             Expanded(
-              // ⚠️ « Aucune commune choisie » n'est PAS « aucune promo », et
-              // c'est vérifié avant le statut de chargement : un client non
-              // configuré ne doit voir ni liste, ni spinner, ni erreur d'API,
-              // mais le geste qui lui manque. Seule la liste est remplacée —
-              // la barre de recherche, la vitrine et les catégories restent
-              // (demande 2026-08-05).
-              child: selectedCommunes.isEmpty
-                  ? const _NoCommuneSelected()
-                  : switch (promoListState.status) {
-                      PromoListStatus.loading =>
-                        const Center(child: CircularProgressIndicator()),
-                      PromoListStatus.error =>
-                        Center(child: ApiErrorText(promoListState.error!)),
-                      PromoListStatus.loaded => RefreshIndicator(
-                          onRefresh: () =>
-                              ref.read(promoListProvider.notifier).refresh(),
-                          // `CustomScrollView` plutôt qu'une `ListView` ou une
-                          // `GridView` selon la densité : le pied de liste (bouton
-                          // « charger plus ») et le message de liste vide sont
-                          // partagés par les trois dispositions, et seul un sliver
-                          // permet de changer la grille sans les dupliquer.
-                          child: CustomScrollView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            slivers: [
-                              if (promos.isEmpty)
-                                SliverFillRemaining(
-                                  hasScrollBody: false,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(top: 80),
-                                    child: Text(
-                                      search.isEmpty
-                                          ? l10n.noActivePromos
-                                          : l10n.noSearchResults(search),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                )
-                              else
-                                SliverPadding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: _listPadding),
-                                  sliver: _PromoSliver(
-                                    density: density,
-                                    promos: promos,
-                                    favorites: favorites,
-                                  ),
-                                ),
-                              if (promos.isNotEmpty && promoListState.hasMore)
-                                SliverToBoxAdapter(
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: _listSpacing),
-                                    child: Center(
-                                      child: promoListState.loadingMore
-                                          ? const SizedBox(
-                                              height: 24,
-                                              width: 24,
-                                              child: CircularProgressIndicator(
-                                                  strokeWidth: 2),
-                                            )
-                                          : OutlinedButton(
-                                              onPressed: () =>
-                                                  _loadMore(context, ref),
-                                              child: Text(
-                                                  l10n.loadMoreButtonLabel),
-                                            ),
-                                    ),
-                                  ),
-                                ),
-                              const SliverToBoxAdapter(
-                                  child: SizedBox(height: _listPadding)),
-                            ],
+              // ⚠️ **Il n'y a plus d'état « non configuré », et c'est le sens
+              // de la bascule** : sans point enregistré, le serveur cadre sur
+              // son défaut et la liste a du contenu dès la première seconde.
+              // Ce que le client doit savoir — qu'il regarde peut-être à côté
+              // — est dit par `_PointParDefautBanner` au-dessus, pas par un
+              // écran vide qui lui retirerait le produit.
+              child: switch (promoListState.status) {
+                PromoListStatus.loading =>
+                  const Center(child: CircularProgressIndicator()),
+                PromoListStatus.error =>
+                  Center(child: ApiErrorText(promoListState.error!)),
+                PromoListStatus.loaded => RefreshIndicator(
+                    onRefresh: () =>
+                        ref.read(promoListProvider.notifier).refresh(),
+                    // `CustomScrollView` plutôt qu'une `ListView` ou une
+                    // `GridView` selon la densité : le pied de liste (bouton
+                    // « charger plus ») et le message de liste vide sont
+                    // partagés par les trois dispositions, et seul un sliver
+                    // permet de changer la grille sans les dupliquer.
+                    child: CustomScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: [
+                        if (promos.isEmpty)
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 80),
+                              child: Text(
+                                search.isEmpty
+                                    ? l10n.noActivePromos
+                                    : l10n.noSearchResults(search),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          )
+                        else
+                          SliverPadding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: _listPadding),
+                            sliver: _PromoSliver(
+                              density: density,
+                              promos: promos,
+                              favorites: favorites,
+                            ),
                           ),
-                        ),
-                    },
+                        if (promos.isNotEmpty && promoListState.hasMore)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: _listSpacing),
+                              child: Center(
+                                child: promoListState.loadingMore
+                                    ? const SizedBox(
+                                        height: 24,
+                                        width: 24,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2),
+                                      )
+                                    : OutlinedButton(
+                                        onPressed: () =>
+                                            _loadMore(context, ref),
+                                        child: Text(l10n.loadMoreButtonLabel),
+                                      ),
+                              ),
+                            ),
+                          ),
+                        const SliverToBoxAdapter(
+                            child: SizedBox(height: _listPadding)),
+                      ],
+                    ),
+                  ),
+              },
             ),
           ],
         ),
@@ -182,23 +183,24 @@ class PromoListScreen extends ConsumerWidget {
   }
 }
 
-/// Ce qu'on affiche **à la place de la liste** quand aucune commune n'est
-/// choisie — nouveau client, ou client existant dont la sélection est vide.
+/// Bandeau affiché **au-dessus de la liste** tant que le client n'a enregistré
+/// aucun point.
 ///
-/// ── Pourquoi ce n'est pas un cas de liste vide ────────────────────────────
+/// ── Pourquoi il n'est pas facultatif ──────────────────────────────────────
 ///
-/// Le serveur ne traite pas `communeIds: []` comme « aucune commune » mais
-/// comme **aucun filtre** (`if (query.communeIds?.length)`,
-/// `PromoService.findActiveForClient`). Un client non configuré ne voyait donc
-/// pas une liste vide : il voyait **toutes les promos de toutes les communes**,
-/// présentées comme les siennes, sous un en-tête annonçant sa zone. Un résultat
-/// faux affiché avec assurance, pas une absence.
+/// Sans point, le serveur cadre sur son défaut : la liste est **pleine,
+/// plausible, et peut-être à 300 km**. C'est exactement le défaut que
+/// l'ancien écran « choisissez vos communes » avait été écrit pour fermer —
+/// « un résultat faux affiché avec assurance, pas une absence ». Le retirer
+/// sans le remplacer le réintroduirait.
 ///
-/// D'où deux messages distincts et non un seul : « aucune promo » dit qu'il
-/// n'y a rien à voir, celui-ci dit qu'il manque un réglage pour voir — l'inverse
-/// exact (règle #29, deux messages pour « vide » et « pas configuré »).
-class _NoCommuneSelected extends StatelessWidget {
-  const _NoCommuneSelected();
+/// ⚠️ **Il propose de choisir un point, jamais d'accorder une permission.**
+/// L'invitation à activer la localisation reste contextuelle, sur la carte :
+/// c'est ce placement, et pas un autre, qui a levé le refus App Store
+/// 5.1.1(iv) du 2026-08-05. Un bandeau d'accueil qui redemande la permission
+/// rejouerait le motif du refus.
+class _PointParDefautBanner extends StatelessWidget {
+  const _PointParDefautBanner();
 
   @override
   Widget build(BuildContext context) {
@@ -206,35 +208,30 @@ class _NoCommuneSelected extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.location_off_outlined,
-                size: 48, color: colorScheme.onSurfaceVariant),
-            const SizedBox(height: 16),
-            Text(
-              l10n.noCommuneSelectedTitle,
-              style: textTheme.titleMedium,
-              textAlign: TextAlign.center,
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(AppRadii.md),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.explore_outlined, color: colorScheme.onSecondaryContainer),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              l10n.defaultPointBannerMessage,
+              style: textTheme.bodySmall
+                  ?.copyWith(color: colorScheme.onSecondaryContainer),
             ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.noCommuneSelectedBody,
-              style: textTheme.bodyMedium
-                  ?.copyWith(color: colorScheme.onSurfaceVariant),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: () => context.push('/select-commune'),
-              icon: const Icon(Icons.tune),
-              label: Text(l10n.noCommuneSelectedAction),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.tonal(
+            onPressed: () => context.push('/carte'),
+            child: Text(l10n.defaultPointBannerAction),
+          ),
+        ],
       ),
     );
   }
@@ -370,11 +367,17 @@ class _TopBarState extends ConsumerState<_TopBar> {
         children: [
           Row(
             children: [
-              // Le sélecteur de commune fait office de titre : c'est
+              // Le point de recherche fait office de titre : c'est
               // l'information qui conditionne tout le contenu affiché.
+              //
+              // ⚠️ **Il ne nomme pas un lieu, et c'est assumé** : sans
+              // géocodeur (décision 6), l'app ne sait pas comment s'appelle
+              // l'endroit où pointe le client. Écrire un nom approché serait
+              // pire que ne rien nommer. Le geste, lui, reste à un tap — la
+              // carte est l'endroit où l'on choisit.
               Expanded(
                 child: InkWell(
-                  onTap: () => context.push('/select-commune'),
+                  onTap: () => context.push('/carte'),
                   borderRadius: BorderRadius.circular(AppRadii.sm),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
@@ -386,8 +389,9 @@ class _TopBarState extends ConsumerState<_TopBar> {
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
-                            ref.watch(selectedCommuneLabelProvider) ??
-                                l10n.changeCommuneTooltip,
+                            ref.watch(clientPositionProvider) == null
+                                ? l10n.defaultPointTitle
+                                : l10n.myPointTitle,
                             style: textTheme.titleMedium,
                             overflow: TextOverflow.ellipsis,
                           ),

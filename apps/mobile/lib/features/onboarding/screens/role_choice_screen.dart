@@ -25,8 +25,18 @@ class RoleChoiceScreen extends ConsumerWidget {
       return;
     }
 
+    // ⚠️ **`markCompleted()` DOIT être appelé ici depuis le 2026-08-12.**
+    // Il ne l'était que dans l'écran de localisation, supprimé avec la
+    // bascule : sans cette ligne, l'onboarding ne se terminerait jamais pour
+    // un client et reviendrait **à chaque lancement** (`splash_screen` relit
+    // `isCompleted()`). Rien ne l'aurait signalé — ni compilation, ni test.
+    await store.markCompleted();
     if (!context.mounted) return;
-    context.go('/onboarding/location');
+    // Plus d'écran de permission au démarrage : le client n'a aucune
+    // permission à accorder pour voir des promos. L'invitation à activer la
+    // localisation reste contextuelle, sur la carte — c'est ce placement qui a
+    // levé le refus App Store 5.1.1(iv) du 2026-08-05.
+    context.go('/');
   }
 
   @override

@@ -59,7 +59,12 @@ void main() {
     await reinitialiserAppareil();
     final prefs = await SharedPreferences.getInstance();
     prefs.setBool('onboarding_completed', true);
-    prefs.setStringList('selected_commune_ids', [communeCible]);
+    // Le décor pose le POINT de recherche, plus une sélection de communes
+    // (bascule 2026-08-12). Sans lui, l'accueil cadrerait sur le défaut
+    // servi par le serveur, qui n'est pas forcément celui du décor.
+    prefs.setDouble('client_position_lat', decorLatitude);
+    prefs.setDouble('client_position_lng', decorLongitude);
+    prefs.setString('client_position_consent_version', 'geo-2026-08-12');
     // Les fonds de carte viennent d'un serveur de tuiles externe : leurs
     // échecs sont des erreurs d'image, sans rapport avec ce qu'on éprouve.
     ignorerErreursDeChargementDImage();

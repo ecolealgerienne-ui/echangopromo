@@ -14,11 +14,21 @@ class HighlightApi {
   /// Ce que voit le client. Retourne toujours quelque chose tant qu'il
   /// existe des promos actives : sans mise en avant admin exploitable, le
   /// backend retombe sur le classement calculé (`curated: false`).
-  Future<List<Highlight>> list({List<String> communeIds = const []}) async {
+  /// [point] cadre le **repli** calculé, pas la curation admin (globale par
+  /// décision produit). Même porte de consentement que la liste : `null` veut
+  /// dire « le client n'a rien enregistré », et le serveur cadre alors sur son
+  /// propre défaut — jamais sur tout le pays, ce qui ferait annoncer en vitrine
+  /// des promos que la liste juste en dessous ne contient pas.
+  Future<List<Highlight>> list({
+    (double, double)? point,
+    double? radiusKm,
+  }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/highlight',
       queryParameters: {
-        if (communeIds.isNotEmpty) 'communeIds': communeIds.join(','),
+        if (point != null) 'latitude': point.$1,
+        if (point != null) 'longitude': point.$2,
+        if (point != null && radiusKm != null) 'radiusKm': radiusKm,
       },
     );
     final items = response.data!['items'] as List<dynamic>;

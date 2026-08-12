@@ -16,7 +16,6 @@ import '../data/local/device_id_store.dart';
 import '../data/local/favorites_store.dart';
 import '../data/local/location_invite_store.dart';
 import '../data/local/onboarding_store.dart';
-import '../data/local/selected_commune_store.dart';
 import 'auth_provider.dart';
 
 /// Surchargé dans `main()` une fois `SharedPreferences.getInstance()` résolu.
@@ -33,9 +32,6 @@ final deviceIdStoreProvider =
 
 final deviceIdProvider =
     Provider<String>((ref) => ref.watch(deviceIdStoreProvider).getOrCreate());
-
-final selectedCommuneStoreProvider = Provider(
-    (ref) => SelectedCommuneStore(ref.watch(sharedPreferencesProvider)));
 
 final favoritesStoreProvider =
     Provider((ref) => FavoritesStore(ref.watch(sharedPreferencesProvider)));

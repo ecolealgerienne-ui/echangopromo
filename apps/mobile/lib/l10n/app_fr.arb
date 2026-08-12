@@ -47,6 +47,14 @@
   "filterAllOption": "Toutes",
   "communeRequired": "Commune requise",
   "positionRequired": "Position du commerce requise",
+  "defaultPointTitle": "Autour du point par défaut",
+  "myPointTitle": "Autour de mon point",
+  "defaultPointBannerMessage": "Vous voyez les promos autour d’un point par défaut, qui n’est peut-être pas le vôtre.",
+  "defaultPointBannerAction": "Choisir",
+  "savePointAction": "Chercher autour de ce point",
+  "savePointNotice": "Ce point sera envoyé à notre service pour construire votre liste de promos. Vous pouvez le changer ou le supprimer à tout moment.",
+  "savePointDone": "Point enregistré",
+  "forgetPointAction": "Oublier mon point",
   "missingPositionBannerTitle": "Vos promos ne sont visibles par personne",
   "missingPositionBannerMessage": "Les clients cherchent les promos autour d’eux. Indiquez la position de votre commerce — depuis le commerce — pour y apparaître.",
   "missingPositionBannerAction": "Indiquer ma position",
@@ -82,7 +90,6 @@
   "yesLabel": "Oui",
   "createLabel": "Créer",
   "createFailed": "Création impossible.",
-  "chooseCommuneTitle": "Choisissez votre commune",
   "promoDetailTitle": "Détail de la promo",
   "validUntil": "Valable jusqu'au {date}",
   "@validUntil": {
@@ -131,14 +138,10 @@
     }
   },
   "shareTextCopiedNotice": "Texte copié : certaines applis (ex. Messenger) n'affichent que la photo, collez le texte manuellement si besoin.",
-  "changeCommuneTooltip": "Changer de commune",
   "professionalSpaceTooltip": "Espace professionnel",
   "commercantSpaceItem": "Espace commerçant",
   "allCategoriesChip": "Toutes",
   "noActivePromos": "Aucune promo active pour le moment.",
-  "noCommuneSelectedTitle": "Choisissez vos communes",
-  "noCommuneSelectedBody": "Les promos affichées dépendent des communes que vous suivez. Sélectionnez-en au moins une pour voir celles près de chez vous.",
-  "noCommuneSelectedAction": "Choisir mes communes",
   "loadMoreButtonLabel": "Afficher plus",
   "promoDensityTooltip": "Changer l'affichage",
   "filtersSortTooltip": "Filtres et tri",
@@ -354,22 +357,14 @@
       }
     }
   },
-  "maxCommunesHint": "Choisissez jusqu'à {max} communes voisines : leurs promos s'afficheront ensemble.",
-  "@maxCommunesHint": {
-    "placeholders": {
-      "max": {
-        "type": "int"
-      }
-    }
-  },
   "legalCguTitle": "Conditions générales d'utilisation",
   "legalPrivacyTitle": "Politique de confidentialité",
   "legalCguLinkLabel": "Lire les CGU",
   "legalPrivacyLinkLabel": "Lire la politique de confidentialité",
   "acceptTermsLabel": "J'accepte les conditions d'utilisation et la politique de confidentialité",
   "acceptTermsRequired": "Vous devez accepter les CGU et la politique de confidentialité pour créer un compte.",
-  "legalCguContent": "Dernière mise à jour : [à compléter]\n\n1. Objet\nEchango Promo est une application mobile permettant aux commerçants d'un quartier pilote (Djelfa) de publier des promotions temporaires, consultables gratuitement par les clients à proximité.\n\n2. Inscription du commerçant\nEn créant un compte, vous certifiez que les informations fournies (nom, adresse, catégorie, numéro de téléphone) sont exactes. Le code PIN choisi est personnel et confidentiel — Echango Promo ne le connaît jamais en clair.\n\n3. Contenu publié\nVous êtes seul responsable des promotions que vous publiez (prix, description, photo). Les prix affichés doivent refléter une réduction réelle. Toute promotion trompeuse, expirée non retirée, ou à caractère frauduleux peut être masquée après signalement et vérification par un modérateur (agent ou administrateur), sans préavis.\n\n4. Signalement et modération\nLes clients peuvent signaler une promotion. Au-delà d'un seuil de signalements distincts, la promotion est mise en attente de vérification. Un modérateur peut la masquer, la valider, ou avertir le commerçant (la promotion repasse alors en brouillon, une republication explicite est requise).\n\n5. Suspension de compte\nEn cas de contenu manifestement frauduleux ou répété malgré avertissement, l'administrateur peut suspendre un compte commerçant. Le commerçant peut à tout moment supprimer son propre compte depuis l'application.\n\n6. Limitation de responsabilité\nEchango Promo est un intermédiaire technique. Echango Promo n'est pas partie aux transactions entre commerçants et clients et ne garantit ni l'exactitude ni la disponibilité effective des promotions publiées.\n\n7. Évolution des CGU\nCes conditions peuvent évoluer, notamment à l'ouverture de l'application à un public plus large. Toute modification substantielle sera signalée dans l'application.\n\n8. Contact\nPour toute question relative à ces conditions : [à compléter — email de contact].",
-  "legalPrivacyContent": "Dernière mise à jour : [à compléter]\n\n1. Données collectées\nCommerçant (compte) : numéro de téléphone, nom du commerce, adresse, catégorie, photo du commerce (facultative), position GPS (facultative), code PIN (jamais stocké en clair, uniquement sous forme chiffrée).\n\nClient : aucune donnée personnelle ni compte requis. Un identifiant technique anonyme est généré sur l'appareil pour limiter les abus (un signalement ou favori par appareil), sans lien avec une identité réelle.\n\n2. Finalité\nCes données servent uniquement au fonctionnement du service : affichage des promotions et fiches commerçants, anti-fraude sur les signalements, statistiques de fréquentation anonymes (nombre de vues).\n\n3. Conservation\nLes photos sont supprimées du stockage après 30 jours d'inactivité de la promotion associée ; les données du compte (nom, téléphone, historique) sont conservées tant que le compte est actif. En cas de suppression de compte, les données sont désactivées immédiatement (invisibles publiquement) et conservées à des fins d'historique interne, sans traitement ultérieur.\n\n4. Partage\nAucune donnée n'est vendue ni partagée avec des tiers à des fins commerciales. Les informations du commerçant (nom, adresse, photo) sont publiques par nature (fiche commerçant visible des clients).\n\n5. Vos droits\nVous pouvez à tout moment consulter, corriger ou supprimer votre compte depuis l'application. Pour toute autre demande (accès, suppression complète des données historiques) : [à compléter — email de contact].\n\n6. Sécurité\nLes mots de passe et codes PIN sont stockés sous forme chiffrée (hachage), jamais en clair. Les accès administrateur et agent sont protégés par authentification et limités par rôle.",
+  "legalCguContent": "Dernière mise à jour : [à compléter]\n\n1. Objet\nEchango Promo est une application mobile permettant aux commerçants de publier des promotions temporaires, consultables gratuitement par les clients aux alentours.\n\n2. Inscription du commerçant\nEn créant un compte, vous certifiez que les informations fournies (nom, adresse, catégorie, numéro de téléphone) sont exactes. Le code PIN choisi est personnel et confidentiel — Echango Promo ne le connaît jamais en clair.\n\n3. Contenu publié\nVous êtes seul responsable des promotions que vous publiez (prix, description, photo). Les prix affichés doivent refléter une réduction réelle. Toute promotion trompeuse, expirée non retirée, ou à caractère frauduleux peut être masquée après signalement et vérification par un modérateur (agent ou administrateur), sans préavis.\n\n4. Signalement et modération\nLes clients peuvent signaler une promotion. Au-delà d'un seuil de signalements distincts, la promotion est mise en attente de vérification. Un modérateur peut la masquer, la valider, ou avertir le commerçant (la promotion repasse alors en brouillon, une republication explicite est requise).\n\n5. Suspension de compte\nEn cas de contenu manifestement frauduleux ou répété malgré avertissement, l'administrateur peut suspendre un compte commerçant. Le commerçant peut à tout moment supprimer son propre compte depuis l'application.\n\n6. Limitation de responsabilité\nEchango Promo est un intermédiaire technique. Echango Promo n'est pas partie aux transactions entre commerçants et clients et ne garantit ni l'exactitude ni la disponibilité effective des promotions publiées.\n\n7. Évolution des CGU\nCes conditions peuvent évoluer, notamment à l'ouverture de l'application à un public plus large. Toute modification substantielle sera signalée dans l'application.\n\n8. Contact\nPour toute question relative à ces conditions : [à compléter — email de contact].",
+  "legalPrivacyContent": "Dernière mise à jour : [à compléter]\n\n1. Données collectées\nCommerçant (compte) : numéro de téléphone, nom du commerce, adresse, catégorie, photo du commerce (facultative), position GPS (facultative), code PIN (jamais stocké en clair, uniquement sous forme chiffrée).\n\nClient : aucun compte requis. Un identifiant technique anonyme est généré sur l'appareil pour limiter les abus (un signalement ou favori par appareil), sans lien avec une identité réelle.\n\nClient (point de recherche) : l'application n'accède pas à la localisation de votre appareil pour vous montrer des promotions. Vous choisissez vous-même un point sur la carte et vous l'enregistrez ; ce sont les commerces proches de ce point qui vous sont proposés. Il n'a pas à être votre domicile ni l'endroit où vous êtes. Ce point est transmis à notre service uniquement pour construire la liste des promotions, après votre accord, et il n'est pas conservé sur nos serveurs. Vous pouvez le modifier ou le supprimer à tout moment depuis la carte.\n\nSi vous autorisez l'accès à votre position, elle sert uniquement à centrer la carte et à afficher les distances : elle est calculée sur votre appareil et n'est pas transmise. Aucun suivi, aucune lecture en arrière-plan, aucun historique de positions.\n\n2. Finalité\nCes données servent uniquement au fonctionnement du service : affichage des promotions et fiches commerçants, anti-fraude sur les signalements, statistiques de fréquentation anonymes (nombre de vues).\n\n3. Conservation\nLes photos sont supprimées du stockage après 30 jours d'inactivité de la promotion associée ; les données du compte (nom, téléphone, historique) sont conservées tant que le compte est actif. En cas de suppression de compte, les données sont désactivées immédiatement (invisibles publiquement) et conservées à des fins d'historique interne, sans traitement ultérieur.\n\n4. Partage\nAucune donnée n'est vendue ni partagée avec des tiers à des fins commerciales. Les informations du commerçant (nom, adresse, photo) sont publiques par nature (fiche commerçant visible des clients).\n\n5. Vos droits\nVous pouvez à tout moment consulter, corriger ou supprimer votre compte depuis l'application. Pour toute autre demande (accès, suppression complète des données historiques) : [à compléter — email de contact].\n\n6. Sécurité\nLes mots de passe et codes PIN sont stockés sous forme chiffrée (hachage), jamais en clair. Les accès administrateur et agent sont protégés par authentification et limités par rôle.",
   "onboardingSplashTagline": "Les promos de ma ville",
   "onboardingWelcomeTitle": "Bienvenue",
   "onboardingWelcomeSubtitle": "Dites-nous qui vous êtes, on adapte l'application.",
@@ -377,14 +372,8 @@
   "onboardingRoleClientDesc": "Voir les offres près de chez moi",
   "onboardingRoleMerchantTitle": "Je suis commerçant",
   "onboardingRoleMerchantDesc": "Publier mes promos",
-  "onboardingLocationTitle": "Les promos près de vous",
-  "onboardingLocationSubtitle": "Activez la localisation pour voir en premier les offres de votre quartier.",
-  "onboardingLocationPerkNearby": "Les commerces les plus proches d'abord",
-  "onboardingLocationPerkRoute": "L'itinéraire en un geste",
-  "onboardingLocationPerkPrivacy": "Aucune donnée partagée avec les commerçants",
   "onboardingLocationEnable": "Activer la localisation",
-  "onboardingLocationContinue": "Continuer",
-  "mapLocationInvite": "Sans localisation, on ne peut pas trier par proximité — vous verrez toutes les promos de la commune.",
+  "mapLocationInvite": "Sans localisation, on ne peut pas trier par proximité — vous verrez les promos autour du point choisi.",
   "mapDirections": "Itinéraire",
   "mapCall": "Appeler",
   "mapBackToList": "Revenir à la liste",

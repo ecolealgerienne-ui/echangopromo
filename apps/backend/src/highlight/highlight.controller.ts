@@ -55,7 +55,15 @@ export class HighlightController {
 
   @Get()
   async list(@Query() query: ListHighlightQueryDto) {
-    const slides = await this.highlightService.findForClient(query.communeIds);
+    const slides = await this.highlightService.findForClient(
+      query.latitude !== undefined && query.longitude !== undefined
+        ? {
+            latitude: query.latitude,
+            longitude: query.longitude,
+            radiusKm: query.radiusKm,
+          }
+        : undefined,
+    );
     return { items: slides.map((slide) => this.toClientJson(slide)) };
   }
 }

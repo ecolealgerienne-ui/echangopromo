@@ -84,33 +84,24 @@ void main() {
       reason: 'la carte « commerçant » manque au choix du rôle',
     );
 
-    // ── 2. Client → l'écran de localisation ──────────────────────────────
+    // ── 2. Client → l'accueil, directement ───────────────────────────────
+    //
+    // ⚠️ **Il y avait ici un écran de localisation, supprimé le 2026-08-12.**
+    // Le client n'a plus aucune permission à accorder pour voir des promos :
+    // sans point enregistré, le serveur cadre sur son défaut. L'invitation à
+    // activer la localisation reste contextuelle, sur la carte — c'est ce
+    // placement qui a levé le refus App Store 5.1.1(iv) du 2026-08-05, et le
+    // supprimer d'ici ne le remet pas en cause.
+    //
+    // ⚠️ Ce que ce parcours doit surtout attraper désormais : `markCompleted()`
+    // n'était appelé QUE depuis l'écran supprimé. S'il manque au choix du rôle,
+    // l'onboarding revient à chaque lancement — et rien d'autre ne le dirait
+    // (voir l'assertion sur le magasin natif, plus bas).
     await taper(tester, find.byIcon(Icons.person_outline));
     await pomperJusqua(
       tester,
-      find.byIcon(Icons.location_on_outlined),
-      raison: 'l’écran de localisation ne suit pas le choix « client »',
-    );
-
-    // ── 3. « Continuer » termine l'onboarding ────────────────────────────
-    //
-    // ⚠️ **Il menait à un second écran qui redemandait la localisation**, et
-    // Apple l'a refusé le 2026-08-05 (5.1.1(iv) : « encourages users to
-    // allow »). La proposition existe toujours, mais sur la CARTE — là où la
-    // fonction ne marche pas sans position. Le libellé du bouton est passé de
-    // « Plus tard » à « Continuer », mot neutre exigé par la réponse d'Apple.
-    //
-    // Chaque bouton est désigné par son TYPE, jamais par son libellé :
-    // « Activer » est un `FilledButton`, « Continuer » un `TextButton`.
-    await taper(tester, find.byType(TextButton));
-
-    // L'accueil est reconnu à sa barre d'onglets — la même icône que la carte
-    // « commerçant » de l'étape 1, mais l'écran de localisation l'a fait
-    // disparaître entre les deux, donc aucune confusion possible.
-    await pomperJusqua(
-      tester,
       find.byIcon(Icons.storefront_outlined),
-      raison: 'l’accueil client n’a pas suivi « Continuer »',
+      raison: 'l’accueil client n’a pas suivi le choix « client »',
     );
 
     // ── 4. Ce qui a été retenu, dans le VRAI magasin ─────────────────────

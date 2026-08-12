@@ -14,16 +14,17 @@ import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../providers/location_providers.dart';
+import '../providers/position_providers.dart';
 import '../providers/map_providers.dart';
 import '../providers/promo_providers.dart';
 import '../utils/marker_cluster.dart';
 import '../widgets/map_shop_sheet.dart';
 
-/// Centre de repli : Djelfa, le quartier pilote. Utilisé tant que la
-/// position de l'utilisateur n'est pas connue (localisation refusée, service
-/// coupé, ou position pas encore remontée) — une carte centrée sur l'océan
-/// serait inexploitable.
-const _fallbackCenter = LatLng(34.6703, 3.2630);
+/// ⚠️ **Le centre de repli n'est plus déclaré ici.** Cet écran en portait un
+/// (Djelfa, en dur) pendant que la configuration serveur en annonçait un autre :
+/// un client sans point enregistré aurait vu une liste autour de l'un et une
+/// carte autour de l'autre. Il n'en existe plus qu'un seul dans tout le dépôt,
+/// `kPointDeRepliHorsLigne`, au bout de `centreParDefautProvider` (A4).
 const _initialZoom = 13.0;
 
 /// Au-delà de ce zoom, deux commerces distincts ne se chevauchent plus :
@@ -186,7 +187,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final shopsAsync =
         bounds == null ? null : ref.watch(mapShopsProvider(bounds));
     final userPosition = ref.watch(userPositionProvider).valueOrNull;
-    final communeCenter = ref.watch(mapCenterForCommunesProvider).valueOrNull;
+    // Cascade unique : point enregistré → défaut serveur → repli hors ligne.
+    // Elle est lue au même endroit par la liste et par la carte, sans quoi un
+    // client sans point verrait l'une autour d'un lieu et l'autre autour d'un
+    // autre (A4 du plan de bascule).
+    final centreParDefaut = ref.watch(centreParDefautProvider);
     // `?? false` : tant qu'on ne sait pas, on ne propose rien — une invitation
     // affichée puis retirée est plus déroutante qu'une invitation tardive.
     final peutDemander =
@@ -200,25 +205,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _recenterOn(userPosition, zoom: 15);
       });
-    } else if (userPosition == null &&
-        communeCenter != null &&
-        !_centeredOnCommune) {
-      // Pas de GPS, mais des communes choisies : on ouvre là plutôt que sur
-      // `_fallbackCenter` (Djelfa, en dur), qui envoyait tout client d'ailleurs
-      // regarder une ville qui n'est pas la sienne — vue comme vide, sans rien
-      // pour le lui dire (2026-08-05).
+    } else if (userPosition == null && !_centeredOnCommune) {
+      // Pas de GPS : on ouvre sur le point du client s'il en a enregistré un,
+      // sinon sur celui que sert le serveur.
       //
-      // Zoom volontairement plus large que pour le GPS : ce centre est le
-      // barycentre des commerces d'une commune, pas une position. L'afficher
-      // au même zoom lui donnerait une précision qu'il n'a pas.
+      // Zoom volontairement plus large que pour le GPS : ce centre est un
+      // repère, pas une position mesurée. L'afficher au même zoom lui donnerait
+      // une précision qu'il n'a pas.
       _centeredOnCommune = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _recenterOn(
-            LatLng(communeCenter.latitude, communeCenter.longitude),
-            zoom: _initialZoom,
-          );
-        }
+        if (mounted) _recenterOn(centreParDefaut, zoom: _initialZoom);
       });
     }
 
@@ -238,12 +234,23 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
 
     return Scaffold(
+      // ⚠️ **C'est ici, et nulle part ailleurs, que naît le point du client.**
+      //
+      // Le geste est explicite et il porte sa notice : c'est lui qui vaut
+      // consentement (A2.2 du plan). Il n'existe aucun chemin où accorder la
+      // permission de localisation suffirait à enregistrer un point — se
+      // centrer sur soi ne fait que **cadrer**, il faut encore valider. Cette
+      // frontière est ce qui permet d'affirmer aux deux stores qu'il n'y a ni
+      // suivi ni lecture en arrière-plan.
+      floatingActionButton: _BoutonEnregistrerPoint(
+        centreCourant: () => _map.camera.center,
+      ),
       body: Stack(
         children: [
           FlutterMap(
             mapController: _map,
             options: MapOptions(
-              initialCenter: _fallbackCenter,
+              initialCenter: centreParDefaut,
               initialZoom: _initialZoom,
               maxZoom: 18,
               minZoom: 5,
@@ -857,6 +864,73 @@ class _InvitationLocalisation extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Enregistre le centre courant de la carte comme point de recherche du client.
+///
+/// ⚠️ **La notice est affichée AVANT l'enregistrement, pas après.** Un
+/// consentement qui arrive une fois la donnée posée n'en est pas un — et c'est
+/// cette boîte de dialogue, avec sa phrase, qui rend vraie l'affirmation faite
+/// aux stores : le client sait ce qu'il envoie, pourquoi, et qu'il peut le
+/// reprendre.
+///
+/// ⚠️ Le bouton bascule en « oublier mon point » quand il y en a un : le
+/// retrait doit être aussi accessible que l'octroi, sinon le consentement n'est
+/// pas reprenable.
+class _BoutonEnregistrerPoint extends ConsumerWidget {
+  const _BoutonEnregistrerPoint({required this.centreCourant});
+
+  final LatLng Function() centreCourant;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final dejaPose = ref.watch(clientPositionProvider) != null;
+
+    return FloatingActionButton.extended(
+      icon: Icon(dejaPose ? Icons.wrong_location_outlined : Icons.my_location),
+      label: Text(dejaPose ? l10n.forgetPointAction : l10n.savePointAction),
+      onPressed: () async {
+        final controleur = ref.read(clientPositionProvider.notifier);
+        if (dejaPose) {
+          await controleur.retirer();
+          if (context.mounted) invalidateAfterPositionChange(ref);
+          return;
+        }
+
+        final centre = centreCourant();
+        final accepte = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(AppLocalizations.of(dialogContext)!.savePointAction),
+            content: Text(AppLocalizations.of(dialogContext)!.savePointNotice),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(AppLocalizations.of(dialogContext)!.commonCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child:
+                    Text(AppLocalizations.of(dialogContext)!.savePointAction),
+              ),
+            ],
+          ),
+        );
+        if (accepte != true) return;
+
+        await controleur.enregistrer(centre.latitude, centre.longitude);
+        if (!context.mounted) return;
+        // ⚠️ Sans cette invalidation, la vitrine et la carte garderaient leur
+        // cadrage d'avant : elles ne sont pas reconstruites de zéro au retour
+        // d'une boîte de dialogue (règle #37).
+        invalidateAfterPositionChange(ref);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.savePointDone)),
+        );
+      },
     );
   }
 }

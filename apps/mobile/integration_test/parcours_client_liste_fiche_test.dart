@@ -76,7 +76,12 @@ void main() {
     // communes est un parcours à lui seul (écran dédié, plafond de 4,
     // cascade wilaya → commune), et le mêler à celui-ci ferait échouer l'un
     // pour des raisons appartenant à l'autre.
-    prefs.setStringList('selected_commune_ids', [communeCible]);
+    // Le décor pose le POINT de recherche, plus une sélection de communes
+    // (bascule 2026-08-12). Sans lui, l'accueil cadrerait sur le défaut
+    // servi par le serveur, qui n'est pas forcément celui du décor.
+    prefs.setDouble('client_position_lat', decorLatitude);
+    prefs.setDouble('client_position_lng', decorLongitude);
+    prefs.setString('client_position_consent_version', 'geo-2026-08-12');
     // Les promos du décor portent une photo absente de MinIO.
     ignorerErreursDeChargementDImage();
 

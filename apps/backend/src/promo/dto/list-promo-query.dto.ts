@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDefined,
   IsEnum,
   IsLatitude,
@@ -17,31 +18,7 @@ import {
 } from 'class-validator';
 import { Categorie } from '../../common/enums/categorie.enum';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
-
-/**
- * Conversion d'un paramètre de requête numérique.
- *
- * ⚠️ **`@Type(() => Number)` seul ne suffit pas pour une coordonnée**, alors
- * qu'il suffit pour `page`/`limit` — et la différence est ce qui rend le piège
- * invisible. `?page=` (vide) donne `Number('') === 0`, que `@Min(1)` refuse.
- * `?latitude=` donne le même `0`, que **`@IsLatitude()` accepte** : c'est
- * l'équateur, une valeur parfaitement légitime. Le client se retrouverait au
- * large du Gabon sans qu'aucune validation ne bronche.
- *
- * D'où ce transform explicite : une chaîne vide ou blanche devient `NaN`, donc
- * un refus, et **jamais un zéro**. L'absence, elle, reste l'absence — c'est
- * `@ValidateIf` qui décide ensuite si elle est acceptable.
- *
- * ⚠️ Le piège *inverse* n'existe pas, contrairement à ce qu'on pourrait
- * craindre : `class-transformer` construit ses clés depuis l'objet source, donc
- * le callback n'est **jamais appelé** pour un paramètre absent — pas de
- * `Number(undefined)`, pas de `NaN` fabriqué par mégarde.
- */
-const versNombre = ({ value }: { value: unknown }): unknown => {
-  if (value === undefined || value === null) return value;
-  if (typeof value === 'string' && value.trim() === '') return Number.NaN;
-  return Number(value);
-};
+import { versNombre } from '../../common/transforms/vers-nombre';
 
 /**
  * Tri de la liste client. `recent` est le défaut historique (favoris
@@ -170,6 +147,24 @@ export class ListPromoQueryDto extends PaginationQueryDto {
   @IsNumber()
   @IsPositive()
   radiusKm?: number;
+
+  /**
+   * Ne renvoyer **que** les favoris, et sans aucun cadrage géographique.
+   *
+   * ⚠️ Un favori est un choix explicite du client : rien ne justifie qu'une
+   * règle de proximité le lui retire. Le filtre était purement local — appliqué
+   * aux pages déjà chargées — ce qui marchait tant que la fenêtre valait quatre
+   * communes ; avec un rayon de 5 km, **un favori posé sur un commerce à 8 km
+   * disparaissait de l'onglet sans un mot**. Un élément qui s'évapore sans
+   * erreur ni message est exactement la classe de défaut que ce dépôt traque
+   * (R7 du plan de bascule).
+   */
+  @IsOptional()
+  @Transform(
+    ({ value }: { value: unknown }) => value === 'true' || value === true,
+  )
+  @IsBoolean()
+  favoritesOnly?: boolean;
 
   @IsOptional()
   @IsEnum(PromoSortOrder)
