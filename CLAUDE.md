@@ -484,7 +484,7 @@ permet de reconnaître un cas nouveau relevant de la même règle.
     se voit ni à la compilation, ni à l'exécution, ni dans les journaux — à
     l'inverse d'un garde global dont on se retire explicitement.
     **Conséquence directe** : toute route ouverte doit être **épinglée
-    nommément** avec sa justification (les 16 actuelles le sont, dans
+    nommément** avec sa justification (les 15 actuelles le sont, dans
     `scripts/lib/frontiere_http.py`), et c'est le banc, et lui seul, qui peut
     affirmer qu'aucun garde ne manque. ⚠️ Ne jamais énumérer « les routes
     protégées » depuis leur garde : l'ensemble contrôlé rétrécirait avec ce
