@@ -2849,6 +2849,34 @@ latitude sans longitude rend 400. Distances de contrôle depuis Djelfa : 0,5 à
 2,5 km pour les huit commerces locaux, **1571 km** pour « Lala » — qui est en
 Île-de-France, une donnée de test à nettoyer.
 
+#### Le lot 2a — une duplication qui attendait depuis toujours
+
+`applyVisibleConditions` s'annonce depuis sa création comme **« l'unique
+définition de promo visible par un client »**, et son commentaire raconte même
+comment quatre copies éparses ont été fusionnées le 2026-08-05. Le même fichier
+en portait une **sixième**, locale à `findActiveForMap` : les cinq mêmes
+conditions, réécrites 650 lignes plus bas, sous d'autres noms de paramètres.
+
+Le titre l'affirmait, le code le démentait, et personne ne l'avait vu **parce
+que les deux copies disaient la même chose**. C'est ce qui rend ce défaut
+particulier : une duplication n'échoue pas, elle attend.
+
+Ce qui l'a révélée n'est pas une relecture de confort, c'est la préparation de
+la **sixième condition** (la position du commerçant, décision 8). Elle n'aurait
+porté que sur l'une des deux copies — donc sur la liste et pas sur la carte. Un
+commerçant sans position aurait disparu de la liste **en restant visible sur la
+carte**, sans erreur ni journal. D'où la fusion livrée **avant** le lot 4, et
+dans un lot à part.
+
+⚠️ **Ce que sa vérification établit, et ce qu'elle n'établit pas.** Les trois
+requêtes concernées répondent `200` contre le vrai Postgres (carte, carte avec
+filtre catégorie, liste au point) — donc la requête fusionnée est valide, les
+alias et les paramètres ne se télescopent pas. **L'équivalence, elle, repose sur
+la lecture** (mêmes cinq conditions, même ordre, seuls les noms de paramètres
+changent) et non sur un diff du SQL généré. La base étant expirée, aucune de ces
+réponses ne contient de ligne : elles ne prouvent pas que le filtrage
+sélectionne.
+
 #### La mesure qui manquait, et ce qu'elle dit vraiment
 
 **44 commerçants sans position sur 53** (83 %), mais **zéro promo en ligne**
