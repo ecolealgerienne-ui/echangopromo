@@ -62,7 +62,6 @@ void main() {
   testWidgets('signaler une promo la retire de la liste', (tester) async {
     exigerIdentifiants({
       'TEST_PROMO_DESC': promoDescription,
-      'TEST_COMMUNE_ID': communeCible,
     });
 
     await reinitialiserAppareil();

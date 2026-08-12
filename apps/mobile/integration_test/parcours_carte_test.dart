@@ -51,7 +51,6 @@ void main() {
   testWidgets('la carte montre le commerce et sa meilleure remise',
       (tester) async {
     exigerIdentifiants({
-      'TEST_COMMUNE_ID': communeCible,
       'TEST_REMISE': remiseAttendue,
       'TEST_COMMERCE_NOM': commerceNom,
     });
@@ -86,11 +85,38 @@ void main() {
     // qu'une fois la carte posée : la fenêtre est donc large.
     final marqueur =
         find.byWidgetPredicate((w) => w is Text && w.data == remiseAttendue);
+
+    // ⚠️ **Le marqueur individuel n'apparaît QUE si rien ne le regroupe.**
+    // La carte agrège les commerces trop proches en grappes qui se scindent au
+    // zoom : attendre le marqueur sans jamais zoomer suppose une densité
+    // faible que rien ne garantit — et qui sera fausse en production bien
+    // avant de l'être ici. Ce parcours a d'ailleurs échoué le 2026-08-12 sur
+    // un décor à 13 commerces, en affichant « 11 » et « 2 » : le produit
+    // fonctionnait, c'est le parcours qui supposait.
+    //
+    // On fait donc ce que fait un utilisateur : taper une grappe, qui zoome
+    // dessus, jusqu'à ce que le marqueur se détache. Borné, parce qu'un
+    // « jusqu'à ce que ça marche » sans borne est une boucle infinie déguisée.
+    final grappe = find.byWidgetPredicate(
+        (w) => w is Text && int.tryParse(w.data ?? '') != null);
+    for (var essai = 0; essai < 6 && marqueur.evaluate().isEmpty; essai++) {
+      await pomperJusquaVrai(
+        tester,
+        () => marqueur.evaluate().isNotEmpty || grappe.evaluate().isNotEmpty,
+        raison: 'ni marqueur ni grappe sur la carte — elle n’a rien chargé',
+        limite: const Duration(seconds: 30),
+      );
+      if (marqueur.evaluate().isNotEmpty) break;
+      await taper(tester, grappe.first);
+      await tester.pump(const Duration(seconds: 2));
+    }
+
     await pomperJusquaVrai(
       tester,
       () => marqueur.evaluate().isNotEmpty,
-      raison: 'aucun marqueur « $remiseAttendue » sur la carte — le commerce '
-          'n’est pas affiché, ou pas à cet endroit',
+      raison: 'aucun marqueur « $remiseAttendue » sur la carte après avoir '
+          'ouvert les grappes — le commerce n’est pas affiché, ou pas à cet '
+          'endroit',
       limite: const Duration(seconds: 60),
     );
 

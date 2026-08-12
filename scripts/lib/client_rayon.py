@@ -314,6 +314,8 @@ def main():
         return 2
     time.sleep(PACE)
 
+    crees = []
+
     def poser_commerce(nom, lat, lng, base):
         """Crée un commerçant positionné et lui publie une promo.
 
@@ -328,6 +330,7 @@ def main():
         if st not in (200, 201):
             return None, "création refusée (%s %s)" % (st, d.get("code"))
         cid = d.get("id")
+        crees.append(("+213556%s" % base, cid))
         time.sleep(PACE)
         st, d = appeler("POST", "/promo/agent/%s" % cid, jeton, {
             "description": "Banc rayon — %s" % nom,
@@ -397,6 +400,24 @@ def main():
     cherchees = lister(RAYON_KM, "&search=Banc%20rayon")
     noter("le coin ressort malgré le rayon serré",
           *verdict_presence(cherchees, id_coin, True, "recherche"))
+
+    # ── Nettoyage : ne pas laisser deux commerces de plus à chaque passage ──
+    #
+    # ⚠️ Ce n'est pas de la coquetterie. Sans lui, chaque exécution ajoutait deux
+    # commerces au voisinage du décor — et le 2026-08-12 le parcours « carte » a
+    # fini par échouer parce que la carte les regroupait tous en grappes au lieu
+    # d'afficher le marqueur qu'il cherchait. Un banc qui laisse des traces finit
+    # par faire échouer un AUTRE banc, et l'échec accuse alors le mauvais endroit.
+    #
+    # Auto-suppression : le banc connaît le PIN qu'il a posé, donc pas besoin
+    # d'identifiants admin.
+    for tel, _cid in crees:
+        time.sleep(PACE)
+        _, d = appeler("POST", "/commercant/login",
+                       corps={"telephone": tel, "pin": PIN})
+        jc = d.get("accessToken")
+        if jc:
+            appeler("DELETE", "/commercant/me", jc)
 
     print("\n" + "═" * 64)
     echecs = resultats.count("echec")

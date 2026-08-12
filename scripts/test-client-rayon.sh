@@ -20,7 +20,7 @@
 # les EXIGE, ce qui garantit qu'un décor bancal est refusé franchement au lieu
 # de produire des commerces invisibles.
 #
-# ⚠️ Il consomme 1 requête sur le seau strict (connexion agent) et ~7 sur celui
+# ⚠️ Il consomme 3 requêtes sur le seau strict (agent + 2 nettoyages) et ~7 sur celui
 # des écritures (20/min/IP, partagé). Attendre une minute après un autre banc —
 # un 429 se déguise en refus métier.
 set -uo pipefail

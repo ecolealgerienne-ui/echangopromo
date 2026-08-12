@@ -60,22 +60,11 @@ void main() {
       (tester) async {
     exigerIdentifiants({
       'TEST_PROMO_DESC': promoDescription,
-      'TEST_COMMUNE_ID': communeCible,
     });
 
     await reinitialiserAppareil();
     final prefs = await SharedPreferences.getInstance();
     prefs.setBool('onboarding_completed', true);
-    // ⚠️ **Sans commune sélectionnée, l'accueil n'affiche AUCUNE promo** — il
-    // montre « Choisissez vos communes ». `reinitialiserAppareil` efface les
-    // préférences, donc l'état de départ est justement celui-là. Le premier
-    // passage de ce parcours l'a découvert en cherchant une carte qui ne
-    // pouvait pas exister.
-    //
-    // La commune est posée dans le magasin, comme l'onboarding : le choix des
-    // communes est un parcours à lui seul (écran dédié, plafond de 4,
-    // cascade wilaya → commune), et le mêler à celui-ci ferait échouer l'un
-    // pour des raisons appartenant à l'autre.
     // Le décor pose le POINT de recherche, plus une sélection de communes
     // (bascule 2026-08-12). Sans lui, l'accueil cadrerait sur le défaut
     // servi par le serveur, qui n'est pas forcément celui du décor.
