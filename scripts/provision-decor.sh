@@ -243,11 +243,11 @@ COMMERCANT_TOKEN="$(commercant_login)"
 if [ -z "$COMMERCANT_TOKEN" ]; then
   info "Absent — inscription (consomme 1 sur le plafond horaire)"
   # ⚠️ Les coordonnées ne sont PAS décoratives. Sans elles, ce commerçant
-  # n'apparaît sur aucune carte, et `GET /promo/map/center` rend
-  # `{"center":null}` pour sa commune — le parcours écran « carte » s'arrête
-  # alors sur « centre absent », et le banc `client-carte` mesure une carte
-  # vide. Le décor prétend préparer le terrain de TOUS les bancs ; il lui
-  # manquait le point que celui de la carte va chercher.
+  # n'apparaît sur aucune carte, ne sort dans aucune liste au rayon, et
+  # **ne peut plus rien publier** depuis le 2026-08-12 : le banc `client-carte`
+  # mesurerait une carte vide et les autres se feraient refuser leurs promos.
+  # Le décor prétend préparer le terrain de TOUS les bancs ; il lui manquait le
+  # point que la moitié d'entre eux vont chercher.
   # (Constaté le 2026-08-05 : `seed-demo.sh` en posait, `provision-decor.sh`
   # non — d'où une commune peuplée avec centre et une commune de décor sans.)
   out="$(api POST /commercant/register "$(jq -n --arg t "$D_COMMERCANT_TEL" \
@@ -402,16 +402,22 @@ etat_promo="$(api GET "/promo/$PROMO_ID" '' "$COMMERCANT_TOKEN" \
 pass "Promo $PROMO_ID"
 
 # ─────────────────────────────────────────────────────────────────────────────
-step "6. La commune du décor a un centre de carte"
+step "6. Le commerçant du décor est bien SUR la carte"
 # ⚠️ Contrôle, pas commentaire. Le décor a longtemps posé un commerçant SANS
 # coordonnées : tout passait au vert ici, et c'est le parcours « carte » qui
-# s'arrêtait plus tard sur « centre absent » — loin de la cause. Le seul moyen
-# de savoir que le point est posé, c'est de demander au serveur ce qu'il en
-# fait, pas de vérifier qu'on l'a envoyé.
-centre="$(api GET "/promo/map/center?communeIds=$COMMUNE_ID" | jq -c '.center // empty')"
-[ -n "$centre" ] || fail "Commune « $COMMUNE_NOM » sans centre de carte" \
-  "le commerçant du décor n'a pas de coordonnées — le parcours « carte » ne pourra pas partir"
-pass "Centre $centre"
+# s'arrêtait plus tard — loin de la cause. Le seul moyen de savoir que le point
+# est posé, c'est de demander au serveur ce qu'il en fait, pas de vérifier
+# qu'on l'a envoyé.
+#
+# ⚠️ Ce contrôle interrogeait `GET /promo/map/center`, retirée le 2026-08-12
+# avec la sélection de communes. Le remplaçant est **plus fort, pas
+# équivalent** : il demande la carte elle-même, dans un cadre serré autour du
+# décor, et exige d'y trouver CE commerçant. L'ancien se contentait d'un
+# barycentre de commune — il pouvait être non nul sans que celui-ci y soit.
+bbox="north=34.72&south=34.62&east=3.32&west=3.21"
+sur_la_carte="$(api GET "/promo/map?$bbox" | jq -r --arg id "$CID"   '[.items[]? | select(.commercant.id == $id)] | length')"
+[ "${sur_la_carte:-0}" -ge 1 ] || fail "Le commerçant du décor n'est pas sur la carte"   "pas de coordonnées, ou aucune promo visible — le parcours « carte » ne pourra pas partir"
+pass "Commerçant présent dans le cadre du décor"
 
 echo
 echo "════════════════════════════════════════════════════════════════"

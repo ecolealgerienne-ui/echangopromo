@@ -229,21 +229,22 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "carte" ]; then
 # d'un côté seulement, ce parcours le dira.
 echo
 echo "── 2 sexies. Carte ──"
-CARTE_COMMUNE="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ communeId)"
-[ -n "$CARTE_COMMUNE" ] || { echo "❌ communeId du commerçant illisible."; exit 2; }
-
-CENTRE="$(curl -s "$API_URL/promo/map/center?communeIds=$CARTE_COMMUNE"   -H "X-Device-Id: $DEVICE_ID" | "$PY" -c "import sys,json
+# ⚠️ Le cadre se dérive désormais des coordonnées DU COMMERÇANT, plus d'un
+# barycentre de commune : `GET /promo/map/center` a été retirée le 2026-08-12
+# avec la sélection de communes. C'est plus direct — on cadre sur le commerce
+# qu'on va chercher, au lieu de cadrer sur la moyenne d'une commune en espérant
+# qu'il s'y trouve.
+CARTE_POS="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | "$PY" -c "import sys,json
 try:
     d = json.load(sys.stdin)
 except Exception:
     print('ILLISIBLE reponse non JSON'); sys.exit(0)
-c = (d or {}).get('center') or {}
-if c.get('latitude') is None or c.get('longitude') is None:
-    print('ILLISIBLE centre absent'); sys.exit(0)
-print('%s %s' % (c['latitude'], c['longitude']))")"
-case "$CENTRE" in ILLISIBLE*) echo "❌ centre de carte — $CENTRE"; exit 2 ;; esac
-CARTE_LAT="${CENTRE% *}"
-CARTE_LNG="${CENTRE#* }"
+if d.get('latitude') is None or d.get('longitude') is None:
+    print('ILLISIBLE commercant sans position'); sys.exit(0)
+print('%s %s' % (d['latitude'], d['longitude']))")"
+case "$CARTE_POS" in ILLISIBLE*) echo "❌ position du commerçant — $CARTE_POS"; exit 2 ;; esac
+CARTE_LAT="${CARTE_POS% *}"
+CARTE_LNG="${CARTE_POS#* }"
 
 BBOX="$(CLAT="$CARTE_LAT" CLNG="$CARTE_LNG" "$PY" -c "import os
 la = float(os.environ['CLAT']); ln = float(os.environ['CLNG'])

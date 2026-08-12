@@ -24,7 +24,6 @@ import { MAP_THROTTLE, SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
 import { ListPromoMapQueryDto } from './dto/list-promo-map-query.dto';
-import { MapCenterQueryDto } from './dto/map-center-query.dto';
 import { ListPromoQueryDto } from './dto/list-promo-query.dto';
 import { UpdatePromoDto } from './dto/update-promo.dto';
 import { Promo } from './entities/promo.entity';
@@ -165,31 +164,6 @@ export class PromoController {
           : null,
         promos: promos.map((promo) => this.toClientJson(promo)),
       })),
-    };
-  }
-
-  /**
-   * Où centrer la carte quand le client n'a pas de position GPS mais a choisi
-   * ses communes. Publique et bornée par `MAP_THROTTLE`, comme `GET
-   * /promo/map` dont elle n'est qu'un préalable — elle n'expose rien de plus
-   * que ce que cette route rend déjà (des positions de commerces publics),
-   * et sous une forme moins précise puisque agrégée.
-   *
-   * `{ center: null }` quand aucun commerçant positionné n'a de promo visible
-   * dans ces communes : l'app garde alors son propre repli. Un objet plutôt
-   * qu'un `204` — le corps distingue « je sais qu'il n'y a pas de centre » de
-   * « la requête n'a pas abouti », que l'app traite différemment.
-   *
-   * Deux segments (`map/center`), donc aucun conflit avec `@Get(':id')` — mais
-   * déclarée ici, près de `@Get('map')`, parce que c'est la même surface.
-   */
-  @Throttle(MAP_THROTTLE)
-  @Get('map/center')
-  async mapCenter(@Query() query: MapCenterQueryDto) {
-    return {
-      center: await this.promoService.findMapCenterForCommunes(
-        query.communeIds,
-      ),
     };
   }
 
