@@ -2,19 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../l10n/app_localizations.dart';
 
-/// Capture optionnelle de la position GPS du commerce — gratuit, aucune clé
-/// API Google Maps nécessaire (juste la localisation native de l'appareil).
+/// Capture de la position GPS du commerce — gratuit, aucune clé API Google
+/// Maps nécessaire (juste la localisation native de l'appareil).
+///
+/// Facultative à l'auto-inscription, **obligatoire** quand un agent crée la
+/// fiche (voir [requis]).
 class LocationCaptureField extends StatefulWidget {
   const LocationCaptureField({
     super.key,
     required this.latitude,
     required this.longitude,
     required this.onChanged,
+    this.requis = false,
   });
 
   final double? latitude;
   final double? longitude;
   final void Function(double latitude, double longitude) onChanged;
+
+  /// ⚠️ **Le libellé disait « (optionnel) » partout**, y compris sur l'écran de
+  /// l'agent où la position est exigée depuis le 2026-08-12 — serveur compris.
+  /// Un champ qui s'annonce facultatif et refuse la validation est pire qu'un
+  /// champ non rempli : il fait chercher l'erreur ailleurs.
+  final bool requis;
 
   @override
   State<LocationCaptureField> createState() => _LocationCaptureFieldState();
@@ -99,7 +109,11 @@ class _LocationCaptureFieldState extends State<LocationCaptureField> {
           icon: Icon(located
               ? Icons.check_circle_outline
               : Icons.my_location_outlined),
-          label: Text(located ? l10n.locationSaved : l10n.locationCapture),
+          label: Text(located
+              ? l10n.locationSaved
+              : (widget.requis
+                  ? l10n.locationCaptureRequired
+                  : l10n.locationCapture)),
           onPressed: _locating ? null : _locate,
         ),
         if (_locating)

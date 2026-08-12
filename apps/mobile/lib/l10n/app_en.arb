@@ -476,5 +476,6 @@
   "savePointAction": "Search around this point",
   "savePointNotice": "This point will be sent to our service to build your promo list. You can change or delete it at any time.",
   "savePointDone": "Point saved",
-  "forgetPointAction": "Forget my point"
+  "forgetPointAction": "Forget my point",
+  "locationCaptureRequired": "Locate my shop (required)"
 }

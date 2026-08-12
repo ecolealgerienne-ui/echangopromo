@@ -476,5 +476,6 @@
   "savePointAction": "البحث حول هذه النقطة",
   "savePointNotice": "ستُرسل هذه النقطة إلى خدمتنا لإنشاء قائمة العروض الخاصة بك. يمكنك تغييرها أو حذفها في أي وقت.",
   "savePointDone": "تم حفظ النقطة",
-  "forgetPointAction": "نسيان نقطتي"
+  "forgetPointAction": "نسيان نقطتي",
+  "locationCaptureRequired": "تحديد موقع محلي (إلزامي)"
 }

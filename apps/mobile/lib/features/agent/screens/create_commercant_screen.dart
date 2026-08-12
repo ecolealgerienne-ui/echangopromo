@@ -158,6 +158,7 @@ class _CreateCommercantScreenState
           child: ListView(
             children: [
               CommercantFieldsForm(
+                positionRequise: true,
                 photo: _photo,
                 onPhotoChanged: (file) => setState(() => _photo = file),
                 telephoneController: _telephoneController,

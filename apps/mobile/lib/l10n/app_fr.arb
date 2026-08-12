@@ -579,5 +579,6 @@
   "promoCapEditLabel": "Modifier le plafond",
   "promoCapDialogTitle": "Plafond de promos actives",
   "promoCapDialogBody": "Laissez le champ vide pour suivre le réglage global. Zéro empêche de publier sans suspendre le compte.",
-  "promoCapFieldLabel": "Plafond (vide = global)"
+  "promoCapFieldLabel": "Plafond (vide = global)",
+  "locationCaptureRequired": "Localiser mon commerce (obligatoire)"
 }

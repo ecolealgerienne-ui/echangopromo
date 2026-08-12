@@ -3051,6 +3051,42 @@ rejeux, le commerçant du décor a épuisé son plafond de 5 créations / 24 h �
 rapport avec la bascule. Contourné en repartant sur un numéro neuf
 (`D_COMMERCANT_TEL`), pas en touchant au produit.
 
+#### Les parcours sur appareil — 2 défauts de plus, et une incohérence d'écran
+
+Sept parcours joués sur émulateur. **Aucun défaut de produit**, deux défauts de
+parcours, et une incohérence d'interface que seul l'appareil pouvait montrer.
+
+✅ premier lancement · liste et fiche · carte · signalement · création de promo ·
+création par l'agent · auto-inscription du commerçant.
+
+**Le parcours « carte » supposait une densité faible.** Il attendait le marqueur
+individuel d'un commerce **sans jamais zoomer** — il présupposait donc qu'aucune
+grappe ne se forme, ce que rien ne stipulait ni ne vérifiait. Il a échoué sur un
+décor à 13 commerces en affichant « 11 » et « 2 » : **le produit regroupait
+correctement, c'est le parcours qui supposait** — et cette précondition sera
+fausse en production bien avant de l'être ici. Il ouvre désormais les grappes
+comme le ferait un utilisateur, borné à 6 essais.
+
+**Et la densité venait de mon propre banc** : `client_rayon.py` laissait deux
+commerçants derrière lui à chaque exécution. Un banc qui laisse des traces finit
+par faire échouer un **autre** banc, et l'échec accuse alors le mauvais endroit.
+Il s'auto-supprime maintenant.
+
+**Le parcours de l'agent ne captait pas de position**, devenue obligatoire sur
+cet écran. Il restait bloqué sur le formulaire et son message d'échec parlait de
+« téléphone déjà pris ? » — très loin de la vraie cause. En le corrigeant, une
+incohérence est apparue : ⚠️ **le bouton s'annonçait toujours « Localiser mon
+commerce (optionnel) »** sur un écran qui refuse la validation sans lui. Un champ
+qui se dit facultatif et bloque quand même est pire qu'un champ vide : il fait
+chercher l'erreur ailleurs. `LocationCaptureField` prend donc un drapeau
+`requis`, et le libellé le suit.
+
+⚠️ **Ce que ces parcours n'ont pas pu couvrir** : l'émulateur était plein
+(`INSTALL_FAILED_INSUFFICIENT_STORAGE`) tant que deux applications d'autres
+projets y étaient installées. Elles ont été désinstallées sur demande. Restent
+non joués : espace pro, modération admin, plafond commerçant — non touchés par
+la bascule, et leurs paramètres demandent le calcul complet du décor d'écran.
+
 #### Points ouverts à la clôture
 
 - ✅ **Les six clés sont désormais dans le `.env` du clone WSL**, réglées sur

@@ -25,6 +25,7 @@ class CommercantFieldsForm extends ConsumerWidget {
     required this.onPhotoChanged,
     required this.telephoneController,
     required this.nomController,
+    this.positionRequise = false,
     required this.adresseController,
     required this.latitude,
     required this.longitude,
@@ -40,6 +41,12 @@ class CommercantFieldsForm extends ConsumerWidget {
   final ValueChanged<File> onPhotoChanged;
   final TextEditingController telephoneController;
   final TextEditingController nomController;
+
+  /// ⚠️ Vrai sur l'écran de l'agent uniquement : il est physiquement dans le
+  /// commerce, c'est la seule capture juste par construction. L'auto-inscription
+  /// garde une position facultative — c'est la PUBLICATION qui la réclamera.
+  final bool positionRequise;
+
   final TextEditingController adresseController;
   final double? latitude;
   final double? longitude;

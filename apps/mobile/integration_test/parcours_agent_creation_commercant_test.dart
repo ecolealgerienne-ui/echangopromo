@@ -165,6 +165,41 @@ void main() {
     await saisir(tester, champs - 2, commercantPin);
     await saisir(tester, champs - 1, commercantPin);
 
+    // ── 4 bis. La position, désormais OBLIGATOIRE ici ───────────────────
+    //
+    // ⚠️ **Nouveau depuis le 2026-08-12**, et c'est le geste qui manquait à ce
+    // parcours : l'agent est physiquement dans le commerce, donc sa capture est
+    // la seule juste par construction — la route serveur l'EXIGE
+    // (`CreateCommercantByAgentDto`), et l'écran refuse avant même de partir.
+    //
+    // Sans ce bloc, le parcours restait bloqué sur le formulaire et accusait le
+    // téléphone ou la zone : le message d'échec parlait de « téléphone déjà
+    // pris ? », très loin de la vraie cause.
+    await defilerJusquaVrai(
+      tester,
+      () => find.byIcon(Icons.my_location_outlined).evaluate().isNotEmpty,
+      raison: 'le bouton de localisation n’a jamais été atteint',
+    );
+    // Désigné par son ICÔNE, jamais par son libellé : celui-ci est traduit, et
+    // il change selon que la position est facultative ou requise.
+    await taper(tester, find.byIcon(Icons.my_location_outlined));
+    // La capture passe par le GPS de l'appareil : sur émulateur, c'est la
+    // position simulée de l'AVD. On attend qu'elle soit affichée en clair —
+    // le champ montre les coordonnées une fois captées, ce qui est le seul
+    // signal fiable que le formulaire les a bien reçues.
+    await pomperJusquaVrai(
+      tester,
+      () => find
+          .byWidgetPredicate((w) =>
+              w is Text &&
+              RegExp(r'^-?\d+\.\d+, -?\d+\.\d+$').hasMatch(w.data ?? ''))
+          .evaluate()
+          .isNotEmpty,
+      raison: 'la position n’a pas été captée — localisation activée sur '
+          'l’émulateur ? une position simulée est-elle définie ?',
+      limite: const Duration(seconds: 45),
+    );
+
     await defilerJusqua(
       tester,
       find.byType(FilledButton),
