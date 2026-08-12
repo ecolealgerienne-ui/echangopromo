@@ -34,6 +34,12 @@ commune »).
 
 ── Usage ────────────────────────────────────────────────────────────────────
 
+⚠️ **La sonde de globalité exige au moins une diapositive CURÉE.** Sans elle
+elle ne peut rien conclure — et ce n'est pas un défaut du banc : la globalité
+ne porte que sur la curation, le repli suivant le point par conception. Lancer
+`./scripts/test-admin-highlight.sh` **avant** celui-ci, qui en crée une.
+Sans cet ordre, ce banc rend « non concluant » et c'est le bon verdict.
+
     python3 scripts/lib/client_highlight.py --self-test
     ./scripts/test-client-highlight.sh
 """
@@ -260,8 +266,12 @@ def main():
         noter("GET /highlight avec un point", "non_concluant",
               "HTTP %s %s" % (st, avec.get("code")))
         return 1
-    noter("bandeau homogène et sous plafond",
-          *verdict_homogene(avec.get("items")))
+    # ⚠️ **Pas d'homogénéité ici.** Le point est volontairement à 1500 km du
+    # décor : le bandeau y est vide, et demander « est-il homogène ? » à un
+    # bandeau vide ne peut rendre qu'un « je ne sais pas ». Une sonde qui ne
+    # peut pas conclure là où on l'a placée n'est pas une sonde prudente,
+    # c'est une sonde mal placée — l'homogénéité est déjà éprouvée en §1, sur
+    # un bandeau qui a du contenu.
     noter("la curation ne dépend pas du point",
           *verdict_globalite(sans.get("items"), avec.get("items")))
     # ⚠️ La contrepartie, et c'est elle qui donne son sens à la sonde
