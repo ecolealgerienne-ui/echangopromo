@@ -2899,6 +2899,53 @@ filtrage sélectionne** — une liste vide satisfait n'importe quelle assertion
 d'absence (règle #28). Le contrôle qui manque est celui du §9.2 du plan : un
 point **dans le carré et hors du cercle**, à écrire dans `client_liste.py`.
 
+#### Le lot 4 — publier exige une position, et ce qu'un banc a rattrapé
+
+Publier sans position était un geste sans effet : la carte filtre sur un cadre
+et la liste sur un rayon, qu'un `NULL` ne peut satisfaire ni l'un ni l'autre. Le
+commerçant voyait « 3 en ligne » sur un stock que personne ne voyait.
+
+**Deux décisions qui ne valent qu'ensemble** — l'aval et la source :
+
+- **`PATCH /commercant/me/position`**, qui n'allume pas la revue de profil à la
+  **première** pose. Sans elle, le commerçant bloqué qui corrige par la route
+  générale entre aussitôt dans un second blocage, plus long : il attend un
+  admin. Il ne peut pas s'en sortir seul.
+- **La position devient obligatoire à la création par agent** — serveur *et*
+  écran — alors qu'elle reste facultative à l'auto-inscription. C'est la mesure
+  du jour qui l'impose : 40 des 44 commerçants sans position venaient de cette
+  route. Écoper sans fermer le robinet aurait laissé chaque tournée d'agent
+  reconstituer le parc qu'on venait de régulariser.
+
+**Ce qu'un banc a rattrapé, et qui n'aurait rien produit d'autre qu'un vert.**
+
+Le banc `test-position-publication` a été écrit, éprouvé par mutation, et a
+rendu **❌ au premier passage contre le serveur réel**. Il avait raison : le
+refus venait de `COMMERCANT_REGISTRE_NOT_VALIDATED`, pas de la position.
+**C'était le scénario qui était faux, pas le produit.**
+
+Quatre gardes se suivent dans `PromoService` — registre, revue de profil,
+position, plafond — et **rendent toutes 403**. Un commerçant auto-inscrit est
+arrêté par la première, bien avant d'atteindre celle qu'on croyait mesurer.
+
+⚠️ **Si ce banc s'était contenté du statut HTTP, il serait passé au vert en
+mesurant une règle qu'il n'atteignait pas.** Il aurait « prouvé » le blocage de
+position sans jamais l'avoir déclenché — et personne n'aurait eu de raison d'y
+revenir. C'est exactement le faux positif que la règle #28 vise, et il ne s'est
+révélé que parce que le verdict exigeait le **code d'erreur**.
+
+Corollaire, à retenir pour les prochains bancs : **là où plusieurs gardes
+partagent un même statut, le statut ne mesure rien.** Et établir la prémisse
+(« cette garde est-elle seulement *atteignable* ? ») ne se déduit pas d'une
+lecture du code, ça se construit dans le décor — ici en levant le blocage
+registre, puis en **vérifiant** l'état de départ avant de mesurer quoi que ce
+soit.
+
+Verdict final contre le serveur réel : refus `COMMERCANT_POSITION_REQUIRED`,
+brouillon toujours accepté (la régression de `promo.service.ts` n'a pas été
+refabriquée), position posée, publication acceptée **sans détour par un admin**
+— ce dernier point étant ce qui prouve que la route dédiée tient sa promesse.
+
 #### Points ouverts à la clôture
 
 - ✅ **Les six clés sont désormais dans le `.env` du clone WSL**, réglées sur
