@@ -328,56 +328,11 @@ SIG_FILE_AVANT="$(curl -s "$API_URL/admin/moderation/queue"   -H "Authorization:
 [ -n "$SIG_FILE_AVANT" ] || { echo "❌ file de modération illisible."; exit 2; }
 echo "✅ « $SIG_DESC » publique (200) · file de modération : $SIG_FILE_AVANT"
 fi
-if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "commune" ]; then
-# ── 2 quater. La commune du commerçant, par son NOM, et une de ses promos ───
-echo
-echo "── 2 quater. Sélection de commune ──"
-CID_COM="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ communeId)"
-[ -n "$CID_COM" ] || { echo "❌ communeId du commerçant illisible."; exit 2; }
-
-lire_commune() { # ID — → "wilaya|nom" depuis la liste des communes
-  "$PY" -c "import sys,json
-try:
-    d = json.load(sys.stdin)
-except Exception:
-    print('ILLISIBLE reponse non JSON'); sys.exit(0)
-items = d.get('items') if isinstance(d, dict) else d
-if not isinstance(items, list):
-    print('ILLISIBLE liste des communes inattendue'); sys.exit(0)
-for c in items:
-    if c.get('id') == '$1':
-        if not (c.get('wilaya') and c.get('nom')):
-            print('ILLISIBLE commune incomplete'); sys.exit(0)
-        print('%s|%s' % (c['wilaya'], c['nom'])); sys.exit(0)
-print('ILLISIBLE commune introuvable dans /commune')"
-}
-
-INFO_COM="$(curl -s "$API_URL/commune" -H "X-Device-Id: $DEVICE_ID" | lire_commune "$CID_COM")"
-case "$INFO_COM" in
-  ILLISIBLE*) echo "❌ commune — $INFO_COM"; exit 2 ;;
-esac
-COM_WILAYA="${INFO_COM%%|*}"
-COM_NOM="${INFO_COM#*|}"
-
-# Une promo réellement servie POUR CETTE COMMUNE : c'est elle que l'accueil
-# devra afficher une fois la commune choisie. Sans elle, le parcours vérifierait
-# « la liste s'est remplie » au lieu de « avec ce que ce filtre doit rendre ».
-COM_PROMO="$("$PY" -c "import sys,json
-try:
-    d = json.load(sys.stdin)
-except Exception:
-    print('ILLISIBLE reponse non JSON'); sys.exit(0)
-items = d.get('items') or []
-if not items:
-    print('ILLISIBLE aucune promo publiee dans cette commune'); sys.exit(0)
-print(items[0].get('description') or 'ILLISIBLE description vide')"   < <(curl -s "$API_URL/promo?communeIds=$CID_COM&limit=1" -H "X-Device-Id: $DEVICE_ID"))"
-case "$COM_PROMO" in
-  ILLISIBLE*) echo "❌ promo de référence — $COM_PROMO"
-              echo "   Le décor doit publier au moins une promo dans cette commune."
-              exit 2 ;;
-esac
-echo "✅ $COM_WILAYA / $COM_NOM · promo de référence : « $COM_PROMO »"
-fi
+# ⚠️ **Le parcours « choisir sa commune » a été supprimé le 2026-08-12** avec
+# l'écran qu'il pilotait : le client cherche désormais autour d'un point qu'il
+# enregistre, et il n'y a plus de commune à choisir. Le laisser ici aurait fait
+# échouer le lot entier sur un fichier absent — l'échec aurait été franc, mais
+# il aurait accusé le lancement au lieu de dire que la cible n'existe plus.
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "client" ]; then
 # ── 2 ter. Une promo À NOUS, pour que la recherche désigne UNE promo ────────
 #
@@ -790,12 +745,6 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "inscription" ]; then
       fi
     fi
   fi
-  echo
-fi
-
-if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "commune" ]; then
-  jouer parcours_selection_commune_test.dart "client — choisir sa commune"     --dart-define=TEST_WILAYA_NOM="$COM_WILAYA"     --dart-define=TEST_COMMUNE_NOM="$COM_NOM"     --dart-define=TEST_COMMUNE_ID="$CID_COM"     --dart-define=TEST_PROMO_DESC="$COM_PROMO"
-  noter "client — choisir sa commune ($COM_NOM)" $?
   echo
 fi
 
