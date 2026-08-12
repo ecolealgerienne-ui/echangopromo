@@ -3081,6 +3081,27 @@ qui se dit facultatif et bloque quand même est pire qu'un champ vide : il fait
 chercher l'erreur ailleurs. `LocationCaptureField` prend donc un drapeau
 `requis`, et le libellé le suit.
 
+**Passe de confirmation du 2026-08-13 — 7 parcours rejoués, 7 verts**, après un
+décor neuf. Elle a révélé une exigence d'environnement que la bascule a créée
+sans que rien ne la dise :
+
+⚠️ **La permission de localisation doit être accordée PENDANT l'installation.**
+`flutter drive` réinstalle l'application à chaque parcours, ce qui efface les
+permissions — elles sont attachées au paquet, pas à l'appareil. Et un parcours ne
+peut pas taper la boîte de dialogue système : elle n'appartient pas à
+l'application. Le parcours « agent crée un commerçant » attendait donc 45 s puis
+échouait sur « la position n'a pas été captée », **sur un produit parfaitement
+sain**. `test-parcours-ecran.sh` accorde désormais la permission en tâche de
+fond dès que le paquet apparaît, et pose une position simulée — les deux sont
+nécessaires, la permission ne servant à rien si l'appareil n'a aucune position à
+donner.
+
+⚠️ **Un piège de paramétrage à ne pas reprendre pour un défaut** : lancer le
+parcours « liste et fiche » sur « Promo du décor » échoue, parce que le parcours
+exige **exactement une** carte et que plusieurs décors successifs portent tous
+cette description. Le flux prévu crée une promo à description horodatée par
+passage — c'est ce que fait le script.
+
 ⚠️ **Ce que ces parcours n'ont pas pu couvrir** : l'émulateur était plein
 (`INSTALL_FAILED_INSUFFICIENT_STORAGE`) tant que deux applications d'autres
 projets y étaient installées. Elles ont été désinstallées sur demande. Restent

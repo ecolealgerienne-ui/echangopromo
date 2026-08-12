@@ -537,9 +537,46 @@ fi
 echo "   appareil : $APPAREIL"
 echo
 
+# ⚠️ **La permission de localisation doit être accordée PENDANT l'installation.**
+#
+# `flutter drive` réinstalle l'application à chaque parcours, ce qui efface les
+# permissions accordées : elles sont attachées au paquet, pas à l'appareil. Et
+# un parcours ne peut pas taper la boîte de dialogue système d'Android — elle
+# n'appartient pas à l'application.
+#
+# Sans ce sas, le parcours « agent crée un commerçant » attend 45 s puis échoue
+# sur « la position n'a pas été captée », alors que le produit va parfaitement
+# bien : c'est la permission qui manque. Constaté le 2026-08-13, après que la
+# position est devenue obligatoire sur cet écran.
+#
+# On boucle donc en tâche de fond, en accordant dès que le paquet apparaît. La
+# boucle est bornée : un « jusqu'à ce que ça marche » sans borne survivrait au
+# parcours lui-même.
+# ⚠️ Et une position SIMULÉE, sans quoi le GPS de l'émulateur ne rend rien : la
+# permission accordée ne suffit pas si l'appareil n'a aucune position à donner.
+# Les coordonnées sont celles du décor — un point ailleurs ferait sortir le
+# commerce créé du rayon des parcours client qui suivent.
+poser_position_simulee() {
+  adb -s "$APPAREIL" emu geo fix 3.2630 34.6714 >/dev/null 2>&1 || true
+}
+
+accorder_localisation_en_fond() {
+  (
+    for _ in $(seq 1 90); do
+      if adb -s "$APPAREIL" shell pm grant com.echango.promo            android.permission.ACCESS_FINE_LOCATION >/dev/null 2>&1; then
+        adb -s "$APPAREIL" shell pm grant com.echango.promo           android.permission.ACCESS_COARSE_LOCATION >/dev/null 2>&1
+        break
+      fi
+      sleep 2
+    done
+  ) &
+}
+
 jouer() { # FICHIER LIBELLE [defines…]
   local fichier="$1" libelle="$2"; shift 2
   echo "── $libelle ──"
+  poser_position_simulee
+  accorder_localisation_en_fond
   flutter drive \
     -d "$APPAREIL" \
     --driver=test_driver/integration_test.dart \
