@@ -344,9 +344,26 @@ step "5. Une promo appartenant à ce commerçant"
 # plus haut), qui faisait lire un objet d'erreur au lieu d'un statut. Les deux
 # défauts étaient réels et indépendants ; les confondre aurait laissé celui-ci
 # en place, invisible jusqu'au jour où le décor tomberait sur un brouillon.
+# ⚠️ **Le filtre de MODÉRATION est aussi nécessaire que celui de cycle de vie**
+# (2026-08-13). Cette requête ne sélectionnait que sur `lifecycleStatus ==
+# "publiee"`, alors que la vérification d'état finale — et tous les bancs qui
+# consomment `PROMO_ID` — exigent une promo **visible du client**. Or
+# `VISIBLE_MODERATION_STATUSES` ne contient que `normale` et `verifiee_ok` :
+# une promo **signalée** est publiée ET invisible.
+#
+# Le décor rechargeait donc la promo laissée signalée par le parcours de
+# signalement, puis échouait sur « Promo du décor non publiée » — un diagnostic
+# faux qui accuse la publication alors que le sujet est la modération. Deux
+# passages complets ont été perdus dessus.
+#
+# C'est la règle #30 : le décor recopiait la moitié d'un invariant qui vit
+# ailleurs. Il applique désormais les deux conditions que sa propre assertion
+# réclame.
 PROMO_ID="$(api GET "/promo/me/all?limit=100" '' "$COMMERCANT_TOKEN" \
   | jq -r --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-      '[.items[]? | select(.lifecycleStatus == "publiee" and .dateFin > $now)][0].id // empty')"
+      '[.items[]? | select(.lifecycleStatus == "publiee" and .dateFin > $now
+         and (.moderationStatus == "normale"
+              or .moderationStatus == "verifiee_ok"))][0].id // empty')"
 
 # ⚠️ **Publier un brouillon existant AVANT d'en créer un** (2026-08-05).
 # Le plafond anti-abus est de 5 créations par 24 h et par commerçant : après un
@@ -364,10 +381,26 @@ if [ -z "$PROMO_ID" ]; then
     info "Aucune promo visible — publication d'un brouillon existant"
     pub="$(api POST "/promo/$BROUILLON_ID/publish" '{}' "$COMMERCANT_TOKEN")"
     if echo "$pub" | est_erreur; then
-      fail "Publication du brouillon du décor refusée" \
-        "$(echo "$pub" | jq -c '{code,message}')"
+      code_pub="$(echo "$pub" | jq -r '.code // empty')"
+      # ⚠️ **Le commentaire ci-dessus n'est vrai que d'un brouillon JAMAIS
+      # publié** (2026-08-13). Un brouillon peut aussi être une promo arrêtée
+      # puis remise en brouillon : elle porte alors un `publishedAt`, et le
+      # cooldown de republication s'applique. Le décor échouait durement
+      # dessus, en annonçant « publication refusée » là où il n'avait qu'à
+      # créer une promo neuve — la voie de repli existait déjà, dix lignes
+      # plus bas, et n'était simplement pas atteignable.
+      #
+      # Ce refus-ci, et lui seul, est une raison de passer à la création. Tout
+      # autre reste une panne de décor : élargir ce filtre le rendrait aveugle.
+      if [ "$code_pub" = "PROMO_REPUBLISH_TOO_SOON" ]; then
+        info "Brouillon encore en cooldown de republication — on créera"
+        BROUILLON_ID=""
+      else
+        fail "Publication du brouillon du décor refusée" \
+          "$(echo "$pub" | jq -c '{code,message}')"
+      fi
     fi
-    PROMO_ID="$BROUILLON_ID"
+    [ -n "$BROUILLON_ID" ] && PROMO_ID="$BROUILLON_ID"
   fi
 fi
 
