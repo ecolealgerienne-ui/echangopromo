@@ -35,10 +35,12 @@ Application mobile mettant en relation commerçants et clients autour des promot
 
 - **Pas d'inscription.** Aucune donnée personnelle collectée.
 - **Identifiant device anonyme** généré à l'installation, stocké localement, utilisé uniquement pour la limitation des signalements (voir §5.4). Ce n'est pas un compte.
-- **Sélection de ville par défaut** : demandée au premier lancement, stockée en local (pas de compte), modifiable à tout moment.
-- Pour les grandes villes : sélection affinée par **commune** (découpage administratif officiel wilaya → commune).
-- **Multi-sélection de communes (2026-07-12)** : jusqu'à 4 communes simultanément (`kMaxSelectedCommunes`), pensé pour les grandes villes (ex. Alger) où les communes sont accolées — une promo dans l'une intéresse un client dans la voisine. Plafond imposé côté écran ET côté backend (`ListPromoQueryDto.communeIds`, `@ArrayMaxSize(4)`) : une garde uniquement côté app se contournerait en appelant l'API directement. Écran dédié avec bouton de confirmation explicite (pas d'application en direct à chaque coche), car ce filtre part en requête serveur — contrairement au filtre favoris/tri (§ci-dessous) qui reste local et s'applique en direct.
-- **Liste des promos actives**, filtrée par les communes sélectionnées (`IN (...)` sur `commercant.communeId`, déjà indexé).
+- **Point de recherche enregistré par le client (bascule 2026-08-12)** — remplace la sélection de ville et de communes. Le client choisit un point sur la carte, ou s'y centre via le GPS puis l'enregistre ; les promos affichées sont celles des commerces dans un rayon autour de **ce point**. Rien ne l'oblige à être son domicile ni l'endroit où il se trouve.
+  - **Aucune permission n'est requise pour chercher.** Sans point enregistré, le serveur cadre sur son propre défaut (`GET /promo/config`) et l'accueil le dit — un bandeau non masquable, parce qu'une liste pleine et plausible autour d'un lieu qui n'est pas le sien est plus trompeuse qu'un écran vide.
+  - **Le geste d'enregistrement vaut consentement** : c'est à ce moment, et pas après, que le client apprend que le point part au service. Il se retire depuis la carte, ce qui efface le point avec lui.
+  - Le GPS, s'il est autorisé, sert **uniquement** à centrer la carte et à afficher les distances, **sur l'appareil**. Il ne franchit la frontière que par un enregistrement explicite.
+  - **Ce qui a disparu avec la commune** : le multi-zone (jusqu'à 4 communes, décision du 2026-07-12) et le nom de lieu affiché en tête de l'accueil — sans géocodeur, l'app ne sait pas comment s'appelle l'endroit visé, et un nom approché serait pire que pas de nom.
+- **Liste des promos actives**, cadrée par le point et un rayon (défaut 5 km, `CLIENT_DEFAULT_RADIUS_KM`), triée par distance. Une **recherche textuelle ignore le rayon** : chercher est un acte intentionnel avec une cible.
 - **Filtre par catégorie** (liste fixe, voir §5.6).
 - **Fiche promo** : jusqu'à 3 photos (2026-07-12 — une seule ne suffit pas à juger un produit, carousel swipeable si plusieurs), produit, prix avant/après, nom, adresse et téléphone du commerçant (numéro tap-pour-appeler, ajout 2026-07-12 — déjà renvoyé par l'API publique mais jamais affiché jusqu'ici), date de fin de validité. Si le commerçant a renseigné une photo de son commerce et/ou une position GPS, la fiche affiche aussi la photo du commerce et un bouton "Itinéraire" qui ouvre l'app Google Maps (lien simple, pas d'intégration payante).
 - **Signalement** "promo expirée / incorrecte" : action sans compte, limitée par device ID (voir §5.4). Objectif : limiter les abus côté commerçant autant que côté client.
@@ -101,12 +103,24 @@ création agent) :
 - **Photo du commerce, optionnelle** — pour que les clients l'identifient
   facilement dans la liste/fiche (caméra ou galerie, contrairement à la
   photo de promo prise par l'agent qui est caméra uniquement).
-- **Position GPS, optionnelle** — capturée via la localisation native de
-  l'appareil (gratuit, aucune intégration Google Maps payante). L'adresse
-  texte est elle aussi optionnelle (peut être saisie en complément de ou à
-  la place de la position GPS), l'adressage informel étant
-  courant localement. Sert uniquement à afficher un bouton "Itinéraire"
-  côté client (§3.1) ; aucune carte interactive en V0.
+- **Position GPS — facultative à l'inscription, mais OBLIGATOIRE pour publier**
+  (2026-08-12). Sans elle, une promo n'est visible par personne : les clients
+  cherchent par proximité et la carte filtre sur un cadre, qu'un `NULL` ne peut
+  satisfaire. Publier serait un geste sans effet, et le tableau de bord
+  annoncerait « 3 en ligne » sur un stock que personne ne voit.
+  - Le **brouillon reste possible** sans position : c'est mettre en ligne qui
+    exige un point, pas préparer.
+  - **Obligatoire dès la création par un agent** (serveur et écran) : l'agent
+    est physiquement dans le commerce, c'est la seule capture juste par
+    construction. Mesuré le 2026-08-12 : 40 des 44 commerçants sans position
+    venaient de cette route.
+  - `PATCH /commercant/me/position` pose le point **sans** déclencher la revue
+    de profil à la première pose — sinon le commerçant bloqué qui corrige se
+    retrouverait bloqué une seconde fois, à attendre un admin.
+  - L'adresse texte reste **optionnelle** et complémentaire : un point capté à
+    l'intérieur d'un local dérive de 50 à 200 m, et ne dit pas « 2ᵉ étage ».
+    Capturée via la localisation native (gratuit, aucune intégration Google Maps
+    payante).
 - **Confirmation du PIN** : ressaisie obligatoire à la définition du PIN
   (inscription ou activation d'un compte créé par un agent), pour éviter
   qu'une faute de frappe bloque le commerçant à la première connexion.
@@ -207,8 +221,12 @@ brouillon → publiée → arrêtée
 ### 5.1 Expiration des promos
 Tâche planifiée (cron, ex. quotidienne) qui bascule automatiquement les promos ayant dépassé leur date de fin vers le statut `expirée`. Aucune action utilisateur ne déclenche ce changement — c'est un point critique à ne pas oublier en développement, sans quoi l'objectif de fraîcheur du contenu est compromis silencieusement.
 
-### 5.2 Commune — territoire agent et filtre client (Zone abandonnée)
-- **Commune** : découpage officiel, filtre visible côté client, doit permettre l'extension vers d'autres wilayas sans refonte.
+### 5.2 Commune — territoire agent et admin (plus un filtre client)
+- **Commune** : découpage officiel. ⚠️ **Ce n'est plus l'ancrage du client
+  depuis le 2026-08-12** (voir §3.1) : elle reste la frontière d'autorisation de
+  l'agent (`assertCommuneMatches`) et le filtre des écrans admin. Le commerçant
+  y est toujours rattaché — `communeId` reste `NOT NULL`, et le rendre nullable
+  ferait refuser toutes les actions d'agent en silence.
 - Le découpage opérationnel interne "Zone" (distinct de Commune) a été
   abandonné le 2026-07-09 : un agent est rattaché directement à une ou
   plusieurs `Commune` (relation many-to-many), un agent par commune n'étant

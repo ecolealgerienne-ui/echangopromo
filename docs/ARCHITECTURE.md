@@ -19,7 +19,7 @@ stack technique**, avec les adaptations suivantes propres à son domaine
 | Stockage images | **S3 OVH** (compatible API S3), via `@aws-sdk/client-s3` | Décision explicite des specs (§5.8), même SDK que le projet Vendure. |
 | Apps mobiles | **Une seule app Flutter multi-rôles** (Client / Commerçant / Agent) | Miroir de l'app "mobile" de Vendure qui combine déjà client + vendeur. Le routing conditionnel selon l'état de connexion (anonyme / commerçant / agent) évite de dupliquer l'infra (thème, navigation, l10n) sur 2-3 apps pour un pilote à ~30 commerces. |
 | État / navigation mobile | **flutter_riverpod** + **go_router** | Même choix que Vendure Mobile. |
-| Auth mobile | `flutter_secure_storage` (PIN commerçant / session agent), `shared_preferences` (ville/commune sélectionnée, favoris locaux, device ID anonyme) | Cohérent avec le stockage 100% local exigé côté client (§3.1). |
+| Auth mobile | `flutter_secure_storage` (PIN commerçant / session agent), `shared_preferences` (point de recherche + consentement, favoris locaux, device ID anonyme) | Cohérent avec le stockage 100% local exigé côté client (§3.1). |
 | Admin / Modérateur | **Différé pour le pilote** — pas d'UI dédiée en V0, actions via API (endpoints REST protégés, appelés directement) | Échelle du pilote (~30 commerces) ne justifie pas encore un dashboard web ; à réévaluer dès l'extension à d'autres quartiers/communes. |
 | Déploiement | Docker + docker-compose (Postgres, backend), même logique que `packages/backend` du dépôt Vendure | Réutilise les pratiques d'infra déjà en place côté porteur de projet. |
 
@@ -41,7 +41,7 @@ echangopromo/
 
 Modules NestJS calqués sur les entités des specs (§4) :
 
-- `commune` — référentiel administratif (wilaya → commune), lecture seule côté client, et utilisé aussi pour rattacher un agent à son territoire (le concept de Zone opérationnelle séparée a été abandonné le 2026-07-09).
+- `commune` — référentiel administratif (wilaya → commune). ⚠️ **N'est plus l'ancrage du client depuis le 2026-08-12** : celui-ci cherche autour d'un point qu'il enregistre. La commune reste le territoire de l'agent (le concept de Zone opérationnelle séparée a été abandonné le 2026-07-09) et le filtre des écrans admin ; `Commercant.communeId` reste `NOT NULL`, la garde IDOR de l'agent en dépendant.
 - `commercant` — fiche, cycle de vie du compte, niveau de vérification, auth téléphone+PIN (pas d'OTP — décision produit, §3.2 des specs).
 - `promo` — CRUD promo, plafond de 5 actives (§5.3), job d'expiration (§5.1). Détient la définition unique de « promo visible » (`findVisibleByIds`, `findActiveForClient`), réutilisée par les autres modules plutôt que réécrite.
 - `highlight` — bandeau « Top promos » de l'accueil, curé par l'admin (ordre, image importée, titres) avec repli automatique sur le classement calculé par plus forte réduction quand aucune mise en avant n'est exploitable. Lecture publique (`GET /highlight`), gestion admin (`/admin/highlight`, agent exclu : vitrine globale, pas outil de terrain).
@@ -66,7 +66,7 @@ lib/
 ├── config/         # env, endpoints API
 ├── data/
 │   ├── api/        # clients REST (dio/http)
-│   └── local/      # device ID, favoris, ville/commune sélectionnée
+│   └── local/      # device ID, favoris, point de recherche + consentement
 ├── domain/         # modèles (Promo, Commercant, Commune, ...)
 └── features/
     ├── client/     # liste promos, fiche promo, favoris, signalement

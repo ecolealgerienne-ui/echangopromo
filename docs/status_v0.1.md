@@ -2946,14 +2946,72 @@ brouillon toujours accepté (la régression de `promo.service.ts` n'a pas été
 refabriquée), position posée, publication acceptée **sans détour par un admin**
 — ce dernier point étant ce qui prouve que la route dédiée tient sa promesse.
 
+#### Les lots 3, 5, 6, 7 et 8 — la bascule est complète
+
+**Lot 3 (l'app).** Le client enregistre un point et voit les promos autour. La
+porte de consentement vit **à un seul endroit** — `clientPositionProvider` rend
+`null` tant que rien n'est enregistré, et aucune coordonnée ne part alors.
+
+Le geste d'enregistrement **est** le consentement : point et consentement se
+posent ensemble et se retirent ensemble, dans le même store. Cet invariant rend
+impossible l'état qui ferait mentir les CGU — un point présent sans
+consentement — et rend la porte triviale à vérifier.
+
+⚠️ **Le défaut qui serait passé inaperçu** : `markCompleted()` n'était appelé
+**que** depuis l'écran de localisation supprimé. Sans son déplacement vers le
+choix du rôle, l'onboarding serait revenu **à chaque lancement** — sans erreur,
+sans test rouge, sans rien pour le dire. Il avait été repéré par la relecture
+adversariale, pas par le code.
+
+**Lot 5.** `GET /promo/map/center` retirée : sa seule raison d'être était écrite
+dans son propre doc (« pour un client qui n'a pas de GPS mais a choisi ses
+communes »), et ce cas n'existe plus. ⚠️ Le dépinglage dans `frontiere_http.py`
+**devait** être dans le même commit : le banc échoue sur une route ouverte non
+épinglée, mais se contente d'un **avertissement** sur une entrée épinglée
+disparue. Rien ne l'aurait rattrapée.
+
+Ses deux contrôles sont **réécrits, pas supprimés** — et le remplaçant du décor
+est plus fort que l'original : il demande la carte elle-même et exige d'y
+trouver *ce* commerçant, là où un barycentre de commune pouvait être non nul
+sans qu'il y soit.
+
+**Lot 6.** Les trois filtres wilaya fusionnés. Vérifié en vrai, et pas seulement
+« ça répond 200 » : 72 commerçants sans filtre, 72 pour Djelfa, **0 pour une
+wilaya inexistante**. Un filtre qui rend tout aurait rendu 72 partout.
+
+**Lots 7 et 8.** Specs §3.1/§3.2/§5.2, `ARCHITECTURE.md`, et la règle 33 de
+`CLAUDE.md` (14 → 15 routes ouvertes). Côté stores : `PrivacyInfo.xcprivacy`
+(obligatoire chez Apple, **absent jusqu'ici**) et `InfoPlist.strings` dans les
+trois langues — la justification de localisation était en français seul dans une
+app trilingue.
+
+⚠️ **La déclaration store a changé de sens, et c'est le point à ne pas rater.**
+Le plan disait d'abord « ne pas déclarer la position du capteur, elle ne quitte
+pas l'appareil ». C'était faux dès lors que le client peut poser son point
+depuis un centrage GPS — le parcours le plus naturel. Des coordonnées dérivées
+du capteur et transmises restent de la localisation collectée, même envoyées une
+seule fois sur un geste explicite. **Sous-déclarer est le seul risque qui coûte
+vraiment** : « collectée, sans suivi » n'ôte rien au produit, une déclaration
+fausse coûte un refus — et il y en a déjà eu un sur ce sujet le 2026-08-05.
+
 #### Points ouverts à la clôture
 
 - ✅ **Les six clés sont désormais dans le `.env` du clone WSL**, réglées sur
   **Djelfa** (34.6703 / 3.2630) et non Alger : c'est l'environnement du pilote,
   et un rayon de 5 km autour d'Alger y rendrait toute liste vide — ce qui se lit
   comme un bug, pas comme un réglage.
-- ⚠️ **Le décor et les bancs restent à refaire** avant toute mesure de filtrage :
-  base expirée, et `client_liste.py` n'a aujourd'hui aucun paramètre géographique.
+- ⚠️ **`client_liste.py` n'éprouve toujours aucun rayon.** Le cas décisif du
+  §9.2 du plan — **un point dans le carré mais hors du cercle** — n'est pas
+  couvert : c'est le seul qui distingue une bbox d'un rayon, donc le seul qui
+  attraperait un rognage des coins oublié. Et la base de décor est expirée
+  (promos du 5 août, durée 5 à 7 jours), donc toute mesure de filtrage rendrait
+  des listes vides — qui satisfont n'importe quelle assertion d'absence.
+- ⚠️ **Rien n'a été exécuté sur appareil.** L'app compile, `analyze` rend 0
+  problème et les 4 vérificateurs passent, mais aucun parcours d'intégration
+  n'a tourné depuis la bascule. Ceux qui posaient `selected_commune_ids` ont été
+  réécrits pour poser le point du décor — **cette réécriture n'est pas
+  vérifiée**, et la règle 37 rappelle qu'aucun test hors appareil ne voit une
+  invalidation manquante.
 - ⚠️ **Le clone WSL portait 2 fichiers modifiés non commités** (`provision-decor.sh`,
   `seed-demo.sh`) — le **même** travail que le commit `aa7154a` déjà sur `origin`,
   refait localement et jamais poussé. Mis en `git stash` (récupérable), pas

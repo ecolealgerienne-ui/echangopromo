@@ -45,8 +45,21 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- ⚠️ Repli seulement : la version affichée vient de `<lang>.lproj/InfoPlist.strings`
+	     depuis le 2026-08-12. L'app est trilingue, cette justification ne l'était pas.
+	     Elle décrit un usage SUR L'APPAREIL (centrage, distances) — ce qui part au
+	     service est le point que le client enregistre, décrit dans la politique de
+	     confidentialité. Réécrite après le refus App Store 5.1.1(iv) du 2026-08-05 :
+	     ne pas la régresser. -->
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Utilisée pour vous montrer les promotions les plus proches de vous, et — si vous êtes commerçant — pour enregistrer la position de votre commerce afin que les clients puissent le trouver.</string>
+	<string>Utilisée pour centrer la carte sur vous et afficher les distances — et, si vous êtes commerçant, pour enregistrer la position de votre commerce afin que les clients puissent le trouver.</string>
+	<!-- Sans cette liste, iOS n'irait chercher aucun `InfoPlist.strings` localisé. -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>fr</string>
+		<string>en</string>
+		<string>ar</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Utilisée pour prendre la photo de votre commerce ou d'une promo.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

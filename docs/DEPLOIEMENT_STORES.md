@@ -134,8 +134,8 @@ un nouvel identifiant, en repartant de zéro côté installations et avis.
 4. **Créer l'app sur Play Console** : fiche store (description FR/EN/AR,
    captures d'écran, icône), **politique de confidentialité** (obligatoire
    — une simple page hébergée sur `echango.com` suffit), classification du
-   contenu, formulaire "Sécurité des données" (l'app collecte : position
-   GPS optionnelle, photo, numéro de téléphone — à déclarer honnêtement).
+   contenu, formulaire "Sécurité des données" — voir le § dédié ci-dessous,
+   la déclaration a changé le 2026-08-12.
 5. **Upload** du `.aab` généré à l'étape 3, passage en test interne puis
    production.
 6. **Récupérer l'empreinte SHA-256 réelle** pour `assetlinks.json` — **⚠️
@@ -174,7 +174,8 @@ un nouvel identifiant, en repartant de zéro côté installations et avis.
    main**, c'est le genre de fichier généré qui casse facilement.
 3. **Créer la fiche** sur
    [App Store Connect](https://appstoreconnect.apple.com/) (métadonnées,
-   captures d'écran, politique de confidentialité — obligatoire aussi).
+   captures d'écran, politique de confidentialité — obligatoire aussi), et
+   remplir la section **Confidentialité** : voir le § dédié ci-dessous.
 4. **Build & upload** : *Xcode → Product → Archive*, puis *Distribute
    App*, ou `flutter build ipa` + l'app *Transporter*.
 5. **TestFlight** (recommandé avant la review publique), puis soumission
@@ -243,3 +244,53 @@ contrairement à un release cassé découvert après validation du store.
 - [ ] Mobile rebuild avec `--dart-define=PLAY_STORE_URL=...`/`APP_STORE_URL=...`
 - [ ] Vérifier que le build de release **ne** passe **pas** de `--dart-define=API_BASE_URL` (le défaut `env.dart` est déjà la production)
 - [ ] Test réel : lien partagé → app installée → ouvre la fiche promo ; app absente → redirige vers le store
+
+
+---
+
+## Déclaration de confidentialité — les deux stores (2026-08-12)
+
+⚠️ **Elle a changé avec la bascule géographique, et dans le sens qui coûte si
+on se trompe.** Jusqu'ici l'app pouvait dire qu'elle ne collectait aucune
+donnée du client. Ce n'est plus vrai : le client **enregistre un point** sur la
+carte, et ce point est transmis au service pour construire sa liste.
+
+### Ce qu'il faut déclarer
+
+| | Google Play — « Sécurité des données » | App Store Connect — « Confidentialité » |
+|---|---|---|
+| **Localisation** | **Collectée**, approximative, **fournie par l'utilisateur**. Finalité : *fonctionnalité de l'app*. **Non partagée**, **pas de suivi**, non utilisée pour la publicité | Catégorie *Coarse Location*, usage *App Functionality*, **pas de suivi** |
+| Photos | Collectées (photo du commerce, photos de promo) | *Photos or Videos*, usage *App Functionality* |
+| Téléphone | Collecté (commerçant uniquement — le client n'a pas de compte) | *Phone Number*, usage *App Functionality* |
+
+### Ce qu'il ne faut PAS déclarer, et pourquoi
+
+- **Aucun suivi (« tracking »).** Rien n'est partagé avec des tiers, il n'y a
+  ni identifiant publicitaire, ni régie. `NSPrivacyTracking` vaut `false` dans
+  `PrivacyInfo.xcprivacy`.
+- **Aucune lecture de position en arrière-plan, aucun historique.** La position
+  du capteur sert au centrage de la carte et au calcul des distances, **sur
+  l'appareil**. Elle ne quitte l'appareil que si l'utilisateur s'en sert pour
+  poser son point, par un geste explicite.
+
+### Le piège à ne pas rejouer
+
+⚠️ **Ne pas sous-déclarer pour « rester simple ».** Déclarer « collectée, sans
+suivi » n'ôte rien au produit ; une déclaration fausse coûte un refus — et il y
+en a déjà eu un sur ce sujet précis, le 2026-08-05 (5.1.1(iv), justification de
+localisation qui ne décrivait pas l'usage réel).
+
+⚠️ **Et ne pas réécrire `NSLocationWhenInUseUsageDescription` pour y parler de
+transmission** : elle décrit l'accès au capteur, qui reste local. C'est la
+politique de confidentialité qui décrit le point enregistré. Elle est désormais
+localisée dans `ios/Runner/{fr,en,ar}.lproj/InfoPlist.strings` — la version du
+`Info.plist` n'est qu'un repli.
+
+### Fichiers concernés
+
+- `apps/mobile/ios/Runner/PrivacyInfo.xcprivacy` — manifeste de confidentialité,
+  **obligatoire chez Apple**, absent jusqu'au 2026-08-12.
+- `apps/mobile/ios/Runner/{fr,en,ar}.lproj/InfoPlist.strings` — les
+  justifications de permission dans les trois langues de l'app.
+- `CFBundleLocalizations` dans `Info.plist` — sans elle, iOS ne chercherait
+  aucun fichier localisé.
