@@ -3167,6 +3167,56 @@ la bascule, et leurs paramètres demandent le calcul complet du décor d'écran.
   ne se chargeait pas. Réglé par `npm install`. La suite complète rend **107
   tests verts sur 10 fichiers**.
 
+### 2026-08-13 — le banc de frontière était vide depuis 24 h
+
+**Le module `scripts/lib/frontiere_http.py` faisait 0 octet**, et le banc rendait
+0 sans rien mesurer. Trouvé par l'analyse d'impact du chantier suivant, comme le
+défaut précédent — deux fois de suite, c'est une revue adverse qui a vu ce
+qu'aucun contrôle ne pouvait voir.
+
+**Ce qui s'est passé.** Le commit `72d43d3` annonçait la correction d'un
+décompte (16 → 15 dans trois fichiers). Il a bien corrigé `CLAUDE.md` et ce
+fichier-ci — et **supprimé les 489 lignes du module** au passage, là où le
+correctif attendu était un chiffre dans un commentaire. Le message de commit
+parlait de trois fichiers, le diff en touchait trois : rien ne dépassait.
+
+**Pourquoi rien n'a levé, et c'est tout le sujet.** `python3 fichier_vide.py`
+sort en **0**. L'auto-test bloquant « réussissait », le `exec` qui suit
+« réussissait », et le banc affichait son seul titre avant de rendre 0. Le
+contrôle qui tient la règle 33 — le **seul** capable de dire qu'aucune route
+n'est ouverte par oubli — était devenu un `exit 0` déguisé. C'est le cas de la
+règle 28 dans sa forme la plus pure : il ne rassurait pas *à tort*, il ne
+regardait **rien du tout**.
+
+⚠️ **Et il l'a fait dans une fenêtre où le produit bougeait beaucoup** : ces
+24 h couvrent la fin de la bascule géographique, qui ajoutait et retirait des
+routes. Aucune n'a été vérifiée.
+
+**Trois corrections** (`47b5474`) :
+
+1. le module est restauré depuis `72d43d3^`, avec le 16 → 15 que ce commit
+   entendait faire — le dictionnaire porte bien **15** entrées ;
+2. **l'enveloppe n'accepte plus un code de sortie pour un verdict.** Elle exige
+   désormais que l'auto-test ait annoncé ses cas *mesurés*
+   (`auto-test : N cas, dont M refus`). Un module vide, tronqué, ou qui
+   n'exécute plus son auto-test échoue bruyamment. **Éprouvé par mutation** :
+   module vidé ⇒ `exit 2` avec le bon message ; restauré ⇒ `git diff` muet ;
+3. le **« sur 48 »** écrit en dur dans le message `--only` se mesure. Il était
+   déjà faux — la mesure rend **51**. Un nombre dans une phrase ne peut pas
+   échouer : c'est exactement ce que `72d43d3` prétendait corriger, dans le
+   fichier qu'il a supprimé.
+
+**Mesure de reprise** (décor du jour, backend WSL) : `auto-test 17/17, dont 6
+refus` · **51 routes protégées sur 66**, 15 ouvertes épinglées, 3 host-scopées ·
+**147 sondes, 0 échec**. Le banc refuse aussi correctement sans identifiants
+(« aucune valeur par défaut ici », règle 29) — vérifié en premier passage.
+
+**Ce qu'on en retient, et qui dépasse ce fichier.** Un banc peut mourir sans
+rougir. Le code de sortie d'un interpréteur mesure qu'il n'a **pas planté**, pas
+qu'il a **travaillé** — toute enveloppe qui délègue son verdict à un `||` fait
+la même hypothèse, et la même erreur. Le remède n'est pas la vigilance : c'est
+qu'un contrôle produise une **mesure** que l'enveloppe puisse exiger.
+
 ---
 
 ## Comment tenir ce fichier
