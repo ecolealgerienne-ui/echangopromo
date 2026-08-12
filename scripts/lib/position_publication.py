@@ -174,6 +174,15 @@ def verdict_publication(statut, code):
     return "ok", "publication acceptée (%s)" % statut
 
 
+def _exiger(nom):
+    valeur = os.environ.get(nom)
+    if not valeur:
+        print("❌ %s absent de l'environnement — coller le bloc export du décor."
+              % nom)
+        sys.exit(2)
+    return valeur
+
+
 def _v(libelle, obtenu, attendu):
     if obtenu != attendu:
         print("  ❌ auto-test : %s → %r au lieu de %r" % (libelle, obtenu, attendu))
@@ -254,6 +263,62 @@ def main():
         print("  ⚠️  le compte naît avec une position — prémisse fausse")
         return 2
     print("  ⓘ  compte créé sans position, comme attendu")
+    commercant_id = moi.get("id")
+    time.sleep(PACE)
+
+    # ── Lever TOUS les autres blocages, sinon on mesure le mauvais refus ─────
+    #
+    # ⚠️ Ce bloc n'est pas du décor de confort, c'est la prémisse elle-même
+    # (règle #38). La première version de ce banc s'en passait : un commerçant
+    # auto-inscrit était refusé par `COMMERCANT_REGISTRE_NOT_VALIDATED` bien
+    # avant d'atteindre la garde de position, et le banc rendait ❌ sur un
+    # produit correct. Il a rendu ❌ pour la bonne raison — il exige le CODE et
+    # pas le statut — mais c'était le scénario qui était faux, pas le produit.
+    #
+    # Quatre gardes se suivent dans `PromoService` : registre, revue de profil,
+    # position, plafond. Pour mesurer la troisième, il faut avoir franchi les
+    # deux premières. La validation du registre efface aussi
+    # `profilePendingReview` (`resolveRegistreVerification`), donc ces quelques
+    # requêtes lèvent bien les deux.
+    print("\n── 1 bis. lever le blocage registre, pour isoler la position ──")
+    admin_email = _exiger("ADMIN_EMAIL")
+    admin_password = _exiger("ADMIN_PASSWORD")
+    st, d = appeler("POST", "/admin/login",
+                    corps={"email": admin_email, "password": admin_password})
+    jeton_admin = d.get("accessToken")
+    if not jeton_admin:
+        print("  ⚠️  connexion admin impossible (%s %s)" % (st, d.get("code")))
+        return 2
+    time.sleep(PACE)
+
+    st, up = televerser(jeton, "registre")
+    cle_registre = up.get("key")
+    if not cle_registre:
+        print("  ⚠️  téléversement du registre impossible (%s)" % st)
+        return 2
+    time.sleep(PACE)
+
+    st, d = appeler("POST", "/commercant/me/registre", jeton,
+                    {"registreKey": cle_registre})
+    if st not in (200, 201):
+        print("  ⚠️  dépôt du registre refusé (%s %s)" % (st, d.get("code")))
+        return 2
+    time.sleep(PACE)
+
+    st, d = appeler("POST", "/admin/commercant/%s/registre/valider"
+                    % commercant_id, jeton_admin)
+    if st not in (200, 201):
+        print("  ⚠️  validation du registre refusée (%s %s)" % (st, d.get("code")))
+        return 2
+    print("  ⓘ  registre validé — il ne reste que la position")
+    time.sleep(PACE)
+
+    # La prémisse, vérifiée et non supposée : le compte n'a toujours pas de
+    # position, et plus aucun autre blocage.
+    _, moi = appeler("GET", "/commercant/me", jeton)
+    if moi.get("latitude") is not None or moi.get("profilePendingReview"):
+        print("  ⚠️  état de départ inattendu (position ou revue de profil)")
+        return 2
     time.sleep(PACE)
 
     st, up = televerser(jeton, "promo")

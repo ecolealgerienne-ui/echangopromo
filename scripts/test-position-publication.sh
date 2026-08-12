@@ -14,7 +14,14 @@
 # seul chemin qui autorise encore un compte sans position, la création par agent
 # l'exigeant depuis le 2026-08-12. Il ne touche à aucun compte existant.
 #
-# ⚠️ Il consomme 2 requêtes sur le seau strict (5/min/IP).
+# ⚠️ Exige ADMIN_EMAIL et ADMIN_PASSWORD dans l'environnement : il faut lever
+# le blocage registre pour que la garde de position soit seulement ATTEIGNABLE.
+# Quatre gardes se suivent dans PromoService (registre, revue de profil,
+# position, plafond) ; sans ce décor, le banc mesurerait la première.
+#
+# ⚠️ Il consomme 3 requêtes sur le seau strict (5/min/IP) : inscription du
+# commerçant, connexion admin, et la marge. Attendre une minute après un autre
+# banc — un 429 se déguise en refus métier.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RACINE="$(cd "$HERE/.." && pwd)"
