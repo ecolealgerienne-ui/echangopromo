@@ -34,11 +34,15 @@ commune »).
 
 ── Usage ────────────────────────────────────────────────────────────────────
 
-⚠️ **La sonde de globalité exige au moins une diapositive CURÉE.** Sans elle
-elle ne peut rien conclure — et ce n'est pas un défaut du banc : la globalité
-ne porte que sur la curation, le repli suivant le point par conception. Lancer
-`./scripts/test-admin-highlight.sh` **avant** celui-ci, qui en crée une.
-Sans cet ordre, ce banc rend « non concluant » et c'est le bon verdict.
+⚠️ **La sonde de globalité exige au moins une diapositive CURÉE**, et le banc
+la pose lui-même avant de mesurer, puis la retire. Il l'a d'abord empruntée à
+`test-admin-highlight.sh` — mauvaise idée : ce banc-là **supprime la sienne en
+fin de course**, si bien que la globalité ne concluait jamais. Une dépendance
+d'ordre entre bancs est invisible, vraie un jour et fausse le lendemain ; un
+banc qui a besoin d'un état le construit.
+
+Exige donc ADMIN_EMAIL / ADMIN_PASSWORD / PROMO_ID (bloc export du décor). Sans
+eux il le dit et la globalité reste « non concluant » — jamais un faux vert.
 
     python3 scripts/lib/client_highlight.py --self-test
     ./scripts/test-client-highlight.sh
@@ -158,6 +162,30 @@ def _champs(noeud, noms):
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+def appeler_ecrire(methode, chemin, jeton=None, corps=None):
+    """Variante authentifiée — le banc pose puis retire sa propre curation."""
+    donnees = json.dumps(corps).encode() if corps is not None else None
+    req = urllib.request.Request(API_URL + chemin, data=donnees, method=methode)
+    req.add_header("Content-Type", "application/json")
+    req.add_header("X-Device-Id", DEVICE_ID)
+    if jeton:
+        req.add_header("Authorization", "Bearer " + jeton)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            brut = r.read()
+            try:
+                return r.status, json.loads(brut or b"{}")
+            except Exception:
+                return r.status, {}
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read())
+        except Exception:
+            return e.code, {}
+    except Exception as e:
+        return None, {"code": "RESEAU: %s" % e}
+
+
 def appeler(chemin):
     req = urllib.request.Request(API_URL + chemin, method="GET")
     req.add_header("X-Device-Id", DEVICE_ID)
@@ -256,11 +284,42 @@ def main():
     noter("aucun champ interne", *verdict_fuite(sans))
     time.sleep(PACE)
 
+    # ── La curation, posée PAR CE BANC ────────────────────────────────────
+    #
+    # ⚠️ **Sans elle, la sonde de globalité ne peut rien conclure**, et un banc
+    # qui ne conclut pas ne mesure pas. Le décor n'en fournit aucune, et
+    # `admin_highlight.py` supprime la sienne en fin de course — s'appuyer sur
+    # lui aurait été une dépendance d'ordre invisible, vraie un jour et fausse
+    # le lendemain. Un banc qui a besoin d'un état le construit.
+    hid = None
+    ja = None
+    admin_email = os.environ.get("ADMIN_EMAIL")
+    admin_password = os.environ.get("ADMIN_PASSWORD")
+    promo_id = os.environ.get("PROMO_ID")
+    if admin_email and admin_password and promo_id:
+        _, d = appeler_ecrire("POST", "/admin/login", corps={
+            "email": admin_email, "password": admin_password})
+        ja = d.get("accessToken")
+        if ja:
+            _, d = appeler_ecrire("POST", "/admin/highlight", ja, {
+                "promoId": promo_id,
+                "imageKey": "highlight-images/banc/diapo.jpg",
+                "titre": "Banc bandeau", "sousTitre": "curation du banc",
+                "active": True})
+            hid = d.get("id")
+            time.sleep(PACE)
+    if hid is None:
+        print("  ⓘ  curation impossible a poser — la globalite ne conclura pas")
+
     print("\n── 2. avec un point de recherche ──")
     # ⚠️ Un point VOLONTAIREMENT loin du décor (Tamanrasset, ~1500 km), pour que
     # la variation soit réelle. Un point voisin rendrait le même repli que sans
     # point, et la sonde ne distinguerait plus « la curation est globale » de
     # « rien n'a changé parce que rien n'a bougé ».
+    # ⚠️ On relit « sans point » APRÈS la pose : sinon la comparaison porte
+    # sur une photo d'avant la curation — deux états du serveur au lieu de
+    # deux cadrages (règle #38 : mesurer au plus près du geste).
+    _, sans = appeler("/highlight")
     st, avec = appeler("/highlight?latitude=22.785&longitude=5.523&radiusKm=5")
     if st != 200:
         noter("GET /highlight avec un point", "non_concluant",
@@ -281,6 +340,10 @@ def main():
     # prouver la globalité (règle #38).
     noter("le repli, lui, suit le point",
           *verdict_repli_suit(sans.get("items"), avec.get("items")))
+
+    # ── Nettoyage : ne rien laisser derrière soi ─────────────────────────
+    if hid and ja:
+        appeler_ecrire("DELETE", "/admin/highlight/%s" % hid, ja)
 
     print("\n" + "═" * 64)
     echecs = resultats.count("echec")
