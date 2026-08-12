@@ -468,11 +468,41 @@ silencieusement du périmètre de tout agent.
 
 ⇒ **Décision séparée, à prendre le jour où le rôle agent disparaît.**
 
+> ✅ **Prise le 2026-08-13 : l'agent devient GLOBAL.** ⚠️ Contrairement à ce
+> qu'on pourrait lire ici après coup, **ce document ne l'avait pas décidé** — il
+> avait seulement identifié la question et l'avait laissée ouverte. La décision
+> est postérieure, et elle ouvre un chantier distinct : la suppression de
+> `wilaya`/`commune`, avec une **adresse libre facultative** pour seul texte de
+> lieu.
+>
+> ⚠️ **Ce que cela emporte, et qu'il faut regarder en face** : `scopedCommuneIds`
+> et `assertCommuneMatches` disparaissent. Ce sont les gardes IDOR de la
+> **règle 1**, nées d'un IDOR critique réel. Un agent global n'est plus un agent
+> *mal* cadré, c'est un agent *non* cadré — c'est un choix produit assumé, pas un
+> effet de bord, et il doit être écrit comme tel partout où ces gardes
+> disparaissent.
+>
+> Corollaire : le décor et quatre bancs (`appartenance`, `admin_agents`,
+> `agent_creation`, `admin_dashboard`) reposent sur « deux communes disjointes »
+> pour éprouver l'isolation de l'agent. **Leur sujet disparaît** — ils ne se
+> corrigent pas, ils se suppriment.
+>
+> ⚠️ **Et une perte irréversible à traiter AVANT la migration** : mesuré le
+> 2026-08-13, 78 commerçants actifs, 66 avec une adresse. **Douze n'ont que leur
+> commune** comme information de lieu. Supprimer la colonne la détruit
+> définitivement, et l'adresse étant facultative, rien ne la reconstituera. Le
+> remède est une recopie `wilaya, commune → adresse` quand celle-ci est vide,
+> dans la même migration.
+
 ### 4.2 La commune est la frontière d'autorisation de l'agent
 
 `AdminController.scopedCommuneIds` (`admin.controller.ts:267-273`) cadre quatre
 endpoints (`:318`, `:404`, `:426`, `:704`), et `assertCommuneMatches` est la garde
 IDOR née de la **règle 1**, elle-même née d'un IDOR critique réel.
+
+> ✅ **Caduc depuis le 2026-08-13** (voir §4.1) : l'agent devenant global, cette
+> frontière n'a plus d'objet. Ce qui suit décrit l'état **avant** cette décision,
+> et reste la meilleure description de ce que sa suppression emporte.
 
 ⇒ La décision 9 se lit « **`communeId` reste rempli** ». La cascade wilaya → commune
 reste à l'inscription, et `GET /commune` reste une route ouverte épinglée

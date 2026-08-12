@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../domain/enums/onboarding_role.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../shared/widgets/app_settings_actions.dart';
 import '../../../providers/core_providers.dart';
 
 /// Deuxième écran du premier lancement : oriente l'accueil, sans créer de
@@ -46,38 +47,62 @@ class RoleChoiceScreen extends ConsumerWidget {
 
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(l10n.onboardingWelcomeTitle,
-                  style: textTheme.headlineMedium),
-              const SizedBox(height: 8),
-              Text(
-                l10n.onboardingWelcomeSubtitle,
-                style: textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+        // ⚠️ **Le sélecteur de langue manquait ici, et c'était le pire endroit
+        // pour l'oublier** : c'est le PREMIER écran, et le seul que voit un
+        // utilisateur qui ne lit pas le français. Les 22 autres écrans le
+        // portent via leur `AppBar` — celui-ci n'en a pas, et il est passé
+        // entre les mailles (signalé le 2026-08-13).
+        //
+        // Épinglé en haut, HORS de la colonne centrée : placé dedans, il aurait
+        // simplement flotté juste au-dessus de « Bienvenue » au lieu d'occuper
+        // le coin de l'écran. Et pas d'`AppBar` ajoutée pour l'occasion : une
+        // barre de titre au-dessus de « Bienvenue » ferait doublon.
+        child: Column(
+          children: [
+            const Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: AppSettingsActions(),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(l10n.onboardingWelcomeTitle,
+                        style: textTheme.headlineMedium),
+                    const SizedBox(height: 8),
+                    Text(
+                      l10n.onboardingWelcomeSubtitle,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    _RoleCard(
+                      icon: Icons.person_outline,
+                      title: l10n.onboardingRoleClientTitle,
+                      description: l10n.onboardingRoleClientDesc,
+                      onTap: () => _choose(context, ref, OnboardingRole.client),
+                    ),
+                    const SizedBox(height: 12),
+                    _RoleCard(
+                      icon: Icons.storefront_outlined,
+                      title: l10n.onboardingRoleMerchantTitle,
+                      description: l10n.onboardingRoleMerchantDesc,
+                      tintWithSecondary: true,
+                      onTap: () =>
+                          _choose(context, ref, OnboardingRole.commercant),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 28),
-              _RoleCard(
-                icon: Icons.person_outline,
-                title: l10n.onboardingRoleClientTitle,
-                description: l10n.onboardingRoleClientDesc,
-                onTap: () => _choose(context, ref, OnboardingRole.client),
-              ),
-              const SizedBox(height: 12),
-              _RoleCard(
-                icon: Icons.storefront_outlined,
-                title: l10n.onboardingRoleMerchantTitle,
-                description: l10n.onboardingRoleMerchantDesc,
-                tintWithSecondary: true,
-                onTap: () => _choose(context, ref, OnboardingRole.commercant),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
