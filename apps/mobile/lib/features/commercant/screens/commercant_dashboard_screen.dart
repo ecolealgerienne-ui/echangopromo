@@ -14,10 +14,12 @@ import '../../../domain/models/notification.dart' as domain;
 import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../../shared/providers/notification_provider.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/app_settings_actions.dart';
+import '../../shared/widgets/location_capture_field.dart';
 import '../../shared/widgets/notifications_panel.dart';
 import '../../shared/widgets/status_chip.dart';
 import '../providers/commercant_providers.dart';
@@ -46,6 +48,14 @@ class CommercantDashboardScreen extends ConsumerWidget {
     final slotsAsync = ref.watch(promoSlotsProvider);
     final slots = slotsAsync.valueOrNull;
     final atCap = slots?.auPlafond ?? false;
+    // Le bouton doit refléter les **deux** raisons de ne pas pouvoir publier,
+    // sinon il invite à un geste que le serveur refusera. Tant que la fiche
+    // n'est pas chargée on n'en sait rien : on laisse actif plutôt que de
+    // désactiver sur une supposition — le refus serveur, lui, est explicite.
+    final me = meAsync.valueOrNull;
+    final sansPosition =
+        me != null && (me.latitude == null || me.longitude == null);
+    final blocage = atCap || sansPosition;
 
     return Scaffold(
       appBar: AppBar(
@@ -110,6 +120,15 @@ class CommercantDashboardScreen extends ConsumerWidget {
                   _RegistreStatusBanner(commercant: commercant),
                   if (commercant.profilePendingReview)
                     const _ProfilePendingReviewBanner(),
+                  // ⚠️ Permanent tant que la position manque, pas un message
+                  // affiché une fois à l'inscription : ce moment-là est le
+                  // pire possible pour le commerçant — il est à l'intérieur,
+                  // pressé, il refuse le GPS et ferme le message. Ensuite son
+                  // tableau de bord lui dirait « 3 en ligne », tout vert, et
+                  // aucun client ne le verrait jamais.
+                  if (commercant.latitude == null ||
+                      commercant.longitude == null)
+                    const _MissingPositionBanner(),
                 ],
               ),
             ),
@@ -178,7 +197,7 @@ class CommercantDashboardScreen extends ConsumerWidget {
         // compte 2 promos en ligne, le tableau de bord affiche « 1 / 5 » et
         // « il vous reste 4 emplacements ». Trouvé par le parcours de création
         // le 2026-08-05.
-        onPressed: atCap
+        onPressed: blocage
             ? null
             : () async {
                 final created =
@@ -187,12 +206,12 @@ class CommercantDashboardScreen extends ConsumerWidget {
                   invalidateAfterPromoChange(ref);
                 }
               },
-        backgroundColor: atCap
+        backgroundColor: blocage
             ? Theme.of(context).colorScheme.surfaceContainerHighest
             : null,
         foregroundColor:
-            atCap ? Theme.of(context).colorScheme.onSurfaceVariant : null,
-        icon: Icon(atCap ? Icons.block : Icons.add),
+            blocage ? Theme.of(context).colorScheme.onSurfaceVariant : null,
+        icon: Icon(blocage ? Icons.block : Icons.add),
         // Désactivé plutôt que masqué au plafond : sa disparition laisserait
         // croire à un bug, alors que le message explique la limite.
         //
@@ -200,10 +219,16 @@ class CommercantDashboardScreen extends ConsumerWidget {
         // en toutes lettres dans les trois `.arb` (« Plafond de 5 promos
         // atteint »), si bien qu'un changement de `PROMO_ACTIVE_CAP` faisait
         // annoncer 5 à une app qui en autorisait déjà 8 (2026-08-05).
+        // La position d'abord : c'est le blocage que le commerçant peut lever
+        // seul, et en une fois. Annoncer le plafond à quelqu'un qui n'est de
+        // toute façon visible par personne l'enverrait résoudre le mauvais
+        // problème.
         label: Text(
-          slots != null && slots.auPlafond
-              ? l10n.capReachedLabel(slots.plafond)
-              : l10n.newPromoTitle,
+          sansPosition
+              ? l10n.positionRequiredFabLabel
+              : slots != null && slots.auPlafond
+                  ? l10n.capReachedLabel(slots.plafond)
+                  : l10n.newPromoTitle,
         ),
       ),
     );
@@ -918,6 +943,67 @@ class _ProfilePendingReviewBanner extends StatelessWidget {
         message: l10n.profilePendingReviewBannerMessage,
       ),
     );
+  }
+}
+
+/// Bandeau permanent tant que le commerce n'a pas de position.
+///
+/// ⚠️ **Il dit ce que le commerçant PERD, pas ce qu'il enfreint.** « Position
+/// obligatoire » décrirait la règle sans expliquer l'enjeu ; « vos promos ne
+/// sont visibles par personne » lui donne la raison d'agir. C'est aussi
+/// pourquoi le bandeau porte l'action : découvrir le problème sans pouvoir le
+/// corriger sur place, c'est ce qui s'était produit avec le plafond de promos
+/// (« il ne la découvrait qu'en se faisant refuser une publication »).
+class _MissingPositionBanner extends ConsumerWidget {
+  const _MissingPositionBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final semanticColors = Theme.of(context).extension<AppSemanticColors>()!;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: _AlertBox(
+        color: semanticColors.warning,
+        title: l10n.missingPositionBannerTitle,
+        message: l10n.missingPositionBannerMessage,
+        action: _AlertAction(
+          label: l10n.missingPositionBannerAction,
+          onPressed: () => _capturer(context, ref),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _capturer(BuildContext context, WidgetRef ref) async {
+    final capturee = await showDialog<(double, double)>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(AppLocalizations.of(dialogContext)!.locationCapture),
+        content: LocationCaptureField(
+          latitude: null,
+          longitude: null,
+          // Le champ ne fait que capter : c'est ce callback qui referme et
+          // remonte le point. Rien n'est envoyé tant que le GPS n'a pas rendu
+          // de position — pas de « position par défaut » qui masquerait un
+          // échec de capture.
+          onChanged: (latitude, longitude) =>
+              Navigator.of(dialogContext).pop((latitude, longitude)),
+        ),
+      ),
+    );
+    if (capturee == null || !context.mounted) return;
+
+    await ref.read(commercantApiProvider).setPosition(
+          latitude: capturee.$1,
+          longitude: capturee.$2,
+        );
+    // ⚠️ Sans cette invalidation, le bandeau resterait affiché après la pose et
+    // le bouton « Nouvelle promo » désactivé : l'écran n'est pas reconstruit de
+    // zéro au retour d'une boîte de dialogue (règle #37).
+    ref.invalidate(commercantMeProvider);
+    ref.invalidate(promoSlotsProvider);
   }
 }
 

@@ -24,6 +24,7 @@ import { Commercant } from './entities/commercant.entity';
 import { LoginCommercantDto } from './dto/login-commercant.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
 import { RequestRegistreVerificationDto } from './dto/request-registre-verification.dto';
+import { SetCommercantPositionDto } from './dto/set-position.dto';
 import { UpdateCommercantDto } from './dto/update-commercant.dto';
 
 @Controller('commercant')
@@ -133,6 +134,33 @@ export class CommercantController {
       user.sub,
       dto,
     );
+    return this.toMeJson(commercant);
+  }
+
+  /**
+   * Pose la position du commerce, et **elle seule**.
+   *
+   * Existe pour une raison précise : `PATCH /commercant/me` allume
+   * `profilePendingReview`, qui **bloque la publication**. Un commerçant à qui
+   * l'on vient de refuser une publication faute de position, et qui la corrige
+   * par la route générale, se retrouve aussitôt bloqué une seconde fois — plus
+   * longtemps, puisqu'il attend alors un administrateur. Il ne peut pas s'en
+   * sortir seul, et le jour de la bascule cela ferait une file de modération de
+   * la taille du parc sans position.
+   *
+   * Voir `SetCommercantPositionDto` et `CommercantService.setPosition` : la
+   * dispense ne vaut que pour la **première** pose ; déplacer une position déjà
+   * renseignée reste une modification de profil.
+   */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('commercant')
+  @Patch('me/position')
+  async setMyPosition(
+    @CurrentUser() user: AuthTokenPayload,
+    @Body() dto: SetCommercantPositionDto,
+  ) {
+    const commercant = await this.commercantService.setPosition(user.sub, dto);
     return this.toMeJson(commercant);
   }
 

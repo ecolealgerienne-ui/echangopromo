@@ -48,6 +48,9 @@ import urllib.request
 API_URL = os.environ.get("API_URL", "http://localhost:3000")
 PACE = float(os.environ.get("PACE_SECONDS", "1.1"))
 DEVICE_ID = "banc-profil-0001"
+# Position de décor, à Djelfa — obligatoire à la création par agent depuis le
+# 2026-08-12, et sans elle publier est refusé (règle #38).
+DECOR_LAT, DECOR_LNG = 34.6689, 3.2597
 
 RESERVES = ("pinHash", "tokenVersion", "deletedAt", "suspendedAt")
 
@@ -225,7 +228,8 @@ def main():
     st, d = appeler("POST", "/agent/commercant", jg, {
         "telephone": tel, "nom": "Commerce Profil", "pin": pin_initial,
         "adresse": "Rue du profil", "categorie": "alimentation",
-        "communeId": communes[0]})
+        "communeId": communes[0],
+        "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     if st not in (200, 201):
         print("❌ création du commerçant du banc refusée (HTTP %s, %s)"
               % (st, d.get("code")))

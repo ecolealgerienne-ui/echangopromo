@@ -70,6 +70,16 @@ export enum ErrorCode {
   COMMERCANT_REGISTRE_KEY_MISMATCH = 'COMMERCANT_REGISTRE_KEY_MISMATCH',
   COMMERCANT_PROFILE_PENDING_REVIEW = 'COMMERCANT_PROFILE_PENDING_REVIEW',
   COMMERCANT_ACCOUNT_INACTIVE = 'COMMERCANT_ACCOUNT_INACTIVE',
+  /**
+   * Publication refusée faute de position (bascule géographique, 2026-08-12).
+   *
+   * ⚠️ **Son message doit rester nettement distinct de
+   * `COMMERCANT_PROFILE_PENDING_REVIEW`.** Ce sont deux blocages successifs sur
+   * le même geste, et un commerçant qui lit deux refus voisins croit avoir déjà
+   * fait ce qu'on lui demande. L'un dit « il manque un renseignement », l'autre
+   * « un humain doit valider » : la différence doit s'entendre à la lecture.
+   */
+  COMMERCANT_POSITION_REQUIRED = 'COMMERCANT_POSITION_REQUIRED',
 
   /**
    * Notification introuvable **pour ce destinataire** — soit elle appartient à

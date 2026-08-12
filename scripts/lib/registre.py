@@ -51,6 +51,9 @@ API_URL = os.environ.get("API_URL", "http://localhost:3000")
 PACE = float(os.environ.get("PACE_SECONDS", "1.2"))
 DEVICE_ID = "banc-registre-0001"
 PIN = "654321"
+# Position de décor, à Djelfa — obligatoire à la création par agent depuis le
+# 2026-08-12, et sans elle publier est refusé (règle #38).
+DECOR_LAT, DECOR_LNG = 34.6714, 3.2630
 
 JPEG_1x1 = base64.b64decode(
     "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRof"
@@ -254,7 +257,8 @@ def main():
     st, d = appeler("POST", "/agent/commercant", jg, {
         "telephone": tel, "nom": "Commerce Registre", "pin": PIN,
         "adresse": "Rue du registre", "categorie": "alimentation",
-        "communeId": communes[0]})
+        "communeId": communes[0],
+        "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     cid = d.get("id")
     if not cid:
         print("❌ création refusée (HTTP %s, %s)" % (st, d.get("code")))

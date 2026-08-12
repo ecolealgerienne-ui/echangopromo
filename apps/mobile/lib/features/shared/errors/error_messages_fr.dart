@@ -81,6 +81,13 @@ const Map<String, String> errorMessagesFr = {
       "Ce document n'appartient pas à ce commerçant.",
   'COMMERCANT_PROFILE_PENDING_REVIEW':
       'Les modifications de votre profil doivent être validées par un administrateur avant de pouvoir publier des promos.',
+  // ⚠️ Volontairement très éloigné du message ci-dessus : ce sont deux blocages
+  // successifs sur le même geste. Un commerçant qui lit deux refus voisins
+  // croit avoir déjà fait ce qu'on lui demande. Ici il manque un
+  // renseignement qu'il peut fournir seul ; au-dessus, il faut attendre un
+  // humain.
+  'COMMERCANT_POSITION_REQUIRED':
+      'Indiquez la position de votre commerce pour publier : les clients cherchent les promos autour d’eux.',
   'COMMERCANT_ACCOUNT_INACTIVE':
       'Ce compte commerçant est suspendu ou supprimé.',
   'NOTIFICATION_NOT_FOUND': 'Cette notification n’est plus disponible.',

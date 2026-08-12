@@ -52,6 +52,10 @@ API_URL = os.environ.get("API_URL", "http://localhost:3000")
 PACE = float(os.environ.get("PACE_SECONDS", "1.2"))
 DEVICE_ID = "banc-autosupp-0001"
 PIN = "654321"
+# Position de décor, à Djelfa — voir agent_creation.py : obligatoire à la
+# création par agent depuis le 2026-08-12, et sans elle publier est refusé
+# (règle #38 : un banc qui accuse le produit à tort est le pire faux négatif).
+DECOR_LAT, DECOR_LNG = 34.6738, 3.2664
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -263,7 +267,8 @@ def main():
         st, d = appeler("POST", "/agent/commercant", jg, {
             "telephone": tel, "nom": nom, "pin": PIN,
             "adresse": "Rue du banc", "categorie": "alimentation",
-            "communeId": _commune_de_l_agent(jg)})
+            "communeId": _commune_de_l_agent(jg),
+            "latitude": DECOR_LAT, "longitude": DECOR_LNG})
         if st not in (200, 201):
             print("❌ création de %s refusée (HTTP %s, %s)"
                   % (nom, st, d.get("code")))
@@ -339,7 +344,8 @@ def main():
     st, d = appeler("POST", "/agent/commercant", jg, {
         "telephone": tel_victime, "nom": "Commerce Repreneur", "pin": PIN,
         "adresse": "Rue du banc", "categorie": "alimentation",
-        "communeId": _commune_de_l_agent(jg)})
+        "communeId": _commune_de_l_agent(jg),
+        "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     noter("le numéro est libéré (P10)", *verdict_numero_libere(st, d.get("code")))
     time.sleep(PACE)
 

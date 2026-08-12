@@ -667,6 +667,7 @@ export class PromoService {
     if (!dto.asDraft) {
       this.commercantService.assertRegistreValidated(commercant);
       this.commercantService.assertProfileValidated(commercant);
+      this.commercantService.assertPositionSet(commercant);
     }
     this.assertPriceOrder(dto.prixAvant, dto.prixApres);
     this.assertPhotoKeysOwned(dto.photoKeys, commercantId, options?.actorId);
@@ -746,6 +747,7 @@ export class PromoService {
     this.commercantService.assertAccountActive(commercant);
     this.commercantService.assertRegistreValidated(commercant);
     this.commercantService.assertProfileValidated(commercant);
+    this.commercantService.assertPositionSet(commercant);
 
     const dateFin = this.resolveDateFin();
     return this.withCommercantLock(promo.commercantId, async (manager) => {

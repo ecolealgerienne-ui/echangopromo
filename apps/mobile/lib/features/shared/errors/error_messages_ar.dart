@@ -45,6 +45,8 @@ const Map<String, String> errorMessagesAr = {
   'COMMERCANT_REGISTRE_KEY_MISMATCH': 'هذا المستند لا يخص هذا التاجر.',
   'COMMERCANT_PROFILE_PENDING_REVIEW':
       'يجب أن يصادق مسؤول على تعديلات ملفك الشخصي قبل أن تتمكن من نشر العروض.',
+  'COMMERCANT_POSITION_REQUIRED':
+      'حدّد موقع محلك لتتمكن من النشر: الزبائن يبحثون عن العروض القريبة منهم.',
   'COMMERCANT_ACCOUNT_INACTIVE': 'حساب التاجر هذا موقوف أو محذوف.',
   'NOTIFICATION_NOT_FOUND': 'لم يعد هذا الإشعار متاحًا.',
   'RATE_LIMITED': 'عدد كبير جدًا من المحاولات. أعد المحاولة بعد قليل.',

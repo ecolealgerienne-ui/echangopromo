@@ -44,6 +44,11 @@ API_URL = os.environ.get("API_URL", "http://localhost:3000")
 PACE = float(os.environ.get("PACE_SECONDS", "1.1"))
 DEVICE_ID = "banc-agent-creation-0001"
 PIN = "654321"
+# Position de décor, à Djelfa. ⚠️ Obligatoire depuis le 2026-08-12 : la création
+# par agent l'exige, et publier sans position est refusé. Sans ces deux valeurs
+# le banc rendrait ❌ sur un produit parfaitement correct (règle #38) — et
+# d'autant plus crédiblement que le message parlerait bien de position.
+DECOR_LAT, DECOR_LNG = 34.6702, 3.2611
 
 
 def verdict_commune(commune_creee, communes_agent):
@@ -209,7 +214,8 @@ def main():
     st, d = appeler("POST", "/agent/commercant", jg, {
         "telephone": "+213558%s" % base, "nom": "Commerce Agent",
         "pin": PIN, "adresse": "Rue de l'agent", "categorie": "alimentation",
-        "communeId": communes_a[0]})
+        "communeId": communes_a[0],
+        "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     if st not in (200, 201):
         noter("création chez soi", "non_concluant",
               "HTTP %s %s" % (st, d.get("code")))
@@ -233,7 +239,8 @@ def main():
         st, d = appeler("POST", "/agent/commercant", jg, {
             "telephone": "+213559%s" % base, "nom": "Commerce Intrus",
             "pin": PIN, "adresse": "Rue d'ailleurs",
-            "categorie": "alimentation", "communeId": hors[0]})
+            "categorie": "alimentation", "communeId": hors[0],
+            "latitude": DECOR_LAT, "longitude": DECOR_LNG})
         noter("création dans la commune de l'agent B",
               *verdict_refus_commune(st, d.get("code")))
 

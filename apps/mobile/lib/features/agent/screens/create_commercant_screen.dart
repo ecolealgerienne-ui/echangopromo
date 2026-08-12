@@ -54,8 +54,25 @@ class _CreateCommercantScreenState
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
-    if (!_formKey.currentState!.validate() || _communeId == null) {
-      setState(() => _error = _communeId == null ? l10n.communeRequired : null);
+    // ⚠️ La position est **obligatoire ici**, alors qu'elle reste facultative à
+    // l'auto-inscription. L'agent est physiquement dans le commerce : c'est la
+    // seule capture juste par construction. Sans cette garde, chaque tournée
+    // recréerait des fiches invisibles — 40 des 44 commerçants sans position
+    // mesurés le 2026-08-12 venaient de cette route.
+    //
+    // Refusé côté serveur aussi (`CreateCommercantByAgentDto`) : cette
+    // vérification-ci évite un aller-retour réseau pour rien, elle ne le
+    // remplace pas — une garde uniquement client se contourne en appelant
+    // l'API directement.
+    if (!_formKey.currentState!.validate() ||
+        _communeId == null ||
+        _latitude == null ||
+        _longitude == null) {
+      setState(() => _error = _communeId == null
+          ? l10n.communeRequired
+          : (_latitude == null || _longitude == null)
+              ? l10n.positionRequired
+              : null);
       return;
     }
 

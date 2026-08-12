@@ -53,6 +53,8 @@ const Map<String, String> errorMessagesEn = {
       'This document does not belong to this merchant.',
   'COMMERCANT_PROFILE_PENDING_REVIEW':
       'Your profile changes must be validated by an administrator before you can publish promos.',
+  'COMMERCANT_POSITION_REQUIRED':
+      'Set your shop’s location to publish — customers look for promos around them.',
   'COMMERCANT_ACCOUNT_INACTIVE':
       'This merchant account is suspended or deleted.',
   'NOTIFICATION_NOT_FOUND': 'This notification is no longer available.',

@@ -30,6 +30,7 @@ import {
 import { CreateCommercantByAgentDto } from './dto/create-commercant-by-agent.dto';
 import { ListCommercantQueryDto } from './dto/list-commercant-query.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
+import { SetCommercantPositionDto } from './dto/set-position.dto';
 import { UpdateCommercantDto } from './dto/update-commercant.dto';
 
 @Injectable()
@@ -704,6 +705,35 @@ export class CommercantService {
   }
 
   /**
+   * Pose la position du commerce, **sans déclencher la revue de profil quand
+   * il n'y en avait aucune**.
+   *
+   * C'est la sortie de l'impasse décrite dans `SetCommercantPositionDto` : le
+   * commerçant bloqué faute de position doit pouvoir se débloquer **seul**, or
+   * la route générale de profil le renverrait attendre un administrateur.
+   *
+   * ⚠️ **L'exception ne vaut que pour la première pose.** Un commerçant qui
+   * *déplace* une position déjà renseignée décrit un commerce qui a changé
+   * d'adresse — exactement ce que la revue admin existe pour regarder. Ce
+   * `wasUnset` est donc la frontière entre « réparer une donnée manquante » et
+   * « modifier son profil », et l'élargir viderait la revue de son objet.
+   */
+  async setPosition(
+    commercantId: string,
+    dto: SetCommercantPositionDto,
+  ): Promise<Commercant> {
+    const commercant = await this.findByIdOrFail(commercantId);
+    const wasUnset =
+      commercant.latitude === null || commercant.longitude === null;
+    commercant.latitude = dto.latitude;
+    commercant.longitude = dto.longitude;
+    if (!wasUnset) {
+      commercant.profilePendingReview = true;
+    }
+    return this.commercants.save(commercant);
+  }
+
+  /**
    * Contrairement à `assertRegistreValidated`, s'applique à **tous** les
    * commerçants sans exception d'origine — décision produit du 2026-07-12 :
    * toute modification de profil (même pour un commerçant confirmé par un
@@ -714,6 +744,34 @@ export class CommercantService {
       throw new ForbiddenAppException(
         ErrorCode.COMMERCANT_PROFILE_PENDING_REVIEW,
         'Les modifications de votre profil doivent être validées par un administrateur avant de pouvoir publier des promos',
+      );
+    }
+  }
+
+  /**
+   * Sans position, une promo n'est **visible par personne** : les clients
+   * cherchent par proximité et la carte filtre sur un cadre, qu'un `NULL` ne
+   * peut pas satisfaire. Publier serait donc un geste sans effet — et sans
+   * cette garde, le commerçant verrait « 3 en ligne » sur un stock que
+   * personne ne voit, exactement le défaut que `countVisible` avait déjà
+   * produit une fois (règle #8).
+   *
+   * ⚠️ **`=== null`, pas la véracité.** `!commercant.longitude` refuserait une
+   * longitude à `0`, qui est le méridien de Greenwich — une coordonnée
+   * parfaitement légitime. Même piège que `configNumber` côté configuration.
+   *
+   * ⚠️ **Ne jamais appeler cette garde sur un enregistrement en brouillon.**
+   * `promo.service.ts` documente la régression exacte qu'on refabriquerait :
+   * des gardes posées pour tout le monde refusaient aussi « Enregistrer comme
+   * brouillon », « avec un message parlant de publier, sur un geste qui ne
+   * publie pas ». Un commerçant sans position doit pouvoir **préparer** ses
+   * promos ; c'est les mettre en ligne qui exige un point.
+   */
+  assertPositionSet(commercant: Commercant): void {
+    if (commercant.latitude === null || commercant.longitude === null) {
+      throw new ForbiddenAppException(
+        ErrorCode.COMMERCANT_POSITION_REQUIRED,
+        'Indiquez la position de votre commerce pour pouvoir publier : les clients cherchent les promos autour d’eux',
       );
     }
   }

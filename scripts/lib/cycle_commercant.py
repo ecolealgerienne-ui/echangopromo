@@ -46,6 +46,10 @@ API_URL = os.environ.get("API_URL", "http://localhost:3000")
 PACE = float(os.environ.get("PACE_SECONDS", "3.2"))
 TEL = os.environ.get("TEL_CYCLE", "+213555000199")
 PIN = "135791"
+# Position de décor, à Djelfa. Obligatoire à la création par agent depuis le
+# 2026-08-12 ; facultative à l'auto-inscription, mais posée quand même ici —
+# ce banc publie, et publier sans position est refusé (règle #38).
+DECOR_LAT, DECOR_LNG = 34.6725, 3.2652
 
 
 def appeler(methode, chemin, jeton=None, corps=None, entetes=None):
@@ -203,7 +207,8 @@ def main():
     commune = appeler("GET", "/commune")[1]["items"][0]["id"]
     st, d = appeler("POST", "/agent/commercant", jg, {
         "telephone": TEL, "nom": "Commerce Cycle", "pin": PIN,
-        "adresse": "Rue du Cycle", "categorie": "alimentation", "communeId": commune})
+        "adresse": "Rue du Cycle", "categorie": "alimentation", "communeId": commune,
+        "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     if st not in (200, 201):
         print("❌ création du commerçant de travail refusée : %s" % d.get("code"))
         sys.exit(2)
@@ -260,7 +265,8 @@ def main():
               "pas de jeton avant suspension — connexion refusée (plafond de 5/min ?)")
     st, d = appeler("POST", "/commercant/register", corps={
         "telephone": TEL, "nom": "Usurpateur", "categorie": "autre",
-        "communeId": commune, "pin": PIN, "acceptedTerms": True})
+        "communeId": commune, "pin": PIN, "acceptedTerms": True,
+        "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     noter("numéro TOUJOURS pris (suspension ≠ libération)",
           *verdict_numero_pris(st, d.get("code")))
     time.sleep(PACE)
@@ -285,7 +291,8 @@ def main():
     noter("promos supprimées", *verdict_compte(len(promos_publiques()), 0, "promos visibles"))
     st, d = appeler("POST", "/commercant/register", corps={
         "telephone": TEL, "nom": "Repreneur du local", "categorie": "autre",
-        "communeId": commune, "pin": PIN, "acceptedTerms": True})
+        "communeId": commune, "pin": PIN, "acceptedTerms": True,
+        "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     noter("numéro LIBÉRÉ par la suppression", *verdict_numero_libre(st, d.get("code")))
     time.sleep(PACE)
 
