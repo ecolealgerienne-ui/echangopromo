@@ -34,9 +34,6 @@
 #   inscription        un commerçant s'inscrit DEPUIS L'APP : formulaire,
 #                      photo du registre, conditions — puis le script vérifie
 #                      que le compte existe et que son registre est en attente.
-#   commune            l'état vide de l'accueil → choix d'une commune → les
-#                      promos DE CETTE COMMUNE apparaissent, et le choix est
-#                      retenu dans le magasin natif.
 #   client             l'accueil et la fiche : une promo fabriquée pour ce
 #                      passage est retrouvée par la recherche, ouverte, et son
 #                      COMPTEUR DE VUES monte côté serveur.
@@ -83,11 +80,11 @@ DEVICE_ID="parcours-ecran-0001"
 
 CHOIX="${1:-tous}"
 case "$CHOIX" in
-  tous|premier-lancement|plafond|creation|admin|agent|moderation|client|inscription|agent-creation|commune|signalement|carte) ;;
+  tous|premier-lancement|plafond|creation|admin|agent|moderation|client|inscription|agent-creation|signalement|carte) ;;
   *) echo "❌ Parcours inconnu : « $CHOIX »."
      echo "   Attendu : premier-lancement | plafond | creation | admin | agent"
      echo "             | moderation | client | inscription | agent-creation"
-     echo "             | commune | signalement | carte"
+     echo "             | signalement | carte"
      echo "             (rien = tous)"
      exit 2 ;;
 esac
@@ -98,7 +95,7 @@ esac
 BESOIN_COMMERCANT=non
 # `inscription` a besoin du décor UNIQUEMENT pour mesurer le plafond auprès du
 # serveur — le compte qu'il crée, lui, est neuf.
-case "$CHOIX" in tous|plafond|creation|client|inscription|commune|signalement|carte) BESOIN_COMMERCANT=oui ;; esac
+case "$CHOIX" in tous|plafond|creation|client|inscription|signalement|carte) BESOIN_COMMERCANT=oui ;; esac
 BESOIN_PRO=non
 case "$CHOIX" in tous|admin|agent|moderation|agent-creation) BESOIN_PRO=oui ;; esac
 
