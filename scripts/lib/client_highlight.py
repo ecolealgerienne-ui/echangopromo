@@ -77,22 +77,54 @@ def verdict_homogene(items):
         len(items), "curé" if cure else "repli")
 
 
-def verdict_globalite(sans_commune, avec_commune):
-    """La curation ne dépend pas des communes du client."""
-    if sans_commune is None or avec_commune is None:
+def verdict_repli_suit(sans_point, avec_point):
+    """Le repli calculé, lui, DOIT changer avec le point.
+
+    Non concluant plutôt qu'échec si aucun repli n'est en jeu : quand la
+    curation remplit le bandeau, il n'y a rien qui doive suivre le point.
+    """
+    if sans_point is None or avec_point is None:
         return "non_concluant", "une des deux réponses est illisible"
-    if not sans_commune and not avec_commune:
+    replis_sans = {i["id"] for i in sans_point if not i.get("curated")}
+    replis_avec = {i["id"] for i in avec_point if not i.get("curated")}
+    if not replis_sans and not replis_avec:
+        return ("non_concluant",
+                "aucun repli des deux côtés — la curation remplit le bandeau, "
+                "il n'y a rien qui doive suivre le point")
+    if replis_sans == replis_avec:
+        return ("echec",
+                "le repli est IDENTIQUE à 1500 km de distance (%d diapo(s)) — "
+                "le point n'est pas pris en compte, et la sonde de globalité "
+                "ne prouve alors plus rien" % len(replis_sans))
+    return "ok", "%d → %d diapo(s) de repli, le cadrage bouge" % (
+        len(replis_sans), len(replis_avec))
+
+
+def verdict_globalite(sans_point, avec_point):
+    """La curation ne dépend pas du point de recherche du client.
+
+    ⚠️ **Cette sonde interrogeait `?communeIds=` jusqu'au 2026-08-12**, et ce
+    paramètre n'existe plus. `ValidationPipe({ whitelist: true })` retire en
+    silence tout paramètre inconnu : les deux réponses seraient devenues
+    identiques **parce qu'on n'avait rien demandé**, et le banc aurait conclu
+    « la curation ne dépend pas de la commune » sans avoir fait varier quoi que
+    ce soit. Vert pour la mauvaise raison, indéfiniment — le mode de panne que
+    la règle #28 vise.
+    """
+    if sans_point is None or avec_point is None:
+        return "non_concluant", "une des deux réponses est illisible"
+    if not sans_point and not avec_point:
         return "non_concluant", "les deux bandeaux sont vides"
-    cures_sans = {i["id"] for i in sans_commune if i.get("curated")}
-    cures_avec = {i["id"] for i in avec_commune if i.get("curated")}
+    cures_sans = {i["id"] for i in sans_point if i.get("curated")}
+    cures_avec = {i["id"] for i in avec_point if i.get("curated")}
     if not cures_sans and not cures_avec:
         return ("non_concluant",
                 "aucune diapositive curée — la globalité ne porte que sur "
-                "elles, le repli suit la commune par conception")
+                "elles, le repli suit le point par conception")
     if cures_sans != cures_avec:
         manquantes = sorted(cures_sans - cures_avec)
         return ("echec",
-                "la curation change avec la commune : %d diapositive(s) "
+                "la curation change avec le point : %d diapositive(s) "
                 "disparaissent (ex. %s) — l'admin ne comprendrait pas "
                 "pourquoi sa mise en avant s'évapore"
                 % (len(manquantes) or len(cures_avec - cures_sans),
@@ -155,6 +187,9 @@ def self_test():
     _v("bandeau curé homogène", verdict_homogene(cure)[0], "ok")
     _v("bandeau de repli homogène", verdict_homogene(repli)[0], "ok")
     _v("curation identique", verdict_globalite(cure, cure)[0], "ok")
+    # Le repli DOIT bouger avec le point : deux ensembles différents = ok.
+    _v("le repli change avec le point",
+       verdict_repli_suit(repli, [{"id": "z", "curated": False}])[0], "ok")
     _v("projection propre",
        verdict_fuite({"items": [{"imageUrl": "u"}]})[0], "ok")
 
@@ -173,10 +208,18 @@ def self_test():
        verdict_globalite(cure, cure[:1])[0], "echec")
     _v("aucune curée → non concluant",
        verdict_globalite(repli, repli)[0], "non_concluant")
+    # ⚠️ LE cas qui rattrape un serveur ignorant le paramètre : il rendrait la
+    # même chose partout, ce qui satisfait `verdict_globalite` mais ne prouve
+    # rien. Sans ce refus, on prouverait l'immobilité en croyant prouver la
+    # globalité (règle #38).
+    _v("repli identique à 1500 km → le point est ignoré",
+       verdict_repli_suit(repli, repli)[0], "echec")
+    _v("aucun repli des deux côtés → non concluant",
+       verdict_repli_suit(cure, cure)[0], "non_concluant")
     _v("imageKey exposé",
        verdict_fuite({"items": [{"imageKey": "k"}]})[0], "echec")
 
-    refus = 7
+    refus = 9
     total = _ok + len(_echecs)
     print("auto-test : %d cas, dont %d refus" % (total, refus))
     for e in _echecs:
@@ -207,22 +250,27 @@ def main():
     noter("aucun champ interne", *verdict_fuite(sans))
     time.sleep(PACE)
 
-    print("\n── 2. avec une commune ──")
-    st, communes = appeler("/commune?limit=1")
-    items_c = communes.get("items", [])
-    if not items_c:
-        noter("une commune à filtrer", "non_concluant",
-              "le référentiel est vide")
-        return 1
-    st, avec = appeler("/highlight?communeIds=%s" % items_c[0]["id"])
+    print("\n── 2. avec un point de recherche ──")
+    # ⚠️ Un point VOLONTAIREMENT loin du décor (Tamanrasset, ~1500 km), pour que
+    # la variation soit réelle. Un point voisin rendrait le même repli que sans
+    # point, et la sonde ne distinguerait plus « la curation est globale » de
+    # « rien n'a changé parce que rien n'a bougé ».
+    st, avec = appeler("/highlight?latitude=22.785&longitude=5.523&radiusKm=5")
     if st != 200:
-        noter("GET /highlight?communeIds", "non_concluant",
+        noter("GET /highlight avec un point", "non_concluant",
               "HTTP %s %s" % (st, avec.get("code")))
         return 1
     noter("bandeau homogène et sous plafond",
           *verdict_homogene(avec.get("items")))
-    noter("la curation ne dépend pas de la commune",
+    noter("la curation ne dépend pas du point",
           *verdict_globalite(sans.get("items"), avec.get("items")))
+    # ⚠️ La contrepartie, et c'est elle qui donne son sens à la sonde
+    # précédente : le REPLI, lui, DOIT suivre le point. Prise seule, la
+    # globalité est satisfaite par un serveur qui IGNORE le paramètre — il
+    # rendrait la même chose partout. On prouverait l'immobilité en croyant
+    # prouver la globalité (règle #38).
+    noter("le repli, lui, suit le point",
+          *verdict_repli_suit(sans.get("items"), avec.get("items")))
 
     print("\n" + "═" * 64)
     echecs = resultats.count("echec")

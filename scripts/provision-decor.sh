@@ -263,6 +263,27 @@ if [ -z "$COMMERCANT_TOKEN" ]; then
 fi
 pass "Commerçant connecté ($D_COMMERCANT_TEL)"
 
+# ⚠️ **Réparer un compte de décor ANTÉRIEUR au correctif du 2026-08-05.**
+# Ce script est idempotent *par la connexion* : si le compte existe déjà, il
+# n'est jamais réinscrit — donc les coordonnées ajoutées à sa charge utile
+# d'inscription ne s'appliquent jamais à lui. Un décor monté avant cette date
+# reste sans position indéfiniment, et depuis le 2026-08-12 il ne peut plus
+# publier : le décor échouait à l'étape 5 sur `COMMERCANT_POSITION_REQUIRED`,
+# constaté ce jour-là.
+#
+# C'est exactement le cas pour lequel `PATCH /commercant/me/position` existe :
+# elle pose le point SANS déclencher de revue de profil à la première pose, là
+# où `PATCH /commercant/me` renverrait le compte attendre un admin — et le
+# décor se saboterait lui-même, comme le 2026-08-05.
+POSITION_ACTUELLE="$(api GET /commercant/me '' "$COMMERCANT_TOKEN" | jq -r '.latitude // empty')"
+if [ -z "$POSITION_ACTUELLE" ]; then
+  info "Commerçant sans position (compte antérieur) — pose via PATCH /commercant/me/position"
+  out="$(api PATCH /commercant/me/position     '{"latitude":34.6714,"longitude":3.2630}' "$COMMERCANT_TOKEN")"
+  echo "$out" | est_erreur && fail "Pose de la position refusée"     "$(echo "$out" | jq -c '{code,message}')"
+  sleep "$PACE"
+  pass "Position posée (34.6714, 3.2630)"
+fi
+
 # Validation du registre — geste d'administration, pas geste d'utilisateur.
 CID="$(api GET "/admin/commercant?limit=100" '' "$ADMIN_TOKEN" \
   | jq -r --arg t "$D_COMMERCANT_TEL" '.items[]? | select(.telephone==$t) | .id' | head -1)"
