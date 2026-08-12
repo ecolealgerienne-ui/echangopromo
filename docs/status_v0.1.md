@@ -3081,6 +3081,22 @@ qui se dit facultatif et bloque quand même est pire qu'un champ vide : il fait
 chercher l'erreur ailleurs. `LocationCaptureField` prend donc un drapeau
 `requis`, et le libellé le suit.
 
+⚠️ **Cette entrée était fausse jusqu'au 2026-08-13, et de la pire façon : elle
+déclarait corrigé un défaut qui ne l'était pas.** Le drapeau avait bien été ajouté
+au widget, et l'écran de l'agent le passait bien à `true` — mais
+`CommercantFieldsForm` **ne le transmettait pas** à `LocationCaptureField`. Le
+bouton continuait donc d'afficher « (optionnel) » sur l'écran par lequel passe
+tout le parc.
+
+Rien ne pouvait le dire : `requis` a une valeur par défaut, donc l'oubli
+**compile**. Ni `analyze`, ni les vérificateurs, ni les parcours ne regardent un
+libellé. Et j'avais tenu pour faite une modification dont je n'avais vérifié que
+la compilation — c'est exactement le mode de panne du paramètre optionnel non
+transmis : invisible partout.
+
+Trouvé par l'analyse d'impact du chantier suivant, pas par un contrôle. Corrigé
+et rejoué sur appareil le 2026-08-13.
+
 **Passe de confirmation du 2026-08-13 — 7 parcours rejoués, 7 verts**, après un
 décor neuf. Elle a révélé une exigence d'environnement que la bascule a créée
 sans que rien ne la dise :

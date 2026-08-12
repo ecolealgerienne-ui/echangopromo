@@ -127,6 +127,16 @@ class CommercantFieldsForm extends ConsumerWidget {
             LocationCaptureField(
               latitude: latitude,
               longitude: longitude,
+              // ⚠️ **Ce `requis:` a manqué du 2026-08-12 au 2026-08-13**, et rien
+              // ne pouvait le dire : `LocationCaptureField.requis` a une valeur
+              // par défaut, donc l'oubli compile. Le drapeau existait, l'écran de
+              // l'agent le passait à `true`, et il mourait ici — l'écran affichait
+              // « (optionnel) » tout en refusant la validation sans position.
+              //
+              // C'est le défaut que ce drapeau avait été créé pour corriger,
+              // reproduit un cran plus haut dans la chaîne. Un paramètre optionnel
+              // non transmis est invisible : ni compilation, ni analyse, ni test.
+              requis: positionRequise,
               onChanged: onLocationChanged,
             ),
           ],
