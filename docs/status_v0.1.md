@@ -2995,6 +2995,62 @@ seule fois sur un geste explicite. **Sous-déclarer est le seul risque qui coût
 vraiment** : « collectée, sans suivi » n'ôte rien au produit, une déclaration
 fausse coûte un refus — et il y en a déjà eu un sur ce sujet le 2026-08-05.
 
+#### Le rejeu complet des bancs — 6 défauts, tous dans l'outillage
+
+Les **30 bancs** ont été rejoués après la bascule. **Aucun n'a trouvé de défaut
+dans le produit.** Les six qu'ils ont trouvés étaient dans le décor, dans les
+bancs eux-mêmes, ou dans mes propres décomptes — ce qui est le bon résultat,
+mais mérite d'être dit précisément.
+
+**1. Le décor ne pouvait plus publier.** Son commerçant date d'avant le
+correctif du 2026-08-05, et `provision-decor.sh` est idempotent **par la
+connexion** : un compte existant n'est jamais réinscrit, donc les coordonnées
+ajoutées à sa charge utile ne l'atteignent jamais. Il s'arrêtait sur
+`COMMERCANT_POSITION_REQUIRED`, **et tous les bancs derrière lui restaient
+bloqués**. C'est mot pour mot le risque résiduel que le §5.5 du plan avait
+prévu. Réparé par `PATCH /commercant/me/position` — la route existe pour ce cas.
+
+**2. L'étape 6 du décor lisait la mauvaise clé.** La projection de
+`GET /promo/map` est **plate** : le commerçant *est* l'item, ses promos sont
+imbriquées dessous. Le contrôle cherchait `.commercant.id`, écrit sans regarder
+la réponse. Il a rendu ❌ sur un décor parfaitement posé — bon sens d'erreur :
+il a échoué franchement au lieu de compter 0 en silence.
+
+**3. 🔴 `client_highlight.py` ne sondait plus rien.** Il interrogeait
+`?communeIds=`, paramètre supprimé par la bascule. `ValidationPipe({whitelist:
+true})` **retire en silence tout paramètre inconnu** : les deux réponses
+comparées seraient devenues identiques *parce qu'on n'avait rien demandé*, et
+le banc aurait conclu « la curation ne dépend pas de la commune » sans jamais
+avoir fait varier quoi que ce soit. **Vert pour la mauvaise raison,
+indéfiniment.** C'est le défaut le plus intéressant de la campagne, et aucun
+outil ne pouvait le voir : le banc passait.
+
+**4. Et sa contrepartie manquait.** « La curation ne change pas avec le
+cadrage » est satisfaite par un serveur qui **ignore le paramètre** — il rendrait
+la même chose partout. On prouverait l'immobilité en croyant prouver la
+globalité. D'où une seconde sonde : le **repli**, lui, DOIT suivre le point.
+⚠️ Les deux s'excluent — la réponse contient *soit* la curation *soit* le repli
+— donc elles portent sur deux états successifs du serveur, dans cet ordre.
+
+**5. 🔴 `GET /promo/config` n'était plus épinglée.** Le lot 1 l'avait ajoutée
+juste au-dessus de `GET /commune` ; le lot 5 supprimait `/promo/map/center` par
+une découpe entre deux repères textuels, et l'a emportée. Le banc de frontière
+l'a attrapée au premier rejeu avec un **échec dur** — c'est sa polarité, et elle
+a payé. Ni compilation, ni test, ni lint ne l'auraient vue.
+
+**6. Mes décomptes de routes étaient faux.** J'avais écrit 16 en additionnant de
+tête ; le banc mesurait 15. Trois fichiers l'affirmaient. C'est exactement ce que
+la règle 33 portait déjà — son « les 14 actuelles » était périmé depuis le
+2026-08-05, et personne ne l'avait vu **parce qu'un nombre dans une phrase ne
+peut pas échouer**. Les trois valeurs sont désormais alignées sur ce que le banc
+mesure.
+
+⚠️ **Un artefact de campagne, à ne pas prendre pour un défaut** : à force de
+rejeux, le commerçant du décor a épuisé son plafond de 5 créations / 24 h — que
+`promo-cycle` épuise d'ailleurs volontairement. Le décor échouait alors sans
+rapport avec la bascule. Contourné en repartant sur un numéro neuf
+(`D_COMMERCANT_TEL`), pas en touchant au produit.
+
 #### Points ouverts à la clôture
 
 - ✅ **Les six clés sont désormais dans le `.env` du clone WSL**, réglées sur
