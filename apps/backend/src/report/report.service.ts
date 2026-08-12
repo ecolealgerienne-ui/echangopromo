@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Commercant } from '../commercant/entities/commercant.entity';
-import { Commune } from '../commune/entities/commune.entity';
+import { applyWilayaScope } from '../commune/apply-wilaya-scope';
 import { ConflictAppException } from '../common/errors/app-exception';
 import { configNumber } from '../common/config/config-number';
 import { ErrorCode } from '../common/errors/error-code.enum';
@@ -181,11 +181,7 @@ export class ReportService {
       });
     }
     if (filter?.wilaya) {
-      qb.innerJoin(
-        Commune,
-        'commune',
-        'commune.id = commercant.communeId',
-      ).andWhere('commune.wilaya = :wilaya', { wilaya: filter.wilaya });
+      applyWilayaScope(qb, 'commercant', filter.wilaya);
     }
     return qb;
   }

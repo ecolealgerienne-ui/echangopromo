@@ -18,6 +18,7 @@ import {
   NotificationType,
 } from '../notification/entities/notification.entity';
 import { NotificationService } from '../notification/notification.service';
+import { applyWilayaScope } from '../commune/apply-wilaya-scope';
 import { Promo, PromoLifecycleStatus } from '../promo/entities/promo.entity';
 import { StorageService } from '../storage/storage.service';
 import { CommercantView } from './entities/commercant-view.entity';
@@ -555,12 +556,7 @@ export class CommercantService {
       });
     }
     if (query.wilaya) {
-      qb.innerJoin('commercant.commune', 'commune').andWhere(
-        'commune.wilaya = :wilaya',
-        {
-          wilaya: query.wilaya,
-        },
-      );
+      applyWilayaScope(qb, 'commercant', query.wilaya);
     }
     if (query.search) {
       qb.andWhere(

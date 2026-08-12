@@ -16,6 +16,7 @@ import {
 } from 'typeorm';
 import { CommercantService } from '../commercant/commercant.service';
 import { Commercant } from '../commercant/entities/commercant.entity';
+import { applyWilayaScope } from '../commune/apply-wilaya-scope';
 import { withTimeout } from '../common/async/with-timeout';
 import { configNumber } from '../common/config/config-number';
 import {
@@ -1151,12 +1152,7 @@ export class PromoService {
       });
     }
     if (query.wilaya) {
-      qb.innerJoin('commercant.commune', 'commune').andWhere(
-        'commune.wilaya = :wilaya',
-        {
-          wilaya: query.wilaya,
-        },
-      );
+      applyWilayaScope(qb, 'commercant', query.wilaya);
     }
     if (query.categorie) {
       qb.andWhere('promo.categorie = :categorie', {
