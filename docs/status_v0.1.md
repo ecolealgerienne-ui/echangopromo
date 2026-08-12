@@ -2980,7 +2980,8 @@ sans qu'il y soit.
 wilaya inexistante**. Un filtre qui rend tout aurait rendu 72 partout.
 
 **Lots 7 et 8.** Specs §3.1/§3.2/§5.2, `ARCHITECTURE.md`, et la règle 33 de
-`CLAUDE.md` (14 → 15 routes ouvertes). Côté stores : `PrivacyInfo.xcprivacy`
+`CLAUDE.md` (14 → **16** routes ouvertes : `/promo/config` arrive, `/promo/map/center`
+part). Côté stores : `PrivacyInfo.xcprivacy`
 (obligatoire chez Apple, **absent jusqu'ici**) et `InfoPlist.strings` dans les
 trois langues — la justification de localisation était en français seul dans une
 app trilingue.
