@@ -5,7 +5,6 @@ import {
   IsOptional,
   IsPhoneNumber,
   IsString,
-  IsUUID,
   Matches,
   MinLength,
 } from 'class-validator';
@@ -37,9 +36,6 @@ export class CreateCommercantByAgentDto {
 
   @IsEnum(Categorie)
   categorie: Categorie;
-
-  @IsUUID()
-  communeId: string;
 
   /** Clé S3 de la photo du commerce, déjà uploadée (optionnel). */
   @IsOptional()

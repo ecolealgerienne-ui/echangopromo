@@ -10,10 +10,8 @@ import {
 import { UuidParam } from '../common/decorators/uuid-param.decorator';
 import { Throttle } from '@nestjs/throttler';
 import { AgentService } from '../agent/agent.service';
-import { AssignCommunesDto } from '../agent/dto/assign-communes.dto';
 import { CreateAgentDto } from '../agent/dto/create-agent.dto';
 import { ResetAgentPasswordDto } from '../agent/dto/reset-agent-password.dto';
-import { TransferCommunesDto } from '../agent/dto/transfer-communes.dto';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { ListAuditLogQueryDto } from '../audit-log/dto/list-audit-log-query.dto';
 import { UpdatePromoActiveCapDto } from './dto/update-promo-active-cap.dto';
@@ -116,44 +114,11 @@ export class AdminController {
     return this.agentService.findAll(query.page, query.limit);
   }
 
-  /**
-   * Seule route d'écriture de ce contrôleur qui n'injectait même pas
-   * `@CurrentUser()` : elle était structurellement incapable de journaliser,
-   * alors qu'elle **élargit le périmètre IDOR** consommé ensuite par
-   * `assertCommuneMatches` — et que `transfer-communes`, au même effet,
-   * journalise cinquante lignes plus bas (revue 2026-08-05, règle #11).
-   *
-   * ⚠️ Ce commentaire était placé ENTRE les décorateurs de garde et `@Patch`.
-   * NestJS s'en moque, mais le banc de frontière lisait alors la route comme
-   * **ouverte** : il retire les commentaires en laissant des lignes vides, et
-   * sa remontée du bloc de décorateurs s'arrêtait là. Un commentaire au
-   * mauvais endroit faisait donc accuser une route parfaitement protégée
-   * (2026-08-05). Le banc a été rendu insensible aux lignes vides, mais la
-   * place conventionnelle du commentaire reste au-dessus des décorateurs.
-   */
-  @Throttle(SENSITIVE_ACTION_THROTTLE)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
-  @Patch('agent/:id/communes')
-  async assignCommunes(
-    @CurrentUser() user: AuthTokenPayload,
-    @UuidParam('id') agentId: string,
-    @Body() dto: AssignCommunesDto,
-  ) {
-    const agent = await this.agentService.assignCommunes(
-      agentId,
-      dto.communeIds,
-    );
-    await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
-      actorId: user.sub,
-      action: 'assign_agent_communes',
-      targetType: 'agent',
-      targetId: agentId,
-      metadata: { communeIds: dto.communeIds },
-    });
-    return agent;
-  }
+  // ⚠️ `PATCH agent/:id/communes` supprimée le 2026-08-13. Elle portait un
+  // commentaire qui reste utile ailleurs : placé ENTRE les décorateurs de
+  // garde et le verbe, il faisait lire la route comme **ouverte** par le banc
+  // de frontière (2026-08-05). Le banc y est insensible depuis, mais la place
+  // conventionnelle d'un commentaire reste au-dessus des décorateurs.
 
   /** Révoque les JWT déjà émis pour cet agent (device perdu/volé, départ — audit règle #6). */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
@@ -201,30 +166,16 @@ export class AdminController {
     return { ok: true };
   }
 
-  /** Transfère un lot de communes d'un agent à un autre (specs §3.4). */
-  @Throttle(SENSITIVE_ACTION_THROTTLE)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
-  @Post('agent/transfer-communes')
-  async transferCommunes(
-    @CurrentUser() user: AuthTokenPayload,
-    @Body() dto: TransferCommunesDto,
-  ) {
-    await this.agentService.transferCommunes(
-      dto.communeIds,
-      dto.fromAgentId,
-      dto.toAgentId,
-    );
-    await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
-      actorId: user.sub,
-      action: 'transfer_communes',
-      targetType: 'agent',
-      targetId: dto.toAgentId,
-      metadata: { communeIds: dto.communeIds, fromAgentId: dto.fromAgentId },
-    });
-    return { ok: true };
-  }
+  // ⚠️ `POST agent/transfer-communes` supprimée le 2026-08-13 (specs §3.4).
+  // Elle répondait à un besoin métier réel que **rien ne reprend** : au départ
+  // d'un agent, transférer son secteur pour que ses commerces ne cessent pas
+  // d'être suivis en silence. Sans territoire, la question ne se pose plus.
+  //
+  // ⚠️ Les entrées d'audit `assign_agent_communes` et `transfer_communes`
+  // restent en base, avec leurs `metadata.communeIds` pointant vers une table
+  // supprimée. **Elles ne sont pas purgées** : c'est de la traçabilité
+  // historique, et l'écran d'audit affiche `action` en brut, donc rien ne
+  // casse.
 
   /**
    * DTO explicite plutôt qu'un spread d'entité (règle #4) — la file de
@@ -298,15 +249,7 @@ export class AdminController {
     // sur la même promo, dernier écrivain gagne, aucune erreur levée
     // (règle #13). La commune tenait lieu de partition du travail ; rien ne
     // la remplace à ce jour — point ouvert du plan de suppression.
-    const result = await this.moderationService.queue(
-      query.page,
-      query.limit,
-      undefined,
-      {
-        communeId: query.communeId,
-        wilaya: query.wilaya,
-      },
-    );
+    const result = await this.moderationService.queue(query.page, query.limit);
     return {
       ...result,
       items: result.items.map(
@@ -390,7 +333,7 @@ export class AdminController {
     @Query() query: ListPromoAdminQueryDto,
   ) {
     // Portée globale depuis le 2026-08-13 (chantier « agent global »).
-    const result = await this.promoService.findAllForAdmin(query, undefined);
+    const result = await this.promoService.findAllForAdmin(query);
     return {
       ...result,
       items: result.items.map((promo) => this.toAdminPromoJson(promo)),
@@ -412,14 +355,11 @@ export class AdminController {
     @Query() query: ListCommercantQueryDto,
   ) {
     // Portée globale depuis le 2026-08-13 (chantier « agent global »).
-    // ⚠️ La `CommuneFilterBar` de l'app disparaît avec ce chantier, et la
-    // recherche de `findAllForAdmin` ne porte que sur le nom et le téléphone :
-    // il ne restera **aucun** moyen de resserrer géographiquement cet écran
-    // tant que `adresse` n'est pas ajoutée à la recherche.
-    const result = await this.commercantService.findAllForAdmin(
-      query,
-      undefined,
-    );
+    // ⚠️ La `CommuneFilterBar` de l'app disparaît avec ce chantier. Le seul
+    // moyen de resserrer géographiquement cet écran devenu national est
+    // désormais la recherche texte, à laquelle `adresse` a été ajoutée dans le
+    // même lot (voir `findAllForAdmin`).
+    const result = await this.commercantService.findAllForAdmin(query);
     return {
       ...result,
       items: await Promise.all(
@@ -429,7 +369,6 @@ export class AdminController {
           telephone: commercant.telephone,
           adresse: commercant.adresse,
           categorie: commercant.categorie,
-          communeId: commercant.communeId,
           photoUrl: commercant.photoKey
             ? this.storageService.buildPublicUrl(commercant.photoKey)
             : null,
@@ -709,9 +648,6 @@ export class AdminController {
   @Roles('admin', 'agent')
   @Get('dashboard')
   async dashboard() {
-    // `undefined` = aucun filtre de commune. Le paramètre survit jusqu'à ce
-    // que L2 retire les signatures côté services.
-    const communeIds = undefined;
     const [
       commercesActifs,
       promosPubliees,
@@ -719,11 +655,11 @@ export class AdminController {
       registresEnAttente,
       profilsEnAttente,
     ] = await Promise.all([
-      this.commercantService.countActive(communeIds),
-      this.promoService.countVisible(communeIds),
-      this.reportService.countPendingModeration(communeIds),
-      this.commercantService.countPendingRegistre(communeIds),
-      this.commercantService.countPendingProfileReview(communeIds),
+      this.commercantService.countActive(),
+      this.promoService.countVisible(),
+      this.reportService.countPendingModeration(),
+      this.commercantService.countPendingRegistre(),
+      this.commercantService.countPendingProfileReview(),
     ]);
 
     return {

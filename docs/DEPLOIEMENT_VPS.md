@@ -37,12 +37,18 @@ Le conteneur `backend` lance automatiquement les migrations au démarrage
 (`Dockerfile` : `npx typeorm migration:run -d dist/data-source.js && node
 dist/main`) — rien à faire de spécial pour ça, `up -d` suffit.
 
-## Seeds (admin, communes)
+## Seed (admin)
 
-Les scripts de seed (`src/scripts/seed-admin.ts`, `seed-communes.ts`) sont
-compilés dans `dist/scripts/` par `nest build` (comme `main.ts` →
-`dist/main.js`), donc exécutables directement dans le conteneur de prod
-sans dépendance dev (`ts-node` n'est pas dans l'image finale) :
+⚠️ **`seed:communes:prod` a disparu le 2026-08-13** avec le découpage
+administratif : le script, la table et les deux entrées `package.json` sont
+supprimés. Cette page l'ordonnait encore comme une étape de mise en
+production — un runbook qui prescrit une commande inexistante fait échouer un
+déploiement au pire moment, et rien ne l'aurait signalé avant.
+
+Le script de seed restant (`src/scripts/seed-admin.ts`) est compilé dans
+`dist/scripts/` par `nest build` (comme `main.ts` → `dist/main.js`), donc
+exécutable directement dans le conteneur de prod sans dépendance dev
+(`ts-node` n'est pas dans l'image finale) :
 
 ⚠️ **Le mot de passe ci-dessous reste un espace réservé, et doit le rester.**
 Ce fichier est versionné et poussé sur GitHub : y écrire le vrai secret le
@@ -54,10 +60,6 @@ se tape au moment du seed et ne vit nulle part dans le dépôt.
 # Premier admin (une seule fois)
 docker compose --env-file .env.production -f docker-compose.promo.yml exec backend \
   npm run seed:admin:prod -- admin@echango.com "<mot-de-passe-hors-dépôt>" "Admin Promo"
-
-# Référentiel communes (idempotent, à relancer si la liste est corrigée)
-docker compose --env-file .env.production -f docker-compose.promo.yml exec backend \
-  npm run seed:communes:prod
 ```
 
 Ne pas mettre `ADMIN_EMAIL`/`ADMIN_PASSWORD`/`ADMIN_NOM` dans

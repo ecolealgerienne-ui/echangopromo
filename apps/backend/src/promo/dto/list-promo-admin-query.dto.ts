@@ -1,10 +1,4 @@
-import {
-  IsEnum,
-  IsOptional,
-  IsString,
-  IsUUID,
-  MaxLength,
-} from 'class-validator';
+import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 import { Categorie } from '../../common/enums/categorie.enum';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
 import {
@@ -24,15 +18,7 @@ export class ListPromoAdminQueryDto extends PaginationQueryDto {
   @MaxLength(140)
   search?: string;
 
-  @IsOptional()
-  @IsUUID()
-  communeId?: string;
-
-  /** Filtre wilaya (2026-07-14) — prépare l'extension multi-wilaya, sans effet tant que Djelfa est la seule wilaya pilote. */
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  wilaya?: string;
+  // Filtres `communeId` et `wilaya` retirés le 2026-08-13 (agent global).
 
   @IsOptional()
   @IsEnum(Categorie)

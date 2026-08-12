@@ -1,7 +1,5 @@
 import { Transform } from 'class-transformer';
 import {
-  ArrayMaxSize,
-  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsDefined,
@@ -36,22 +34,21 @@ export enum PromoSortOrder {
 }
 
 export class ListPromoQueryDto extends PaginationQueryDto {
-  /**
-   * Jusqu'à 4 communes (décision produit 2026-07-12, pensée pour les
-   * grandes villes comme Alger où les communes sont accolées — une promo
-   * dans l'une intéresse un client dans la voisine). Plafond imposé ici,
-   * pas seulement côté app : une garde uniquement client se contourne en
-   * appelant l'API directement.
-   */
-  @IsOptional()
-  @IsArray()
-  @ArrayMinSize(1)
-  @ArrayMaxSize(4)
-  @IsUUID(undefined, { each: true })
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.split(',').filter(Boolean) : value,
-  )
-  communeIds?: string[];
+  // ⚠️ **`communeIds` retiré le 2026-08-13, et son retrait est silencieux par
+  // construction.** `main.ts` monte le `ValidationPipe` avec `whitelist: true`
+  // mais **sans** `forbidNonWhitelisted` : un client qui enverrait encore
+  // `?communeIds=…` ne recevrait aucune erreur, le paramètre serait simplement
+  // effacé. Or il alimentait `perimetreExplicite` — la même requête passerait
+  // donc de « toutes les promos de mes 4 communes » à « les promos dans 5 km
+  // du point par défaut », sans une ligne de journal.
+  //
+  // Ce n'est pas un risque ici : rien n'est publié, aucune app installée
+  // n'existe (`docs/DEPLOIEMENT_STORES.md`). Écrit quand même, parce que le
+  // jour où une version sera en magasin, ce mode de défaillance-là ne se verra
+  // ni dans les journaux ni dans les taux d'erreur.
+  //
+  // Côté app, le paramètre était **déjà mort** depuis la bascule géographique
+  // (aucun appelant de `PromoApi.listActive(communeIds:)`, règle #31).
 
   @IsOptional()
   @IsEnum(Categorie)
@@ -99,11 +96,10 @@ export class ListPromoQueryDto extends PaginationQueryDto {
    * n'oblige ce point à être là où le client se trouve.
    *
    * Absent, le serveur applique son propre défaut (`GET /promo/config`) —
-   * **sauf** si la requête porte déjà un périmètre explicite (`communeIds` ou
-   * `commercantId`), auquel cas aucun filtre géographique ne s'applique. Sans
-   * cette exception, l'app déjà installée (qui envoie `communeIds` de Djelfa)
-   * verrait ses résultats croisés avec un rayon autour du point par défaut, et
-   * n'afficherait plus rien.
+   * **sauf** si la requête porte déjà un périmètre explicite (`commercantId`,
+   * ou l'onglet Favoris), auquel cas aucun filtre géographique ne s'applique :
+   * « autres promos du magasin » interroge une fiche précise, pas un
+   * voisinage. ⚠️ `communeIds` figurait dans cette liste jusqu'au 2026-08-13.
    *
    * Les deux vont ensemble : `@ValidateIf` rend chacune obligatoire dès que
    * l'autre est là. Une latitude seule est une requête cassée, pas une

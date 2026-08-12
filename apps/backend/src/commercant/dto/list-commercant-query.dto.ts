@@ -3,7 +3,6 @@ import {
   IsEnum,
   IsOptional,
   IsString,
-  IsUUID,
   MaxLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
@@ -20,16 +19,10 @@ export class ListCommercantQueryDto extends PaginationQueryDto {
   @MaxLength(100)
   search?: string;
 
-  /** Filtre commune (2026-07-14, en plus du scope agent qui reste géré à part). */
-  @IsOptional()
-  @IsUUID()
-  communeId?: string;
-
-  /** Filtre wilaya (2026-07-14) — prépare l'extension multi-wilaya, sans effet tant que Djelfa est la seule wilaya pilote. */
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  wilaya?: string;
+  // ⚠️ Les filtres `communeId` et `wilaya` ont été retirés le 2026-08-13.
+  // Il ne reste **aucun** moyen de resserrer géographiquement cet écran : la
+  // recherche ci-dessus ne porte que sur le nom et le téléphone. Ajouter
+  // `adresse` à cette recherche fait partie du chantier — voir le plan.
 
   @IsOptional()
   @IsEnum(CommercantAccountState)

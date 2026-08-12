@@ -83,7 +83,6 @@ export class CommercantController {
       nom: commercant.nom,
       adresse: commercant.adresse,
       categorie: commercant.categorie,
-      communeId: commercant.communeId,
       // Ajouté 2026-07-12 : le client a besoin d'appeler le commerçant
       // depuis la fiche promo (tap-pour-appeler), pas seulement de voir son
       // adresse — jusqu'ici omis de cette réponse publique (contrairement à
@@ -102,7 +101,6 @@ export class CommercantController {
       nom: commercant.nom,
       adresse: commercant.adresse,
       categorie: commercant.categorie,
-      communeId: commercant.communeId,
       accountState: commercant.accountState,
       originVerification: commercant.originVerification,
       registreStatus: commercant.registreStatus,

@@ -16,7 +16,6 @@ import {
 } from 'typeorm';
 import { CommercantService } from '../commercant/commercant.service';
 import { Commercant } from '../commercant/entities/commercant.entity';
-import { applyWilayaScope } from '../commune/apply-wilaya-scope';
 import { withTimeout } from '../common/async/with-timeout';
 import { configNumber } from '../common/config/config-number';
 import {
@@ -802,11 +801,17 @@ export class PromoService {
     // serveur.
     //
     // ⚠️ **Et le défaut ne s'applique QUE si la requête ne porte aucun autre
-    // périmètre.** Sans cette exception, l'app déjà installée — qui envoie les
-    // `communeIds` de Djelfa et aucune position — verrait ses communes croisées
-    // avec un rayon autour du point par défaut et n'afficherait plus rien. Même
-    // raison pour `commercantId` : « autres promos du magasin » interroge une
-    // fiche précise, pas un voisinage (§5.6 du plan).
+    // périmètre.** `commercantId` en est un : « autres promos du magasin »
+    // interroge une fiche précise, pas un voisinage (§5.6 du plan).
+    //
+    // ⚠️ `communeIds` faisait partie de cette liste jusqu'au 2026-08-13 — il
+    // protégeait l'app déjà installée, qui envoyait les communes de Djelfa et
+    // aucune position. Son retrait change donc le sens d'une requête ancienne :
+    // « toutes les promos de mes 4 communes » devient « les promos dans 5 km du
+    // point par défaut ». Le `ValidationPipe` étant monté sans
+    // `forbidNonWhitelisted`, ce basculement est **muet** — pas d'erreur, pas
+    // de journal. Sans conséquence ici (rien n'est publié), mais c'est le mode
+    // de défaillance à connaître le jour où une version sera en magasin.
     // ⚠️ L'onglet Favoris est un périmètre à part entière, et **le plus
     // explicite de tous** : le client a désigné ces promos une par une. Les
     // recadrer géographiquement les lui retirerait au premier déménagement du
@@ -819,10 +824,7 @@ export class PromoService {
       });
     }
 
-    const perimetreExplicite =
-      favorisSeuls ||
-      Boolean(query.commercantId) ||
-      Boolean(query.communeIds?.length);
+    const perimetreExplicite = favorisSeuls || Boolean(query.commercantId);
 
     const config = this.getClientConfig();
 
@@ -876,11 +878,6 @@ export class PromoService {
       qb.andWhere(`${this.distanceKmSql} <= :rayonKm`, { rayonKm });
     }
 
-    if (query.communeIds?.length) {
-      qb.andWhere('commercant.communeId IN (:...communeIds)', {
-        communeIds: query.communeIds,
-      });
-    }
     if (query.categorie) {
       qb.andWhere('promo.categorie = :categorie', {
         categorie: query.categorie,
@@ -1059,17 +1056,12 @@ export class PromoService {
    * Vue admin/agent (plan de correction, Phase 2) : toutes les promos, tous
    * statuts confondus (contrairement à `findActiveForClient`) — permet de
    * repérer et masquer un contenu problématique sans attendre 3
-   * signalements. `scopedCommuneIds` restreint aux communes d'un agent ;
-   * `undefined` = vue globale (admin).
+   * signalements. Vue globale pour l'admin comme pour l'agent depuis le
+   * 2026-08-13 (chantier « agent global »).
    */
   async findAllForAdmin(
     query: ListPromoAdminQueryDto,
-    scopedCommuneIds?: string[],
   ): Promise<PaginatedResult<Promo>> {
-    if (scopedCommuneIds && scopedCommuneIds.length === 0) {
-      return toPaginatedResult([], 0, query.page, query.limit);
-    }
-
     const qb = this.promos
       .createQueryBuilder('promo')
       .innerJoinAndSelect('promo.commercant', 'commercant')
@@ -1080,14 +1072,6 @@ export class PromoService {
         '(promo.description ILIKE :search OR commercant.nom ILIKE :search)',
         { search: `%${query.search}%` },
       );
-    }
-    if (query.communeId) {
-      qb.andWhere('commercant.communeId = :communeId', {
-        communeId: query.communeId,
-      });
-    }
-    if (query.wilaya) {
-      applyWilayaScope(qb, 'commercant', query.wilaya);
     }
     if (query.categorie) {
       qb.andWhere('promo.categorie = :categorie', {
@@ -1102,11 +1086,6 @@ export class PromoService {
     if (query.moderationStatus) {
       qb.andWhere('promo.moderationStatus = :moderationStatus', {
         moderationStatus: query.moderationStatus,
-      });
-    }
-    if (scopedCommuneIds) {
-      qb.andWhere('commercant.communeId IN (:...scopedCommuneIds)', {
-        scopedCommuneIds,
       });
     }
     qb.skip((query.page - 1) * query.limit).take(query.limit);
@@ -1495,25 +1474,21 @@ export class PromoService {
    * 2026-07-12). Filtre aussi sur `dateFin` comme `findActiveForClient` —
    * sans ça, une promo expirée reste comptée comme "publiée" jusqu'au
    * passage du cron quotidien (`expireOutdatedPromosCron`), jusqu'à 24h de
-   * statistique fausse. `communeIds` restreint aux communes d'un agent —
-   * `undefined` = vue globale (admin).
+   * statistique fausse. Vue globale pour l'admin comme pour l'agent depuis le
+   * 2026-08-13 (chantier « agent global »).
    */
-  async countVisible(communeIds?: string[]): Promise<number> {
-    if (communeIds && communeIds.length === 0) return 0;
-
-    // La jointure sur `commercant` est désormais inconditionnelle : elle ne
-    // servait qu'au filtre par commune, si bien que la vue admin (sans
-    // `communeIds`) comptait les promos de comptes supprimés ou suspendus —
-    // le dashboard annonçait des promos publiées qu'aucun client ne voyait.
-    const qb = this.applyVisibleConditions(
+  async countVisible(): Promise<number> {
+    // ⚠️ **La jointure sur `commercant` RESTE, et ce n'est pas un vestige.**
+    // Elle a l'air de ne plus servir à rien maintenant que le filtre par
+    // commune est parti — c'est exactement le raisonnement qui l'avait rendue
+    // conditionnelle la première fois, et le défaut qui en découlait : la vue
+    // admin comptait les promos de comptes supprimés ou suspendus, et le
+    // dashboard annonçait des promos publiées qu'aucun client ne voyait.
+    // `applyVisibleConditions` s'appuie sur l'alias `commercant`.
+    return this.applyVisibleConditions(
       this.promos
         .createQueryBuilder('promo')
         .innerJoin('promo.commercant', 'commercant'),
-    );
-
-    if (communeIds) {
-      qb.andWhere('commercant.communeId IN (:...communeIds)', { communeIds });
-    }
-    return qb.getCount();
+    ).getCount();
   }
 }

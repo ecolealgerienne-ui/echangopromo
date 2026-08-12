@@ -3,7 +3,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { AuthModule } from '../auth/auth.module';
 import { CommercantModule } from '../commercant/commercant.module';
-import { CommuneModule } from '../commune/commune.module';
 import { AgentController } from './agent.controller';
 import { AgentService } from './agent.service';
 import { Agent } from './entities/agent.entity';
@@ -13,7 +12,6 @@ import { Agent } from './entities/agent.entity';
     TypeOrmModule.forFeature([Agent]),
     AuthModule,
     CommercantModule,
-    CommuneModule,
     AuditLogModule,
   ],
   controllers: [AgentController],

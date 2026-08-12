@@ -3,22 +3,29 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  JoinTable,
-  ManyToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Commune } from '../../commune/entities/commune.entity';
 
 /**
- * Compte agent terrain — créé exclusivement par l'Admin, pas d'auto-inscription
- * (specs §3.3). Rattaché à zéro, une ou plusieurs communes (many-to-many) :
- * un agent doit pouvoir couvrir plusieurs communes, voire une wilaya entière
- * (le concept de Zone opérationnelle séparée a été abandonné — un agent par
- * commune n'est pas soutenable, et le rôle agent lui-même est amené à
- * disparaître à l'extension multi-wilaya). "Assigner toute la wilaya" est une
- * simple commodité d'UI côté admin qui sélectionne en masse toutes les
- * communes de cette wilaya dans cette même relation — pas un champ distinct,
- * pour ne pas créer une deuxième source de vérité.
+ * Compte agent terrain — créé exclusivement par l'Admin, pas
+ * d'auto-inscription (specs §3.3).
+ *
+ * ⚠️ **L'agent n'a plus de territoire depuis le 2026-08-13.** Il était rattaché
+ * à zéro, une ou plusieurs `Commune` par une relation many-to-many
+ * (`agent_communes`), qui bornait tout ce qu'il pouvait voir et faire. Cette
+ * relation est supprimée : un agent agit désormais sur **tout le parc**.
+ *
+ * Ce que ça retire, et qu'aucun autre mécanisme ne remplace :
+ * - la garde d'appartenance de quatorze routes d'écriture (règle #1, levée par
+ *   décision produit — voir `AdminController` et `PromoController`) ;
+ * - la partition du travail de modération : tous les agents voient la même
+ *   file, et les trois résolutions sont des `update` inconditionnels ;
+ * - le seul moyen dont disposait l'admin pour **restreindre** un agent. Il n'y
+ *   a plus de granularité entre « agent » et « admin moins deux écrans ».
+ *
+ * ⚠️ Le rôle lui-même est en sursis, et il l'était déjà : les specs comme
+ * `CLAUDE.md` annonçaient sa disparition « à l'extension multi-wilaya ». Ce
+ * chantier crée exactement l'état qu'ils décrivaient.
  */
 @Entity()
 export class Agent {
@@ -35,15 +42,13 @@ export class Agent {
   @Column()
   nom: string;
 
-  @ManyToMany(() => Commune)
-  @JoinTable({
-    name: 'agent_communes',
-    joinColumn: { name: 'agentId', referencedColumnName: 'id' },
-    inverseJoinColumn: { name: 'communeId', referencedColumnName: 'id' },
-  })
-  communes: Commune[];
-
-  /** Incrémenté pour révoquer tous les JWT émis avant (audit règle #6). */
+  /**
+   * ⚠️ **Le seul frein qui reste.** Un agent global compromis dispose de
+   * quatorze routes d'écriture sur tout le parc, sans plafond anti-abus. La
+   * révocation par `tokenVersion` passe donc du statut de conformité à celui
+   * de dernier recours — `revocation_jwt.py` avec elle (règle #6).
+   */
+  @Column({ type: 'int', default: 0 })
   @Column({ type: 'int', default: 0 })
   tokenVersion: number;
 

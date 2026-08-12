@@ -6,7 +6,6 @@ import {
   IsOptional,
   IsPhoneNumber,
   IsString,
-  IsUUID,
   Matches,
   MinLength,
 } from 'class-validator';
@@ -28,9 +27,6 @@ export class RegisterCommercantDto {
 
   @IsEnum(Categorie)
   categorie: Categorie;
-
-  @IsUUID()
-  communeId: string;
 
   @Matches(PIN_SET_PATTERN, { message: PIN_SET_MESSAGE })
   pin: string;

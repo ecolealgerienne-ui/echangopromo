@@ -10,7 +10,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Categorie } from '../../common/enums/categorie.enum';
-import { Commune } from '../../commune/entities/commune.entity';
 import { Agent } from '../../agent/entities/agent.entity';
 
 /**
@@ -106,13 +105,25 @@ export class Commercant {
   @Column({ type: 'enum', enum: Categorie })
   categorie: Categorie;
 
-  @ManyToOne(() => Commune)
-  @JoinColumn({ name: 'communeId' })
-  commune: Commune;
-
+  /**
+   * ⚠️ **En sursis — la colonne tombe au lot L7** (chantier « suppression de
+   * commune »). Elle est passée `nullable` le 2026-08-13, et ce n'est pas un
+   * assouplissement : c'est ce qui permet au produit de continuer à tourner
+   * entre le retrait du champ des DTO d'inscription (L2) et le `DROP`
+   * définitif (L7).
+   *
+   * Sans ce passage, `create({ ...rest })` n'aurait plus rien posé dans une
+   * colonne `NOT NULL` : **toute création de commerçant aurait rendu 500**,
+   * emportant le décor des bancs, donc les lots qui en dépendent. Le
+   * `whitelist` du ValidationPipe ne sauve que la FORME de la requête ; il ne
+   * remplit pas une colonne.
+   *
+   * Plus personne ne l'écrit ni ne la lit — elle n'existe que pour porter la
+   * donnée jusqu'à la recopie vers `adresse`, en L7.
+   */
   @Index()
-  @Column()
-  communeId: string;
+  @Column({ type: 'uuid', nullable: true })
+  communeId: string | null;
 
   /**
    * Plafond de promos actives **propre à ce commerçant**, ou `null` pour

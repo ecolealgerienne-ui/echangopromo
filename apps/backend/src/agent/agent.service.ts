@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
-import { CommuneService } from '../commune/commune.service';
 import {
   BadRequestAppException,
   NotFoundAppException,
@@ -20,7 +19,6 @@ export class AgentService {
   constructor(
     @InjectRepository(Agent) private readonly agents: Repository<Agent>,
     private readonly authService: AuthService,
-    private readonly communeService: CommuneService,
   ) {}
 
   /** Créé exclusivement par l'admin — pas d'auto-inscription agent (specs §3.3). */
@@ -33,14 +31,12 @@ export class AgentService {
       );
     }
 
-    const communes = await this.communeService.findByIds(dto.communeIds ?? []);
     const passwordHash = await this.authService.hash(dto.password);
     return this.agents.save(
       this.agents.create({
         email: dto.email,
         nom: dto.nom,
         passwordHash,
-        communes,
       }),
     );
   }
@@ -69,7 +65,6 @@ export class AgentService {
   async findByIdOrFail(id: string): Promise<Agent> {
     const agent = await this.agents.findOne({
       where: { id },
-      relations: ['communes'],
     });
     if (!agent) {
       throw new NotFoundAppException(
@@ -82,7 +77,6 @@ export class AgentService {
 
   async findAll(page: number, limit: number): Promise<PaginatedResult<Agent>> {
     const [items, total] = await this.agents.findAndCount({
-      relations: ['communes'],
       order: { nom: 'ASC' },
       skip: (page - 1) * limit,
       take: limit,
@@ -90,12 +84,16 @@ export class AgentService {
     return toPaginatedResult(items, total, page, limit);
   }
 
-  /** Remplace l'ensemble des communes assignées à l'agent (liste vide = désassignation totale). */
-  async assignCommunes(agentId: string, communeIds: string[]): Promise<Agent> {
-    const agent = await this.findByIdOrFail(agentId);
-    agent.communes = await this.communeService.findByIds(communeIds);
-    return this.agents.save(agent);
-  }
+  // ⚠️ `assignCommunes` et `transferCommunes` ont été supprimées le
+  // 2026-08-13 avec la relation `agent_communes`. Elles étaient le seul moyen
+  // dont l'admin disposait pour **restreindre** un agent ; il n'y a plus
+  // aucune granularité entre « agent » et « admin moins deux écrans ».
+  //
+  // `transferCommunes` répondait à un besoin métier réel que rien ne reprend :
+  // au départ d'un agent, transférer son secteur pour que ses commerces ne
+  // cessent pas d'être suivis en silence. Sans territoire, la question ne se
+  // pose plus — mais la question inverse s'ouvre : plus rien n'attribue le
+  // travail, et tous les agents voient la même file de modération.
 
   /** Révoque tous les JWT déjà émis pour cet agent (device perdu/volé, départ) — audit règle #6. */
   async revokeTokens(agentId: string): Promise<void> {
@@ -115,41 +113,5 @@ export class AgentService {
     const passwordHash = await this.authService.hash(newPassword);
     await this.agents.update({ id: agentId }, { passwordHash });
     await this.agents.increment({ id: agentId }, 'tokenVersion', 1);
-  }
-
-  /**
-   * Transfère un lot de communes d'un agent à un autre (specs §3.4) — cas
-   * type : départ d'un agent, pour éviter que les commerces de ces communes
-   * cessent d'être suivis silencieusement.
-   */
-  async transferCommunes(
-    communeIds: string[],
-    fromAgentId: string,
-    toAgentId: string,
-  ): Promise<void> {
-    const fromAgent = await this.findByIdOrFail(fromAgentId);
-    const toAgent = await this.findByIdOrFail(toAgentId);
-
-    const fromAgentCommuneIds = new Set(fromAgent.communes.map((c) => c.id));
-    if (!communeIds.every((id) => fromAgentCommuneIds.has(id))) {
-      throw new BadRequestAppException(
-        ErrorCode.AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT,
-        "Au moins une de ces communes n'est pas actuellement assignée à cet agent",
-      );
-    }
-
-    const transferredIds = new Set(communeIds);
-    const communesToTransfer = fromAgent.communes.filter((c) =>
-      transferredIds.has(c.id),
-    );
-    fromAgent.communes = fromAgent.communes.filter(
-      (c) => !transferredIds.has(c.id),
-    );
-    const toAgentCommuneIds = new Set(toAgent.communes.map((c) => c.id));
-    toAgent.communes = [
-      ...toAgent.communes,
-      ...communesToTransfer.filter((c) => !toAgentCommuneIds.has(c.id)),
-    ];
-    await this.agents.save([fromAgent, toAgent]);
   }
 }

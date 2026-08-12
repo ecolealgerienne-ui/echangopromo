@@ -50,7 +50,11 @@ RESERVES = ("pinHash", "deletedAt", "suspendedAt", "tokenVersion",
             "profilePendingReview", "originVerification")
 
 # Ce qu'elle doit porter — sans quoi la fiche ne remplit pas son rôle.
-PROMIS = ("id", "nom", "categorie", "communeId", "telephone")
+# ⚠️ `communeId` remplacé par `adresse` le 2026-08-13. La clé reste présente
+# dans la réponse même quand le commerçant n'a pas saisi d'adresse — elle vaut
+# alors `null` —, donc l'assertion de PRÉSENCE garde exactement le même
+# pouvoir : elle refuse un champ disparu du contrat, pas un champ vide.
+PROMIS = ("id", "nom", "categorie", "adresse", "telephone")
 
 
 def verdict_reserve(corps):

@@ -1,11 +1,4 @@
-import {
-  IsArray,
-  IsEmail,
-  IsOptional,
-  IsString,
-  IsUUID,
-  MinLength,
-} from 'class-validator';
+import { IsEmail, IsString, MinLength } from 'class-validator';
 
 export class CreateAgentDto {
   @IsEmail()
@@ -19,8 +12,5 @@ export class CreateAgentDto {
   @MinLength(2)
   nom: string;
 
-  @IsOptional()
-  @IsArray()
-  @IsUUID(undefined, { each: true })
-  communeIds?: string[];
+  // `communeIds` retiré le 2026-08-13 : un agent n'a plus de territoire.
 }

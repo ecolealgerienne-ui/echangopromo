@@ -57,7 +57,7 @@ PACE = float(os.environ.get("PACE_SECONDS", "1.1"))
 
 ROLES_CONNUS = ("commercant", "agent", "admin")
 
-# Les 15 routes ouvertes, épinglées une par une AVEC leur justification.
+# Les 14 routes ouvertes, épinglées une par une AVEC leur justification.
 #
 # ⚠️ Ne jamais y ajouter une entrée pour faire passer le banc : une route
 # ouverte est la seule surface qu'un inconnu peut marteler.
@@ -70,7 +70,12 @@ ROUTES_OUVERTES = {
                               "pouvoir demander quoi que ce soit, donc avant tout "
                               "compte ; ne renvoie que quatre nombres de "
                               "configuration, aucune donnée métier ni personnelle",
-    ("GET", "/commune"): "sélecteur wilaya→commune, chargé en entier par CommuneCascadeField",
+    # ⚠️ `GET /commune` dépinglée le 2026-08-13, dans le MÊME commit que la
+    # suppression de la route. C'est obligatoire dans ce sens-là : une entrée
+    # épinglée devenue introuvable ne fait qu'**avertir** ici, alors que
+    # l'inverse — une route ouverte non épinglée — sort en échec. Rien ne
+    # rattrape donc un dépinglage oublié, et c'est très exactement ce qui est
+    # arrivé à `/promo/config` le 2026-08-12.
     ("GET", "/highlight"): "bandeau Top promos de l'accueil",
     ("GET", "/commercant/:id/public"): "fiche commerçant publique",
     ("GET", "/p/:id"): "redirection de partage vers le store",

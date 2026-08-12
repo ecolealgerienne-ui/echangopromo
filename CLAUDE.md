@@ -49,21 +49,29 @@ l'app ne les atteignait** (règle #31). Coût assumé : une connexion d'agent
 consomme deux requêtes du seau strict (5/min/IP).
 
 Le concept de Zone opérationnelle (découpage interne dédié
-aux tournées d'agent) a été abandonné le 2026-07-09 : un agent est
-désormais rattaché directement à zéro, une ou plusieurs `Commune`
-(relation many-to-many), "assigner toute la wilaya" n'étant qu'une
-commodité d'UI qui sélectionne en masse les communes de cette wilaya —
-un agent par commune n'étant pas soutenable et le rôle agent lui-même
-étant amené à disparaître à l'extension multi-wilaya.
+aux tournées d'agent) a été abandonné le 2026-07-09, puis remplacé par un
+rattachement direct à des `Commune`.
+
+⚠️ **Ce rattachement a disparu à son tour le 2026-08-13 : l'agent est
+global.** Plus de territoire, plus de relation `agent_communes`, plus de
+frontière d'appartenance — un agent agit sur tout le parc. Ce que ça retire et
+que **rien ne remplace** : la garde IDOR de quatorze routes d'écriture (règle 1,
+levée par décision produit), la partition du travail de modération (tous les
+agents voient la même file, résolutions sans verrou), et le seul moyen dont
+l'admin disposait pour **restreindre** un agent.
+
+⚠️ Le rôle lui-même est en sursis, et ce document l'annonçait déjà : « le rôle
+agent est amené à disparaître à l'extension multi-wilaya ». Le chantier crée
+exactement l'état décrit. La question est ouverte, pas tranchée.
 
 ```
-apps/backend/src/{commune,agent,admin,commercant,promo,report,audit-log,storage,auth}
+apps/backend/src/{agent,admin,commercant,promo,report,audit-log,storage,auth}
 apps/mobile/lib/{app,data,domain,providers,features/{client,commercant,agent,admin,shared}}
 ```
 
 Commandes utiles :
 - Backend : `cd apps/backend && npm run start:dev` / `build` / `lint` /
-  `seed:admin -- <email> <password> <nom>` / `seed:communes` /
+  `seed:admin -- <email> <password> <nom>` /
   `migration:run` / `migration:generate -- src/migrations/<Nom>` /
   `migration:revert`. Schéma géré uniquement par migrations
   (`synchronize: false` toujours, plus de bascule sur `NODE_ENV`) —
@@ -250,17 +258,24 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
     indépendants (liste des commerces d'une zone, file de modération).*
 
 15. **Tout nouvel endpoint `GET` de liste doit prévoir page/limit dès la
-    conception**, même si le volume initial semble négligeable — ce
-    produit vise explicitement une extension multi-communes puis
-    multi-wilayas. **Exception à vérifier avant de paginer un endpoint
-    existant** : si un client le consomme aujourd'hui comme une liste de
-    référence complète (ex. `/commune` chargé en entier par
-    `CommuneCascadeField` pour construire un sélecteur wilaya → commune),
-    ajouter la pagination sans adapter ce client tronque silencieusement
-    la liste dès que le total dépasse la taille de page par défaut —
-    vérifier les consommateurs existants (mobile, autre service) avant
-    d'activer une pagination par défaut sur un endpoint déjà en
-    production.
+    conception**, même si le volume initial semble négligeable — ce produit
+    vise explicitement un déploiement au-delà du quartier pilote.
+    **Exception à vérifier avant de paginer un endpoint existant** : si un
+    client le consomme aujourd'hui comme une liste de référence complète,
+    ajouter la pagination sans adapter ce client tronque silencieusement la
+    liste dès que le total dépasse la taille de page par défaut — vérifier
+    les consommateurs existants (mobile, autre service) avant d'activer une
+    pagination par défaut sur un endpoint déjà en production.
+
+    ⚠️ **Cette exception n'a plus d'exemple dans ce dépôt depuis le
+    2026-08-13.** Son cas fondateur était `/commune`, chargé en entier par
+    `CommuneCascadeField` pour construire un sélecteur wilaya → commune ;
+    l'endpoint et son consommateur ont été supprimés avec le découpage
+    administratif. **Plus aucun endpoint n'est consommé comme liste de
+    référence complète**, et `client_commune.py` — le seul banc qui éprouvait
+    la non-troncature — disparaît avec lui. La règle reste juste ; c'est son
+    exemple qui est mort, et une exception qui protège un fantôme finit par
+    autoriser n'importe quoi.
 
 16. **Nettoyer le scaffolding généré par un CLI (NestJS, etc.) dès l'ajout
     du premier vrai module métier.** *Trouvé : les seuls tests de tout le
@@ -484,7 +499,7 @@ permet de reconnaître un cas nouveau relevant de la même règle.
     se voit ni à la compilation, ni à l'exécution, ni dans les journaux — à
     l'inverse d'un garde global dont on se retire explicitement.
     **Conséquence directe** : toute route ouverte doit être **épinglée
-    nommément** avec sa justification (les 15 actuelles le sont, dans
+    nommément** avec sa justification (les 14 actuelles le sont, dans
     `scripts/lib/frontiere_http.py`), et c'est le banc, et lui seul, qui peut
     affirmer qu'aucun garde ne manque. ⚠️ Ne jamais énumérer « les routes
     protégées » depuis leur garde : l'ensemble contrôlé rétrécirait avec ce

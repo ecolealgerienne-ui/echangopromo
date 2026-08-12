@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, QueryFailedError, Repository } from 'typeorm';
+import { IsNull, QueryFailedError, Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
 import {
   BadRequestAppException,
@@ -18,7 +18,6 @@ import {
   NotificationType,
 } from '../notification/entities/notification.entity';
 import { NotificationService } from '../notification/notification.service';
-import { applyWilayaScope } from '../commune/apply-wilaya-scope';
 import { Promo, PromoLifecycleStatus } from '../promo/entities/promo.entity';
 import { StorageService } from '../storage/storage.service';
 import { CommercantView } from './entities/commercant-view.entity';
@@ -468,11 +467,6 @@ export class CommercantService {
   }
 
   /**
-   * `communeIds` restreint aux communes d'un agent (dashboard partagé
-   * admin/agent, décision produit 2026-07-12) — `undefined` = vue globale
-   * (admin), même convention que `AdminController.scopedCommuneIds`.
-   */
-  /**
    * **Le filtre « compte vivant » commun à tous les compteurs de dashboard.**
    *
    * Le bug avait été trouvé le 2026-07-14 et corrigé sur `countActive`
@@ -487,42 +481,38 @@ export class CommercantService {
    * n'attend pas une validation de registre mais une décision de
    * réactivation, qui rendra son dossier à la file.
    */
-  private aliveAccountWhere(communeIds?: string[]) {
+  private aliveAccountWhere() {
     return {
       deletedAt: IsNull(),
       suspendedAt: IsNull(),
-      ...(communeIds ? { communeId: In(communeIds) } : {}),
     };
   }
 
-  async countActive(communeIds?: string[]): Promise<number> {
-    if (communeIds && communeIds.length === 0) return 0;
+  async countActive(): Promise<number> {
     return this.commercants.count({
       where: {
         accountState: CommercantAccountState.AUTONOME,
-        ...this.aliveAccountWhere(communeIds),
+        ...this.aliveAccountWhere(),
       },
     });
   }
 
   /** Registres en attente de validation (stat dashboard admin, plan de correction). */
-  async countPendingRegistre(communeIds?: string[]): Promise<number> {
-    if (communeIds && communeIds.length === 0) return 0;
+  async countPendingRegistre(): Promise<number> {
     return this.commercants.count({
       where: {
         registreStatus: RegistreStatus.EN_ATTENTE,
-        ...this.aliveAccountWhere(communeIds),
+        ...this.aliveAccountWhere(),
       },
     });
   }
 
   /** Modifications de profil en attente de validation (stat dashboard admin). */
-  async countPendingProfileReview(communeIds?: string[]): Promise<number> {
-    if (communeIds && communeIds.length === 0) return 0;
+  async countPendingProfileReview(): Promise<number> {
     return this.commercants.count({
       where: {
         profilePendingReview: true,
-        ...this.aliveAccountWhere(communeIds),
+        ...this.aliveAccountWhere(),
       },
     });
   }
@@ -531,18 +521,17 @@ export class CommercantService {
    * Vue admin (plan de correction, Phase 2) : recherche + liste sur
    * l'ensemble des commerçants, y compris suspendus et supprimés — sans ça,
    * l'admin ne pourrait jamais retrouver un compte suspendu pour le
-   * réactiver, ni consulter l'historique d'un compte supprimé. `communeIds`
-   * restreint aux communes d'un agent (partage de cet écran admin/agent,
-   * décision produit 2026-07-12) — `undefined` = vue globale (admin).
+   * réactiver, ni consulter l'historique d'un compte supprimé.
+   *
+   * ⚠️ **Vue globale pour tout le monde depuis le 2026-08-13.** Le paramètre
+   * `communeIds` restreignait cet écran aux communes de l'agent ; il est parti
+   * avec le territoire. Un agent voit désormais le parc entier — et le cas
+   * dégénéré s'inverse : un agent sans commune rendait ici une page **vide**,
+   * il rend maintenant **tout**.
    */
   async findAllForAdmin(
     query: ListCommercantQueryDto,
-    communeIds?: string[],
   ): Promise<PaginatedResult<Commercant>> {
-    if (communeIds && communeIds.length === 0) {
-      return toPaginatedResult([], 0, query.page, query.limit);
-    }
-
     const qb = this.commercants
       .createQueryBuilder('commercant')
       // ⚠️ **Ce filtre manquait, et c'était la QUATRIÈME copie du même oubli**
@@ -569,20 +558,18 @@ export class CommercantService {
       .where('commercant.deletedAt IS NULL')
       .orderBy('commercant.createdAt', 'DESC');
 
-    if (communeIds) {
-      qb.andWhere('commercant.communeId IN (:...communeIds)', { communeIds });
-    }
-    if (query.communeId) {
-      qb.andWhere('commercant.communeId = :filterCommuneId', {
-        filterCommuneId: query.communeId,
-      });
-    }
-    if (query.wilaya) {
-      applyWilayaScope(qb, 'commercant', query.wilaya);
-    }
     if (query.search) {
+      // ⚠️ **`adresse` ajoutée à la recherche le 2026-08-13, et ce n'est pas
+      // un agrément.** Le même lot retire le filtre commune/wilaya et la barre
+      // de filtres de l'écran : sans cette ligne, il ne resterait **aucun**
+      // moyen de resserrer géographiquement une liste devenue nationale, sur
+      // un écran conçu quand elle tenait dans une commune.
+      //
+      // C'est aussi ce qui donne un usage au champ que D2 promeut : `adresse`
+      // devient le seul texte de lieu du produit.
       qb.andWhere(
-        '(commercant.nom ILIKE :search OR commercant.telephone ILIKE :search)',
+        '(commercant.nom ILIKE :search OR commercant.telephone ILIKE :search' +
+          ' OR commercant.adresse ILIKE :search)',
         { search: `%${query.search}%` },
       );
     }

@@ -4,7 +4,6 @@ import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CommuneModule } from './commune/commune.module';
 import { CommercantModule } from './commercant/commercant.module';
 import { PromoModule } from './promo/promo.module';
 import { AgentModule } from './agent/agent.module';
@@ -48,7 +47,6 @@ import { typeOrmBaseOptions } from './data-source';
     // (`/promo/:id`) — aucune dépendance à l'ordre d'enregistrement des
     // modules ici, contrairement à un chemin partagé.
     AppLinksModule,
-    CommuneModule,
     CommercantModule,
     PromoModule,
     HighlightModule,
