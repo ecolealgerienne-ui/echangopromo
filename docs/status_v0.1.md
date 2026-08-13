@@ -4070,6 +4070,47 @@ rouge avec un message qui nomme le défaut.
 mutation du plafond en avait laissé une publiée. Les 9 commerçants des trois
 villes, eux, ne sont pas touchés.
 
+### 2026-08-13 — la frontière admin, dernier écart des quatre rôles
+
+**`frontiere_admin`** — 19 contrôles, 19 cas d'auto-test dont 14 refus. Vert au
+premier passage réel.
+
+**Le trou, mesuré.** Neuf routes sont `@Roles('admin')` **seul**, et toutes
+leurs écritures n'étaient jamais exercées qu'avec un jeton **admin** : aucun
+banc ne les attaquait avec un jeton d'**agent**. Trois seulement avaient un
+témoin négatif (`GET /admin/agent`, `GET /admin/audit-log`, `PATCH
+…/plafond-promos`). **Un `GET` refusé ne prouve rien du `POST` d'à côté** — la
+polarité est par route, et la route qu'on oublie est ouverte (règle 33).
+
+Ce que ça coûterait : `POST /admin/agent` atteignable, c'est un agent qui se
+fabrique des comptes ; les cinq routes de curation atteignables, c'est un agent
+qui décide de la vitrine nationale.
+
+**Résultat : les neuf refusent l'agent en `403 AUTH_FORBIDDEN_ROLE`**, et
+l'admin franchit chacune. Rien n'était ouvert — mais c'est désormais **prouvé**
+plutôt que lu dans le code, ce que la règle 33 interdit précisément de faire.
+
+⚠️ **Le témoin positif est gratuit, et c'est le point technique du banc** : les
+gardes NestJS s'exécutent **avant** les pipes de validation. Un corps vide
+ressort donc en `400 VALIDATION_ERROR` pour l'admin — preuve qu'il a franchi la
+garde — et en `403` pour l'agent, **avant** d'être regardé. Aucun agent créé,
+aucune curation modifiée. Seule exception, jouée en dernier :
+`POST /admin/me/revoke-token`, dont le témoin positif révoque pour de bon le
+jeton de l'admin.
+
+⚠️ **Et sa limite est écrite, parce que sa mutation l'a révélée.** Jeton admin
+substitué à celui de l'agent — une garde tombée simulée — : **5 échecs et 5 non
+concluants, jamais un faux vert**. Ces cinq non-concluants disent quelque chose :
+sur les quatre routes visant un UUID absent, une garde tombée se manifeste en
+`404 …_NOT_FOUND`, et la ressource inexistante **masque** l'absence de garde. Le
+rendre pleinement sensible imposerait de viser des cibles réelles — donc de
+révoquer un vrai jeton, réinitialiser un vrai mot de passe et supprimer une
+vraie entrée de vitrine à chaque passage. Choix assumé : sensibilité totale sur
+les cinq routes sans `:id`, « non concluant plutôt que faux » sur les quatre
+autres.
+
+**Les quatre rôles sont désormais couverts** : client, commerçant, agent, admin.
+
 ---
 
 ## Comment tenir ce fichier
