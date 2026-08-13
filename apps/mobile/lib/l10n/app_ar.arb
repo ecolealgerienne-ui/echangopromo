@@ -458,5 +458,9 @@
   "savePointNotice": "ستُرسل هذه النقطة إلى خدمتنا لإنشاء قائمة العروض الخاصة بك. يمكنك تغييرها أو حذفها في أي وقت.",
   "savePointDone": "تم حفظ النقطة",
   "forgetPointAction": "نسيان نقطتي",
-  "locationCaptureRequired": "تحديد موقع محلي (إلزامي)"
+  "locationCaptureRequired": "تحديد موقع محلي (إلزامي)",
+  "savePointProposeFirst": "أنت هنا. هل تريد حفظ هذا الموقع كمدينة افتراضية؟",
+  "savePointProposeArea": "أنت تستكشف مدينة أخرى. هل تجعلها مدينتك الافتراضية؟",
+  "savePointProposeAccept": "حفظ",
+  "savePointProposeLater": "لاحقًا"
 }

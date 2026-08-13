@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../app/theme.dart';
 import '../../../data/api/api_exception.dart';
+import '../../../data/local/point_proposal_store.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/models/map_shop.dart';
 import '../../../l10n/app_localizations.dart';
@@ -63,6 +64,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   MapBounds? _bounds;
   double _zoom = _initialZoom;
   MapShop? _selected;
+
+  /// Centre de la carte **une fois stabilisée**, pas à chaque image. C'est lui
+  /// que la proposition d'enregistrement offre, et c'est lui qu'on compare à la
+  /// ville déjà enregistrée. Lu depuis `_map.camera` uniquement à ce
+  /// moment-là : le lire pendant un vol proposerait une ville qu'on traverse.
+  LatLng? _centreStabilise;
+
+  late bool _premierPointEcarte =
+      ref.read(pointProposalStoreProvider).premierPointEcarte();
+
+  /// Ville explorée que le client vient d'écarter, à la maille du centième de
+  /// degré. `null` = aucune. Relue au démarrage pour survivre à un retour sur
+  /// l'écran.
+  late String? _villeEcartee =
+      ref.read(pointProposalStoreProvider).villeEcartee();
 
   /// Derniers commerces reçus, conservés pendant qu'une nouvelle zone se
   /// charge. Sans ça, changer de zone vide `valueOrNull` et fait disparaître
@@ -133,12 +149,63 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       // découvre en revanche du terrain neuf et reste une vraie requête.
       final loaded = _bounds;
       final needsFetch = loaded == null || !loaded.contains(next);
-      if (!needsFetch && camera.zoom == _zoom) return;
+      // ⚠️ Le centre se met à jour à CHAQUE stabilisation, avant la sortie
+      // anticipée : se déplacer dans la marge déjà chargée ne demande rien au
+      // serveur, mais change bel et bien la ville qu'on regarde. Le capturer
+      // seulement quand une requête part ferait proposer une ville quittée.
+      final centreChange = _centreStabilise != camera.center;
+      if (!needsFetch && camera.zoom == _zoom && !centreChange) return;
       setState(() {
         if (needsFetch) _bounds = next.padded();
         _zoom = camera.zoom;
+        _centreStabilise = camera.center;
       });
     });
+  }
+
+  /// Enregistre un point après consentement — **le même chemin** que le bouton
+  /// flottant, appelé aussi par la proposition.
+  ///
+  /// ⚠️ Deux copies de ce geste divergeraient : le dialogue de consentement,
+  /// l'invalidation des providers et la confirmation forment un tout, et c'est
+  /// l'invalidation qu'on oublie (règle 30 et règle 37). Une seule
+  /// implémentation, deux appelants.
+  Future<void> _enregistrerPoint(LatLng centre,
+      {bool viaProposition = false}) async {
+    final l10n = AppLocalizations.of(context)!;
+    final accepte = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(AppLocalizations.of(dialogContext)!.savePointAction),
+        content: Text(AppLocalizations.of(dialogContext)!.savePointNotice),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(AppLocalizations.of(dialogContext)!.commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(AppLocalizations.of(dialogContext)!.savePointAction),
+          ),
+        ],
+      ),
+    );
+    if (accepte != true) return;
+    await ref
+        .read(clientPositionProvider.notifier)
+        .enregistrer(centre.latitude, centre.longitude);
+    if (!mounted) return;
+    // ⚠️ Sans cette invalidation, la vitrine et la carte garderaient leur
+    // cadrage d'avant : elles ne sont pas reconstruites de zéro au retour d'une
+    // boîte de dialogue (règle 37).
+    invalidateAfterPositionChange(ref);
+    // Une ville enregistrée depuis la proposition d'exploration efface la
+    // « ville écartée » : elle vient d'être acceptée, la mémoriser comme
+    // refusée n'aurait aucun sens.
+    if (viaProposition) setState(() => _villeEcartee = null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.savePointDone)),
+    );
   }
 
   void _recenterOn(LatLng position, {double? zoom}) {
@@ -255,6 +322,61 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _recenterOn(centreParDefaut, zoom: _initialZoom);
       });
+    }
+
+    // ── La proposition d'enregistrer une ville par défaut ────────────────
+    //
+    // Deux moments, un seul geste. Le mécanisme d'enregistrement existait
+    // déjà — bouton flottant + consentement — mais **rien ne le proposait** :
+    // il fallait remarquer un bouton libellé « Chercher autour de ce point »
+    // pour comprendre qu'on pouvait fixer sa ville. Les deux scénarios client
+    // du 2026-08-13 le demandent explicitement.
+    //
+    // ⚠️ **Le seuil vient du SERVEUR**, jamais d'une constante écrite ici : au
+    // delà du rayon de recherche, le client regarde des promos qui
+    // n'apparaîtront pas dans sa liste — c'est exactement le moment où la
+    // proposition a du sens, et le jour où le rayon change elle suit
+    // (règle 32).
+    final rayonKm =
+        ref.watch(clientGeoConfigProvider).valueOrNull?.defaultRadiusKm;
+    final centre = _centreStabilise;
+    _Proposition? proposition;
+    if (centre != null && rayonKm != null) {
+      if (pointEnregistre == null) {
+        // Scénario 1 — aucune ville enregistrée. On propose dès que la carte
+        // s'est posée quelque part, que ce soit sur le GPS ou sur le défaut
+        // serveur : à ce stade les deux sont à égalité, et c'est justement au
+        // client de trancher.
+        if (!_premierPointEcarte) {
+          proposition = _Proposition(
+            message: l10n.savePointProposeFirst,
+            centre: centre,
+            onEcarter: () async {
+              await ref.read(pointProposalStoreProvider).ecarterPremierPoint();
+              if (mounted) setState(() => _premierPointEcarte = true);
+            },
+          );
+        }
+      } else {
+        // Scénario 2 — une ville est enregistrée et le client en explore une
+        // autre. `distanceTo` rend des mètres.
+        final ecart =
+            distanceTo(centre, pointEnregistre.$1, pointEnregistre.$2);
+        final cle =
+            PointProposalStore.cleDeVille(centre.latitude, centre.longitude);
+        if (ecart != null && ecart > rayonKm * 1000 && cle != _villeEcartee) {
+          proposition = _Proposition(
+            message: l10n.savePointProposeArea,
+            centre: centre,
+            onEcarter: () async {
+              await ref
+                  .read(pointProposalStoreProvider)
+                  .ecarterVille(centre.latitude, centre.longitude);
+              if (mounted) setState(() => _villeEcartee = cle);
+            },
+          );
+        }
+      }
     }
 
     // Les points restent affichés pendant qu'une nouvelle zone se charge, et
@@ -445,6 +567,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           // Sans cette dernière, l'invitation reviendrait à chaque ouverture
           // de la carte : la même proposition répétée n'est plus une
           // proposition.
+          // ⚠️ **Un seul bandeau à la fois, et l'invitation passe devant.**
+          // Activer la localisation est le préalable du scénario 1 : les
+          // empiler proposerait au client de fixer une ville avant même de
+          // savoir où il est, et deux sollicitations superposées se lisent
+          // comme du harcèlement — c'est ce qu'Apple a refusé le 2026-08-05.
+          if (proposition != null &&
+              _selected == null &&
+              !(peutDemander && !_invitationEcartee))
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 24,
+              child: _PropositionPoint(
+                message: proposition.message,
+                onEnregistrer: () => _enregistrerPoint(proposition!.centre,
+                    viaProposition: true),
+                onEcarter: proposition.onEcarter,
+              ),
+            ),
+
           if (peutDemander && _selected == null && !_invitationEcartee)
             Positioned(
               left: 16,
@@ -851,6 +993,90 @@ class _UserDot extends StatelessWidget {
 /// Un bandeau, pas un écran : la carte est déjà là, et la couvrir d'une
 /// proposition plein écran reviendrait à redemander avant de laisser voir —
 /// exactement ce qui a été refusé.
+/// Ce qu'il y a à proposer, et où. `null` quand il n'y a rien à proposer —
+/// jamais un objet « vide » qu'il faudrait interroger pour le savoir.
+class _Proposition {
+  const _Proposition({
+    required this.message,
+    required this.centre,
+    required this.onEcarter,
+  });
+
+  final String message;
+  final LatLng centre;
+  final Future<void> Function() onEcarter;
+}
+
+/// Bandeau proposant de fixer la ville par défaut.
+///
+/// Même forme que `_InvitationLocalisation` volontairement : ce sont deux
+/// propositions du même écran, et leur donner deux apparences ferait croire à
+/// deux natures.
+class _PropositionPoint extends StatelessWidget {
+  const _PropositionPoint({
+    required this.message,
+    required this.onEnregistrer,
+    required this.onEcarter,
+  });
+
+  final String message;
+  final Future<void> Function() onEnregistrer;
+  final Future<void> Function() onEcarter;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colorScheme.secondaryContainer,
+      borderRadius: BorderRadius.circular(AppRadii.md),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 8, 8, 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    message,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSecondaryContainer,
+                        ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  color: colorScheme.onSecondaryContainer,
+                  tooltip: MaterialLocalizations.of(context).closeButtonLabel,
+                  onPressed: onEcarter,
+                ),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: onEcarter,
+                  child: Text(l10n.savePointProposeLater),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: onEnregistrer,
+                  child: Text(l10n.savePointProposeAccept),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _InvitationLocalisation extends StatelessWidget {
   const _InvitationLocalisation({
     required this.onActiver,

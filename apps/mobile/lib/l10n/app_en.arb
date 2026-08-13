@@ -458,5 +458,9 @@
   "savePointNotice": "This point will be sent to our service to build your promo list. You can change or delete it at any time.",
   "savePointDone": "Point saved",
   "forgetPointAction": "Forget my point",
-  "locationCaptureRequired": "Locate my shop (required)"
+  "locationCaptureRequired": "Locate my shop (required)",
+  "savePointProposeFirst": "You are here. Save this position as your default city?",
+  "savePointProposeArea": "You are exploring another city. Set it as your default city?",
+  "savePointProposeAccept": "Save",
+  "savePointProposeLater": "Later"
 }

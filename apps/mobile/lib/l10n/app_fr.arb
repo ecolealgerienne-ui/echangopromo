@@ -561,5 +561,9 @@
   "promoCapDialogTitle": "Plafond de promos actives",
   "promoCapDialogBody": "Laissez le champ vide pour suivre le réglage global. Zéro empêche de publier sans suspendre le compte.",
   "promoCapFieldLabel": "Plafond (vide = global)",
-  "locationCaptureRequired": "Localiser mon commerce (obligatoire)"
+  "locationCaptureRequired": "Localiser mon commerce (obligatoire)",
+  "savePointProposeFirst": "Vous êtes ici. Enregistrer cette position comme ville par défaut ?",
+  "savePointProposeArea": "Vous explorez une autre ville. La prendre comme ville par défaut ?",
+  "savePointProposeAccept": "Enregistrer",
+  "savePointProposeLater": "Plus tard"
 }
