@@ -32,6 +32,22 @@ const String villeCommerce = String.fromEnvironment('TEST_VILLE_COMMERCE');
 const String villeLat = String.fromEnvironment('TEST_VILLE_LAT');
 const String villeLng = String.fromEnvironment('TEST_VILLE_LNG');
 
+/// La proposition est-elle affichée ?
+///
+/// ⚠️ **`find.byType(FilledButton)` ne l'identifie PAS**, et c'est ce qui a fait
+/// échouer ce parcours deux fois : le bandeau d'invitation à activer la
+/// localisation en porte un aussi — et il s'affiche précisément parce que ces
+/// parcours tournent sans GPS. Le témoin négatif accusait donc la proposition
+/// pour un bouton qui n'était pas le sien.
+///
+/// On vise le TEXTE du bandeau, en acceptant les deux langues que l'émulateur
+/// peut servir. ⚠️ Un appareil en arabe ferait échouer cette reconnaissance —
+/// limite dite plutôt que découverte.
+bool propositionVisible() => textesRendus().any((t) =>
+    t.contains('comme ville par défaut') ||
+    t.contains('as your default city') ||
+    t.contains('default city?'));
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -81,9 +97,29 @@ void main() {
     // ── 2. Sur la carte, rien ne doit être proposé : on est chez soi ────────
     await taper(tester, find.byIcon(Icons.map_outlined));
     await tester.pump(const Duration(seconds: 3));
+
+    // ── ⚠️ Écarter d'abord l'invitation à la localisation ──────────────────
+    //
+    // Un seul bandeau s'affiche à la fois, et l'invitation passe devant la
+    // proposition de ville : deux sollicitations superposées se lisent comme du
+    // harcèlement, et Apple l'a refusé le 2026-08-05 (5.1.1(iv)).
+    //
+    // ⚠️ **Conséquence produit, mesurée ici** : tant que le client n'a pas
+    // écarté l'invitation, il ne verra JAMAIS la proposition de changer de
+    // ville. Sur un appareil sans localisation, elle reste affichée
+    // indéfiniment — donc la proposition est inatteignable. Ce parcours a
+    // échoué là-dessus, en annonçant « aucune proposition » alors que la carte
+    // s'était bien déplacée de 6,2 km (sonde : centre 35.0774 → 35.1336).
+    //
+    // Le parcours fait donc ce que ferait l'utilisateur : il ferme
+    // l'invitation, puis explore.
+    if (find.byIcon(Icons.close).evaluate().isNotEmpty) {
+      await taper(tester, find.byIcon(Icons.close));
+      await tester.pump(const Duration(seconds: 2));
+    }
     expect(
-      find.byType(FilledButton).evaluate().isEmpty,
-      isTrue,
+      propositionVisible(),
+      isFalse,
       reason: 'une proposition de changer de ville s’affiche alors que le '
           'client regarde SA ville — elle deviendrait du harcèlement',
     );
@@ -95,18 +131,30 @@ void main() {
     // dérivé de la résolution de la projection Web Mercator (~15,7 m/px ici) et
     // du rayon que le serveur annonce. En dessous du rayon, rien ne doit être
     // proposé — c'est ce que le § 2 vient de vérifier.
-    await tester.drag(find.byType(FlutterMap), const Offset(0, 400));
+    // ⚠️ `timedDrag` et non `drag` : `flutter_map` suit le doigt par les
+    // événements de MOUVEMENT intermédiaires. Un `drag` synthétise un
+    // appui-déplacement-relâchement quasi instantané, et la carte ne bouge
+    // PAS — mesuré par sonde le 2026-08-13 : le centre restait rivé au point
+    // de départ sur toutes les constructions, donc l'écart valait zéro et
+    // aucune proposition ne pouvait naître.
+    await tester.timedDrag(
+      find.byType(FlutterMap),
+      const Offset(0, 400),
+      const Duration(milliseconds: 800),
+    );
     await tester.pump(const Duration(seconds: 3));
 
     // ── 4. La proposition apparaît ─────────────────────────────────────────
     await pomperJusquaVrai(
       tester,
-      () => find.byType(FilledButton).evaluate().isNotEmpty,
+      propositionVisible,
       raison: 'après s’être éloigné de plus de 5 km, aucune proposition de '
           'prendre cette ville — le client n’a aucun moyen de découvrir le geste',
       limite: const Duration(seconds: 30),
     );
-    await taper(tester, find.byType(FilledButton).first);
+    // Le bouton d'acceptation du bandeau — le dernier `FilledButton` de
+    // l'écran, l'invitation à la localisation venant avant lui dans l'arbre.
+    await taper(tester, find.byType(FilledButton).last);
 
     // Le consentement, dans sa boîte : enregistrer un point est un envoi de
     // donnée, il ne se fait pas sans un oui explicite.
