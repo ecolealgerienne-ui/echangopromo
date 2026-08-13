@@ -3456,6 +3456,22 @@ C'est la mesure qui établit que le nouveau plafond est bien celui qui tourne, e
 non celui qui est écrit — avant le changement, le même banc voyait le verrou au
 4ᵉ essai.
 
+⚠️ **Et la séparation elle-même a été éprouvée, pas supposée** (règle 28 : un
+contrôle doit prouver qu'il sait refuser). Sept requêtes de suite sur chacune
+des deux routes restées strictes, **juste après** avoir vidé le seau des
+connexions :
+
+```
+POST /report               404 404 404 404 404 429 429
+POST /commercant/register  400 400 400 400 400 429 429
+```
+
+Cinq passent, la sixième est refusée : les deux routes tiennent toujours leur
+plafond de 5, et elles le tiennent **séparément** du seau d'authentification
+qu'on venait d'épuiser. Un `429` sur la sixième d'une route dont les cinq
+premières sont des `404`/`400` prouve aussi que le compteur s'incrémente **avant
+le traitement** — un refus métier ne rend pas la requête gratuite.
+
 ---
 
 ## Comment tenir ce fichier
