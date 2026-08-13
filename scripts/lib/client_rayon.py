@@ -299,14 +299,6 @@ def main():
         return 2
     time.sleep(PACE)
 
-    st, moi = appeler("GET", "/agent/me", jeton)
-    communes = [c["id"] for c in (moi.get("communes") or [])]
-    if not communes:
-        print("  ⚠️  l'agent n'a aucune commune — décor absent ?")
-        return 2
-    commune = communes[0]
-    time.sleep(PACE)
-
     st, up = televerser(jeton, "promo")
     cle = up.get("key")
     if not cle:
@@ -325,7 +317,7 @@ def main():
         """
         st, d = appeler("POST", "/agent/commercant", jeton, {
             "telephone": "+213556%s" % base, "nom": nom, "pin": PIN,
-            "categorie": "alimentation", "communeId": commune,
+            "categorie": "alimentation",
             "latitude": lat, "longitude": lng})
         if st not in (200, 201):
             return None, "création refusée (%s %s)" % (st, d.get("code"))
@@ -360,8 +352,18 @@ def main():
     if err:
         print("  ⚠️  commerce proche : %s" % err)
         return 2
+    # ⚠️ **`%06d`, et ce n'est pas cosmétique.** Le suffixe s'écrivait
+    # `str(int(base) + 1)` : `base` vient de `%H%M%S`, donc entre minuit et
+    # 10 h il commence par un zéro — `int("023059") + 1` rend `23060`, et
+    # `str()` le sert sur **cinq** chiffres. Le numéro devenait trop court et la
+    # création était refusée en `VALIDATION_ERROR`.
+    #
+    # Ce banc échouait donc **selon l'heure de la journée**, sur un produit
+    # parfaitement sain, et son message accusait la création (règle #38).
+    # Trouvé le 2026-08-13 à 2 h du matin — il aurait pu ne jamais l'être en
+    # ne le lançant qu'aux heures ouvrables.
     id_coin, err = poser_commerce("Rayon Coin", coin_lat, coin_lng,
-                                  str(int(base) + 1))
+                                  "%06d" % (int(base) + 1))
     if err:
         print("  ⚠️  commerce du coin : %s" % err)
         return 2

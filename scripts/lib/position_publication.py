@@ -237,17 +237,9 @@ def main():
 
     print("── 1. un commerçant qui s'inscrit seul, sans position ──")
     tel = "+213557%s" % time.strftime("%H%M%S")
-    st, d = appeler("GET", "/commune?limit=1")
-    communes = d.get("items") or []
-    if st != 200 or not communes:
-        print("  ⚠️  référentiel commune injoignable — décor absent ?")
-        return 2
-    commune_id = communes[0]["id"]
-    time.sleep(PACE)
-
     st, d = appeler("POST", "/commercant/register", corps={
         "telephone": tel, "nom": "Commerce Sans Point", "pin": PIN,
-        "categorie": "alimentation", "communeId": commune_id,
+        "categorie": "alimentation",
         "acceptedTerms": True})
     if st not in (200, 201):
         print("  ⚠️  inscription refusée (%s %s) — pas de verdict possible"

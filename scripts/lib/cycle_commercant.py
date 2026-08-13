@@ -204,10 +204,9 @@ def main():
         print("  ·  commerçant précédent supprimé (banc rejouable)\n")
 
     # ── Décor propre au banc ─────────────────────────────────────────────────
-    commune = appeler("GET", "/commune")[1]["items"][0]["id"]
     st, d = appeler("POST", "/agent/commercant", jg, {
         "telephone": TEL, "nom": "Commerce Cycle", "pin": PIN,
-        "adresse": "Rue du Cycle", "categorie": "alimentation", "communeId": commune,
+        "adresse": "Rue du Cycle", "categorie": "alimentation",
         "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     if st not in (200, 201):
         print("❌ création du commerçant de travail refusée : %s" % d.get("code"))
@@ -265,7 +264,7 @@ def main():
               "pas de jeton avant suspension — connexion refusée (plafond de 5/min ?)")
     st, d = appeler("POST", "/commercant/register", corps={
         "telephone": TEL, "nom": "Usurpateur", "categorie": "autre",
-        "communeId": commune, "pin": PIN, "acceptedTerms": True,
+        "pin": PIN, "acceptedTerms": True,
         "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     noter("numéro TOUJOURS pris (suspension ≠ libération)",
           *verdict_numero_pris(st, d.get("code")))
@@ -291,7 +290,7 @@ def main():
     noter("promos supprimées", *verdict_compte(len(promos_publiques()), 0, "promos visibles"))
     st, d = appeler("POST", "/commercant/register", corps={
         "telephone": TEL, "nom": "Repreneur du local", "categorie": "autre",
-        "communeId": commune, "pin": PIN, "acceptedTerms": True,
+        "pin": PIN, "acceptedTerms": True,
         "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     noter("numéro LIBÉRÉ par la suppression", *verdict_numero_libre(st, d.get("code")))
     time.sleep(PACE)

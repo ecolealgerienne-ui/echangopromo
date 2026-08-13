@@ -11,7 +11,7 @@
 # Il pose ce qu'un banc ne peut pas poser lui-même :
 #   - un **admin** aux identifiants connus (le seul en base a un mot de passe
 #     que personne ne connaît) ;
-#   - un **agent** rattaché à une commune — il n'y en a aucun en base ;
+#   - **deux agents** (le second est le témoin de la portée globale) ;
 #   - un **commerçant** actif, registre validé.
 #
 # ── ⚠️ Idempotent, et c'est une contrainte de plafond ───────────────────────
@@ -83,7 +83,13 @@ echo "════════════════════════�
 echo "  Décor des bancs — $API_URL"
 echo "════════════════════════════════════════════════════════════════"
 
-curl -sS -o /dev/null "$API_URL/commune" || fail "Backend injoignable sur $API_URL"
+# ⚠️ **`--fail`, et sur une route qui existe** (2026-08-13). Cette sonde visait
+# `GET /commune` SANS `--fail` : `curl` sort en 0 sur un 404, donc elle restait
+# verte alors même que la route venait de disparaître. Un `curl -o /dev/null`
+# sans `--fail` dans un banc est un aveu — on a décidé de ne pas savoir
+# (règle 29). `GET /promo/config` est épinglée comme route ouverte, donc stable.
+curl -sS --fail -o /dev/null "$API_URL/promo/config" \
+  || fail "Backend injoignable sur $API_URL"
 
 # ─────────────────────────────────────────────────────────────────────────────
 step "1. Admin aux identifiants connus"
@@ -106,22 +112,19 @@ fi
 pass "Admin connecté ($D_ADMIN_EMAIL)"
 
 # ─────────────────────────────────────────────────────────────────────────────
-step "2. Deux communes DISJOINTES"
-
-# ⚠️ Deux communes, et c'est le cœur du banc d'appartenance : sans une seconde
-# commune, l'agent intrus serait un agent sans commune — un cas dégénéré qui ne
-# prouve rien du filtre réel.
-COMMUNE_JSON="$(api GET /commune)"
-COMMUNE_ID="$(echo "$COMMUNE_JSON" | jq -r '.items[0].id // empty')"
-COMMUNE_NOM="$(echo "$COMMUNE_JSON" | jq -r '.items[0].nom // empty')"
-COMMUNE_B_ID="$(echo "$COMMUNE_JSON" | jq -r '.items[1].id // empty')"
-COMMUNE_B_NOM="$(echo "$COMMUNE_JSON" | jq -r '.items[1].nom // empty')"
-[ -n "$COMMUNE_ID" ] || fail "Aucune commune en base" "lancer npm run seed:communes"
-[ -n "$COMMUNE_B_ID" ] || fail "Une seule commune en base — le banc d'appartenance en exige deux"
-pass "Commune A « $COMMUNE_NOM » · Commune B « $COMMUNE_B_NOM »"
-
+# ⚠️ **L'étape « deux communes disjointes » a disparu le 2026-08-13** avec le
+# découpage administratif. Elle posait la prémisse de `test-appartenance` :
+# deux territoires sans intersection, pour qu'un refus mesuré soit un refus
+# d'appartenance et pas autre chose.
+#
+# **Les DEUX agents restent, et c'est essentiel.** Ils ne servent plus à
+# prouver un cloisonnement mais son contraire : que deux agents distincts
+# voient exactement la même chose, égale à ce que voit l'admin. Avec un seul
+# agent, « il voit tout » serait indiscernable de « il voit ce qu'il voyait » —
+# la sonde ne pourrait pas refuser (règle 28). C'est le second agent qui fait
+# la mesure, hier comme aujourd'hui.
 # ─────────────────────────────────────────────────────────────────────────────
-step "3. Agent rattaché à cette commune"
+step "2. Deux agents, sans territoire"
 
 agent_login() {
   api POST /agent/login "$(jq -n --arg e "$D_AGENT_EMAIL" --arg p "$D_AGENT_PASSWORD" \
@@ -133,54 +136,29 @@ AGENT_TOKEN="$(agent_login)"
 if [ -z "$AGENT_TOKEN" ]; then
   info "Absent — création via POST /admin/agent"
   out="$(api POST /admin/agent "$(jq -n --arg e "$D_AGENT_EMAIL" --arg p "$D_AGENT_PASSWORD" \
-    --arg c "$COMMUNE_ID" '{email:$e, password:$p, nom:"Agent Décor", communeIds:[$c]}')" \
+    '{email:$e, password:$p, nom:"Agent Décor"}')" \
     "$ADMIN_TOKEN")"
   echo "$out" | est_erreur && fail "Création agent refusée" "$(echo "$out" | jq -c '{code,message}')"
   sleep "$PACE"
   AGENT_TOKEN="$(agent_login)"
   [ -n "$AGENT_TOKEN" ] || fail "Connexion agent impossible après création"
 fi
-# ⚠️ **Le rattachement est VÉRIFIÉ, pas annoncé** (2026-08-05).
+# ⚠️ **`assurer_communes` a été supprimée le 2026-08-13**, et il vaut la peine
+# de dire ce qu'elle corrigeait — le défaut, lui, peut revenir sous une autre
+# forme. Les communes n'étaient posées qu'à la CRÉATION de l'agent : sur un
+# agent déjà existant, le décor se contentait de se connecter puis d'imprimer
+# « commune « Ain Chouhada » ». Une affirmation, pas une mesure. Agent A avait
+# ainsi accumulé QUATRE communes au fil des sessions, dont celle de l'agent B,
+# et les deux territoires annoncés disjoints se chevauchaient — les sondes
+# d'appartenance testaient alors un refus qui n'avait pas lieu d'être.
 #
-# Les communes n'étaient posées qu'à la CRÉATION de l'agent. Sur un agent déjà
-# existant, le décor se contentait de se connecter puis d'imprimer
-# « commune « Ain Chouhada » » — une affirmation, pas une mesure. Agent A avait
-# ainsi accumulé QUATRE communes au fil des sessions, dont celle de l'agent B :
-# les deux territoires, annoncés disjoints, se chevauchaient.
-#
-# Ce n'est pas un détail de confort. `test-appartenance` repose entièrement sur
-# cette disjonction : l'agent B y sert d'intrus, et s'il partage une commune
-# avec A, la sonde teste un refus qui n'avait pas lieu d'être. Un décor qui
-# affirme sans vérifier fabrique exactement le genre de banc qui rassure.
-assurer_communes() { # JETON_AGENT EMAIL COMMUNE_ID LIBELLE
-  local tok="$1" email="$2" commune="$3" libelle="$4"
-  local actuelles
-  actuelles="$(api GET /agent/me '' "$tok" | jq -r '[.communes[]?.id] | sort | join(",")')"
-  if [ "$actuelles" = "$commune" ]; then
-    return 0
-  fi
-  info "$libelle : rattachement à corriger (actuel : ${actuelles:-aucun})"
-  local aid
-  aid="$(api GET "/admin/agent?limit=100" '' "$ADMIN_TOKEN" \
-    | jq -r --arg e "$email" '.items[]? | select(.email == $e) | .id' | head -1)"
-  [ -n "$aid" ] || fail "$libelle introuvable dans /admin/agent"
-  out="$(api PATCH "/admin/agent/$aid/communes" \
-    "$(jq -n --arg c "$commune" '{communeIds:[$c]}')" "$ADMIN_TOKEN")"
-  echo "$out" | est_erreur && fail "$libelle : réassignation refusée" \
-    "$(echo "$out" | jq -c '{code,message}')"
-  sleep "$PACE"
-  # Relu APRÈS écriture : c'est l'état final qui compte, pas le code de sortie
-  # de la requête qui prétend l'avoir posé.
-  actuelles="$(api GET /agent/me '' "$tok" | jq -r '[.communes[]?.id] | sort | join(",")')"
-  [ "$actuelles" = "$commune" ] || fail \
-    "$libelle : rattachement toujours faux après réassignation" \
-    "attendu $commune, obtenu ${actuelles:-aucun}"
-}
+# **La leçon survit au chantier** : un décor qui affirme sans relire l'état
+# fabrique exactement le genre de banc qui rassure. Toute propriété dont un
+# banc dépend se lit après écriture, jamais depuis le code de sortie de la
+# requête qui prétend l'avoir posée.
+pass "Agent A connecté ($D_AGENT_EMAIL)"
 
-assurer_communes "$AGENT_TOKEN" "$D_AGENT_EMAIL" "$COMMUNE_ID" "Agent A"
-pass "Agent A connecté ($D_AGENT_EMAIL) — commune « $COMMUNE_NOM » (vérifiée)"
-
-# ── Agent B : l'intrus du banc d'appartenance ────────────────────────────────
+# ── Agent B : le témoin de la portée globale ─────────────────────────────────
 agent_b_login() {
   api POST /agent/login "$(jq -n --arg e "$D_AGENT_B_EMAIL" --arg p "$D_AGENT_B_PASSWORD" \
     '{email:$e, password:$p}')" | jq -r '.accessToken // empty'
@@ -189,24 +167,20 @@ agent_b_login() {
 sleep "$PACE"
 AGENT_B_TOKEN="$(agent_b_login)"
 if [ -z "$AGENT_B_TOKEN" ]; then
-  info "Absent — création via POST /admin/agent, sur la commune B"
+  info "Absent — création via POST /admin/agent"
   out="$(api POST /admin/agent "$(jq -n --arg e "$D_AGENT_B_EMAIL" --arg p "$D_AGENT_B_PASSWORD" \
-    --arg c "$COMMUNE_B_ID" '{email:$e, password:$p, nom:"Agent Décor B", communeIds:[$c]}')" \
+    '{email:$e, password:$p, nom:"Agent Décor B"}')" \
     "$ADMIN_TOKEN")"
   echo "$out" | est_erreur && fail "Création agent B refusée" "$(echo "$out" | jq -c '{code,message}')"
   sleep "$PACE"
   AGENT_B_TOKEN="$(agent_b_login)"
   [ -n "$AGENT_B_TOKEN" ] || fail "Connexion agent B impossible après création"
 fi
-assurer_communes "$AGENT_B_TOKEN" "$D_AGENT_B_EMAIL" "$COMMUNE_B_ID" "Agent B"
-pass "Agent B connecté ($D_AGENT_B_EMAIL) — commune « $COMMUNE_B_NOM » (vérifiée)"
-
-# Les deux territoires sont maintenant d'un seul élément chacun, et distincts
-# par construction (`COMMUNE_ID` ≠ `COMMUNE_B_ID`, garanti à l'étape 2). La
-# disjonction sur laquelle reposent `test-appartenance` et
-# `test-admin-dashboard` n'est donc plus une supposition.
-[ "$COMMUNE_ID" != "$COMMUNE_B_ID" ] || fail \
-  "Les deux communes du décor sont identiques — la disjonction est perdue"
+# ⚠️ **Ce n'est plus « l'intrus », c'est le témoin.** Il servait à prouver un
+# refus ; il sert maintenant à prouver que les deux agents voient la même
+# chose. La vérification de disjonction qui suivait ici n'a plus d'objet — il
+# n'y a plus rien à disjoindre.
+pass "Agent B connecté ($D_AGENT_B_EMAIL)"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ── Envoi d'une VRAIE photo ────────────────────────────────────────────────
@@ -249,11 +223,11 @@ if [ -z "$COMMERCANT_TOKEN" ]; then
   # Le décor prétend préparer le terrain de TOUS les bancs ; il lui manquait le
   # point que la moitié d'entre eux vont chercher.
   # (Constaté le 2026-08-05 : `seed-demo.sh` en posait, `provision-decor.sh`
-  # non — d'où une commune peuplée avec centre et une commune de décor sans.)
+  # non — d'où un décor sans point de repère.)
   out="$(api POST /commercant/register "$(jq -n --arg t "$D_COMMERCANT_TEL" \
-    --arg p "$D_COMMERCANT_PIN" --arg c "$COMMUNE_ID" \
+    --arg p "$D_COMMERCANT_PIN" \
     '{telephone:$t, nom:"Commerce Décor", adresse:"Rue du Décor", categorie:"alimentation",
-      communeId:$c, pin:$p, acceptedTerms:true,
+      pin:$p, acceptedTerms:true,
       latitude:34.6714, longitude:3.2630}')")"
   echo "$out" | est_erreur && fail "Inscription commerçant refusée" \
     "$(echo "$out" | jq -c '{code,message}')"

@@ -25,9 +25,11 @@ défaut réel.
 
 ── Ce qu'il n'éprouve PAS, et pourquoi ─────────────────────────────────────
 
-Que l'agent soit refusé hors de ses communes : c'est `test-agent-appartenance`
-qui le fait, sur les 16 routes à la fois. Le redoubler ici ne prouverait rien de
-plus. Et le plafond de 5 actives sous course est l'objet de
+Que l'agent soit refusé hors de ses communes. ⚠️ **Il ne l'est plus depuis le
+2026-08-13** : l'agent est global, la notion de territoire a disparu, et
+`appartenance.py` est suspendu en attendant d'être réécrit pour prouver
+l'inverse — qu'il est ACCEPTÉ partout. Le plafond de 5 actives sous course est
+l'objet de
 `test-promo-plafond`.
 
 ── Usage ────────────────────────────────────────────────────────────────────

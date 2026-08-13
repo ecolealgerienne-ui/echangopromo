@@ -247,21 +247,11 @@ def main():
         return 2
     time.sleep(PACE)
 
-    # ⚠️ `communeId` est encore EXIGÉ par `CreateCommercantByAgentDto` au
-    # moment où ce banc est écrit (lot L1). Le lot L2 retire ce champ ; ce bloc
-    # disparaîtra avec lui, et le banc n'aura plus rien à lire ici.
-    st, moi = appeler("GET", "/agent/me", jeton_agent)
-    communes = [c["id"] for c in (moi.get("communes") or [])]
-    if not communes:
-        print("  ⚠️  l'agent n'a aucune commune — décor absent ?")
-        return 2
-    time.sleep(PACE)
-
     base = time.strftime("%H%M%S")
     tel_b = "+213557%s" % base
     st, d = appeler("POST", "/agent/commercant", jeton_agent, {
         "telephone": tel_b, "nom": "Banc appartenance B", "pin": PIN,
-        "categorie": "alimentation", "communeId": communes[0],
+        "categorie": "alimentation",
         "latitude": REF_LAT, "longitude": REF_LNG})
     if st not in (200, 201):
         print("  ⚠️  création de B refusée (%s %s)" % (st, d.get("code")))

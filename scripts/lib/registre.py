@@ -247,17 +247,10 @@ def main():
 
     # ── Décor : un commerçant à nous ────────────────────────────────────────
     print("\n── décor : un commerçant neuf ──")
-    _, moi = appeler("GET", "/agent/me", jg)
-    communes = [c["id"] for c in (moi.get("communes") or [])]
-    if not communes:
-        print("❌ l'agent du décor n'a aucune commune.")
-        return 2
-    time.sleep(PACE)
     tel = "+213563%s" % time.strftime("%H%M%S")
     st, d = appeler("POST", "/agent/commercant", jg, {
         "telephone": tel, "nom": "Commerce Registre", "pin": PIN,
         "adresse": "Rue du registre", "categorie": "alimentation",
-        "communeId": communes[0],
         "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     cid = d.get("id")
     if not cid:

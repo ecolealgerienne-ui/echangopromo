@@ -215,20 +215,12 @@ def main():
 
     # ── Un commerçant à nous : changer le PIN du décor le rendrait
     #    inutilisable pour tous les autres bancs.
-    _, moi = appeler("GET", "/agent/me", jg)
-    communes = [c["id"] for c in (moi.get("communes") or [])]
-    if not communes:
-        print("❌ l'agent du décor n'a aucune commune.")
-        return 2
-    time.sleep(PACE)
-
     base = time.strftime("%H%M%S")
     tel = "+213562%s" % base
     pin_initial, pin_nouveau = "654321", "112233"
     st, d = appeler("POST", "/agent/commercant", jg, {
         "telephone": tel, "nom": "Commerce Profil", "pin": pin_initial,
         "adresse": "Rue du profil", "categorie": "alimentation",
-        "communeId": communes[0],
         "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     if st not in (200, 201):
         print("❌ création du commerçant du banc refusée (HTTP %s, %s)"
