@@ -777,10 +777,39 @@ export class PromoService {
     const dateFin = this.resolveDateFin();
     return this.withCommercantLock(promo.commercantId, async (manager) => {
       await this.assertUnderCap(manager, promo.commercantId);
-      promo.lifecycleStatus = PromoLifecycleStatus.PUBLIEE;
-      promo.dateFin = dateFin;
-      promo.publishedAt = new Date();
-      return manager.save(promo);
+      // ⚠️ **`update` CIBLÉ, jamais `save(promo)`** — et c'est un correctif, pas
+      // un style. `promo` est un instantané pris AVANT l'attente du verrou
+      // consultatif ; `save` diffe cet instantané contre la ligne en base et
+      // réémet **toute** colonne ayant dérivé entre-temps, `moderationStatus`
+      // compris.
+      //
+      // Mesuré le 2026-08-14, avec témoin négatif : sans modération
+      // concurrente, l'`UPDATE` ne portait pas `moderationStatus` ; avec un
+      // `masquer` pendant la fenêtre, il le réémettait à `normale` — **la promo
+      // masquée redevenait publique**, sans erreur nulle part. La variante
+      // `verifier-ok` effaçait en plus `verifiedOkAt`, donc la fenêtre d'ignore
+      // de 30 jours, et remettait la promo en file.
+      //
+      // C'est exactement le défaut corrigé sur `update()` le 2026-08-05 ; la
+      // correction n'avait pas été portée ici. Fenêtre mesurée 3,7–4,7 ms, mais
+      // élargissable à volonté depuis l'extérieur : le verrou consultatif que
+      // cette méthode prend elle-même suffit à la tenir ouverte (voir le banc
+      // de `docs/audit_securite_2026-08-14.md` §4.2).
+      await manager.update(
+        Promo,
+        { id: promo.id },
+        {
+          lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
+          dateFin,
+          publishedAt: new Date(),
+        },
+      );
+      // Relecture DANS la transaction : hors d'elle, l'écriture n'est pas
+      // encore visible.
+      return manager.findOneOrFail(Promo, {
+        where: { id: promo.id },
+        relations: { commercant: true },
+      });
     });
   }
 
@@ -793,8 +822,16 @@ export class PromoService {
         'Seule une promo publiée peut être arrêtée',
       );
     }
-    promo.lifecycleStatus = PromoLifecycleStatus.ARRETEE;
-    return this.promos.save(promo);
+    // Même correctif que `publish` : `save(promo)` réémettait toute colonne
+    // ayant dérivé depuis le chargement de l'instantané, `moderationStatus`
+    // compris. La fenêtre est ici plus courte (aucun await intermédiaire), mais
+    // le mécanisme est identique — et un correctif appliqué à un seul des deux
+    // sites laisse l'invariant tenu par rien (règle 30).
+    await this.promos.update(
+      { id: promo.id },
+      { lifecycleStatus: PromoLifecycleStatus.ARRETEE },
+    );
+    return this.findByIdOrFail(promoId);
   }
 
   /**

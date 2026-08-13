@@ -48,7 +48,14 @@ export class Agent {
    * révocation par `tokenVersion` passe donc du statut de conformité à celui
    * de dernier recours — `revocation_jwt.py` avec elle (règle #6).
    */
-  @Column({ type: 'int', default: 0 })
+  // ⚠️ Ce décorateur était en DOUBLE jusqu'au 2026-08-14 (introduit par
+  // `b0aeced`, un copier-coller). Aucune conséquence d'exécution — TypeORM
+  // n'en garde qu'un — mais mesuré pendant l'audit : c'est le PREMIER poussé
+  // qui survit, donc **celui du bas**, l'inverse de ce qu'on prédit. Une
+  // édition faite sur la ligne du haut était silencieusement jetée, et les
+  // quatre contrôles du projet — `tsc`, `eslint`, les tests, et surtout
+  // `migration:generate` qui sert de mesure de vérité entité↔base — la
+  // déclaraient conforme.
   @Column({ type: 'int', default: 0 })
   tokenVersion: number;
 

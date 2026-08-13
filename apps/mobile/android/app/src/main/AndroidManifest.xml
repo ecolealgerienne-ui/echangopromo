@@ -11,9 +11,18 @@
          pas de clé API Google Maps) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- ⚠️ Les deux attributs de sauvegarde, posés le 2026-08-14 (audit), et
+         ils pointent sur DEUX fichiers au format DIFFÉRENT : Android a changé
+         de schéma à API 31. `dataExtractionRules` gouverne à partir de 31 (le
+         projet cible 36), `fullBackupContent` couvre les API 24-30 que
+         `minSdk 24` inclut encore. N'en poser qu'un ferme la sauvegarde pour
+         une moitié du parc seulement. Raison détaillée dans
+         `res/xml/data_extraction_rules.xml`. -->
     <application
         android:label="Echango Promo"
         android:name="${applicationName}"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

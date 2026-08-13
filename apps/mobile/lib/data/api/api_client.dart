@@ -36,17 +36,26 @@ class ApiClient {
           receiveTimeout: const Duration(seconds: 20),
           sendTimeout: const Duration(seconds: 20),
         )) {
-    // ⚠️ **Avant** l'intercepteur d'erreurs, et l'ordre est nécessaire : Dio
-    // traite `304` comme une erreur, donc la revalidation doit intercepter la
-    // réponse conditionnelle avant qu'elle ne soit convertie en
-    // `ApiException`. Enregistré après, il ne verrait jamais un seul `304`.
+    // ⚠️ **L'ORDRE A ÉTÉ INVERSÉ LE 2026-08-14**, et le commentaire qui le
+    // justifiait était faux. Il affirmait : « enregistré après, [le cache] ne
+    // verrait jamais un seul 304 ». Contrefactuel mesuré pendant l'audit : dans
+    // l'ordre inverse, le `304` anonyme est **toujours** resservi — l'`onError`
+    // ci-dessous réémet une `DioException` avec `response` INTACT, que
+    // `EtagCacheInterceptor` retrouve par `err.response?.statusCode == 304`.
     //
-    // ⚠️ Facultatif : les constructions qui n'ont pas de `SharedPreferences`
-    // sous la main (tests unitaires) tournent simplement sans cache, plutôt
-    // que d'imposer une dépendance à tout le monde pour une optimisation.
-    if (etagCache != null) {
-      dio.interceptors.add(EtagCacheInterceptor(etagCache));
-    }
+    // Ce que l'ancien ordre coûtait : Dio exécute `onRequest` en **FIFO**, donc
+    // le cache jugeait AVANT que `Authorization` soit posé. Son test
+    // `containsKey('Authorization')` rendait toujours faux, un `If-None-Match`
+    // partait sur une requête authentifiée, le serveur rendait `304` — et comme
+    // `onResponse`/`onError` jugent APRÈS, avec l'en-tête, le cache refusait de
+    // resservir le corps conservé. Résultat mesuré : un écran **public** affichant
+    // « Le serveur est momentanément indisponible » à un utilisateur connecté,
+    // alors qu'il fonctionne parfaitement déconnecté.
+    //
+    // Le chemin est nominal, pas exotique : `splash_screen.dart` renvoie vers la
+    // vitrine publique à CHAQUE lancement quelle que soit la session pro, et
+    // `EtagCacheStore.vider()` n'a aucun appelant — l'entrée posée en session
+    // anonyme survit à la connexion et au redémarrage.
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
@@ -71,6 +80,12 @@ class ApiClient {
         },
       ),
     );
+    // ⚠️ Facultatif : les constructions qui n'ont pas de `SharedPreferences`
+    // sous la main (tests unitaires) tournent simplement sans cache, plutôt
+    // que d'imposer une dépendance à tout le monde pour une optimisation.
+    if (etagCache != null) {
+      dio.interceptors.add(EtagCacheInterceptor(etagCache));
+    }
   }
 
   final Dio dio;
