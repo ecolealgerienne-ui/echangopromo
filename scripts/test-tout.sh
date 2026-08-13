@@ -15,14 +15,26 @@
 # raison. Un lot « tout vert » qui aurait discrètement omis six bancs vaudrait
 # moins que pas de lot du tout.
 #
-# ── ⚠️ La pause entre bancs n'est pas du confort ───────────────────────────
+# ── ⚠️ La pause entre bancs, et pourquoi elle n'est PAS uniforme ───────────
 #
-# Les seaux de débit sont partagés par IP : 60/min global, 20/min sur les
-# écritures, 5/min sur l'inscription et le signalement. Enchaînés sans pause,
-# les bancs se refusent mutuellement — et un 429 se déguise en « identifiants
-# incorrects » ou en refus métier. On paie donc 60 s entre chaque, et le lot
-# dure environ trois quarts d'heure. C'est le prix d'un verdict qui veut dire
-# quelque chose ; `PAUSE_SECONDS` permet de le régler en connaissance de cause.
+# Les seaux de débit sont partagés par IP : 60/min global, 50/min sur les
+# connexions, 20/min sur les écritures, et **5/min sur l'inscription et le
+# signalement**. Enchaînés sans pause, les bancs se refusent mutuellement — et
+# un 429 se déguise en « identifiants incorrects » ou en refus métier.
+#
+# ⚠️ **Le premier lot a duré 45 minutes pour 5 minutes de travail réel.** Mesuré
+# le 2026-08-13 : un banc prend de 0 à 11 secondes, et 43 pauses de 60 s en
+# faisaient 43 minutes — 90 % du lot passé à attendre. Une pause uniforme
+# appliquait à tous le délai que seul le seau le plus serré exige.
+#
+# Les huit bancs qui touchent `POST /report` ou `POST /commercant/register`
+# consomment le seau à **5 par minute** : eux seuls ont besoin d'une minute
+# pleine. Les autres se contentent du seau global, que leur propre cadence
+# interne (~1,2 s par appel) suffit à ménager.
+#
+# Résultat : ~15 minutes au lieu de 45, sans rien relâcher là où c'est serré.
+# `PAUSE_SECONDS` et `PAUSE_STRICTE_SECONDS` restent réglables en connaissance
+# de cause.
 #
 # ── ⚠️ Ce lot peut révéler des interférences qu'un lancement isolé ne voit pas
 #
@@ -46,7 +58,12 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 RACINE="$(cd "$HERE/.." && pwd)"
 cd "$RACINE" || exit 2
 
-PAUSE_SECONDS="${PAUSE_SECONDS:-60}"
+PAUSE_SECONDS="${PAUSE_SECONDS:-10}"
+PAUSE_STRICTE_SECONDS="${PAUSE_STRICTE_SECONDS:-60}"
+
+# Les bancs qui consomment le seau strict (5/min) — établi en cherchant
+# `POST /report` et `POST /commercant/register` dans leur module, pas de mémoire.
+STRICTS=" abus-signalement cycle-commercant file-moderation frontiere-http moderation-course portee-agent position-publication "
 API_URL="${API_URL:-http://localhost:3000}"
 export API_URL
 
@@ -111,8 +128,8 @@ echo "════════════════════════�
 echo "  Lot complet — $API_URL · pause ${PAUSE_SECONDS}s entre bancs"
 echo "══════════════════════════════════════════════════════════════════════"
 echo "  ${#BANCS[@]} bancs à lancer, ${#EXCLUS[@]} exclus (détaillés à la fin)"
-echo "  durée attendue : ~$(( (${#BANCS[@]} * PAUSE_SECONDS) / 60 )) min de pauses,"
-echo "  plus le temps d'exécution."
+echo "  pauses : ${PAUSE_SECONDS}s, et ${PAUSE_STRICTE_SECONDS}s après les 7 bancs"
+echo "  qui consomment le seau strict (report / register)."
 echo
 
 RESULTATS=()
@@ -135,8 +152,15 @@ for b in "${BANCS[@]}"; do
     continue
   fi
 
-  [ "$PREMIER" = "1" ] || sleep "$PAUSE_SECONDS"
-  PREMIER=0
+  # ⚠️ La pause dépend du banc PRÉCÉDENT : c'est lui qui a consommé le seau.
+  if [ "$PREMIER" = "1" ]; then
+    PREMIER=0
+  elif [ -n "${PRECEDENT:-}" ] && [ "${STRICTS#* $PRECEDENT }" != "$STRICTS" ]; then
+    sleep "$PAUSE_STRICTE_SECONDS"
+  else
+    sleep "$PAUSE_SECONDS"
+  fi
+  PRECEDENT="$b"
 
   echo "── $b ──"
   SORTIE="$("$HERE/test-$b.sh" 2>&1)"
