@@ -41,8 +41,15 @@ class AdminAuditLogScreen extends ConsumerWidget {
               itemCount: entries.length,
               itemBuilder: (context, index) {
                 final entry = entries[index];
-                final actorLabel =
-                    auditActorTypeLabel(context, entry.actorType);
+                final roleLabel = auditActorTypeLabel(context, entry.actorType);
+                // ⚠️ **Le repli sur l'UUID est la bonne réponse, pas un pis-aller.**
+                // Le serveur rend `null` quand il n'a pas su résoudre l'acteur ou
+                // la cible, plutôt que d'inventer un libellé — afficher alors
+                // l'identifiant montre la seule vérité disponible. Écrire
+                // « inconnu » à la place ferait passer « je ne sais pas » pour
+                // « il n'existe plus » (règle 29).
+                final acteur = entry.actorLabel ?? entry.actorId;
+                final cible = entry.targetLabel ?? entry.targetId;
                 return ListTile(
                   leading: Icon(
                     entry.actorType == AuditActorType.admin
@@ -52,9 +59,9 @@ class AdminAuditLogScreen extends ConsumerWidget {
                   title: Text(entry.action),
                   subtitle: Text(
                     [
-                      '$actorLabel ${entry.actorId}',
+                      '$roleLabel · $acteur',
                       if (entry.targetType != null)
-                        '${entry.targetType} ${entry.targetId}',
+                        '${entry.targetType} · $cible',
                       dateFormat.format(entry.createdAt),
                     ].join(' · '),
                   ),

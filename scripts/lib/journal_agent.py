@@ -155,6 +155,40 @@ def verdict_attribution(id_a, id_b):
     return "ok", "A=%s ≠ B=%s" % (str(id_a)[:8], str(id_b)[:8])
 
 
+def verdict_libelle(entree, champ, attendu_dans, quoi):
+    """Le libellé lisible servi à côté de l'UUID (2026-08-13).
+
+    ⚠️ **Un UUID n'est pas une trace exploitable.** L'écran affichait
+    `agent 3f2a…` : personne ne retrace « qui a fait quoi » sans ouvrir la base
+    à côté. C'était supportable tant que l'agent était borné ; depuis que ce
+    journal est le seul contrepoids à sa portée globale, une trace illisible est
+    un contrepaids qu'on croit avoir.
+
+    ⚠️ **Le champ ABSENT et le champ NULL ne disent pas la même chose**, et cette
+    sonde les sépare. Absent ⇒ le serveur ne le sert pas du tout (la
+    modification n'est pas déployée). `null` ⇒ il l'a servi et n'a pas su
+    résoudre — légitime pour une cible détruite, suspect pour l'acteur d'une
+    action qu'on vient de faire.
+    """
+    if entree is None:
+        return "non_concluant", "%s : pas d'entrée à examiner" % quoi
+    if champ not in entree:
+        return ("echec",
+                "%s : `%s` n'est pas servi du tout — l'écran ne peut afficher "
+                "qu'un UUID" % (quoi, champ))
+    valeur = entree.get(champ)
+    if valeur is None:
+        return ("echec",
+                "%s : libellé null pour un acteur qui vient d'agir — il existe, "
+                "il n'a simplement pas été résolu" % quoi)
+    if attendu_dans not in valeur:
+        return ("echec",
+                "%s : libellé %r, on n'y retrouve pas %r — il désigne quelqu'un "
+                "d'autre, ce qui est pire qu'un UUID honnête"
+                % (quoi, valeur, attendu_dans))
+    return "ok", valeur
+
+
 def verdict_filtre(entrees, attendu):
     """`?actorType=agent` ne doit rendre que des entrées d'agent."""
     if entrees is None:
@@ -237,6 +271,9 @@ def self_test():
     _v("aucune trace pour le commerçant",
        verdict_aucune_trace([_e(target="p9")], "p1")[0], "ok")
     _v("attribution distincte", verdict_attribution("A", "B")[0], "ok")
+    _v("libellé lisible",
+       verdict_libelle({"actorLabel": "Agent Décor (decor-agent@echango.local)"},
+                       "actorLabel", "decor-agent@echango.local", "A")[0], "ok")
     _v("filtre propre",
        verdict_filtre([{"actorType": "agent"}], "agent")[0], "ok")
 
@@ -279,8 +316,20 @@ def self_test():
        "non_concluant")
     _v("trace manquante → non concluant",
        verdict_attribution("A", None)[0], "non_concluant")
+    # ⚠️ Champ absent ≠ champ null : le premier dit « pas déployé », le second
+    # « pas résolu ». Les confondre ferait passer une régression pour un cas
+    # limite.
+    _v("libellé non servi",
+       verdict_libelle({"actorId": "x"}, "actorLabel", "@", "A")[0], "echec")
+    _v("libellé null pour un acteur vivant",
+       verdict_libelle({"actorLabel": None}, "actorLabel", "@", "A")[0], "echec")
+    _v("libellé d'un autre",
+       verdict_libelle({"actorLabel": "Agent B (b@x)"}, "actorLabel",
+                       "a@x", "A")[0], "echec")
+    _v("pas d'entrée → non concluant",
+       verdict_libelle(None, "actorLabel", "@", "A")[0], "non_concluant")
 
-    refus = 12
+    refus = 15
     total = _ok + len(_echecs)
     print("auto-test : %d cas, dont %d refus" % (total, refus))
     for e in _echecs:
@@ -456,14 +505,29 @@ def main():
     neuves = neuves_depuis(avant)
     noter("la même action par agent B est tracée",
           *verdict_trace(neuves, "registre_valider", id_b, cid))
-    vus = [e.get("actorId") for e in neuves
-           if e.get("action") == "registre_valider"]
+    entrees_b = [e for e in neuves if e.get("action") == "registre_valider"]
     noter("… et à un autre nom que A",
-          *verdict_attribution(id_a, vus[0] if vus else None))
+          *verdict_attribution(id_a, entrees_b[0].get("actorId")
+                               if entrees_b else None))
     time.sleep(PACE)
 
-    # ── 7. Le filtre ────────────────────────────────────────────────────────
-    print("\n── 7. le filtre actorType=agent filtre réellement ──")
+    # ── 7. Le libellé lisible — un UUID n'est pas une trace exploitable ─────
+    #
+    # ⚠️ Ajouté le 2026-08-13 avec `actorLabel`/`targetLabel` : l'écran
+    # affichait `agent 3f2a…` et `commercant 9c11…`. On vérifie sur l'entrée
+    # d'agent B qu'on vient d'obtenir — donc sur un acteur dont on connaît
+    # l'e-mail par ailleurs, et pas sur une chaîne quelconque.
+    print("\n── 7. le journal est lisible, pas seulement exact ──")
+    entree_b = entrees_b[0] if entrees_b else None
+    noter("le libellé de l'acteur nomme l'agent B",
+          *verdict_libelle(entree_b, "actorLabel", agent_b_email, "acteur"))
+    # La cible est le commerçant du décor : son libellé doit porter son numéro.
+    noter("le libellé de la cible nomme le commerçant",
+          *verdict_libelle(entree_b, "targetLabel", tel, "cible"))
+    time.sleep(PACE)
+
+    # ── 8. Le filtre ────────────────────────────────────────────────────────
+    print("\n── 8. le filtre actorType=agent filtre réellement ──")
     noter("?actorType=agent", *verdict_filtre(journal("&actorType=agent"),
                                               "agent"))
     time.sleep(PACE)

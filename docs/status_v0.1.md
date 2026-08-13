@@ -3798,6 +3798,64 @@ Un champ qu'on croit envoyer et que personne ne lit est pire qu'un champ absent.
 
 ---
 
+### 2026-08-13 — Le journal devient lisible
+
+Le journal disait vrai et ne servait à rien : l'écran affichait
+`agent 3f2a…` et `commercant 9c11…`. Personne ne retrace « qui a fait quoi »
+là-dedans sans ouvrir la base à côté.
+
+⚠️ **Ce n'était pas du confort.** C'était supportable tant que l'agent était
+borné à ses communes — la question « de qui s'agit-il » avait une réponse
+courte. Depuis que les quatorze gardes sont tombées, ce journal est le **seul**
+contrepoids à la portée globale : il n'existe plus de limite *a priori*,
+seulement une trace *a posteriori*. **Une trace illisible n'est pas un
+contrepoids, c'est un contrepoids qu'on croit avoir.**
+
+`GET /admin/audit-log` sert désormais `actorLabel` et `targetLabel` :
+`Agent Décor B (decor-agent-b@echango.local)`,
+`Commerce Décor (+213555000101)`.
+
+**Quatre décisions, chacune contre une règle précise :**
+
+- **Une requête par TABLE, pas une par entrée** (règle 14). Le pattern
+  `Promise.all(items.map(async (e) => repo.findOne(…)))` est un N+1 quasi
+  certain, et il l'aurait été : jusqu'à **200 requêtes** pour une page de 100
+  entrées. Quatre suffisent, quel que soit le volume — identifiants dédupliqués
+  d'abord, une même personne occupant typiquement des dizaines de lignes
+  d'affilée.
+- **Une vue explicite, jamais un spread** (règle 4). `{...entity, actorLabel}`
+  transformerait l'instance en objet plain et désactiverait silencieusement le
+  `ClassSerializerInterceptor`. `AuditLog` n'a rien d'`@Exclude()` aujourd'hui ;
+  la forme protège du jour où l'on en ajoutera un.
+- **Un libellé introuvable vaut `null`** (règle 29). « Agent supprimé » ou « — »
+  écrirait une information qu'on n'a pas et rendrait indiscernables « l'acteur
+  n'existe plus » et « je n'ai pas su le résoudre ». Le client retombe alors sur
+  l'UUID, seule vérité disponible — et c'est écrit à l'écran comme la bonne
+  réponse, pas comme un pis-aller.
+- **Les comptes supprimés sont résolus quand même.** On lit les tables sans le
+  filtre `deletedAt IS NULL` des services : un journal qui perd le nom d'un
+  commerçant le jour où on le supprime perd sa valeur **exactement quand elle
+  compte** — c'est la suppression qu'on veut pouvoir retracer.
+
+Quatre entités d'autres modules sont déclarées en direct dans `AuditLogModule`
+(règle 9) : les quatre modules concernés importent déjà `AuditLogModule` pour
+écrire, et les importer en retour créerait quatre cycles. L'accès est en lecture
+seule et ne reproduit aucune règle métier — le seul besoin est de remplacer un
+UUID par un libellé.
+
+**Éprouvé dans le même commit**, et c'est le point : `journal_agent.py` passe de
+9 à **11 contrôles**, avec une sonde par libellé. ⚠️ Le verdict distingue
+**champ absent** et **champ `null`** — le premier dit « pas déployé », le second
+« pas résolu », et les confondre ferait passer une régression pour un cas
+limite. Prouvé par mutation : forcer `actorLabel: null` fait rendre ❌ à la sonde
+de l'acteur, la sonde de la cible restant verte.
+
+`admin_audit_log.py` rejoué : **7/7**, y compris sa sonde « aucun secret dans le
+journal » — les deux libellés n'exposent que du nom, de l'e-mail et un numéro
+que l'admin voit déjà sur ses autres écrans, sur une route qui lui est réservée.
+
+---
+
 ## Comment tenir ce fichier
 
 - **Une entrée de journal par session**, datée, qui dit ce qui a été fait **et
