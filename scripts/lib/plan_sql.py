@@ -35,26 +35,32 @@ blocs, un parcours séquentiel bat n'importe quel index. Le vrai risque n'est pa
 là. Il est que **personne ne saurait dire si l'index sert un jour**, et un
 commentaire ne peut pas échouer (règle 30).
 
-── Le défaut de fond : un btree ne sait pas restreindre en deux dimensions ─
+── Le défaut de fond, et la décision qui l'a fermé ─────────────────────────
 
-Forcé (`enable_seqscan = off`), l'index est bien emprunté — il est donc
-**utilisable**. Mais il rend **101 lignes sur 154** pour un cadre de 5 km, parce
-qu'un btree `(latitude, longitude)` ne restreint que sur sa **première** colonne :
-la longitude n'est qu'un filtre appliqué après coup, à l'intérieur de l'index.
+Un btree `(latitude, longitude)` ne restreint que sur sa **première** colonne :
+la longitude n'y est qu'un filtre appliqué après coup, à l'intérieur de l'index.
+Sur un cadre de 5 km, il remontait **101 lignes sur 154** là où 53
+correspondent.
 
-Mesuré, index GiST créé puis **annulé par ROLLBACK** — rien n'est écrit en base :
+Ce banc a d'abord servi à **mesurer** l'alternative — index GiST créé puis
+annulé par ROLLBACK — et à porter la décision :
 
     btree (latitude, longitude)          101 lignes remontées
     gist  (point(longitude, latitude))    53 lignes remontées   ← les 53 justes
 
-Le GiST écarte 48 lignes de plus **avant** la lecture de table, et il ne demande
-**pas PostGIS** : `point` et l'opérateur `<@ box` sont natifs. À l'échelle d'un
-quartier l'écart est invisible ; à l'échelle nationale, une bande de latitude
-traversant l'Algérie contient une grande part du parc.
+**La bascule a été faite le 2026-08-13** (`CommercantPositionGistIndex`), et les
+rôles se sont inversés : c'est désormais l'ANCIEN btree qui est recréé dans une
+transaction annulée, pour que le gain reste **mesuré** plutôt que raconté. Un
+chiffre écrit dans un commentaire n'aurait pas bronché le jour où quelqu'un
+revient en arrière (règle 30).
 
-⚠️ **Ce banc ne recommande rien** : il mesure. Changer d'index change aussi la
-requête (`point(...) <@ box(...)` au lieu des deux `BETWEEN`), donc c'est une
-décision produit, pas un réglage.
+Pas de PostGIS : `point` et l'opérateur `<@ box` sont natifs, avec un opclass
+GiST fourni en standard.
+
+⚠️ **La reconstitution suit la requête réelle**, `point(...) <@ box(...)`. Tant
+qu'elle portait les deux `BETWEEN`, elle rendait le même nombre de lignes — donc
+la sonde de fidélité restait verte — tout en faisant analyser un plan que le
+produit ne produit plus. Le piège que ce banc dénonce, retourné contre lui-même.
 
 ── Usage ───────────────────────────────────────────────────────────────────
 
@@ -138,27 +144,33 @@ def verdict_index_utilisable(emprunte_si_force):
 
 
 def verdict_selectivite(btree_lignes, gist_lignes, justes):
-    """⚠️ Ce que le btree laisse passer, et que le cadre aurait dû écarter.
+    """⚠️ L'index en place ne doit remonter QUE les lignes du cadre.
 
     Un btree `(lat, lng)` ne restreint que sur sa première colonne : la
-    longitude n'est qu'un filtre interne. On mesure l'écart avec un GiST, dont
-    l'opérateur `<@ box` restreint bien en deux dimensions.
+    longitude n'y est qu'un filtre interne. Le GiST sur `point(lng, lat)`
+    restreint en deux dimensions, et doit donc remonter exactement les lignes
+    contenues dans la boîte.
+
+    ⚠️ **Le sens de ce verdict s'est inversé le 2026-08-13.** Il constatait un
+    écart à combler ; il garde maintenant un gain acquis. Le jour où quelqu'un
+    revient au btree, `gist_lignes` remontera et ce contrôle le dira — un
+    chiffre écrit dans un commentaire, lui, n'aurait pas bronché (règle 30).
     """
     if btree_lignes is None or gist_lignes is None:
         return "non_concluant", "une des deux mesures est illisible"
     if justes and gist_lignes > justes:
-        return ("non_concluant",
-                "le GiST rend %d lignes pour %d justes — la comparaison ne "
-                "porte pas sur la même chose" % (gist_lignes, justes))
+        return ("echec",
+                "l'index remonte %d lignes pour %d réellement dans le cadre : "
+                "il ne restreint pas en deux dimensions" % (gist_lignes, justes))
     if btree_lignes <= gist_lignes:
-        return ("ok",
-                "btree %d, gist %d — aucun gain à attendre d'un changement "
-                "d'index sur ce cadre" % (btree_lignes, gist_lignes))
-    return ("non_concluant",
-            "btree %d lignes contre %d pour un GiST : %d lignes lues en trop "
-            "avant filtrage. Invisible à cette taille, structurel à l'échelle "
-            "— décision produit, pas réglage"
-            % (btree_lignes, gist_lignes, btree_lignes - gist_lignes))
+        return ("non_concluant",
+                "l'ancien btree remontait %d lignes, l'index en place %d — le "
+                "gain mesuré le 2026-08-13 a disparu, ou le cadre choisi ne "
+                "permet plus de le voir" % (btree_lignes, gist_lignes))
+    return ("ok",
+            "%d lignes remontées pour %d dans le cadre ; l'ancien btree en "
+            "remontait %d, soit %d lues puis jetées à chaque requête"
+            % (gist_lignes, justes, btree_lignes, btree_lignes - gist_lignes))
 
 
 def verdict_propre(index_restants):
@@ -186,25 +198,34 @@ DISTANCE = """(6371 * acos(LEAST(1, GREATEST(-1,
       + cos(radians(%(lat)s)) * cos(radians(c.latitude))
       * cos(radians(c.longitude) - radians(%(lng)s))))))"""
 
+# ⚠️ **Le cadre s'écrit `point(...) <@ box(...)` depuis le 2026-08-13**, et
+# cette reconstitution DOIT suivre. Tant qu'elle portait les deux `BETWEEN`,
+# elle rendait le même nombre de lignes — donc la sonde de fidélité restait
+# verte — tout en faisant analyser un plan que le produit ne produit plus.
+# C'est exactement le piège que ce banc dénonce, retourné contre lui-même.
+CADRE = ("""point(c.longitude, c.latitude)
+       <@ box(point(%(west)s,%(south)s), point(%(east)s,%(north)s))""")
+
 LISTE = ("""select p.id from promo p
   inner join commercant c on c.id = p."commercantId"
  where p."lifecycleStatus" = 'publiee'
    and p."moderationStatus" in ('normale','verifiee_ok')
    and p."dateFin" > NOW()
    and c."deletedAt" is null
-   and c.latitude between %(south)s and %(north)s
-   and c.longitude between %(west)s and %(east)s
-   and """ + DISTANCE + " <= %(rayon)s")
+   and """ + CADRE + "\n   and " + DISTANCE + " <= %(rayon)s")
 
+# Le cadre seul, pour mesurer ce que l'index remonte avant tout filtrage.
+CADRE_SEUL = ("""select c.id from commercant c
+ where c."deletedAt" is null
+   and """ + CADRE)
+
+# ⚠️ L'ancien btree, conservé pour que le gain reste MESURÉ et non raconté.
+# Il est créé dans une transaction annulée, exactement comme le GiST l'était
+# avant la bascule — les rôles sont simplement inversés.
 CADRE_BTREE = """select c.id from commercant c
  where c."deletedAt" is null
    and c.latitude between %(south)s and %(north)s
    and c.longitude between %(west)s and %(east)s"""
-
-CADRE_GIST = """select c.id from commercant c
- where c."deletedAt" is null
-   and point(c.longitude, c.latitude)
-       <@ box(point(%(west)s,%(south)s), point(%(east)s,%(north)s))"""
 
 
 def _lignes_du_scan(plan, motif):
@@ -234,7 +255,9 @@ def self_test():
     _v("index emprunté",
        verdict_index_emprunte("Bitmap Index Scan on IDX_x", "IDX_x")[0], "ok")
     _v("index utilisable", verdict_index_utilisable(True)[0], "ok")
-    _v("aucun gain à attendre", verdict_selectivite(53, 53, 53)[0], "ok")
+    # ⚠️ Le gain acquis : le GiST remonte les 53 justes, le btree en remontait
+    # 101. C'était « non concluant » avant la bascule ; c'est « ok » depuis.
+    _v("gain acquis", verdict_selectivite(101, 53, 53)[0], "ok")
     _v("base rendue propre", verdict_propre(0)[0], "ok")
 
     # ── Doivent REFUSER ──────────────────────────────────────────────────────
@@ -248,11 +271,12 @@ def self_test():
 
     # ── Doivent rester NON CONCLUANTS ────────────────────────────────────────
     # ⚠️ L'écart de sélectivité n'est pas un défaut : c'est une décision produit.
-    _v("écart de sélectivité",
-       verdict_selectivite(101, 53, 53)[0], "non_concluant")
+    # ⚠️ Le retour en arrière : plus aucun écart entre les deux index.
+    _v("gain disparu", verdict_selectivite(53, 53, 53)[0], "non_concluant")
     # ⚠️ Deux mesures qui ne portent pas sur la même chose ne se comparent pas.
-    _v("comparaison biaisée",
-       verdict_selectivite(101, 90, 53)[0], "non_concluant")
+    # ⚠️ Le défaut visé : l'index ne restreint pas en deux dimensions.
+    _v("index qui déborde du cadre",
+       verdict_selectivite(101, 90, 53)[0], "echec")
     _v("fidélité illisible", verdict_fidelite(None, 44)[0], "non_concluant")
     _v("plan illisible", verdict_index_emprunte(None, "IDX_x")[0],
        "non_concluant")
@@ -342,28 +366,30 @@ def main():
     noter("seqscan désactivé",
           *verdict_index_utilisable("IDX_commercant_position" in force))
 
-    # ── 4. Ce que le btree laisse passer ────────────────────────────────────
-    print("\n── 4. un btree restreint sur UNE dimension, pas deux ──")
-    n_btree = _lignes_du_scan(plan(CADRE_BTREE, forcer=True),
-                              "IDX_commercant_position")
+    # ── 4. Ce que l'index en place remonte, et ce que l'ancien remontait ──
+    print("\n── l'index remonte-t-il seulement le cadre ? ──")
+    n_gist = _lignes_du_scan(plan(CADRE_SEUL, forcer=True),
+                             "IDX_commercant_position")
     cur.execute("select count(*) from commercant c where c.\"deletedAt\" is null"
-                " and c.latitude between %(south)s and %(north)s"
-                " and c.longitude between %(west)s and %(east)s", p)
+                " and " + CADRE, p)
     justes = cur.fetchone()[0]
 
-    # ⚠️ Créé puis ANNULÉ : ce banc mesure un schéma, il ne le change pas.
-    cur.execute("savepoint avant_gist")
-    cur.execute("""create index banc_plan_gist on commercant
-                   using gist (point(longitude, latitude))
+    # ⚠️ L'ANCIEN index est recréé dans une transaction **annulée**, sous un
+    # autre nom : c'est la seule façon de garder le gain mesuré plutôt que
+    # raconté. Un chiffre écrit dans un commentaire ne peut pas échouer le jour
+    # où quelqu'un revient au btree (règle 30).
+    cur.execute("savepoint avant_btree")
+    cur.execute("""create index banc_plan_btree on commercant (latitude, longitude)
                    where latitude is not null and longitude is not null""")
     cur.execute("analyze commercant")
-    n_gist = _lignes_du_scan(plan(CADRE_GIST, forcer=True), "banc_plan_gist")
-    cur.execute("rollback to savepoint avant_gist")
+    n_btree = _lignes_du_scan(plan(CADRE_BTREE, forcer=True),
+                              "banc_plan_btree")
+    cur.execute("rollback to savepoint avant_btree")
     cx.rollback()
 
     noter("sélectivité", *verdict_selectivite(n_btree, n_gist, justes))
-    print("     %s commerçants dans le cadre ; btree en remonte %s, gist %s"
-          % (justes, n_btree, n_gist))
+    print("     %s commerçants dans le cadre ; l'index en place en remonte %s, "
+          "l'ancien btree %s" % (justes, n_gist, n_btree))
 
     cur2 = cx.cursor()
     cur2.execute("select count(*) from pg_indexes "

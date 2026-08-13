@@ -74,14 +74,28 @@ export const NOM_MAX_LENGTH = 120;
 export const ADRESSE_MAX_LENGTH = 200;
 
 /**
- * Index de la zone visible de la carte (`PromoService.findActiveForMap`).
- * Déclaré ici en plus de la migration `AddCommercantPositionIndex` : sans
- * cette déclaration, un futur `migration:generate` verrait un index présent
- * en base mais absent des entités et proposerait de le supprimer.
+ * ⚠️ **`IDX_commercant_position` n'est PLUS déclaré ici, et son absence est
+ * délibérée.**
+ *
+ * Depuis `CommercantPositionGistIndex1783880000000`, c'est un index **GiST sur
+ * une expression** — `point("longitude", "latitude")` — et le décorateur
+ * `@Index` de TypeORM ne sait décrire que des colonnes. Le déclarer avec
+ * `['latitude', 'longitude']` ferait dire au modèle un btree que la base n'a
+ * pas : `migration:generate` proposerait alors de remplacer le GiST par un
+ * btree à chaque exécution, et la première migration appliquée sans relecture
+ * défairait la décision du 2026-08-13.
+ *
+ * ⚠️ C'est le miroir de la règle 12, et il est ici assumé plutôt que tenu :
+ * « un index en base sans `@Index()` est un candidat à la suppression ». Le
+ * garde-fou n'est donc pas le décorateur mais **la mesure** — le critère du
+ * dépôt reste qu'un `migration:generate` ne rende RIEN, et il a été vérifié
+ * après ce changement. Le jour où il émet quelque chose sur cet index, c'est
+ * ce commentaire qu'il faut venir relire.
+ *
+ * L'index lui-même est éprouvé par `test-plan-sql.sh`, qui vérifie qu'il est
+ * emprunté quand on force le planificateur et qu'il ne remonte que les lignes
+ * réellement dans le cadre.
  */
-@Index('IDX_commercant_position', ['latitude', 'longitude'], {
-  where: '"latitude" IS NOT NULL AND "longitude" IS NOT NULL',
-})
 /**
  * ⚠️ **Unicité du numéro parmi les comptes actifs** — même raison que
  * ci-dessus, et le défaut s'était bel et bien produit : au 2026-08-05,

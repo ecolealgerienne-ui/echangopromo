@@ -338,28 +338,24 @@ export class PromoService {
    * question posée deux fois, et un commentaire « même filtre que la carte »
    * n'aurait rien tenu.
    *
-   * ⚠️ C'est ce `BETWEEN`, et lui seul, qui **peut** emprunter
-   * `IDX_commercant_position` (btree partiel sur `latitude, longitude`).
-   * L'ordre par distance, lui, porte sur une expression calculée et ne peut pas
-   * être servi par un btree : le cadre est donc ce qui rend le tri abordable,
-   * pas un raffinement.
+   * ⚠️ C'est ce cadre, et lui seul, qui **peut** emprunter
+   * `IDX_commercant_position`. L'ordre par distance, lui, porte sur une
+   * expression calculée et ne peut être servi par aucun index : le cadre est
+   * donc ce qui rend le tri abordable, pas un raffinement.
    *
-   * ⚠️ **« Emprunte » était écrit au présent, et le plan réel le dément**
-   * (mesuré le 2026-08-13 par `test-plan-sql.sh`) : à 154 commerçants tenant
+   * ⚠️ **« Emprunte » ne s'écrit pas au présent** : à 154 commerçants tenant
    * dans 6 blocs, PostgreSQL fait un `Seq Scan` — et **il a raison**, aucun
    * index ne bat un parcours complet à cette taille. `enable_seqscan = off`
-   * montre que l'index est bien **utilisable** ; il n'est simplement pas
-   * choisi aujourd'hui.
+   * établit que l'index est bien **utilisable** ; il n'est simplement pas
+   * encore choisi.
    *
-   * ⚠️ Et quand il le sera, il ne restreindra que sur **une** dimension : un
-   * btree `(latitude, longitude)` n'utilise que sa première colonne pour une
-   * plage, la longitude n'étant qu'un filtre interne. Mesuré sur un cadre de
-   * 5 km : l'index remonte **101 lignes sur 154** là où 53 correspondent, quand
-   * un GiST sur `point(longitude, latitude)` — natif, sans PostGIS — en remonte
-   * exactement 53. Invisible à l'échelle du pilote, structurel à l'échelle
-   * nationale. Changer d'index changerait aussi cette requête
-   * (`point(...) <@ box(...)`) : c'est une décision produit, pas un réglage, et
-   * `test-plan-sql.sh` la garde mesurée en attendant qu'elle soit prise.
+   * ⚠️ **Deux `BETWEEN` jusqu'au 2026-08-13, et c'était une dimension de
+   * trop.** Un btree `(latitude, longitude)` n'utilise que sa première colonne
+   * pour une plage : sur un cadre de 5 km il remontait **101 lignes sur 154**
+   * là où 53 correspondent. Le GiST sur `point(longitude, latitude)` — natif,
+   * sans PostGIS — en remonte exactement 53, soit 48 lignes de moins lues puis
+   * jetées à chaque requête. Décision produit prise après mesure ;
+   * `test-plan-sql.sh` la tient.
    *
    * Exige que `commercant` soit déjà joint sous cet alias.
    */
@@ -367,15 +363,24 @@ export class PromoService {
     qb: SelectQueryBuilder<T>,
     bornes: { north: number; south: number; east: number; west: number },
   ): SelectQueryBuilder<T> {
-    return qb
-      .andWhere('commercant.latitude BETWEEN :bboxSouth AND :bboxNorth', {
+    // ⚠️ **`point(longitude, latitude)` — l'ordre est inversé par rapport au
+    // reste du produit**, parce que `point(x, y)` attend l'abscisse d'abord.
+    // Un index construit sur `point(lat, lng)` et interrogé par une boîte
+    // `(lng, lat)` ne lèverait rien : il rendrait des résultats FAUX, en
+    // silence, et seulement pour les points où l'inversion sort du cadre.
+    // L'index de `CommercantPositionGistIndex1783880000000` respecte le même
+    // ordre, et `test-plan-sql.sh` compare le nombre de lignes servies à celui
+    // de l'API — une inversion y ferait diverger les deux totaux.
+    return qb.andWhere(
+      'point(commercant.longitude, commercant.latitude) ' +
+        '<@ box(point(:bboxWest, :bboxSouth), point(:bboxEast, :bboxNorth))',
+      {
         bboxSouth: bornes.south,
         bboxNorth: bornes.north,
-      })
-      .andWhere('commercant.longitude BETWEEN :bboxWest AND :bboxEast', {
         bboxWest: bornes.west,
         bboxEast: bornes.east,
-      });
+      },
+    );
   }
 
   /**
