@@ -4111,6 +4111,54 @@ autres.
 
 **Les quatre rôles sont désormais couverts** : client, commerçant, agent, admin.
 
+### 2026-08-13 — P1 : le premier banc de performance
+
+`banc_perf` — 25 controles, 29 cas d'auto-test dont 19 refus. 0 echec.
+
+Le depot portait 46 bancs de correction et **aucune mesure de performance**. Une
+cible de fluidite qu'on ne mesure pas est un commentaire (regle 30).
+
+**Les chiffres de reference, 2026-08-13, en local sur 74 promos :**
+
+| Route | p50 | p95 | brut | gzip |
+|---|---|---|---|---|
+| `/promo/config` | 5 ms | 9 ms | 89 o | — |
+| `/promo?limit=20` | 12 ms | 17 ms | 15 516 o | **2 559 o** |
+| idem + point client | 11 ms | 12 ms | 15 516 o | **2 559 o** |
+| `/promo/map` | 12 ms | 16 ms | 39 323 o | **5 731 o** |
+
+La compression divise par 6,1 et 6,9 : le point 4 de `AUDIT_PERFORMANCE_V0`
+etait une case cochee, c'est desormais un controle execute.
+
+⚠️ **Deux erreurs de ma part, corrigees par la mesure.**
+
+D'abord j'ai annonce « aucun cache HTTP » apres avoir cherche `ETag` dans le
+CODE. **Faux** : Express en pose un d'office, et une requete conditionnelle rend
+bien `304` sur les quatre routes. Chercher dans le code ce qui se lit dans la
+reponse coute un diagnostic entier.
+
+Ensuite le banc a rendu ROUGE sur `/promo/config` en accusant le middleware
+`compression` — qui ne compresse pas sous 1 Ko, et **a raison** : l'en-tete gzip
+couterait plus que le gain. Regle 38 dans mon propre banc, pour la deuxieme fois
+de la journee.
+
+**Ce qui reste vraiment ouvert, et qui est mesure :**
+
+· `Cache-Control` est absent — l'app economise le corps, jamais le trajet ;
+· **aucun paquet de cache HTTP dans `pubspec.yaml`** : Dio n'envoie jamais
+  `If-None-Match`, donc l'`ETag` du serveur **n'est utilise par aucun vrai
+  client**. C'est une capacite servie sans appelant (regle 31) ;
+· la sonde SQL (transactions par appel, la seule qui voit venir un N+1) rend
+  « non concluant » depuis Windows : ni psycopg2, ni psql, ni docker. Elle
+  mesure depuis WSL.
+
+⚠️ Ce banc n'est **pas** un test de charge : un appel a la fois, sans
+concurrence. Il repond a « cette route est-elle bien formee ? », pas a « que se
+passe-t-il a 500 utilisateurs ? ».
+
+Prouve par mutation : seuil de compression porte a x20 → trois refus nommant le
+facteur reel.
+
 ---
 
 ## Comment tenir ce fichier
