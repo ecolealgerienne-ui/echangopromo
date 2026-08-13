@@ -165,8 +165,25 @@ jour (il avait 9 commits de retard).
 | `commercant-b` | code 2, aucun décompte | la frontière commerçant↔commerçant n'est pas éprouvée |
 
 **Cause du 429 : l'audit lui-même.** Le décor consomme six connexions, et les
-vérificateurs se sont authentifiés en parallèle. À rejouer seul, après une
-minute de repos.
+vérificateurs se sont authentifiés en parallèle.
+
+### ✅ Rejoués seuls le 2026-08-14 — deux des trois trous sont fermés
+
+```
+frontiere-http : auto-test 17/17 (dont 6 refus)
+                 49 routes protégées (63 au total, 14 ouvertes épinglées, 3 host-scopées)
+                 141 sondes, 0 échec
+                 ⚠️ 6 routes sans sonde « mauvais rôle » : elles acceptent les 3 rôles
+commercant-b   : 4 contrôles, 0 échec
+                 PATCH / publish / stop sur la promo d'un autre → 403 PROMO_NOT_OWNED_BY_COMMERCANT
+                 le même geste sur sa propre promo → 200
+plan-sql       : auto-test 17/17, puis TOUJOURS BLOQUÉ — `psycopg2` absent
+```
+
+**La frontière d'accès est donc éprouvée**, et la frontière commerçant↔commerçant
+aussi. Reste `plan-sql` : `pip` n'existe pas dans le Python de cette WSL
+(`No module named pip`). C'est un trou d'**environnement**, et il porte sur des
+plans de requête — de la performance, pas de la sécurité.
 
 ---
 
@@ -560,25 +577,47 @@ n'est pas installé.**
 
 ## 8. Recommandations
 
-| # | Action | Priorité |
-|---|---|---|
-| 1 | **Retirer `mc anonymous set download` du `docker-compose.yml`**, ou le borner à `promo-photos/` — le registre ne doit pas être dans un bucket public (§4.1a) | 🔴 immédiat |
-| 2 | **Vérifier sur OVH que l'ACL `private` par objet est effective** sur `registre-documents/` (§4.1) | 🔴 avant production |
-| 3 | Remplacer `manager.save(promo)` par un `update` ciblé dans `publish()` et `stop()` — le correctif que `update()` a déjà reçu (§4.2) | 🔴 |
-| 4 | `app.set('trust proxy', <IP de Traefik>)` au lieu du compteur `1` (§4.3) | 🟠 avant production |
-| 5 | Ajouter un compteur de tentatives **par compte** — second filet indépendant de la topologie (§4.3) | 🟠 |
-| 6 | Ajouter `lifecycleStatus` ou un `updatedAt` attendu au `WHERE` des **trois** résolutions de modération (§4.5) | 🟠 |
-| 7 | Inverser l'ordre d'enregistrement des intercepteurs, et corriger le commentaire qui le justifie (§4.6) | 🟠 |
-| 8 | **Corriger les lignes 72, 94, 128 et 133 du `rapport_pentest_2026-08-05.md`** — ne PAS ajouter l'épinglage (§5.2) | 🟠 |
-| 9 | Trancher : journaliser `GET /admin/commercant` quand `registreUrl` est servi non nul, ou **écrire l'exemption** (§4.4) | 🟠 |
-| 10 | `apiErrorCode(error)` au lieu de `on ApiException catch` (§4.7) | 🟡 |
-| 11 | Rebuild du backend sur `node:22-alpine` du jour (12 → 8 graves) ; `docker pull postgres:16-alpine` (18 → 15) (§3.4) | 🟡 |
-| 12 | Épingler `TZ=UTC` dans le Dockerfile, ou migrer les 12 colonnes naïves en `timestamptz` (§5.3) | 🟡 |
-| 13 | `dataExtractionRules` avec ses **deux** sections (§5.4) | 🟡 |
-| 14 | Supprimer la ligne 51 d'`agent.entity.ts` (§4.8) | 🟡 |
-| 15 | **Rejouer `frontiere-http`, `commercant-b` et `plan-sql` seuls** — la frontière d'accès n'est pas éprouvée (§3.6) | 🔴 avant de conclure |
-| 16 | **Ne jamais créer le couple téléphone/PIN de `.gitleaksignore` en production** (§3.5) | 🔴 permanent |
+### Corrige le 2026-08-14 (commit `3eaa008`)
 
-> **Tenir ce tableau à jour fait partie du contrôle.** Un état périmé fait
-> conclure : un lecteur qui s'y fie refait le travail, ou l'inscrit à tort comme
+| # | Action | Preuve |
+|---|---|---|
+| 1 | 🔴 `mc anonymous set download` ne porte plus que sur les **trois dossiers publics** — `registre-documents/` sort du perimetre anonyme (§4.1a) | forme calquee sur la production, ou seule l'ACL par objet agit |
+| 3 | 🔴 `update` cible dans `publish()` et `stop()` (§4.2) | **prouve par mutation** — voir ci-dessous |
+| 7 | 🟠 ordre des intercepteurs Dio inverse, et le commentaire faux corrige (§4.6) | `flutter test` 23/23, `analyze` 0 |
+| 8 | 🟠 les 4 lignes fausses du pentest du 2026-08-05 corrigees (§5.2) | — |
+| 10 | 🟡 `apiErrorCode(error)` au lieu de `on ApiException catch` (§4.7) | `check_all` 4/4 |
+| 12 | 🟡 `TZ=UTC` epingle dans le `Dockerfile` (§5.3) | transforme un accident en invariant |
+| 13 | 🟡 `dataExtractionRules` **et** `fullBackupContent`, deux fichiers au format distinct (§5.4) | Android a change de schema a API 31 |
+| 14 | 🟡 `@Column` en double supprime (§4.8) | — |
+| 15 | 🔴 `frontiere-http` et `commercant-b` rejoues : **141 sondes / 49 routes, 0 echec** (§3.6) | le trou de couverture est ferme |
+
+#### La preuve par mutation du n°3
+
+Le banc deterministe — verrou consultatif tenu depuis psql pour elargir la
+fenetre a volonte — a ete joue **contre les deux versions du code** :
+
+```
+code MUTE (manager.save(promo), version d'avant)  ->  publiee / normale   <- decision ECRASEE
+code CORRIGE (manager.update cible)               ->  publiee / masquee   <- decision INTACTE
+```
+
+Le banc **sait donc refuser**. Sans cette seconde execution, le vert n'aurait
+prouve que sa capacite a dire oui.
+
+### NON corrige, et pourquoi — un constat qu'on ne corrige pas doit etre ecrit
+
+| # | Action | Pourquoi pas maintenant |
+|---|---|---|
+| 2 | 🔴 **Verifier sur OVH que l'ACL `private` par objet est effective** (§4.1) | **non mesurable depuis ce poste.** C'est la ligne de partage entre « dev casse par sa compose » et « prod exposee 15 min au porteur ». **Le correctif n°1 ne referme PAS ce point.** |
+| 4 | 🟠 `trust proxy <IP de Traefik>` (§4.3) | demande l'IP ou le sous-reseau reel de Traefik, que je n'ai pas. Poser une valeur au hasard serait pire que le compteur actuel |
+| 5 | 🟠 compteur de tentatives **par compte** (§4.3) | fonctionnalite, pas correctif — et c'est le seul filet independant de la topologie |
+| 6 | 🟠 `WHERE` des trois resolutions de moderation (§4.5) | le vrai remede est un `expectedUpdatedAt` : **changement d'API + 3 ecrans**. Un demi-correctif serait une hypothese de plus, pas une correction |
+| 9 | 🟠 journaliser les lectures privilegiees, ou ecrire l'exemption (§4.4) | **decision produit** — journaliser chaque lecture de liste gonfle le journal d'un ordre de grandeur et noie les ecritures |
+| 11 | 🟡 rebuild/pull des images (§3.4) | a faire au prochain deploiement ; sans effet sur le code |
+| 16 | 🔴 **ne jamais creer le couple telephone/PIN de `.gitleaksignore` en production** (§3.5) | **permanent, et non corrigeable** — le secret est dans l'historique |
+| — | `plan-sql` (§3.6) | `pip` absent du Python de la WSL. Trou d'environnement, portant sur des plans de requete |
+| — | **C7 — le client sur appareil** (§6) | demande l'emulateur. Reste la couche au meilleur rendement par heure |
+
+> **Tenir ce tableau a jour fait partie du controle.** Un etat perime fait
+> conclure : un lecteur qui s'y fie refait le travail, ou l'inscrit a tort comme
 > bloquant.
