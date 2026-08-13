@@ -370,12 +370,31 @@ def main():
     print("  ⓘ  décor posé")
 
     def lister(rayon, extra=""):
+        """Items servis, ou `None` si la réponse est illisible OU TRONQUÉE.
+
+        ⚠️ **`limit=50` a fait échouer ce banc le 2026-08-13**, sur un produit
+        correct. La liste est triée par distance et plafonnée : le décor ayant
+        grossi, plus de cinquante promos se trouvaient plus près que le commerce
+        du coin à 3,9 km, qui tombait donc hors de la page. Le banc lisait une
+        page tronquée comme une absence et accusait le rayon.
+
+        C'est la règle 15 retournée contre un banc — le piège même que
+        `recherche_parc` a été écrit pour attraper ailleurs. On demande donc le
+        maximum serveur, **et on refuse de conclure si le total le dépasse** :
+        une troncature ne peut pas prouver une absence.
+        """
         st, d = appeler(
-            "GET", "/promo?latitude=%s&longitude=%s&radiusKm=%s&limit=50%s"
+            "GET", "/promo?latitude=%s&longitude=%s&radiusKm=%s&limit=100%s"
             % (REF_LAT, REF_LNG, rayon, extra))
         if st != 200:
             return None
-        return d.get("items")
+        items = d.get("items")
+        total = d.get("total")
+        if items is not None and total is not None and total > len(items):
+            print("     ⚠️  %d promos annoncées, %d lues : page tronquée, "
+                  "aucune absence n'y est démontrable" % (total, len(items)))
+            return None
+        return items
 
     print("\n── 2. au rayon %.0f km : le proche est là, le coin ne l'est pas ──"
           % RAYON_KM)

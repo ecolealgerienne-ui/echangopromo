@@ -247,6 +247,20 @@ def main():
               "refusée en %s/%s" % (st, d.get("code")))
 
     print("\n" + "═" * 64)
+    # ── ⚠️ Rendre le décor tel qu'on l'a trouvé ─────────────────────────────
+    #
+    # Ce banc crée DEUX promos sur le commerçant du décor. Le plafond est de 5
+    # actives : deux bancs comme celui-ci et il ne reste plus de place pour les
+    # suivants, qui échouent alors sur un refus parfaitement légitime du
+    # produit. Découvert au premier lot complet du 2026-08-13 — chacun passait
+    # seul, aucun ne passait à la suite des autres.
+    #
+    # ⚠️ Sans verdict : le ménage n'est pas ce que ce banc éprouve, et
+    # l'échouer ferait accuser le produit pour un nettoyage mal fait.
+    for a_arreter in (pid, pid2):
+        if a_arreter:
+            appeler("POST", "/promo/%s/stop" % a_arreter, jg)
+
     echecs = resultats.count("echec")
     non_concluants = resultats.count("non_concluant")
     print("%d contrôles, %d échec(s), %d non concluant(s)"

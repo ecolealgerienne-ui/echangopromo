@@ -56,13 +56,55 @@ DEVICE_ID = "banc-dashboard-0001"
 # Les verdicts — la logique que l'auto-test éprouve
 # ─────────────────────────────────────────────────────────────────────────────
 
+def verdict_inclusion(compteur, reference, quoi):
+    """Le compteur global doit CONTENIR ce que le client voit localement.
+
+    ⚠️ **Cette sonde exigeait l'ÉGALITÉ, et elle a rendu rouge sur un produit
+    correct** (2026-08-13 : tableau de bord 89, liste 51). Elle datait d'avant
+    la bascule géographique, quand `GET /promo` servait tout le parc. Depuis, la
+    liste est bornée au rayon par défaut autour du point du serveur, tandis que
+    `countVisible()` compte le pays entier : les deux ne mesurent plus la même
+    chose, et l'égalité n'était plus qu'un vestige.
+
+    C'est la règle 38 dans sa forme la plus coûteuse — une contre-mesure sur une
+    prémisse périmée accuse le produit, et elle est crue parce qu'un banc qui
+    échoue est cru.
+
+    **Ce qui reste vrai et vérifiable** : le local est un sous-ensemble du
+    global. `liste ≤ compteur`, toujours. Un tableau de bord qui annoncerait
+    moins de promos que le client n'en voit dans cinq kilomètres serait
+    faux — et c'est ce que cette sonde attrape désormais.
+    """
+    if compteur is None or reference is None:
+        return "non_concluant", "%s illisible — pas de verdict" % quoi
+    if reference > compteur:
+        return ("echec",
+                "%s : le client voit %d promos dans le seul rayon par défaut, "
+                "alors que le tableau de bord n'en annonce que %d pour TOUT le "
+                "parc — le compteur global est faux"
+                % (quoi, reference, compteur))
+    if compteur == reference:
+        return "ok", "%d = %d" % (compteur, reference)
+    return ("ok",
+            "%d au global, %d dans le rayon par défaut — le local est bien "
+            "contenu dans le global" % (compteur, reference))
+
+
 def verdict_coherence(compteur, reference, quoi):
-    """Un compteur doit égaler ce qu'il prétend compter."""
+    """Deux mesures GLOBALES du même fait doivent être égales.
+
+    ⚠️ **À ne pas confondre avec [verdict_inclusion].** J'ai d'abord relâché
+    celui-ci en inclusion pour faire passer les promos publiées — et l'auto-test
+    l'a refusé, parce que ce verdict sert AUSSI aux signalements en attente,
+    dont la file de modération est globale elle aussi. Relâcher un verdict
+    partagé affaiblit la sonde qui n'en avait pas besoin : deux questions
+    différentes veulent deux verdicts.
+    """
     if compteur is None or reference is None:
         return "non_concluant", "%s illisible — pas de verdict" % quoi
     if compteur != reference:
         return ("echec",
-                "%s : le tableau de bord dit %d, la liste en contient %d"
+                "%s : le tableau de bord dit %d, la référence en contient %d"
                 % (quoi, compteur, reference))
     return "ok", "%d = %d" % (compteur, reference)
 
@@ -202,6 +244,14 @@ def self_test():
     # ⚠️ Le cas fondateur de la règle 8 : le tableau de bord surcompte.
     _v("surcompte", verdict_coherence(6, 2, "x")[0], "echec")
     _v("sous-compte", verdict_coherence(1, 2, "x")[0], "echec")
+    # ⚠️ L'inclusion : le local tient dans le global, jamais l'inverse.
+    _v("local contenu dans le global",
+       verdict_inclusion(89, 51, "x")[0], "ok")
+    _v("inclusion à égalité", verdict_inclusion(3, 3, "x")[0], "ok")
+    _v("global plus petit que le local",
+       verdict_inclusion(2, 6, "x")[0], "echec")
+    _v("inclusion illisible",
+       verdict_inclusion(None, 6, "x")[0], "non_concluant")
     _v("compteur illisible → non concluant",
        verdict_coherence(None, 2, "x")[0], "non_concluant")
     # ⚠️ **LE cas que ce chantier doit pouvoir attraper** : un filtre de
@@ -222,7 +272,7 @@ def self_test():
     _v("admin ne voit rien → non concluant",
        verdict_meme_vue(set(), set(), set(), "x")[0], "non_concluant")
 
-    refus = 8
+    refus = 10
     total = _ok + len(_echecs)
     print("auto-test : %d cas, dont %d refus" % (total, refus))
     for e in _echecs:
@@ -282,7 +332,7 @@ def main():
     # règle 8 qui est visé ici.
     _, client = appeler("GET", "/promo?limit=1")
     noter("promos publiées = promos vues du client",
-          *verdict_coherence(tb_admin.get("promosPubliees"),
+          *verdict_inclusion(tb_admin.get("promosPubliees"),
                              client.get("total"), "promos publiées"))
     time.sleep(PACE)
 

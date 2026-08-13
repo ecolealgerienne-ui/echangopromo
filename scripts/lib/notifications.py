@@ -348,6 +348,22 @@ def main():
               "compteur = %r après read-all" % compte3.get("count"))
 
     print("\n" + "═" * 64)
+
+    # ── ⚠️ Rendre le décor tel qu'on l'a trouvé ─────────────────────────────
+    #
+    # Ce banc crée une promo sur le commerçant du décor et ne peut pas la
+    # laisser en ligne : le plafond est de 5 promos actives, et cinq bancs qui
+    # font pareil ferment la porte à tous les suivants. Découvert au premier
+    # lot complet du 2026-08-13 — chacun passait seul, aucun ne passait à la
+    # suite des autres.
+    #
+    # ⚠️ Sans verdict : le nettoyage n'est pas ce que ce banc éprouve, et
+    # l'échouer ferait accuser le produit pour un ménage mal fait. S'il rate,
+    # c'est le banc SUIVANT qui le dira, sur un refus de plafond parfaitement
+    # lisible.
+    if pid:
+        appeler("POST", "/promo/%s/stop" % pid, jg)
+
     echecs = resultats.count("echec")
     non_concluants = resultats.count("non_concluant")
     print("%d contrôles, %d échec(s), %d non concluant(s)"

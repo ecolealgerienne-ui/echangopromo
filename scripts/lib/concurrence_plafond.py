@@ -275,6 +275,12 @@ def main():
         print("  ❌ " + e)
     reussis = TOURS - len(echecs) - len(non_concluants)
     print("%d/%d tours concluants, %d échec(s)" % (reussis, TOURS, len(echecs)))
+    # ⚠️ **La ligne que tout lanceur d'ensemble cherche.** Ce banc rendait son
+    # bilan dans un format à lui — « N/M tours concluants » — et `test-tout.sh`
+    # le comptait donc « sauté, aucun décompte rendu » alors qu'il sortait en 0.
+    # Un banc qui conclut dans une langue que personne ne lit ne conclut pas.
+    print("%d contrôles, %d échec(s), %d non concluant(s)"
+          % (TOURS, len(echecs), len(non_concluants)))
     if reussis == 0:
         print("⚠️  aucun tour concluant : le banc n'a rien prouvé.")
     sys.exit(1 if (echecs or reussis == 0) else 0)
