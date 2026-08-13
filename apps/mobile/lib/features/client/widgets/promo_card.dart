@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/theme.dart';
 import '../../../domain/models/promo.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../shared/utils/distance_format.dart';
 import '../../shared/widgets/promo_discount_badge.dart';
 import '../../shared/widgets/promo_price_row.dart';
 
@@ -25,6 +26,7 @@ class PromoCard extends StatelessWidget {
     required this.isFavorite,
     required this.onTap,
     this.onToggleFavorite,
+    this.distanceMeters,
   });
 
   final Promo promo;
@@ -36,6 +38,18 @@ class PromoCard extends StatelessWidget {
   /// permettre de la mettre en favori). Avec, il devient un bouton — mettre
   /// en favori depuis le fil évitait d'ouvrir la fiche uniquement pour ça.
   final VoidCallback? onToggleFavorite;
+
+  /// Distance à vol d'oiseau, en mètres, ou `null` quand elle n'est pas
+  /// calculable — position du client inconnue, ou commerce sans coordonnées.
+  ///
+  /// ⚠️ **Calculée par l'appelant, pas ici.** Cette ligne est reconstruite à
+  /// chaque défilement ; y appeler `ref.watch(userPositionProvider)` ferait
+  /// relire la position par carte visible. L'écran la lit une fois et la passe.
+  ///
+  /// ⚠️ `null` n'est pas « 0 m » et ne s'affiche pas comme tel : la ligne
+  /// disparaît. Un `0` afficherait « à 0 m » sur une position inconnue —
+  /// exactement le défaut que la règle 29 décrit.
+  final double? distanceMeters;
 
   @override
   Widget build(BuildContext context) {
@@ -122,7 +136,19 @@ class PromoCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      promo.commercantNom ?? '',
+                      // ⚠️ Le nom et la distance sur la MÊME ligne : le serveur
+                      // sert `commercantLatitude`/`Longitude` depuis le
+                      // 2026-08-12 « pour que l'app puisse afficher la distance
+                      // dans la liste », et personne ne l'affichait — le modèle
+                      // Dart jetait les deux champs (règle 31). Les séparer sur
+                      // deux lignes rallongerait chaque carte du fil pour une
+                      // valeur de quelques caractères.
+                      [
+                        if ((promo.commercantNom ?? '').isNotEmpty)
+                          promo.commercantNom!,
+                        if (distanceMeters != null)
+                          formatDistance(l10n, distanceMeters!),
+                      ].join(' · '),
                       style: Theme.of(context)
                           .textTheme
                           .bodySmall

@@ -3366,8 +3366,10 @@ cas fondateur et a été retirée avec lui.
 - ⚠️ **Le journal d'audit ne se filtre que par `actorType` et n'affiche que des
   UUID.** Lisible pour un agent de commune, illisible pour un agent national —
   or il est devenu le seul contrepoids à la portée globale.
-- **`formatDistance` n'est toujours appelé nulle part dans la liste client**
-  (R2(1) du chantier précédent, ouverte depuis le 2026-08-12).
+- ~~**`formatDistance` n'est toujours appelé nulle part dans la liste client**
+  (R2(1) du chantier précédent, ouverte depuis le 2026-08-12).~~ **Fait le
+  2026-08-13** — la chaîne était coupée dans le modèle Dart, voir l'entrée de
+  journal du jour.
 
 ⚠️ **Les deux bancs laissés « à rejouer » par le message de commit de L7 l'ont
 été le jour même** : `client-liste` rend 6 contrôles / 0 échec et `registre`
@@ -3853,6 +3855,53 @@ de l'acteur, la sonde de la cible restant verte.
 `admin_audit_log.py` rejoué : **7/7**, y compris sa sonde « aucun secret dans le
 journal » — les deux libellés n'exposent que du nom, de l'e-mail et un numéro
 que l'admin voit déjà sur ses autres écrans, sur une route qui lui est réservée.
+
+---
+
+### 2026-08-13 — La distance dans la liste : la chaîne était coupée au milieu
+
+R2(1), ouverte depuis le 2026-08-12. Le diagnostic écrit alors — *« `formatDistance`
+n'est appelé nulle part dans la liste client »* — décrivait le symptôme. **La
+cause était deux étages plus haut** : `Promo.fromJson` ne lisait pas
+`commercantLatitude` / `commercantLongitude`.
+
+Le serveur les sert depuis le 2026-08-12, avec un commentaire qui dit
+explicitement *« pour que l'app puisse **afficher** la distance dans la liste »*.
+Le modèle Dart les jetait. `PromoCard` n'avait donc rien à afficher, et
+`formatDistance` n'était appelé que par la fiche et la carte.
+
+⚠️ **C'est la règle 31 dans sa forme la plus discrète.** Une capacité écrite des
+deux côtés, documentée côté serveur, sans appelant **au milieu** : rien
+n'échoue, rien n'avertit, le serveur a raison, l'app compile — et la
+fonctionnalité est simplement absente. Personne ne la cherche, puisque le code
+existe des deux côtés.
+
+**Trois précautions dans le raccordement :**
+
+- La distance est lue **une fois pour toute la liste**, pas dans l'`itemBuilder` :
+  celui-ci est rappelé à chaque défilement, et un `ref.watch` par carte visible
+  relirait la position à chaque image.
+- Elle sert au **libellé, jamais à re-trier**. L'ordre reste celui du serveur
+  (`ORDER BY` en SQL) — deux tris qui divergeraient d'un epsilon donneraient une
+  liste dont l'ordre contredit ses propres étiquettes.
+- `null` **n'est pas « 0 m »** : la ligne disparaît. Un repli à zéro afficherait
+  « à 0 m » sur une position inconnue, et placerait un commerce sans coordonnées
+  au large du golfe de Guinée (règle 29).
+
+**Éprouvé des deux côtés, parce que la chaîne a deux moitiés :**
+
+- **Serveur** — `client_liste.py` gagne une sonde : la projection doit **porter**
+  les deux champs, et au moins une promo doit les avoir non nuls. Mesuré 33/33.
+  ⚠️ Elle accepte un parc mixte (un `null` est légitime) mais refuse une
+  projection muette. Prouvé par mutation : retirer `commercantLatitude` de la
+  projection fait rendre ❌ — *« l'app ne peut plus calculer de distance, et rien
+  d'autre ne le signalerait »*. Auto-test : 21 cas dont 12 refus.
+- **Client** — `promo_test.dart` gagne trois cas, dont ⚠️ **le piège du JSON** :
+  Postgres rend `3` et non `3.0` pour une longitude entière, `jsonDecode` en fait
+  un `int`, et un `as double?` lève. Le décodage passe donc par `num?`. **Le
+  méridien de Greenwich (longitude 0) est le cas réel** — un entier parfaitement
+  légitime, et celui qui planterait. Prouvé par mutation : revenir à `as double?`
+  fait tomber ce test. 14 → **17 tests Dart**.
 
 ---
 

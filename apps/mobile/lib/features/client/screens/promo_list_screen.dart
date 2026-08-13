@@ -16,6 +16,7 @@ import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/promo_discount_badge.dart';
 import '../providers/favorites_provider.dart';
+import '../providers/location_providers.dart';
 import '../providers/position_providers.dart';
 import '../providers/promo_providers.dart';
 import '../widgets/promo_card.dart';
@@ -267,6 +268,14 @@ class _PromoSliver extends ConsumerWidget {
     void open(Promo promo) => context.push('/promo/${promo.id}');
     void toggle(Promo promo) =>
         ref.read(favoritesProvider.notifier).toggle(promo.id);
+    // ⚠️ Lue UNE fois pour toute la liste, pas dans le `itemBuilder` : ce
+    // dernier est rappelé à chaque défilement, et y placer un `ref.watch`
+    // ferait relire la position par carte visible.
+    //
+    // ⚠️ Sert au LIBELLÉ, jamais à re-trier. L'ordre affiché reste celui du
+    // serveur (`ORDER BY` en SQL) : deux tris qui divergeraient d'un epsilon
+    // donneraient une liste dont l'ordre contredit ses propres étiquettes.
+    final positionClient = ref.watch(userPositionProvider).valueOrNull;
 
     // La ligne détaillée n'a pas de hauteur fixe — le badge « expire
     // bientôt » et une description sur deux lignes la font varier. Une
@@ -283,6 +292,8 @@ class _PromoSliver extends ConsumerWidget {
             isFavorite: favorites.contains(promo.id),
             onTap: () => open(promo),
             onToggleFavorite: () => toggle(promo),
+            distanceMeters: distanceTo(positionClient, promo.commercantLatitude,
+                promo.commercantLongitude),
           );
         },
       );
