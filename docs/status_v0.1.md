@@ -4159,6 +4159,49 @@ passe-t-il a 500 utilisateurs ? ».
 Prouve par mutation : seuil de compression porte a x20 → trois refus nommant le
 facteur reel.
 
+### 2026-08-13 — P2 : le plan SQL, la forme et non la duree
+
+`plan_sql` — 5 controles, 17 cas d'auto-test dont 13 refus. 0 echec, 1 non
+concluant qui est **une decision produit a prendre**, pas un defaut.
+
+**Pourquoi la forme et pas le temps.** `banc_perf` rend 12 ms en p50 sur la
+liste. A 310 promos et 154 commercants, ce chiffre n'apprend rien : deux petites
+tables se parcourent instantanement. Ce qui ne depend pas de la taille du jour,
+c'est le plan.
+
+⚠️ **La reconstitution SQL est validee avant tout le reste** : 44 promos rendues
+par ma requete, 44 par l'API pour le meme point. Sans cette egalite le banc
+s'arrete — un plan tire d'une requete approximative est credible et faux, donc
+pire qu'aucun plan.
+
+**Ce que le plan montre, et qui dementait un commentaire du code.**
+`promo.service.ts` affirmait que le `BETWEEN` « emprunte
+IDX_commercant_position ». Le plan reel fait un **Seq Scan** sur `commercant`,
+101 lignes ecartees sur 154 — et PostgreSQL a raison, aucun index ne bat un
+parcours complet sur 6 blocs. `enable_seqscan = off` etablit que l'index est
+bien **utilisable** ; il n'est simplement pas choisi. Le commentaire est corrige
+au present mesure.
+
+**Le defaut de fond, mesure sans rien ecrire en base :**
+
+    btree (latitude, longitude)          101 lignes remontees
+    gist  (point(longitude, latitude))    53 lignes remontees   <- les 53 justes
+
+Un btree ne restreint que sur sa **premiere** colonne : la longitude n'est qu'un
+filtre interne. Le GiST ecarte 48 lignes de plus AVANT la lecture de table, et
+il ne demande **pas PostGIS** — `point` et `<@ box` sont natifs. Invisible a
+l'echelle du quartier, structurel a l'echelle nationale : une bande de latitude
+traversant l'Algerie contiendrait une grande part du parc.
+
+⚠️ Le banc **ne recommande rien** : changer d'index changerait aussi la requete
+(`point(...) <@ box(...)` au lieu des deux `BETWEEN`). C'est une decision
+produit. Le banc la garde mesuree en attendant qu'elle soit prise.
+
+⚠️ L'index de comparaison est cree dans une transaction **annulee**, et une
+sonde verifie qu'il ne reste rien. `pg_stat_statements` a ete envisage puis
+retire : `shared_preload_libraries` est vide, il ne collecterait rien sans
+redemarrer la base du poste — hors de question pendant que l'app tourne.
+
 ---
 
 ## Comment tenir ce fichier
