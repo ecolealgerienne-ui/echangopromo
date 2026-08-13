@@ -11,7 +11,7 @@
 ///   1. l'onboarding revient à chaque lancement (`markCompleted()` qui
 ///      n'écrit pas, ou qui écrit là où la redirection ne lit pas) ;
 ///   2. l'onboarding ne s'affiche jamais (marqué fait trop tôt) — et
-///      l'utilisateur atterrit sur un accueil sans commune ni rôle.
+///      l'utilisateur atterrit sur un accueil sans rôle choisi.
 ///
 /// Aucun test unitaire ne les attrape : les deux dépendent du magasin
 /// `SharedPreferences` **natif**, et `setMockInitialValues` installe justement

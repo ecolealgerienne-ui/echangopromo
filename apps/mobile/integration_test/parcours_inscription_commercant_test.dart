@@ -101,8 +101,8 @@ void main() {
     await saisir(tester, 1, commercantTel);
     await saisir(tester, 2, 'Rue du parcours écran');
 
-    // Catégorie, puis commune (cascade wilaya → commune). Tout est choisi par
-    // RANG : les libellés sont traduits, les valeurs viennent de la base.
+    // La catégorie, choisie par RANG : les libellés sont traduits, les valeurs
+    // viennent de l'enum.
     await taper(tester, find.byType(DropdownButtonFormField<Categorie>));
     await pomperJusqua(
       tester,
@@ -111,26 +111,11 @@ void main() {
     );
     await taper(tester, find.byType(DropdownMenuItem<Categorie>).last);
 
-    // Les deux listes de la cascade sont des `DropdownButtonFormField<String>`
-    // — la wilaya d'abord, la commune ensuite, la seconde ne se remplissant
-    // qu'une fois la première choisie.
-    for (final rang in [0, 1]) {
-      final liste = find.byType(DropdownButtonFormField<String>).at(rang);
-      await pomperJusqua(
-        tester,
-        liste,
-        raison: rang == 0
-            ? 'la liste des wilayas n’est pas apparue'
-            : 'la liste des communes n’est pas apparue',
-      );
-      await taper(tester, liste);
-      await pomperJusqua(
-        tester,
-        find.byType(DropdownMenuItem<String>),
-        raison: 'le menu (rang $rang) ne s’est pas déployé',
-      );
-      await taper(tester, find.byType(DropdownMenuItem<String>).last);
-    }
+    // ⚠️ **La cascade wilaya → commune était ici**, deux
+    // `DropdownButtonFormField<String>` dont le second ne se remplissait
+    // qu'une fois le premier choisi. Retirée le 2026-08-13 : l'adresse en
+    // texte libre, saisie plus haut, est le seul repère de lieu que le
+    // commerçant fournit — et elle est facultative.
 
     // ── 3. Descendre : le formulaire fait plus d'un écran ────────────────
     //

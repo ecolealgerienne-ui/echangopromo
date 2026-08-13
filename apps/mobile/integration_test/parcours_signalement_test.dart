@@ -67,9 +67,9 @@ void main() {
     await reinitialiserAppareil();
     final prefs = await SharedPreferences.getInstance();
     prefs.setBool('onboarding_completed', true);
-    // La commune est posée d'office : son choix a son propre parcours.
-    // Le décor pose le POINT de recherche, plus une sélection de communes
-    // (bascule 2026-08-12). Sans lui, l'accueil cadrerait sur le défaut
+    // Le point de recherche est posé d'office.
+    // Le décor pose le POINT de recherche — plus aucune sélection de communes
+    // Sans lui, l'accueil cadrerait sur le défaut
     // servi par le serveur, qui n'est pas forcément celui du décor.
     prefs.setDouble('client_position_lat', decorLatitude);
     prefs.setDouble('client_position_lng', decorLongitude);

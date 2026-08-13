@@ -37,8 +37,8 @@
 #   client             l'accueil et la fiche : une promo fabriquée pour ce
 #                      passage est retrouvée par la recherche, ouverte, et son
 #                      COMPTEUR DE VUES monte côté serveur.
-#   agent-creation     l'agent crée un commerçant DANS SA COMMUNE : le compte
-#                      se connecte ensuite, et il est bien dans sa zone.
+#   agent-creation     l'agent crée un commerçant AVEC SA POSITION : le compte
+#                      se connecte ensuite, et il porte bien son point.
 #   carte              la carte affiche le commerce et sa meilleure remise.
 #                      ⚠️ Pose des COORDONNÉES au commerçant : sans elles, la
 #                      carte est vide — aucun commerçant de la base n'en avait.
@@ -297,8 +297,7 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "signalement" ]; then
 echo
 echo "── 2 quinquies. Signalement ──"
 SIG_CID="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ id)"
-SIG_COMMUNE="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ communeId)"
-[ -n "$SIG_CID" ] && [ -n "$SIG_COMMUNE" ] || { echo "❌ /commercant/me illisible."; exit 2; }
+[ -n "$SIG_CID" ] || { echo "❌ /commercant/me illisible."; exit 2; }
 
 SIG_DESC="Parcours signalement $(date +%H%M%S)"
 SIG_CREEE="$(curl -s -X POST "$API_URL/promo"   -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"   -H "Authorization: Bearer $JETON"   -d "{\"description\":\"$SIG_DESC\",\"prixAvant\":900,\"prixApres\":600,      \"categorie\":\"alimentation\",\"photoKeys\":[\"promo-photos/$SIG_CID/parcours.jpg\"],      \"dureeJours\":5}")"
@@ -346,10 +345,11 @@ PROMO_DESC="Parcours client $(date +%H%M%S)"
 # détour par /commercant/me plutôt qu'un chemin fabriqué.
 CID="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ id)"
 [ -n "$CID" ] || { echo "❌ /commercant/me illisible — impossible de composer une clé photo valide."; exit 2; }
-# La commune du commerçant : sans elle, l'accueil client n'affiche AUCUNE promo
-# (il montre « Choisissez vos communes »).
-COMMUNE_CIBLE="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ communeId)"
-[ -n "$COMMUNE_CIBLE" ] || { echo "❌ communeId du commerçant illisible."; exit 2; }
+# ⚠️ La commune du commerçant était lue ici, avec ce motif : « sans elle,
+# l'accueil client n'affiche AUCUNE promo — il montre "Choisissez vos
+# communes" ». Cet écran n'existe plus depuis le 2026-08-12, et la lecture
+# elle-même sortait en `exit 2` sur un `communeId` illisible : elle aurait
+# empêché deux parcours de partir, en accusant le serveur.
 CREEE="$(curl -s -X POST "$API_URL/promo"   -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"   -H "Authorization: Bearer $JETON"   -d "{\"description\":\"$PROMO_DESC\",\"prixAvant\":1000,\"prixApres\":700,      \"categorie\":\"alimentation\",\"photoKeys\":[\"promo-photos/$CID/parcours.jpg\"],      \"dureeJours\":5}")"
 PROMO_CLIENT="$(echo "$CREEE" | lire_champ id)"
 if [ -z "$PROMO_CLIENT" ]; then
@@ -474,36 +474,13 @@ print(total, items[0]['id'] if items else '-')"
   echo "✅ file de modération : $QUEUE_AVANT   ·   promo visée : $PROMO_CIBLE"
 fi
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent-creation" ]; then
-  # ⚠️ **La commune de l'agent, pas la première venue.** Un agent ne peut créer
-  # que dans SES communes ; choisir au hasard ferait refuser la création par le
-  # serveur, et l'échec accuserait le formulaire.
+  # ⚠️ **`lire_zone` a été retirée le 2026-08-13** avec le territoire de
+  # l'agent. Elle lisait la première commune de `GET /agent/me` pour servir son
+  # nom au formulaire — choisir la première venue aurait fait refuser la
+  # création par le serveur, et l'échec aurait accusé le formulaire. Il n'y a
+  # plus de commune à choisir, donc plus de piège à désamorcer.
   JETON_AGENT="$(curl -s -X POST "$API_URL/agent/login"     -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"     -d "{\"email\":\"$AGENT_EMAIL\",\"password\":\"$AGENT_PASSWORD\"}"     | lire_champ accessToken)"
   [ -n "$JETON_AGENT" ] || { echo "❌ connexion agent refusée (429 déguisé ?)"; exit 2; }
-
-  lire_zone() { # → "id|wilaya|commune" de la PREMIÈRE commune de l'agent
-    "$PY" -c "import sys,json
-try:
-    d = json.load(sys.stdin)
-except Exception:
-    print('ILLISIBLE reponse non JSON'); sys.exit(0)
-cs = d.get('communes') or []
-if not cs:
-    print('ILLISIBLE aucune commune rattachee a cet agent'); sys.exit(0)
-c = cs[0]
-if not (c.get('id') and c.get('wilaya') and c.get('nom')):
-    print('ILLISIBLE commune incomplete'); sys.exit(0)
-print('%s|%s|%s' % (c['id'], c['wilaya'], c['nom']))"
-  }
-
-  ZONE="$(curl -s "$API_URL/agent/me"     -H "Authorization: Bearer $JETON_AGENT" -H "X-Device-Id: $DEVICE_ID"     | lire_zone)"
-  case "$ZONE" in
-    ILLISIBLE*) echo "❌ zone de l'agent — $ZONE"; exit 2 ;;
-  esac
-  ZONE_ID="${ZONE%%|*}"
-  ZONE_RESTE="${ZONE#*|}"
-  ZONE_WILAYA="${ZONE_RESTE%%|*}"
-  ZONE_COMMUNE="${ZONE_RESTE#*|}"
-  echo "✅ zone de l'agent : $ZONE_WILAYA / $ZONE_COMMUNE"
 fi
 fi  # BESOIN_PRO
 
@@ -703,15 +680,23 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent-creation" ]; then
   AGENT_TEL="+213557$(date +%H%M%S)"
   AGENT_PIN="135792"
   echo "── agent : commerçant à créer $AGENT_TEL ──"
-  jouer parcours_agent_creation_commercant_test.dart "agent — créer un commerçant"     --dart-define=TEST_PRO_EMAIL="$AGENT_EMAIL"     --dart-define=TEST_PRO_PASSWORD="$AGENT_PASSWORD"     --dart-define=TEST_COMMERCANT_TEL="$AGENT_TEL"     --dart-define=TEST_COMMERCANT_PIN="$AGENT_PIN"     --dart-define=TEST_WILAYA_NOM="$ZONE_WILAYA"     --dart-define=TEST_COMMUNE_NOM="$ZONE_COMMUNE"
+  jouer parcours_agent_creation_commercant_test.dart "agent — créer un commerçant"     --dart-define=TEST_PRO_EMAIL="$AGENT_EMAIL"     --dart-define=TEST_PRO_PASSWORD="$AGENT_PASSWORD"     --dart-define=TEST_COMMERCANT_TEL="$AGENT_TEL"     --dart-define=TEST_COMMERCANT_PIN="$AGENT_PIN"
   CODE_AGENT=$?
   noter "agent — créer un commerçant ($AGENT_TEL)" $CODE_AGENT
 
-  # ── Contre-mesure : le compte existe-t-il, et DANS LA BONNE COMMUNE ? ────
+  # ── Contre-mesure : le compte existe-t-il, et PORTE-T-IL SA POSITION ? ───
   #
-  # La seconde question est celle qui compte : c'est la frontière de zone, dont
-  # l'absence avait produit l'IDOR agent → promo (P5). Une ligne affichée dans
-  # une liste ne prouve ni l'un ni l'autre.
+  # ⚠️ **La seconde question a changé le 2026-08-13.** Elle était « est-il dans
+  # la bonne commune ? » — la frontière de zone, dont l'absence avait produit
+  # l'IDOR agent → promo (P5). Cette frontière est supprimée par décision
+  # produit ; la contre-mesure aurait rendu ❌ sur un produit correct.
+  #
+  # Elle porte désormais sur la **position**, et ce n'est pas un pis-aller :
+  # c'est ce qui décide qu'un commerce existe pour un client. Une fiche sans
+  # point n'apparaît sur aucune carte, ne sort d'aucune liste au rayon et ne
+  # peut rien publier — 40 des 44 fiches invisibles mesurées le 2026-08-12
+  # venaient de cette route. Une ligne affichée dans une liste ne prouve ni que
+  # le compte existe, ni qu'il est utilisable.
   if [ "$CODE_AGENT" -eq 0 ]; then
     echo
     echo "── contre-mesure : le commerçant créé, vu du serveur ──"
@@ -721,17 +706,17 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent-creation" ]; then
       echo "   ⚠️ Un 429 se déguise en « identifiants incorrects »."
       noter "contre-mesure agent" 1
     else
-      COMMUNE_CREE="$(curl -s "$API_URL/commercant/me"         -H "Authorization: Bearer $JETON_CREE" -H "X-Device-Id: $DEVICE_ID"         | lire_champ communeId)"
-      if [ -z "$COMMUNE_CREE" ]; then
-        echo "⚠️  communeId illisible — la contre-mesure n'a PAS eu lieu."
-        noter "contre-mesure agent (non concluante)" 1
-      elif [ "$COMMUNE_CREE" = "$ZONE_ID" ]; then
-        echo "✅ compte créé et rattaché à $ZONE_COMMUNE, la commune de l'agent"
-        noter "contre-mesure agent" 0
-      else
-        echo "❌ le commerçant est en commune $COMMUNE_CREE, hors de la zone de"
-        echo "   l'agent ($ZONE_ID) : la frontière de zone n'a pas tenu."
+      MOI_CREE="$(curl -s "$API_URL/commercant/me"         -H "Authorization: Bearer $JETON_CREE" -H "X-Device-Id: $DEVICE_ID")"
+      LAT_CREE="$(echo "$MOI_CREE" | lire_champ latitude)"
+      LNG_CREE="$(echo "$MOI_CREE" | lire_champ longitude)"
+      if [ -z "$LAT_CREE" ] || [ -z "$LNG_CREE" ]; then
+        echo "❌ le commerçant créé n'a AUCUNE position (lat='$LAT_CREE',"
+        echo "   lng='$LNG_CREE') : il n'apparaîtra sur aucune carte et ne"
+        echo "   pourra rien publier. L'écran a laissé passer une fiche vide."
         noter "contre-mesure agent" 1
+      else
+        echo "✅ compte créé, connecté, et positionné ($LAT_CREE / $LNG_CREE)"
+        noter "contre-mesure agent" 0
       fi
     fi
   fi
@@ -783,7 +768,7 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "inscription" ]; then
 fi
 
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "client" ]; then
-  jouer parcours_client_liste_fiche_test.dart "client — liste et fiche"     --dart-define=TEST_PROMO_DESC="$PROMO_DESC"     --dart-define=TEST_COMMUNE_ID="$COMMUNE_CIBLE"
+  jouer parcours_client_liste_fiche_test.dart "client — liste et fiche"     --dart-define=TEST_PROMO_DESC="$PROMO_DESC"
   CODE_CLIENT=$?
   noter "client — liste et fiche" $CODE_CLIENT
 
@@ -819,13 +804,13 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "client" ]; then
 fi
 
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "carte" ]; then
-  jouer parcours_carte_test.dart "client — la carte"     --dart-define=TEST_COMMUNE_ID="$CARTE_COMMUNE"     --dart-define=TEST_REMISE="$CARTE_REMISE"     --dart-define=TEST_COMMERCE_NOM="$CARTE_NOM"
+  jouer parcours_carte_test.dart "client — la carte"     --dart-define=TEST_REMISE="$CARTE_REMISE"     --dart-define=TEST_COMMERCE_NOM="$CARTE_NOM"
   noter "client — la carte ($CARTE_REMISE)" $?
   echo
 fi
 
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "signalement" ]; then
-  jouer parcours_signalement_test.dart "client — signaler une promo"     --dart-define=TEST_PROMO_DESC="$SIG_DESC"     --dart-define=TEST_COMMUNE_ID="$SIG_COMMUNE"
+  jouer parcours_signalement_test.dart "client — signaler une promo"     --dart-define=TEST_PROMO_DESC="$SIG_DESC"
   CODE_SIG=$?
   noter "client — signaler une promo" $CODE_SIG
 

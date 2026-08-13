@@ -13,19 +13,19 @@
 /// À l'écran : le commerce créé apparaît dans la liste de l'agent, sous le nom
 /// que le parcours vient de saisir.
 ///
-/// Côté serveur, le script vérifie deux choses : **le compte se connecte** avec
-/// le téléphone et le PIN saisis à l'écran — c'est ce qui distingue un compte
-/// réellement créé d'une ligne affichée — et il est **dans la commune de
-/// l'agent**. La seconde est la plus importante : elle éprouve la frontière de
-/// zone, celle-là même dont l'absence a produit l'IDOR agent → promo (P5).
+/// Côté serveur, le script vérifie que **le compte se connecte** avec le
+/// téléphone et le PIN saisis à l'écran — c'est ce qui distingue un compte
+/// réellement créé d'une ligne affichée.
 ///
-/// ── La commune n'est pas choisie au hasard ───────────────────────────────
+/// ⚠️ **Il vérifiait aussi qu'il naissait dans la commune de l'agent**, et
+/// c'était la contre-mesure la plus importante : elle éprouvait la frontière
+/// dont l'absence avait produit l'IDOR agent → promo (P5). Le chantier « agent
+/// global » du 2026-08-13 supprime cette frontière par décision produit — il
+/// n'y a plus de commune à comparer, et plus de refus à attendre.
 ///
-/// Un agent ne peut créer que dans **ses** communes. Prendre la première de la
-/// cascade ferait refuser la création par le serveur, et l'échec accuserait le
-/// formulaire. Le script sert donc le nom de la wilaya et de la commune de
-/// l'agent (`GET /agent/me`), et le parcours les choisit **par leur texte** —
-/// des données de la base, pas des libellés traduits.
+/// Ce que ce parcours éprouve encore, et qui n'est pas rien : la **position**
+/// reste obligatoire sur cet écran, et c'est ce qui empêche une tournée de
+/// fabriquer des fiches invisibles.
 ///
 /// ── L'entrée : la même que l'admin ───────────────────────────────────────
 ///
@@ -40,8 +40,13 @@
 /// (`/agent/promo/new/:id`) et un autre geste, couvert côté serveur par
 /// `test-agent-promo.sh`.
 ///
-/// **La photo de la boutique** et **la position GPS**, facultatives toutes les
-/// deux ; la seconde ouvre en plus une boîte de dialogue du système.
+/// **La photo de la boutique**, facultative.
+///
+/// ⚠️ Ce paragraphe disait « **et la position GPS**, facultatives toutes les
+/// deux » — faux depuis le 2026-08-12, et faux à deux titres : la position est
+/// **obligatoire** sur cet écran, et le parcours la capture bel et bien
+/// (étape 4 bis). Un « ce qu'il ne couvre pas » qui liste une chose couverte
+/// fait chercher un trou qui n'existe pas.
 library;
 
 import 'package:echango_promo/domain/enums/categorie.dart';
@@ -56,14 +61,12 @@ import 'harness.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('un agent crée un commerçant dans SA commune', (tester) async {
+  testWidgets('un agent crée un commerçant, positionné', (tester) async {
     exigerIdentifiants({
       'TEST_PRO_EMAIL': proEmail,
       'TEST_PRO_PASSWORD': proPassword,
       'TEST_COMMERCANT_TEL': commercantTel,
       'TEST_COMMERCANT_PIN': commercantPin,
-      'TEST_WILAYA_NOM': wilayaNom,
-      'TEST_COMMUNE_NOM': communeNom,
     });
 
     // Le nom du commerce est dérivé du téléphone, unique par construction :
@@ -133,27 +136,12 @@ void main() {
     );
     await taper(tester, find.byType(DropdownMenuItem<Categorie>).last);
 
-    // La cascade : wilaya puis commune, chacune choisie par son NOM.
-    for (final attendu in [wilayaNom, communeNom]) {
-      final liste = find.byType(DropdownButtonFormField<String>);
-      await pomperJusqua(
-        tester,
-        liste,
-        raison: 'la cascade wilaya → commune n’est pas apparue',
-      );
-      // La wilaya d'abord (rang 0), la commune ensuite (rang 1) — la seconde
-      // ne se remplit qu'une fois la première choisie.
-      await taper(tester, liste.at(attendu == wilayaNom ? 0 : 1));
-      final option = find.byWidgetPredicate(
-        (w) => w is Text && w.data == attendu,
-      );
-      await pomperJusqua(
-        tester,
-        option,
-        raison: '« $attendu » n’est pas proposé dans la cascade',
-      );
-      await taper(tester, option.last);
-    }
+    // ⚠️ **La cascade wilaya → commune était ici**, et c'était le bloc
+    // d'interaction le plus long du parcours : deux menus déroulants dont le
+    // second ne se remplissait qu'une fois le premier choisi, chacun visé par
+    // le NOM de la commune de l'agent — la première venue aurait fait refuser
+    // la création par le serveur, et l'échec aurait accusé le formulaire.
+    // Retirée le 2026-08-13 avec le découpage administratif.
 
     // ── 4. Le PIN, sous la ligne de flottaison ───────────────────────────
     await defilerJusquaVrai(
@@ -216,7 +204,7 @@ void main() {
       tester,
       find.byType(AlertDialog),
       raison: 'la confirmation de création n’est pas apparue — la création a '
-          'probablement été refusée (commune hors zone ? téléphone déjà pris ?)',
+          'probablement été refusée (téléphone déjà pris ? position non captée ?)',
       limite: const Duration(seconds: 60),
     );
     await taper(
