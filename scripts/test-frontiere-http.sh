@@ -39,11 +39,16 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RACINE="$(cd "$HERE/.." && pwd)"
 
-command -v python3 >/dev/null 2>&1 || {
-  echo "❌ python3 absent — le banc ne peut pas s'exécuter, et l'absence de"
-  echo "   verdict n'est pas un verdict."
+command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1 || {
+  echo "❌ python3 ou python requis — l'absence de verdict n'est pas un verdict."
   exit 2
 }
+PY=$(command -v python3 || command -v python)
+
+# ⚠️ La console Windows est en cp1252 : sans ça, le moindre « ═ » fait planter
+# le banc en UnicodeEncodeError, et un banc qui ne peut pas AFFICHER son
+# verdict n'en rend aucun.
+export PYTHONIOENCODING=utf-8
 
 cd "$RACINE" || exit 2
 
