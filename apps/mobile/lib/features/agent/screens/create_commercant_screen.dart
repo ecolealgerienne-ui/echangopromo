@@ -35,7 +35,6 @@ class _CreateCommercantScreenState
   final _pinController = TextEditingController();
   final _pinConfirmController = TextEditingController();
   Categorie? _categorie;
-  String? _communeId;
   File? _photo;
   double? _latitude;
   double? _longitude;
@@ -65,14 +64,9 @@ class _CreateCommercantScreenState
     // remplace pas — une garde uniquement client se contourne en appelant
     // l'API directement.
     if (!_formKey.currentState!.validate() ||
-        _communeId == null ||
         _latitude == null ||
         _longitude == null) {
-      setState(() => _error = _communeId == null
-          ? l10n.communeRequired
-          : (_latitude == null || _longitude == null)
-              ? l10n.positionRequired
-              : null);
+      setState(() => _error = l10n.positionRequired);
       return;
     }
 
@@ -93,7 +87,6 @@ class _CreateCommercantScreenState
             nom: _nomController.text.trim(),
             adresse: _adresseController.text.trim(),
             categorie: _categorie!,
-            communeId: _communeId!,
             pin: _pinController.text.trim(),
             photoKey: photoKey,
             latitude: _latitude,
@@ -172,8 +165,6 @@ class _CreateCommercantScreenState
                 }),
                 categorie: _categorie,
                 onCategorieChanged: (v) => setState(() => _categorie = v),
-                communeId: _communeId,
-                onCommuneChanged: (v) => setState(() => _communeId = v),
               ),
               const SizedBox(height: 12),
               TextFormField(

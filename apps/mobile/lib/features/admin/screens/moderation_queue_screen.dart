@@ -8,20 +8,12 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/app_settings_actions.dart';
-import '../widgets/commune_filter_bar.dart';
 import '../widgets/promo_moderation_tile.dart';
 
-/// Filtre commune/wilaya (retour terrain 2026-07-14).
-final _wilayaFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
-final _communeFilterProvider =
-    StateProvider.autoDispose<String?>((ref) => null);
+// Filtres commune/wilaya retirés le 2026-08-13 : la file est nationale.
 
 final _moderationQueueProvider = FutureProvider.autoDispose((ref) {
-  final wilaya = ref.watch(_wilayaFilterProvider);
-  final communeId = ref.watch(_communeFilterProvider);
-  return ref
-      .watch(adminApiProvider)
-      .moderationQueue(wilaya: wilaya, communeId: communeId);
+  return ref.watch(adminApiProvider).moderationQueue();
 });
 
 /// Id de la promo dont une action (masquer/vérifier/avertir) est en cours —
@@ -81,17 +73,11 @@ class ModerationQueueScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: CommuneFilterBar(
-              wilaya: ref.watch(_wilayaFilterProvider),
-              communeId: ref.watch(_communeFilterProvider),
-              onWilayaChanged: (value) =>
-                  ref.read(_wilayaFilterProvider.notifier).state = value,
-              onCommuneChanged: (value) =>
-                  ref.read(_communeFilterProvider.notifier).state = value,
-            ),
-          ),
+          // ⚠️ La `CommuneFilterBar` était ici jusqu'au 2026-08-13. Cette file
+          // est désormais **nationale et partagée par tous les agents**, sans
+          // aucun cadrage ni partition du travail : deux modérateurs peuvent
+          // traiter la même promo, et les résolutions serveur sont des `update`
+          // inconditionnels. C'est un point ouvert, pas un aboutissement.
           Expanded(
             child: queueAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),

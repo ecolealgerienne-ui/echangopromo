@@ -9,7 +9,6 @@ class Commercant {
     required this.nom,
     this.adresse,
     required this.categorie,
-    required this.communeId,
     this.accountState,
     this.originVerification,
     this.registreStatus,
@@ -25,7 +24,6 @@ class Commercant {
         nom: json['nom'] as String,
         adresse: json['adresse'] as String?,
         categorie: Categorie.fromValue(json['categorie'] as String),
-        communeId: json['communeId'] as String,
         accountState: json['accountState'] != null
             ? CommercantAccountState.fromValue(json['accountState'] as String)
             : null,
@@ -44,7 +42,6 @@ class Commercant {
   final String nom;
   final String? adresse;
   final Categorie categorie;
-  final String communeId;
   final CommercantAccountState? accountState;
   final CommercantOriginVerification? originVerification;
   final RegistreStatus? registreStatus;

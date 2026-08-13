@@ -28,10 +28,6 @@
   "prixApresMustBeLower": "Must be lower than the price before",
   "dureeValiditeLabel": "Validity period",
   "dureeJoursOption": "{count, plural, one{{count} day} other{{count} days}}",
-  "wilayaLabel": "Province",
-  "communeLabel": "Municipality",
-  "filterAllOption": "All",
-  "communeRequired": "Municipality required",
   "positionRequired": "Shop location required",
   "missingPositionBannerTitle": "Nobody can see your promos",
   "missingPositionBannerMessage": "Customers look for promos around them. Set your shop’s location — from the shop — to show up.",
@@ -255,25 +251,10 @@
   "registreStatusRejete": "Registration rejected",
   "pendingRegistreFilterLabel": "Pending",
   "newAgentLabel": "New agent",
-  "assignCommunesLabel": "Assign communes",
-  "assignedCommunesLabel": "Assigned communes",
-  "noCommunesAssignedLabel": "No communes assigned.",
   "revokeTokenLabel": "Revoke sessions",
   "revokeTokenConfirmMessage": "All active sessions for this agent will be signed out.",
   "revokeOwnSessionsLabel": "Revoke my sessions",
   "revokeOwnSessionsConfirmMessage": "All your sessions will be signed out, including this one. Use this if a device was lost or stolen.",
-  "transferCommunesLabel": "Transfer communes",
-  "fromAgentLabel": "From agent",
-  "toAgentLabel": "To agent",
-  "selectAllInWilayaLabel": "Select all in this wilaya",
-  "communesSelectedCount": "{count, plural, one{{count} commune selected} other{{count} communes selected}}",
-  "@communesSelectedCount": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "legalCguTitle": "Terms of use",
   "legalPrivacyTitle": "Privacy policy",
   "legalCguLinkLabel": "Read the terms of use",

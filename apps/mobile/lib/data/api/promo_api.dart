@@ -89,7 +89,6 @@ class PromoApi {
   /// expiration la plus proche — tri appliqué côté backend. `page` permet le
   /// chargement incrémental ("Afficher plus" côté écran client).
   Future<PaginatedPromos> listActive({
-    List<String> communeIds = const [],
     Categorie? categorie,
     List<String> favoriteIds = const [],
     int page = 1,
@@ -118,7 +117,6 @@ class PromoApi {
     bool favoritesOnly = false,
   }) async {
     final query = <String, dynamic>{
-      if (communeIds.isNotEmpty) 'communeIds': communeIds.join(','),
       if (point != null) 'latitude': point.$1,
       if (point != null) 'longitude': point.$2,
       if (point != null && radiusKm != null) 'radiusKm': radiusKm,

@@ -84,10 +84,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _centeredOnUser = false;
 
   /// Drapeau **distinct** de `_centeredOnUser`, et c'est délibéré : un GPS qui
-  /// arrive après le centrage sur la commune doit reprendre la main. Un seul
-  /// drapeau partagé aurait figé la carte sur le centre approximatif alors
-  /// que la position exacte était devenue disponible.
-  bool _centeredOnCommune = false;
+  /// arrive après le centrage sur le point par défaut doit reprendre la main.
+  /// Un seul drapeau partagé aurait figé la carte sur ce centre approximatif
+  /// alors que la position exacte était devenue disponible.
+  ///
+  /// ⚠️ Il s'appelait `_centeredOnCommune` jusqu'au 2026-08-13 — un nom qui
+  /// mentait depuis la bascule géographique : il n'a jamais porté de commune,
+  /// et rien ne le signalait. Un booléen mal nommé se lit comme une intention.
+  bool _centeredOnDefaultPoint = false;
 
   @override
   void dispose() {
@@ -205,14 +209,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _recenterOn(userPosition, zoom: 15);
       });
-    } else if (userPosition == null && !_centeredOnCommune) {
+    } else if (userPosition == null && !_centeredOnDefaultPoint) {
       // Pas de GPS : on ouvre sur le point du client s'il en a enregistré un,
       // sinon sur celui que sert le serveur.
       //
       // Zoom volontairement plus large que pour le GPS : ce centre est un
       // repère, pas une position mesurée. L'afficher au même zoom lui donnerait
       // une précision qu'il n'a pas.
-      _centeredOnCommune = true;
+      _centeredOnDefaultPoint = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _recenterOn(centreParDefaut, zoom: _initialZoom);
       });

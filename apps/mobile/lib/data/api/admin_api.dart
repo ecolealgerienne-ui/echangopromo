@@ -50,14 +50,11 @@ class AdminApi {
 
   // --- Modération ---
 
-  Future<List<ModerationItem>> moderationQueue(
-      {String? communeId, String? wilaya}) async {
+  Future<List<ModerationItem>> moderationQueue() async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/moderation/queue',
       queryParameters: {
         'limit': _pageSize,
-        if (communeId != null) 'communeId': communeId,
-        if (wilaya != null) 'wilaya': wilaya,
       },
     );
     final items = response.data!['items'] as List<dynamic>;
@@ -83,16 +80,12 @@ class AdminApi {
   /// masquer un contenu problématique repéré directement.
   Future<List<ModerationItem>> listAllPromos({
     String? search,
-    String? communeId,
-    String? wilaya,
   }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/promo',
       queryParameters: {
         'limit': _pageSize,
         if (search != null && search.isNotEmpty) 'search': search,
-        if (communeId != null) 'communeId': communeId,
-        if (wilaya != null) 'wilaya': wilaya,
       },
     );
     final items = response.data!['items'] as List<dynamic>;
@@ -107,8 +100,6 @@ class AdminApi {
     String? search,
     RegistreStatus? registreStatus,
     bool? profilePendingReview,
-    String? communeId,
-    String? wilaya,
   }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/commercant',
@@ -118,8 +109,6 @@ class AdminApi {
         if (registreStatus != null) 'registreStatus': registreStatus.value,
         if (profilePendingReview != null)
           'profilePendingReview': profilePendingReview,
-        if (communeId != null) 'communeId': communeId,
-        if (wilaya != null) 'wilaya': wilaya,
       },
     );
     final items = response.data!['items'] as List<dynamic>;
@@ -192,22 +181,14 @@ class AdminApi {
     required String email,
     required String password,
     required String nom,
-    List<String>? communeIds,
   }) async {
     final response =
         await _dio.post<Map<String, dynamic>>('/admin/agent', data: {
       'email': email,
       'password': password,
       'nom': nom,
-      if (communeIds != null) 'communeIds': communeIds,
     });
     return Agent.fromJson(response.data!);
-  }
-
-  Future<void> assignCommunes(
-      {required String agentId, required List<String> communeIds}) async {
-    await _dio.patch<void>('/admin/agent/$agentId/communes',
-        data: {'communeIds': communeIds});
   }
 
   Future<void> revokeAgentToken(String agentId) async {
@@ -236,18 +217,6 @@ class AdminApi {
       '/admin/agent/$agentId/reset-password',
       data: {'newPassword': newPassword},
     );
-  }
-
-  Future<void> transferCommunes({
-    required List<String> communeIds,
-    required String fromAgentId,
-    required String toAgentId,
-  }) async {
-    await _dio.post<void>('/admin/agent/transfer-communes', data: {
-      'communeIds': communeIds,
-      'fromAgentId': fromAgentId,
-      'toAgentId': toAgentId,
-    });
   }
 
   // --- Journal d'audit (plan de correction, Phase 3) ---

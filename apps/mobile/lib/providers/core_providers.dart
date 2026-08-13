@@ -5,7 +5,6 @@ import '../data/api/admin_api.dart';
 import '../data/api/agent_api.dart';
 import '../data/api/api_client.dart';
 import '../data/api/commercant_api.dart';
-import '../data/api/commune_api.dart';
 import '../data/api/highlight_api.dart';
 import '../data/api/promo_api.dart';
 import '../data/api/report_api.dart';
@@ -58,8 +57,6 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   );
 });
 
-final communeApiProvider =
-    Provider((ref) => CommuneApi(ref.watch(apiClientProvider).dio));
 final promoApiProvider =
     Provider((ref) => PromoApi(ref.watch(apiClientProvider).dio));
 final commercantApiProvider =

@@ -28,10 +28,12 @@ import '../features/agent/screens/create_commercant_screen.dart';
 import '../features/client/screens/map_screen.dart';
 import '../features/client/screens/promo_detail_screen.dart';
 import '../features/client/screens/promo_list_screen.dart';
-// Conservé volontairement : n'est plus référencé que par la redirection de
-// sélection de commune, désactivée temporairement plus bas. Le retirer
-// obligerait à le remettre au moment de réactiver.
-// ignore: unused_import
+// ⚠️ Un `// ignore: unused_import` était posé ici, avec un commentaire qui
+// annonçait la réactivation prochaine d'une redirection « choisir sa
+// commune ». Cette redirection a été supprimée définitivement, et l'import
+// qu'elle prétendait protéger est en réalité **utilisé** plus bas : le
+// directive `ignore` ne masquait rien et le commentaire décrivait un futur qui
+// n'aura pas lieu. Retirés le 2026-08-13.
 import '../features/commercant/screens/commercant_dashboard_screen.dart';
 import '../features/commercant/screens/commercant_login_screen.dart';
 import '../features/commercant/screens/commercant_register_screen.dart';
@@ -161,11 +163,14 @@ final _appRoutes = <_AppRoute>[
     requiredRole: AppRole.agent,
   ),
   // Agent = modérateur (plan de correction, Phase 2, étendu 2026-07-12 à
-  // dashboard + fiche commerçant) : mêmes écrans que l'admin, le backend
-  // scope automatiquement aux communes de l'agent (voir
-  // AdminController.scopedCommuneIds) — pas de duplication d'écran, à
-  // l'exception volontaire de la gestion des agents et du journal d'audit
-  // (restés admin-only, voir AdminDashboardScreen).
+  // dashboard + fiche commerçant) : mêmes écrans que l'admin — pas de
+  // duplication d'écran, à l'exception volontaire de la gestion des agents et
+  // du journal d'audit (restés admin-only, voir AdminDashboardScreen).
+  //
+  // ⚠️ **Le backend ne scope plus rien depuis le 2026-08-13.** L'agent voyait
+  // ces écrans restreints à ses communes ; il les voit désormais entiers. Ces
+  // deux exceptions admin-only sont donc **tout ce qui distingue encore les
+  // deux rôles** dans l'application.
   _AppRoute(
     '/agent/dashboard',
     (context, state) => const AdminDashboardScreen(),
@@ -278,8 +283,9 @@ final _appRoutes = <_AppRoute>[
     requiredRole: AppRole.admin,
   ),
   // Admin gagne la capacité de publier une promo pour un commerçant
-  // (décision produit 2026-07-12) — même écran que l'agent, la garde de
-  // commune ne s'applique qu'au rôle agent côté backend (vue globale admin).
+  // (décision produit 2026-07-12) — même écran que l'agent. ⚠️ Plus aucune
+  // garde d'appartenance côté backend pour l'un comme pour l'autre depuis le
+  // 2026-08-13.
   _AppRoute(
     '/admin/promo/new/:commercantId',
     (context, state) => AgentPromoFormScreen(

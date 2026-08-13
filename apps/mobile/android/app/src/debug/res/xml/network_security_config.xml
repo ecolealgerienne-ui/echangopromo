@@ -36,7 +36,7 @@
 
       Mesuré le 2026-08-05 contre le VPS, sur le même émulateur, à la même URL :
       racine de l'intercepteur installée en autorité utilisateur → **Chrome
-      charge `https://promo.echango.com/commune`**, l'app rend toujours
+      charge `https://promo.echango.com/promo/config`**, l'app rend toujours
       « Impossible de contacter le serveur ». Le remède est côté machine
       (exclure le domaine de l'inspection HTTPS), pas ici.
     -->

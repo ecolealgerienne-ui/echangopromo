@@ -28,7 +28,7 @@ dependencies:
   # UI
   cached_network_image: ^3.4.0
 
-  # Stockage local (device ID anonyme, favoris, commune sélectionnée)
+  # Stockage local (device ID anonyme, favoris, point de recherche)
   shared_preferences: ^2.3.0
   flutter_secure_storage: ^9.2.0
   uuid: ^4.4.0

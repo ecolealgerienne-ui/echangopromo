@@ -9,7 +9,6 @@ import '../../../domain/enums/commercant_origin_verification.dart';
 import '../../../domain/enums/registre_status.dart';
 import '../../../domain/models/admin_commercant_item.dart';
 import '../../../domain/models/auth_session.dart';
-import '../../../domain/models/commune.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
@@ -18,9 +17,6 @@ import '../../shared/utils/maps_launcher.dart';
 import '../../shared/validators/pin_validator.dart';
 import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/status_chip.dart';
-
-final _communesProvider =
-    FutureProvider.autoDispose((ref) => ref.watch(communeApiProvider).list());
 
 /// Fiche commerçant côté admin — la liste (`AdminCommercantsScreen`)
 /// n'affichait que nom/téléphone tronqués. `GET /admin/commercant` charge
@@ -197,19 +193,18 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
-    final communesAsync = ref.watch(_communesProvider);
-    String? communeName;
-    for (final commune in communesAsync.valueOrNull ?? const <Commune>[]) {
-      if (commune.id == item.communeId) {
-        communeName = commune.nom;
-        break;
-      }
-    }
+    // ⚠️ **C'était le seul écran du produit à afficher un nom de commune**, et
+    // il fallait une requête entière (`GET /commune`, la liste complète) pour
+    // résoudre un identifiant en libellé. L'adresse, elle, est déjà là — servie
+    // par la même réponse, affichée deux blocs plus haut. Le repère de lieu
+    // n'est donc pas perdu : il vient d'un champ que le commerçant a saisi
+    // lui-même, au lieu d'un découpage administratif.
+    //
     // Même pattern que AdminPromosScreen/AdminCommercantsScreen (écran
     // partagé admin/agent, décision produit 2026-07-12) : l'admin gagne la
     // capacité de publier une promo pour un commerçant, même écran que
-    // l'agent (AgentPromoFormScreen), pas de garde de commune côté backend
-    // pour ce rôle (vue globale).
+    // l'agent (AgentPromoFormScreen). Plus aucune garde d'appartenance côté
+    // backend pour l'un comme pour l'autre depuis le 2026-08-13.
     final role = ref.read(authControllerProvider).value?.role;
     final newPromoPath = role == AppRole.agent
         ? '/agent/promo/new/${item.id}'
@@ -295,17 +290,6 @@ class AdminCommercantDetailScreen extends ConsumerWidget {
                           size: 18, color: colorScheme.onSurfaceVariant),
                       const SizedBox(width: 8),
                       Expanded(child: Text(item.adresse!)),
-                    ],
-                  ),
-                ],
-                if (communeName != null) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.place_outlined,
-                          size: 18, color: colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 8),
-                      Text(communeName),
                     ],
                   ),
                 ],

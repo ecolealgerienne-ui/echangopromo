@@ -3,17 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
-import '../../shared/widgets/api_error_text.dart';
-import '../../shared/widgets/commune_multi_select_field.dart';
 import '../../shared/widgets/error_text.dart';
 import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/loading_button.dart';
 
-final _communesForCreateAgentProvider =
-    FutureProvider.autoDispose((ref) => ref.watch(communeApiProvider).list());
-
 /// Création d'un compte agent — pas d'auto-inscription (specs §3.3), seul
 /// l'admin en crée.
+///
+/// ⚠️ **Plus aucun territoire à choisir depuis le 2026-08-13.** L'écran se
+/// réduit à e-mail, mot de passe et nom : un agent créé ici a d'emblée les
+/// mêmes droits d'écriture que tous les autres, sur tout le parc. Il n'existe
+/// plus de compte agent « inoffensif » — c'était le sens d'une création sans
+/// commune assignée.
 class CreateAgentScreen extends ConsumerStatefulWidget {
   const CreateAgentScreen({super.key});
 
@@ -26,7 +27,6 @@ class _CreateAgentScreenState extends ConsumerState<CreateAgentScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nomController = TextEditingController();
-  Set<String> _communeIds = {};
   bool _loading = false;
   String? _error;
 
@@ -50,7 +50,6 @@ class _CreateAgentScreenState extends ConsumerState<CreateAgentScreen> {
             email: _emailController.text.trim(),
             password: _passwordController.text,
             nom: _nomController.text.trim(),
-            communeIds: _communeIds.toList(),
           );
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
@@ -67,7 +66,6 @@ class _CreateAgentScreenState extends ConsumerState<CreateAgentScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final communesAsync = ref.watch(_communesForCreateAgentProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -103,15 +101,6 @@ class _CreateAgentScreenState extends ConsumerState<CreateAgentScreen> {
                     (v == null || v.length < 8) ? l10n.passwordRequired : null,
               ),
               const SizedBox(height: 12),
-              communesAsync.when(
-                loading: () => const LinearProgressIndicator(),
-                error: (error, _) => ApiErrorText(error),
-                data: (communes) => CommuneMultiSelectField(
-                  communes: communes,
-                  selectedCommuneIds: _communeIds,
-                  onChanged: (v) => setState(() => _communeIds = v),
-                ),
-              ),
               ErrorText(_error),
               const SizedBox(height: 16),
               LoadingButton(

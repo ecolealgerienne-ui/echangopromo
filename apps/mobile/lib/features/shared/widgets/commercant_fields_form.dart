@@ -4,20 +4,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../client/providers/commune_providers.dart';
-import 'api_error_text.dart';
 import 'category_dropdown.dart';
 import 'form_section.dart';
-import 'commune_cascade_field.dart';
 import 'location_capture_field.dart';
 import 'photo_picker_field.dart';
 
 /// Champs communs à la création d'une fiche commerçant (auto-inscription et
 /// création par l'agent) : photo, téléphone, nom, adresse, position GPS,
-/// catégorie, commune — factorisé pour éviter la duplication entre
+/// catégorie — factorisé pour éviter la duplication entre
 /// `CommercantRegisterScreen`/`CreateCommercantScreen` (audit qualité de
 /// code). Le PIN (uniquement à l'auto-inscription) reste géré par l'écran
 /// appelant, ajouté après ce widget dans le formulaire.
+///
+/// ⚠️ **Le sélecteur wilaya → commune a disparu le 2026-08-13.** Le lieu du
+/// commerce ne s'exprime plus que de deux façons : sa **position** sur la
+/// carte, qui décide de tout, et son **adresse** en texte libre, facultative
+/// et purement indicative. Retirer la cascade ferme au passage le dernier
+/// `error.toString()` du dépôt (règle #26) : un `GET /commune` en échec y
+/// affichait le message backend brut, toujours en français, dans une app
+/// trilingue — et sur le tout premier écran de saisie du produit.
 class CommercantFieldsForm extends ConsumerWidget {
   const CommercantFieldsForm({
     super.key,
@@ -32,8 +37,6 @@ class CommercantFieldsForm extends ConsumerWidget {
     required this.onLocationChanged,
     required this.categorie,
     required this.onCategorieChanged,
-    required this.communeId,
-    required this.onCommuneChanged,
     this.startIndex,
   });
 
@@ -53,8 +56,6 @@ class CommercantFieldsForm extends ConsumerWidget {
   final void Function(double latitude, double longitude) onLocationChanged;
   final Categorie? categorie;
   final ValueChanged<Categorie?> onCategorieChanged;
-  final String? communeId;
-  final ValueChanged<String?> onCommuneChanged;
 
   /// Numéro de la première section. `null` pour un formulaire sans étapes
   /// numérotées (création par un agent, qui n'est pas un parcours guidé).
@@ -63,7 +64,6 @@ class CommercantFieldsForm extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final communesAsync = ref.watch(communeListProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -106,22 +106,6 @@ class CommercantFieldsForm extends ConsumerWidget {
             TextFormField(
               controller: adresseController,
               decoration: InputDecoration(labelText: l10n.adresseLabel),
-            ),
-            const SizedBox(height: 12),
-            communesAsync.when(
-              loading: () => const LinearProgressIndicator(),
-              // Dernier `error.toString()` du dépôt — et sur le tout premier
-              // écran de saisie du produit : un `GET /commune` en échec y
-              // affichait le message backend, **toujours en français**, quelle
-              // que soit la langue choisie, plus le dump Dio en première ligne.
-              // Les 15 autres sites passent par ce widget depuis longtemps
-              // (revue 2026-08-05, règle #26).
-              error: (error, _) => ApiErrorText(error),
-              data: (communes) => CommuneCascadeField(
-                communes: communes,
-                selectedCommuneId: communeId,
-                onChanged: onCommuneChanged,
-              ),
             ),
             const SizedBox(height: 12),
             LocationCaptureField(

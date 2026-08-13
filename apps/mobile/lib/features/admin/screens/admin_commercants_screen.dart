@@ -12,7 +12,6 @@ import '../../shared/l10n/enum_labels.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/app_settings_actions.dart';
 import '../../shared/widgets/status_chip.dart';
-import '../widgets/commune_filter_bar.dart';
 
 final _commercantSearchProvider =
     StateProvider.autoDispose<String>((ref) => '');
@@ -23,10 +22,11 @@ final _commercantSearchProvider =
 final _registrePendingFilterProvider =
     StateProvider.autoDispose<bool>((ref) => false);
 
-/// Filtre commune/wilaya (retour terrain 2026-07-14), en plus de la recherche.
-final _wilayaFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
-final _communeFilterProvider =
-    StateProvider.autoDispose<String?>((ref) => null);
+// ⚠️ **Le filtre commune/wilaya a disparu le 2026-08-13**, et cette liste est
+// devenue nationale le même jour. Le seul moyen de la resserrer
+// géographiquement est désormais la recherche texte, à laquelle `adresse` a
+// été ajoutée côté serveur dans le même lot — sans quoi il n'en resterait
+// aucun, sur un écran conçu quand la liste tenait dans une commune.
 
 /// Même pattern que `ModerationQueueScreen._inFlightProvider` (audit UX 2026-07-11).
 final _inFlightProvider = StateProvider.autoDispose<Set<String>>((ref) => {});
@@ -34,13 +34,9 @@ final _inFlightProvider = StateProvider.autoDispose<Set<String>>((ref) => {});
 final _commercantsProvider = FutureProvider.autoDispose((ref) {
   final search = ref.watch(_commercantSearchProvider);
   final pendingOnly = ref.watch(_registrePendingFilterProvider);
-  final wilaya = ref.watch(_wilayaFilterProvider);
-  final communeId = ref.watch(_communeFilterProvider);
   return ref.watch(adminApiProvider).listCommercants(
         search: search,
         registreStatus: pendingOnly ? RegistreStatus.enAttente : null,
-        wilaya: wilaya,
-        communeId: communeId,
       );
 });
 
@@ -188,17 +184,6 @@ class AdminCommercantsScreen extends ConsumerWidget {
               ),
               onChanged: (value) =>
                   ref.read(_commercantSearchProvider.notifier).state = value,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            child: CommuneFilterBar(
-              wilaya: ref.watch(_wilayaFilterProvider),
-              communeId: ref.watch(_communeFilterProvider),
-              onWilayaChanged: (value) =>
-                  ref.read(_wilayaFilterProvider.notifier).state = value,
-              onCommuneChanged: (value) =>
-                  ref.read(_communeFilterProvider.notifier).state = value,
             ),
           ),
           Padding(

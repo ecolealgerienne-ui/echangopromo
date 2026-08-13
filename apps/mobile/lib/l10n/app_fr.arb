@@ -42,10 +42,6 @@
       }
     }
   },
-  "wilayaLabel": "Wilaya",
-  "communeLabel": "Commune",
-  "filterAllOption": "Toutes",
-  "communeRequired": "Commune requise",
   "positionRequired": "Position du commerce requise",
   "defaultPointTitle": "Autour du point par défaut",
   "myPointTitle": "Autour de mon point",
@@ -338,25 +334,10 @@
   "registreStatusRejete": "Registre rejeté",
   "pendingRegistreFilterLabel": "En attente",
   "newAgentLabel": "Nouvel agent",
-  "assignCommunesLabel": "Assigner des communes",
-  "assignedCommunesLabel": "Communes assignées",
-  "noCommunesAssignedLabel": "Aucune commune assignée.",
   "revokeTokenLabel": "Révoquer les sessions",
   "revokeTokenConfirmMessage": "Toutes les sessions actives de cet agent seront déconnectées.",
   "revokeOwnSessionsLabel": "Révoquer mes sessions",
   "revokeOwnSessionsConfirmMessage": "Toutes vos sessions seront déconnectées, y compris celle-ci. À utiliser si un appareil a été perdu ou volé.",
-  "transferCommunesLabel": "Transférer des communes",
-  "fromAgentLabel": "Agent source",
-  "toAgentLabel": "Agent destination",
-  "selectAllInWilayaLabel": "Tout sélectionner dans cette wilaya",
-  "communesSelectedCount": "{count, plural, one{{count} commune sélectionnée} other{{count} communes sélectionnées}}",
-  "@communesSelectedCount": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "legalCguTitle": "Conditions générales d'utilisation",
   "legalPrivacyTitle": "Politique de confidentialité",
   "legalCguLinkLabel": "Lire les CGU",

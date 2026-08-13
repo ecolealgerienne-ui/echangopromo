@@ -28,10 +28,6 @@
   "prixApresMustBeLower": "يجب أن يكون أقل من السعر قبل التخفيض",
   "dureeValiditeLabel": "مدة الصلاحية",
   "dureeJoursOption": "{count, plural, one{يوم واحد} two{يومان} few{{count} أيام} many{{count} يومًا} other{{count} يوم}}",
-  "wilayaLabel": "الولاية",
-  "communeLabel": "البلدية",
-  "filterAllOption": "الكل",
-  "communeRequired": "البلدية مطلوبة",
   "positionRequired": "موقع المحل مطلوب",
   "missingPositionBannerTitle": "عروضك غير مرئية لأحد",
   "missingPositionBannerMessage": "الزبائن يبحثون عن العروض القريبة منهم. حدّد موقع محلك — من داخل المحل — لكي تظهر.",
@@ -255,25 +251,10 @@
   "registreStatusRejete": "تم رفض السجل التجاري",
   "pendingRegistreFilterLabel": "بانتظار المصادقة",
   "newAgentLabel": "عون جديد",
-  "assignCommunesLabel": "تعيين بلديات",
-  "assignedCommunesLabel": "البلديات المعينة",
-  "noCommunesAssignedLabel": "لا توجد بلديات معيّنة.",
   "revokeTokenLabel": "إلغاء الجلسات",
   "revokeTokenConfirmMessage": "سيتم تسجيل خروج جميع الجلسات النشطة لهذا العون.",
   "revokeOwnSessionsLabel": "إلغاء جلساتي",
   "revokeOwnSessionsConfirmMessage": "سيتم تسجيل خروج جميع جلساتك، بما فيها هذه الجلسة. استخدم هذا إذا فُقد جهاز أو سُرق.",
-  "transferCommunesLabel": "نقل بلديات",
-  "fromAgentLabel": "من العون",
-  "toAgentLabel": "إلى العون",
-  "selectAllInWilayaLabel": "تحديد الكل في هذه الولاية",
-  "communesSelectedCount": "{count, plural, one{بلدية واحدة مختارة} two{بلديتان مختارتان} few{{count} بلديات مختارة} many{{count} بلدية مختارة} other{{count} بلدية مختارة}}",
-  "@communesSelectedCount": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "legalCguTitle": "شروط الاستخدام",
   "legalPrivacyTitle": "سياسة الخصوصية",
   "legalCguLinkLabel": "قراءة شروط الاستخدام",

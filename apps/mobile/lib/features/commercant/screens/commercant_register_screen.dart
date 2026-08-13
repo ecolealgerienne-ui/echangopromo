@@ -36,7 +36,6 @@ class _CommercantRegisterScreenState
   final _pinController = TextEditingController();
   final _pinConfirmController = TextEditingController();
   Categorie? _categorie;
-  String? _communeId;
   File? _photo;
   File? _registrePhoto;
   double? _latitude;
@@ -73,15 +72,9 @@ class _CommercantRegisterScreenState
     final alreadyRegistered = _alreadyRegistered;
 
     if (!alreadyRegistered &&
-        (!_formKey.currentState!.validate() ||
-            _communeId == null ||
-            !_acceptedTerms)) {
+        (!_formKey.currentState!.validate() || !_acceptedTerms)) {
       setState(() {
-        _error = _communeId == null
-            ? l10n.communeRequired
-            : !_acceptedTerms
-                ? l10n.acceptTermsRequired
-                : null;
+        _error = !_acceptedTerms ? l10n.acceptTermsRequired : null;
       });
       return;
     }
@@ -107,7 +100,6 @@ class _CommercantRegisterScreenState
           nom: _nomController.text.trim(),
           adresse: _adresseController.text.trim(),
           categorie: _categorie!,
-          communeId: _communeId!,
           pin: _pinController.text.trim(),
           latitude: _latitude,
           longitude: _longitude,
@@ -173,8 +165,6 @@ class _CommercantRegisterScreenState
               }),
               categorie: _categorie,
               onCategorieChanged: (v) => setState(() => _categorie = v),
-              communeId: _communeId,
-              onCommuneChanged: (v) => setState(() => _communeId = v),
             ),
             const SizedBox(height: 12),
             FormSection(

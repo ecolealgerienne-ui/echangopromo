@@ -316,8 +316,9 @@ class _PromoSliver extends ConsumerWidget {
   }
 }
 
-/// Commune, langue, recherche et filtres — la seule zone qui reste
-/// identique dans les deux dispositions.
+/// Langue, recherche et filtres — la seule zone qui reste identique dans les
+/// deux dispositions. (Le sélecteur de commune en a disparu le 2026-08-12,
+/// avec la bascule géographique.)
 class _TopBar extends ConsumerStatefulWidget {
   const _TopBar();
 
