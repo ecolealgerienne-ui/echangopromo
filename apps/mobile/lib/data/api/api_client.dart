@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import '../../config/env.dart';
+import '../local/etag_cache_store.dart';
 import 'api_exception.dart';
+import 'etag_cache_interceptor.dart';
 
 /// Codes renvoyés par le backend quand le token JWT n'est plus utilisable
 /// (absent, invalide/expiré, ou révoqué via tokenVersion) — dans tous ces
@@ -21,6 +23,7 @@ class ApiClient {
     required String Function() getDeviceId,
     required String? Function() getToken,
     void Function()? onAuthInvalid,
+    EtagCacheStore? etagCache,
   }) : dio = Dio(BaseOptions(
           baseUrl: Env.apiBaseUrl,
           // Dio n'a par défaut aucun timeout (attente indéfinie) — sur la
@@ -33,6 +36,17 @@ class ApiClient {
           receiveTimeout: const Duration(seconds: 20),
           sendTimeout: const Duration(seconds: 20),
         )) {
+    // ⚠️ **Avant** l'intercepteur d'erreurs, et l'ordre est nécessaire : Dio
+    // traite `304` comme une erreur, donc la revalidation doit intercepter la
+    // réponse conditionnelle avant qu'elle ne soit convertie en
+    // `ApiException`. Enregistré après, il ne verrait jamais un seul `304`.
+    //
+    // ⚠️ Facultatif : les constructions qui n'ont pas de `SharedPreferences`
+    // sous la main (tests unitaires) tournent simplement sans cache, plutôt
+    // que d'imposer une dépendance à tout le monde pour une optimisation.
+    if (etagCache != null) {
+      dio.interceptors.add(EtagCacheInterceptor(etagCache));
+    }
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {

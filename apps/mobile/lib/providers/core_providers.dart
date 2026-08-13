@@ -15,6 +15,7 @@ import '../data/local/device_id_store.dart';
 import '../data/local/favorites_store.dart';
 import '../data/local/location_invite_store.dart';
 import '../data/local/point_proposal_store.dart';
+import '../data/local/etag_cache_store.dart';
 import '../data/local/onboarding_store.dart';
 import 'auth_provider.dart';
 
@@ -45,6 +46,11 @@ final locationInviteStoreProvider = Provider(
 final pointProposalStoreProvider =
     Provider((ref) => PointProposalStore(ref.watch(sharedPreferencesProvider)));
 
+/// Cache de revalidation HTTP — voir `EtagCacheInterceptor` pour ce qu'il
+/// conserve et, surtout, ce qu'il refuse de conserver.
+final etagCacheStoreProvider =
+    Provider((ref) => EtagCacheStore(ref.watch(sharedPreferencesProvider)));
+
 final onboardingStoreProvider =
     Provider((ref) => OnboardingStore(ref.watch(sharedPreferencesProvider)));
 
@@ -61,6 +67,9 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     // vers le login puisque authControllerProvider ne change jamais tout
     // seul (audit V1 §8).
     onAuthInvalid: () => authController.logout(),
+    // Revalidation conditionnelle des routes publiques : le backend posait un
+    // `ETag` que personne ne lisait (règle 31, mesuré le 2026-08-13).
+    etagCache: ref.watch(etagCacheStoreProvider),
   );
 });
 

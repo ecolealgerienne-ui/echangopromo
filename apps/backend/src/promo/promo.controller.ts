@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Patch,
   Post,
   Query,
@@ -168,6 +169,30 @@ export class PromoController {
     // produit — il n'a plus de territoire à opposer.
   }
 
+  /**
+   * ⚠️ **`max-age=0, must-revalidate`, et surtout pas un `max-age` positif.**
+   *
+   * Express pose déjà un `ETag` sur cette réponse — mesuré le 2026-08-13, une
+   * requête conditionnelle rend bien `304`. Ce qui manquait est l'en-tête qui
+   * **autorise le client à conserver le corps** entre deux appels : sans
+   * `Cache-Control`, la mise en cache est laissée à l'heuristique de chaque
+   * client, donc à rien de fiable.
+   *
+   * Le corps fait 2,5 Ko compressés pour 20 promos ; un `304` en fait quelques
+   * dizaines d'octets. Sur un marché sensible au coût data, c'est la même page
+   * payée une fois au lieu de dix.
+   *
+   * **Pourquoi zéro seconde de fraîcheur** : une promo masquée par la
+   * modération doit disparaître au prochain appel, pas au bout d'un délai. On
+   * accepte donc de payer l'aller-retour à chaque fois, et on n'économise que
+   * le corps. Un `max-age` positif échangerait de la bande passante contre du
+   * contenu périmé — ce n'est pas le compromis d'un produit qui retire des
+   * arnaques.
+   *
+   * ⚠️ `private` : la réponse dépend de `favoriteIds`, passés par le client.
+   * Un cache partagé (proxy opérateur) servirait les favoris d'un autre.
+   */
+  @Header('Cache-Control', 'private, max-age=0, must-revalidate')
   @Get()
   async list(@Query() query: ListPromoQueryDto) {
     const result = await this.promoService.findActiveForClient(query);
@@ -187,6 +212,11 @@ export class PromoController {
    * il serait sinon capturé comme un identifiant de promo et répondrait
    * `PROMO_NOT_FOUND` au lieu d'atteindre cette méthode.
    */
+  // Même politique que la liste, et pour la même raison : le corps de la carte
+  // pèse 5,7 Ko compressés (mesuré), un `304` quelques dizaines d'octets. La
+  // fraîcheur reste immédiate — panoramiquer ne doit jamais montrer une promo
+  // retirée il y a dix secondes.
+  @Header('Cache-Control', 'private, max-age=0, must-revalidate')
   @Throttle(MAP_THROTTLE)
   @Get('map')
   async map(@Query() query: ListPromoMapQueryDto) {
@@ -236,6 +266,20 @@ export class PromoController {
    * unique, il serait sinon capté comme un identifiant (même raison que
    * `@Get('map')`).
    */
+  /**
+   * ⚠️ **La seule route à porter une fraîcheur non nulle**, et c'est réfléchi.
+   *
+   * Elle sert 89 octets de constantes — point par défaut, rayon, plafond — et
+   * l'app la redemande à chaque démarrage. Cinq minutes de cache retirent cet
+   * appel du chemin critique de l'ouverture sans rien coûter : ces valeurs ne
+   * changent qu'au rythme d'un `.env`, et le délai maximal d'un changement de
+   * point par défaut passe de « immédiat » à « cinq minutes ».
+   *
+   * ⚠️ C'est précisément ce que cette route existe pour permettre : changer le
+   * point du pilote **sans republier sur les stores**. Cinq minutes est le prix
+   * assumé de cette souplesse ; l'allonger la reprendrait d'une main.
+   */
+  @Header('Cache-Control', 'private, max-age=300')
   @Get('config')
   getClientConfig() {
     return this.promoService.getClientConfig();

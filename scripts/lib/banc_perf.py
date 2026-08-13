@@ -224,13 +224,26 @@ def verdict_cache(entetes):
     """
     if entetes is None:
         return "non_concluant", "en-têtes illisibles"
-    presents = [c for c in ("etag", "cache-control", "last-modified")
-                if c in entetes]
-    if not presents:
+    etag = "etag" in entetes
+    directive = "cache-control" in entetes
+    if not etag and not directive:
         return ("non_concluant",
                 "aucun en-tête de cache : chaque ouverture d'écran refait "
                 "l'aller-retour complet, même quand rien n'a changé")
-    return "ok", "en-têtes de cache : %s" % ", ".join(presents)
+    # ⚠️ **Un ETag seul ne suffit pas, et ce banc l'a d'abord cru.** Express en
+    # pose un d'office ; sans `Cache-Control`, la conservation du corps est
+    # laissée à l'heuristique de chaque client — donc à rien de fiable. Rendre
+    # « ok » sur l'ETag seul masquerait exactement l'écart que P3 vient combler.
+    if etag and not directive:
+        return ("non_concluant",
+                "ETag servi mais AUCUN Cache-Control : le client n'a aucune "
+                "consigne de conservation, et la revalidation dépend de son "
+                "heuristique")
+    if directive and not etag:
+        return ("non_concluant",
+                "Cache-Control servi sans ETag : le client sait qu'il peut "
+                "conserver, mais n'a rien pour revalider")
+    return "ok", "ETag + %s" % entetes["cache-control"]
 
 
 def verdict_revalidation(statut_304, a_etag):
@@ -392,7 +405,15 @@ def self_test():
     _v("poids sous budget", verdict_poids(2559, 8192)[0], "ok")
     _v("compression effective",
        verdict_compression(15516, 2559, 2.0)[0], "ok")
-    _v("cache présent", verdict_cache({"etag": 'W/"abc"'})[0], "ok")
+    _v("cache complet",
+       verdict_cache({"etag": 'W/"abc"',
+                      "cache-control": "private, max-age=0"})[0], "ok")
+    # ⚠️ L'ETag seul : Express en pose un d'office, et ce banc a failli s'en
+    # contenter — ce qui aurait masqué l'écart que P3 comble.
+    _v("ETag sans Cache-Control",
+       verdict_cache({"etag": 'W/"abc"'})[0], "non_concluant")
+    _v("Cache-Control sans ETag",
+       verdict_cache({"cache-control": "private"})[0], "non_concluant")
     _v("revalidation effective", verdict_revalidation(304, True)[0], "ok")
     _v("une requête par appel", verdict_requetes(3, 10)[0], "ok")
     # ⚠️ Le centile, méthode du plus proche rang, sans dépendance.
@@ -435,7 +456,7 @@ def self_test():
        verdict_revalidation(304, None)[0], "non_concluant")
     _v("centile sans valeur", _percentile([], 95), None)
 
-    refus = 19
+    refus = 21
     total = _ok + len(_echecs)
     print("auto-test : %d cas, dont %d refus" % (total, refus))
     for e in _echecs:
