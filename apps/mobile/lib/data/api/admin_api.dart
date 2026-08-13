@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import '../../domain/enums/promo_moderation_status.dart';
 import '../../domain/enums/registre_status.dart';
 import '../../domain/models/admin.dart';
 import '../../domain/models/admin_commercant_item.dart';
@@ -63,16 +64,49 @@ class AdminApi {
         .toList();
   }
 
-  Future<void> masquerPromo(String promoId) async {
-    await _dio.post<void>('/admin/moderation/$promoId/masquer');
+  /// Les trois décisions de modération portent **l'état que le modérateur
+  /// avait à l'écran** (`expectedModerationStatus`, obligatoire côté serveur
+  /// depuis le 2026-08-13).
+  ///
+  /// ⚠️ **Ce n'est pas un paramètre technique, c'est la garde elle-même.** La
+  /// file de modération est nationale et non partitionnée depuis la
+  /// suppression du découpage administratif : deux agents peuvent trancher la
+  /// même promo, et sans cet état le second écrasait silencieusement la
+  /// décision du premier. Le serveur refuse en `MODERATION_STATE_CHANGED` si
+  /// l'état a bougé depuis l'affichage.
+  ///
+  /// ⚠️ Il vient de `item.moderationStatus`, **jamais d'une valeur en dur** :
+  /// écrire `signalee` parce que « c'est ce qu'il y a dans la file » ferait
+  /// échouer toute décision prise depuis l'écran de détail d'une promo, où le
+  /// statut peut être n'importe lequel des quatre.
+  Future<void> masquerPromo(
+    String promoId,
+    PromoModerationStatus expected,
+  ) async {
+    await _dio.post<void>(
+      '/admin/moderation/$promoId/masquer',
+      data: {'expectedModerationStatus': expected.value},
+    );
   }
 
-  Future<void> verifierOkPromo(String promoId) async {
-    await _dio.post<void>('/admin/moderation/$promoId/verifier-ok');
+  Future<void> verifierOkPromo(
+    String promoId,
+    PromoModerationStatus expected,
+  ) async {
+    await _dio.post<void>(
+      '/admin/moderation/$promoId/verifier-ok',
+      data: {'expectedModerationStatus': expected.value},
+    );
   }
 
-  Future<void> avertirPromo(String promoId) async {
-    await _dio.post<void>('/admin/moderation/$promoId/avertir');
+  Future<void> avertirPromo(
+    String promoId,
+    PromoModerationStatus expected,
+  ) async {
+    await _dio.post<void>(
+      '/admin/moderation/$promoId/avertir',
+      data: {'expectedModerationStatus': expected.value},
+    );
   }
 
   /// Vue globale de toutes les promos (plan de correction, Phase 2) — pas

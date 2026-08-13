@@ -38,6 +38,20 @@ class ModerationQueueScreen extends ConsumerWidget {
       await action();
       ref.invalidate(_moderationQueueProvider);
     } catch (error) {
+      // ⚠️ **Un conflit de modération se rafraîchit, il ne se réessaie pas.**
+      // `MODERATION_STATE_CHANGED` dit qu'un autre modérateur a tranché entre
+      // l'affichage et le tap : la ligne à l'écran décrit un état qui n'existe
+      // plus. Laisser la file telle quelle ferait retaper le même bouton sur la
+      // même donnée périmée, indéfiniment — et le message promet justement que
+      // la liste vient d'être rafraîchie. Une promesse dans une traduction que
+      // le code ne tient pas serait pire que pas de message du tout.
+      //
+      // ⚠️ Et il faut passer par `apiErrorCode`, jamais par un `on ApiException
+      // catch` : l'intercepteur de `ApiClient` enveloppe l'exception dans une
+      // `DioException` (règle 26).
+      if (apiErrorCode(error) == 'MODERATION_STATE_CHANGED') {
+        ref.invalidate(_moderationQueueProvider);
+      }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -103,12 +117,27 @@ class ModerationQueueScreen extends ConsumerWidget {
                             ref.invalidate(_moderationQueueProvider);
                           }
                         },
-                        onMasquer: () => _act(context, ref, item.id,
-                            () => api.masquerPromo(item.id)),
-                        onVerifierOk: () => _act(context, ref, item.id,
-                            () => api.verifierOkPromo(item.id)),
-                        onAvertir: () => _act(context, ref, item.id,
-                            () => api.avertirPromo(item.id)),
+                        // `item.moderationStatus` et non `signalee` en dur :
+                        // c'est l'état AFFICHÉ qui fait foi, et c'est lui que
+                        // le serveur compare (voir `AdminApi.masquerPromo`).
+                        onMasquer: () => _act(
+                            context,
+                            ref,
+                            item.id,
+                            () => api.masquerPromo(
+                                item.id, item.moderationStatus)),
+                        onVerifierOk: () => _act(
+                            context,
+                            ref,
+                            item.id,
+                            () => api.verifierOkPromo(
+                                item.id, item.moderationStatus)),
+                        onAvertir: () => _act(
+                            context,
+                            ref,
+                            item.id,
+                            () => api.avertirPromo(
+                                item.id, item.moderationStatus)),
                       );
                     },
                   ),

@@ -43,6 +43,11 @@ class AdminPromosScreen extends ConsumerWidget {
       await action();
       ref.invalidate(_allPromosProvider);
     } catch (error) {
+      // Même raison qu'en file de modération : un conflit se rafraîchit, il ne
+      // se réessaie pas — la ligne affichée décrit un état qui n'existe plus.
+      if (apiErrorCode(error) == 'MODERATION_STATE_CHANGED') {
+        ref.invalidate(_allPromosProvider);
+      }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -115,12 +120,31 @@ class AdminPromosScreen extends ConsumerWidget {
                             ref.invalidate(_allPromosProvider);
                           }
                         },
-                        onMasquer: () => _act(context, ref, item.id,
-                            () => api.masquerPromo(item.id)),
-                        onVerifierOk: () => _act(context, ref, item.id,
-                            () => api.verifierOkPromo(item.id)),
-                        onAvertir: () => _act(context, ref, item.id,
-                            () => api.avertirPromo(item.id)),
+                        // ⚠️ **Troisième appelant, et le compilateur seul l'a
+                        // trouvé.** Cette liste sert TOUTES les promos, pas
+                        // seulement la file : les quatre statuts y passent.
+                        // C'est la raison d'avoir fait de l'état attendu un
+                        // paramètre obligatoire plutôt qu'un nommé optionnel —
+                        // un défaut ici aurait fait échouer en silence toute
+                        // décision prise sur une promo non signalée.
+                        onMasquer: () => _act(
+                            context,
+                            ref,
+                            item.id,
+                            () => api.masquerPromo(
+                                item.id, item.moderationStatus)),
+                        onVerifierOk: () => _act(
+                            context,
+                            ref,
+                            item.id,
+                            () => api.verifierOkPromo(
+                                item.id, item.moderationStatus)),
+                        onAvertir: () => _act(
+                            context,
+                            ref,
+                            item.id,
+                            () => api.avertirPromo(
+                                item.id, item.moderationStatus)),
                       );
                     },
                   ),

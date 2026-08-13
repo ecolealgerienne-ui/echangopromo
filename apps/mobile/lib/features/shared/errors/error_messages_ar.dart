@@ -28,6 +28,8 @@ const Map<String, String> errorMessagesAr = {
   'PROMO_DATE_FIN_NOT_FUTURE': 'يجب أن يكون تاريخ الانتهاء في المستقبل.',
   'PROMO_ALREADY_PUBLISHED': 'هذا العرض منشور بالفعل.',
   'PROMO_NOT_PUBLISHED': 'لا يمكن إيقاف سوى عرض منشور.',
+  'MODERATION_STATE_CHANGED': 'قام مشرف آخر بمعالجة هذا العرض في هذه الأثناء. '
+      'تم تحديث القائمة للتو: تحقق من القرار الجديد قبل اتخاذ أي إجراء.',
   'PROMO_PRIX_APRES_NOT_LOWER':
       'يجب أن يكون السعر بعد التخفيض أقل من السعر قبله.',
   'COMMERCANT_PHONE_TAKEN': 'رقم الهاتف هذا مسجل بالفعل.',

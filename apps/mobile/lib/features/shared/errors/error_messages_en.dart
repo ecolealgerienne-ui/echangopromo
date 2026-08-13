@@ -33,6 +33,10 @@ const Map<String, String> errorMessagesEn = {
   'PROMO_DATE_FIN_NOT_FUTURE': 'The end date must be in the future.',
   'PROMO_ALREADY_PUBLISHED': 'This promo is already published.',
   'PROMO_NOT_PUBLISHED': 'Only a published promo can be stopped.',
+  'MODERATION_STATE_CHANGED':
+      'Another moderator handled this promo in the meantime. '
+          'The list has just been refreshed: check the new decision before '
+          'acting.',
   'PROMO_PRIX_APRES_NOT_LOWER':
       'The discounted price must be lower than the original price.',
   'COMMERCANT_PHONE_TAKEN': 'This phone number is already registered.',

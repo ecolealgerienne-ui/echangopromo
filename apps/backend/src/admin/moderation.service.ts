@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { AuditActorType } from '../audit-log/entities/audit-log.entity';
 import { PaginatedResult } from '../common/pagination/paginated-result';
-import { Promo } from '../promo/entities/promo.entity';
+import { Promo, PromoModerationStatus } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
 import { ReportService } from '../report/report.service';
 import { NotificationService } from '../notification/notification.service';
@@ -52,14 +52,24 @@ export class ModerationService {
     return { ...pending, items };
   }
 
-  /** Le rôle agent modère aussi désormais (scopé communes, vérifié en amont dans AdminController). */
+  /**
+   * ⚠️ **Le commentaire d'origine disait « scopé communes, vérifié en amont
+   * dans AdminController » — c'est faux depuis le 2026-08-13.** Rien n'est
+   * scopé, rien n'est vérifié en amont : tout agent modère tout le parc.
+   *
+   * `expected` est l'état que le modérateur avait à l'écran. Il n'est comparé
+   * à rien **ici** : c'est l'`UPDATE` conditionnel de `PromoService` qui
+   * arbitre. Comparer d'abord puis écrire rouvrirait très exactement la course
+   * qu'on ferme (règle 13). Il ne fait que traverser.
+   */
   async masquer(
     actorType: AuditActorType,
     actorId: string,
     promoId: string,
+    expected: PromoModerationStatus,
   ): Promise<void> {
     const promo = await this.promoService.findByIdOrFail(promoId);
-    await this.promoService.resolveMasquer(promoId);
+    await this.promoService.resolveMasquer(promoId, expected);
     await this.notificationService.create(
       NotificationType.PROMO_HIDDEN,
       NotificationRecipientType.COMMERCANT,
@@ -77,9 +87,10 @@ export class ModerationService {
     actorType: AuditActorType,
     actorId: string,
     promoId: string,
+    expected: PromoModerationStatus,
   ): Promise<void> {
     const promo = await this.promoService.findByIdOrFail(promoId);
-    await this.promoService.resolveVerifieOk(promoId);
+    await this.promoService.resolveVerifieOk(promoId, expected);
     await this.notificationService.create(
       NotificationType.PROMO_VERIFIED,
       NotificationRecipientType.COMMERCANT,
@@ -97,9 +108,10 @@ export class ModerationService {
     actorType: AuditActorType,
     actorId: string,
     promoId: string,
+    expected: PromoModerationStatus,
   ): Promise<void> {
     const promo = await this.promoService.findByIdOrFail(promoId);
-    await this.promoService.resolveAvertir(promoId);
+    await this.promoService.resolveAvertir(promoId, expected);
     await this.notificationService.create(
       NotificationType.PROMO_WARNED,
       NotificationRecipientType.COMMERCANT,

@@ -18,8 +18,10 @@ import { CommercantService } from '../commercant/commercant.service';
 import { Commercant } from '../commercant/entities/commercant.entity';
 import { withTimeout } from '../common/async/with-timeout';
 import { configNumber } from '../common/config/config-number';
+import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import {
   BadRequestAppException,
+  ConflictAppException,
   NotFoundAppException,
 } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
@@ -1302,22 +1304,24 @@ export class PromoService {
   }
 
   /** Décision admin : masquer une promo signalée à tort ou réellement abusive (specs §3.4). */
-  async resolveMasquer(promoId: string): Promise<void> {
-    await this.promos.update(
-      { id: promoId },
-      { moderationStatus: PromoModerationStatus.MASQUEE },
-    );
+  async resolveMasquer(
+    promoId: string,
+    expected: PromoModerationStatus,
+  ): Promise<void> {
+    await this.resolveModeration(promoId, expected, {
+      moderationStatus: PromoModerationStatus.MASQUEE,
+    });
   }
 
   /** Décision admin : promo légitime — ouvre la fenêtre d'ignore de 30 jours (specs §5.4). */
-  async resolveVerifieOk(promoId: string): Promise<void> {
-    await this.promos.update(
-      { id: promoId },
-      {
-        moderationStatus: PromoModerationStatus.VERIFIEE_OK,
-        verifiedOkAt: new Date(),
-      },
-    );
+  async resolveVerifieOk(
+    promoId: string,
+    expected: PromoModerationStatus,
+  ): Promise<void> {
+    await this.resolveModeration(promoId, expected, {
+      moderationStatus: PromoModerationStatus.VERIFIEE_OK,
+      verifiedOkAt: new Date(),
+    });
   }
 
   /**
@@ -1326,7 +1330,10 @@ export class PromoService {
    * brouillon) le temps que le commerçant la vérifie et la republie
    * explicitement via `publish` (pas de republication automatique).
    */
-  async resolveAvertir(promoId: string): Promise<void> {
+  async resolveAvertir(
+    promoId: string,
+    expected: PromoModerationStatus,
+  ): Promise<void> {
     // Le déblocage ne visait que `SIGNALEE`, jamais `MASQUEE` : « avertir »
     // après « masquer » laissait le masque en place tout en notifiant
     // « republiez-la ». Le commerçant republiait, consommait un de ses 5
@@ -1334,14 +1341,51 @@ export class PromoService {
     // `moderationStatus` n'est affiché sur aucun écran commerçant (revue
     // 2026-08-05, règle #8). L'avertissement lève donc tout statut bloquant :
     // c'est le retour en brouillon qui porte la sanction, pas le masque.
-    await this.promos.update(
-      { id: promoId },
-      {
-        moderationStatus: PromoModerationStatus.NORMALE,
-        lifecycleStatus: PromoLifecycleStatus.BROUILLON,
-        dateFin: null,
-      },
+    await this.resolveModeration(promoId, expected, {
+      moderationStatus: PromoModerationStatus.NORMALE,
+      lifecycleStatus: PromoLifecycleStatus.BROUILLON,
+      dateFin: null,
+    });
+  }
+
+  /**
+   * L'écriture des trois résolutions de modération — **conditionnée à l'état
+   * que le modérateur avait sous les yeux** (2026-08-13).
+   *
+   * ⚠️ **Le `WHERE` porte la garde, pas un `if` en amont.** Un contrôle en
+   * deux temps (lire le statut, comparer, écrire) rouvrirait très exactement la
+   * course qu'on ferme : entre la lecture et l'écriture, l'autre modérateur
+   * passe. C'est la règle 13 — « vérifier puis écrire » sur une contrainte
+   * métier n'est jamais sûr sans que la base l'arbitre. Ici un seul `UPDATE …
+   * WHERE "moderationStatus" = :attendu` suffit : Postgres verrouille la ligne,
+   * et **`affected` tranche**.
+   *
+   * ⚠️ **Pourquoi pas le verrou consultatif** qui protège déjà le plafond de
+   * promos actives : il sérialise, il n'arbitre pas. Deux `UPDATE`
+   * inconditionnels sérialisés s'écrasent tout aussi bien, simplement l'un
+   * après l'autre. Un verrou empêche l'entrelacement, pas la perte de décision.
+   *
+   * `affected === 0` a deux causes possibles — la promo a disparu, ou son état
+   * a changé. `ModerationService` a déjà établi l'existence juste avant ;
+   * l'ambiguïté résiduelle penche donc vers le conflit, qui est aussi la
+   * lecture la plus utile pour celui qui reçoit le refus.
+   */
+  private async resolveModeration(
+    promoId: string,
+    expected: PromoModerationStatus,
+    changement: QueryDeepPartialEntity<Promo>,
+  ): Promise<void> {
+    const resultat = await this.promos.update(
+      { id: promoId, moderationStatus: expected },
+      changement,
     );
+    if (resultat.affected === 0) {
+      throw new ConflictAppException(
+        ErrorCode.MODERATION_STATE_CHANGED,
+        'Cette promo a été traitée par un autre modérateur entre-temps. ' +
+          'Rafraîchissez la file avant de décider à nouveau.',
+      );
+    }
   }
 
   /**

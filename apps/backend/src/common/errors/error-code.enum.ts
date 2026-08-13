@@ -49,6 +49,18 @@ export enum ErrorCode {
   PROMO_REPUBLISH_TOO_SOON = 'PROMO_REPUBLISH_TOO_SOON',
   PROMO_DAILY_CREATION_CAP_REACHED = 'PROMO_DAILY_CREATION_CAP_REACHED',
 
+  /**
+   * Deux modérateurs sur la même promo — la décision a été prise contre un
+   * état que l'écran n'affiche plus (2026-08-13, voir `ResolveModerationDto`).
+   *
+   * ⚠️ **C'est un refus qui protège une décision, pas une erreur de saisie.**
+   * L'action de l'appelant est parfaitement valide ; c'est le monde qui a bougé
+   * sous lui. Le message doit donc dire « quelqu'un d'autre est passé avant
+   * vous », jamais « action impossible » — et l'écran doit se rafraîchir, pas
+   * proposer de réessayer à l'identique.
+   */
+  MODERATION_STATE_CHANGED = 'MODERATION_STATE_CHANGED',
+
   // Highlight (bandeau « Top promos » curé par l'admin)
   HIGHLIGHT_NOT_FOUND = 'HIGHLIGHT_NOT_FOUND',
   HIGHLIGHT_EMPTY_CONTENT = 'HIGHLIGHT_EMPTY_CONTENT',

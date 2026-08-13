@@ -59,9 +59,20 @@ rattachement direct à des `Commune`.
 global.** Plus de territoire, plus de relation `agent_communes`, plus de
 frontière d'appartenance — un agent agit sur tout le parc. Ce que ça retire et
 que **rien ne remplace** : la garde IDOR de quatorze routes d'écriture (règle 1,
-levée par décision produit), la partition du travail de modération (tous les
-agents voient la même file, résolutions sans verrou), et le seul moyen dont
-l'admin disposait pour **restreindre** un agent.
+levée par décision produit) et le seul moyen dont l'admin disposait pour
+**restreindre** un agent.
+
+⚠️ **La file de modération reste non partitionnée** — tous les agents du pays
+voient la même liste, et rien ne leur attribue un lot. **Mais la perte de
+décision qui en découlait est fermée depuis le 2026-08-13** : chaque résolution
+porte l'état que le modérateur avait à l'écran
+(`expectedModerationStatus`) et l'écriture y est conditionnée
+(`UPDATE … WHERE "moderationStatus" = ?`), sinon `409
+MODERATION_STATE_CHANGED`. Ce n'était pas un verrou qui manquait — un verrou
+sérialise, il n'arbitre pas, et deux `UPDATE` inconditionnels sérialisés
+s'écrasent tout autant. Éprouvé par `test-moderation-course.sh`, mutation
+comprise. **Répartir le travail reste à faire ; le corrompre n'est plus
+possible en silence.**
 
 ⚠️ Le rôle lui-même est en sursis, et ce document l'annonçait déjà : « le rôle
 agent est amené à disparaître à l'extension multi-wilaya ». Le chantier crée

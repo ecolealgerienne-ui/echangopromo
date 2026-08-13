@@ -58,6 +58,13 @@ const Map<String, String> errorMessagesFr = {
   'PROMO_DATE_FIN_NOT_FUTURE': 'La date de fin doit être dans le futur.',
   'PROMO_ALREADY_PUBLISHED': 'Cette promotion est déjà publiée.',
   'PROMO_NOT_PUBLISHED': 'Seule une promotion publiée peut être arrêtée.',
+  // ⚠️ Le message dit « quelqu'un d'autre est passé », jamais « action
+  // impossible » : le geste du modérateur était valide, c'est l'état qui a
+  // changé sous lui. Il doit relire, pas réessayer à l'identique.
+  'MODERATION_STATE_CHANGED':
+      'Un autre modérateur a traité cette promotion entre-temps. '
+          'La liste vient d\'être rafraîchie : vérifiez la nouvelle décision '
+          'avant d\'agir.',
   'PROMO_PRIX_APRES_NOT_LOWER':
       'Le prix après réduction doit être inférieur au prix avant réduction.',
 

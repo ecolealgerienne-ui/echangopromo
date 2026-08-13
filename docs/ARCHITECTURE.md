@@ -60,7 +60,10 @@ Modules NestJS calqués sur les entités des specs (§4) :
   désormais sur **tout le parc**. Ce que ça retire et que rien ne remplace : la
   garde d'appartenance de quatorze routes d'écriture (règle 1, levée par
   décision produit), la partition du travail de modération, et le seul moyen
-  dont l'admin disposait pour **restreindre** un agent.
+  dont l'admin disposait pour **restreindre** un agent. ⚠️ La file reste
+  non partitionnée, mais depuis le 2026-08-13 deux modérateurs ne peuvent plus
+  s'écraser en silence : chaque résolution porte l'état vu à l'écran et
+  l'écriture y est conditionnée (`MODERATION_STATE_CHANGED`).
 - `admin` — auth email+mot de passe, modération, gestion des agents (création,
   réinitialisation de mot de passe, révocation — plus d'assignation de
   territoire).

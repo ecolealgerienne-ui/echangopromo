@@ -568,14 +568,21 @@ def main():
     # endroit où elles sont exercées par un agent — l'un des trois lots de
     # routes que le chantier lui a ouverts.
     print("\n── 7. l'agent modère — trois décisions qui lui sont ouvertes ──")
+    # ⚠️ `expectedModerationStatus` est obligatoire depuis le 2026-08-13 (garde
+    # de course, voir `ResolveModerationDto`). L'omettre rendrait
+    # `VALIDATION_ERROR`, donc « non concluant » — le banc ne dirait plus rien
+    # sur la portée, ce qu'il est le seul à mesurer. La séquence est
+    # déterministe : la promo vient d'être créée (`normale`), puis `masquee`,
+    # puis `verifiee_ok`.
     st, d = appeler("POST", "/admin/moderation/%s/masquer" % pid, jg,
-                    {"reason": "sonde du banc de portée"})
+                    {"expectedModerationStatus": "normale"})
     noter("moderation/masquer accepté", *verdict_acceptation(st, d.get("code")))
     time.sleep(PACE)
     noter("… et la promo disparaît", *verdict_effet(visible(pid), False, "visible"))
     time.sleep(PACE)
 
-    st, d = appeler("POST", "/admin/moderation/%s/verifier-ok" % pid, jg)
+    st, d = appeler("POST", "/admin/moderation/%s/verifier-ok" % pid, jg,
+                    {"expectedModerationStatus": "masquee"})
     noter("moderation/verifier-ok accepté",
           *verdict_acceptation(st, d.get("code")))
     time.sleep(PACE)
@@ -583,7 +590,7 @@ def main():
     time.sleep(PACE)
 
     st, d = appeler("POST", "/admin/moderation/%s/avertir" % pid, jg,
-                    {"reason": "sonde du banc de portée"})
+                    {"expectedModerationStatus": "verifiee_ok"})
     noter("moderation/avertir accepté", *verdict_acceptation(st, d.get("code")))
     time.sleep(PACE)
     # ⚠️ `avertir` renvoie la promo en BROUILLON : elle sort de l'affichage.

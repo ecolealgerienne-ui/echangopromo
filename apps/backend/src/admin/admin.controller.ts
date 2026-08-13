@@ -28,6 +28,7 @@ import { ResetCommercantPinDto } from '../commercant/dto/reset-commercant-pin.dt
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { AUTH_THROTTLE, SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
 import { ListModerationQueueQueryDto } from './dto/list-moderation-queue-query.dto';
+import { ResolveModerationDto } from './dto/resolve-moderation.dto';
 import { ListPromoAdminQueryDto } from '../promo/dto/list-promo-admin-query.dto';
 import { Promo } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
@@ -269,14 +270,22 @@ export class AdminController {
   async masquer(
     @CurrentUser() user: AuthTokenPayload,
     @UuidParam('promoId') promoId: string,
+    @Body() dto: ResolveModerationDto,
   ) {
     // ⚠️ Plus aucune garde d'appartenance ici depuis le 2026-08-13 (agent
     // global) : n'importe quel agent modère n'importe quelle promo du pays.
     // Voir le bloc « trois méthodes retirées » plus haut. Règle #1 levée.
+    //
+    // ⚠️ **C'est ce retrait qui a rendu la course réelle** : la file est
+    // devenue nationale et non partitionnée, donc tous les agents du pays
+    // regardent la même liste sans que rien ne leur attribue un lot. D'où
+    // `expectedModerationStatus`, qui fait porter la décision par l'état que le
+    // modérateur avait à l'écran (voir `ResolveModerationDto`).
     await this.moderationService.masquer(
       this.actorType(user.role),
       user.sub,
       promoId,
+      dto.expectedModerationStatus,
     );
     return { ok: true };
   }
@@ -288,14 +297,21 @@ export class AdminController {
   async verifierOk(
     @CurrentUser() user: AuthTokenPayload,
     @UuidParam('promoId') promoId: string,
+    @Body() dto: ResolveModerationDto,
   ) {
     // ⚠️ Plus aucune garde d'appartenance ici depuis le 2026-08-13 (agent
     // global) : n'importe quel agent modère n'importe quelle promo du pays.
     // Voir le bloc « trois méthodes retirées » plus haut. Règle #1 levée.
+    //
+    // ⚠️ **La plus coûteuse des trois à perdre dans une course** : elle rend la
+    // promo publique ET ouvre une fenêtre d'ignore de 30 jours qui la rend
+    // insensible aux signalements suivants. Écraser un « masquer » avec elle,
+    // c'est republier un contenu retiré et le protéger un mois.
     await this.moderationService.verifierOk(
       this.actorType(user.role),
       user.sub,
       promoId,
+      dto.expectedModerationStatus,
     );
     return { ok: true };
   }
@@ -307,14 +323,20 @@ export class AdminController {
   async avertir(
     @CurrentUser() user: AuthTokenPayload,
     @UuidParam('promoId') promoId: string,
+    @Body() dto: ResolveModerationDto,
   ) {
     // ⚠️ Plus aucune garde d'appartenance ici depuis le 2026-08-13 (agent
     // global) : n'importe quel agent modère n'importe quelle promo du pays.
     // Voir le bloc « trois méthodes retirées » plus haut. Règle #1 levée.
+    //
+    // ⚠️ Elle **lève tout statut bloquant** (voir `resolveAvertir`) : écraser
+    // un « masquer » avec elle rend la promo republiable par son commerçant,
+    // masque levé, sans que personne n'ait décidé de le lever.
     await this.moderationService.avertir(
       this.actorType(user.role),
       user.sub,
       promoId,
+      dto.expectedModerationStatus,
     );
     return { ok: true };
   }

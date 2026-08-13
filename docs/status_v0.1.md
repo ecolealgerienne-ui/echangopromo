@@ -3337,9 +3337,12 @@ Mesuré : **A = B = admin**.
 #### Ce qui est retiré sans être remplacé
 
 Écrit dans le code, pas seulement ici : la **partition du travail de
-modération** (tous les agents voient la même file, les trois résolutions sont
-des `update` inconditionnels — deux modérateurs sur la même promo, dernier
-écrivain gagne, sans erreur) ; le **transfert de secteur** au départ d'un agent ;
+modération** (tous les agents voient la même file) — ⚠️ **la suite de cette
+phrase est périmée depuis le 2026-08-13** : elle disait « les trois résolutions
+sont des `update` inconditionnels, dernier écrivain gagne, sans erreur », et
+c'est corrigé (voir l'entrée de journal du jour, lot B). Répartir le travail
+reste à faire ; le corrompre n'est plus possible en silence ;
+le **transfert de secteur** au départ d'un agent ;
 et le seul moyen dont l'admin disposait pour **restreindre** un agent — il
 n'existe plus de granularité entre « agent » et « admin moins deux écrans », ni
 aucune route de suppression d'agent. L'exception nommée de la règle 15 perd son
@@ -3555,6 +3558,82 @@ modification n'a pas d'effet.
 un banc qui supprime désormais des comptes ; `TEST_PROMO.md` décrivait le banc
 d'appartenance au présent. Les documents **datés** (audits, rapport de pentest,
 revues) ne sont pas touchés : ils décrivent ce qui était vrai à leur date.
+
+---
+
+### 2026-08-13 — Lot B : la course de modération est fermée
+
+**Le seul point du chantier « agent global » qui pouvait corrompre des données
+sans que personne ne le voie.** Les trois résolutions étaient des
+`UPDATE … WHERE id = ?` **inconditionnels**, et la file est devenue nationale et
+non partitionnée : tous les agents du pays regardent la même liste, rien ne leur
+attribue un lot.
+
+```
+A masque la promo.                       → MASQUEE, retirée du public
+B, dont l'écran datait d'avant, vérifie. → VERIFIEE_OK, remise en ligne
+                                           + fenêtre d'ignore de 30 jours
+```
+
+Les deux reçoivent `200`. Les deux gestes entrent au journal comme deux succès
+indépendants. **Rien ne dit que la décision de A a été annulée** — ni un écran,
+ni une notification, ni une ligne de journal. La promo retirée redevient
+publique **et** protégée un mois contre les signalements suivants.
+
+**Le correctif n'est pas un verrou, et c'est le point.** Un verrou sérialise, il
+n'arbitre pas : deux `UPDATE` inconditionnels sérialisés s'écrasent tout aussi
+bien, simplement l'un après l'autre. Ce qui manquait était une **comparaison**.
+Chaque décision porte désormais l'état que le modérateur avait à l'écran, et
+l'écriture y est conditionnée :
+
+```sql
+UPDATE promo SET … WHERE id = ? AND "moderationStatus" = ?   -- affected tranche
+```
+
+`affected = 0` ⇒ `409 MODERATION_STATE_CHANGED`. **Le `WHERE` porte la garde,
+pas un `if` en amont** : lire puis comparer puis écrire rouvrirait exactement la
+course qu'on ferme (règle 13).
+
+**Pourquoi l'état vient du client.** Parce que le client est le seul à savoir ce
+que le modérateur a vu. Les trois écrans qui appellent ces routes affichent déjà
+`moderationStatus` — la file (`signalee` par construction), la liste de toutes
+les promos, et le détail d'une promo. La valeur existait des deux côtés ; il ne
+restait qu'à la faire voyager. **Obligatoire, pas optionnelle** (règle 29) : un
+champ facultatif ferait retomber tout appelant qui l'oublie sur l'ancien
+comportement sans le dire — une protection présente dans le code et absente à
+l'exécution, ce qui est pire que son absence puisqu'on la croirait acquise.
+
+⚠️ **Et c'est ce choix qui a trouvé le troisième appelant.** Paramètre
+positionnel obligatoire ⇒ `flutter analyze` a signalé `admin_promos_screen.dart`,
+que je n'avais pas ouvert. Cet écran sert **toutes** les promos, donc les quatre
+statuts : un défaut y aurait fait échouer en silence toute décision prise sur
+une promo non signalée.
+
+**Ce que la garde n'interdit pas, et il fallait le prouver.** Revenir sur sa
+propre décision reste possible : un admin qui ouvre une promo déjà masquée voit
+`masquee`, l'envoie, et son avertissement passe. C'est le flux corrigé le
+2026-08-05 (« avertir depuis MASQUÉE »). Une garde du type « on ne tranche que
+ce qui est `signalee` » l'aurait cassé — c'est la sonde 3 du banc, et la plus
+importante des quatre (règle 38).
+
+**`moderation_course.py` — 7 contrôles, 0 échec.** Deux `masquer` **vraiment
+simultanés** (deux fils), exactement un `2xx` et un `409`. Auto-test 16 cas dont
+11 refus, incluant les trois façons de se tromper : deux succès (le défaut
+d'origine), deux refus (le correctif trop strict, sur lequel un banc qui ne
+cherche qu'un refus serait vert), et un refus au mauvais code (indiscernable
+d'une panne).
+
+⚠️ **Prouvé par mutation** (règle 28) : retirer `moderationStatus: expected` du
+`WHERE` fait rendre au banc *« les DEUX décisions ont été acceptées »*, et la
+promo finit en `verifiee_ok` — publique et protégée 30 jours — après une
+décision prise sur un écran périmé. C'est le défaut d'origine, reproduit à
+l'identique. Mutation annulée, 7/7 revenus.
+
+**Une dernière chose que ce lot a révélée sans la chercher** : les trois routes
+ne prenaient **aucun corps**. Le `{"reason": …}` que trois bancs leur envoyaient
+depuis des semaines était **silencieusement jeté** par `whitelist: true`. Une
+décision de modération n'a donc jamais eu de motif enregistré — ce n'est pas
+corrigé ici, c'est noté.
 
 ---
 
