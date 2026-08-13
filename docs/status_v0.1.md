@@ -4360,6 +4360,49 @@ vers **25 000 commercants**, et devient structurante au-dela de 100 000.
 donc rien refuser. Il produit un tableau qu'un humain lit. Ce qui est solide est
 la FORME des deux courbes, pas les millisecondes au centieme.
 
+### 2026-08-13 — le lot complet, deux passages
+
+**`test-tout.sh`** enchaine 42 bancs et rend un tableau. Il n'existait pas :
+personne ne pouvait dire « tout est vert » avant un deploiement.
+
+**Premier passage : 28 verts · 2 echecs · 2 non concluants · 11 sautes.** Aucun
+de ces defauts n'etait visible en lancant les bancs un par un.
+
+· **six bancs ne rendaient pas le decor** — ils creaient des promos sur le
+  commercant de test sans les arreter. Le plafond etant de 5 actives, tous les
+  suivants echouaient sur `PROMO_ACTIVE_CAP_REACHED`, un refus parfaitement
+  legitime du produit impute a tort aux bancs ;
+· **une quatrieme forme d'appel `python3`** (chemin relatif) faisait passer trois
+  bancs pour des auto-tests casses. Leurs auto-tests passaient : c'etait l'appel
+  qui echouait ;
+· **`client-rayon` lisait une page tronquee comme une absence** — `limit=50` sur
+  une liste triee par distance, decor grossi, le commerce du coin hors page ;
+· **`admin-dashboard` comparait un compteur global a une liste bornee au rayon**,
+  vestige d'avant la bascule geographique.
+
+**Second passage, apres corrections : 36 verts · 0 echec · 5 non concluants ·
+1 saute.**
+
+⚠️ **Deux limites restent, et elles sont d'une autre nature que ce qui a ete
+corrige :**
+
+1. `frontiere-http` rend `429 RATE_LIMITED`. Il figure bien dans les sept bancs
+   « stricts », mais la pause est reglee sur le banc PRECEDENT : elle protege le
+   suivant, pas le gourmand lui-meme. Ma logique etait incomplete ;
+2. `plafond-promos`, `plafond-admin` et `tournee-agent` rendent des non
+   concluants qu'ils n'avaient pas au premier passage. Ils tournent desormais
+   APRES les bancs de moderation qui ne bloquaient plus — l'ordre reel a change
+   — et butent vraisemblablement sur le plafond QUOTIDIEN de creations
+   (5/24 h/commercant). Arreter une promo libere un emplacement actif, jamais un
+   quota journalier : aucun nettoyage ne peut le rendre.
+
+⚠️ **La duree : 45 min au premier passage, ~18 au second.** Mesure : un banc
+prend 0 a 11 secondes, donc 43 pauses de 60 s faisaient 90 % du lot. Une pause
+uniforme appliquait a tous le delai que seul le seau le plus serre exige
+(`report` et `register`, 5/min). La pause suit desormais ce que le banc
+precedent a consomme. **Aucune reinstallation d'app n'est en jeu** : ces bancs
+sont du HTTP pur, et `parcours-ecran` est exclu du lot.
+
 ---
 
 ## Comment tenir ce fichier
