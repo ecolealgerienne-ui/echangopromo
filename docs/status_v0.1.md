@@ -3726,6 +3726,78 @@ aucun fichier écrit.
 
 ---
 
+### 2026-08-13 — Le journal d'audit, côté agent
+
+`CLAUDE.md` dit du journal qu'il **« est devenu le seul contrepoids à la portée
+globale »** de l'agent. Ce contrepoids n'était éprouvé pour personne d'autre que
+l'admin : `audit_log.py` se connecte en admin, agit en admin, et n'assertent que
+`actorType == "admin"` — son auto-test compte même une entrée `agent` comme un
+échec, parce qu'il vérifie le chemin admin.
+
+**`journal_agent.py` — 9 contrôles, 0 échec.** Auto-test 17 cas dont 12 refus.
+
+**Trois mécanismes, pas un.** C'est la raison d'être du banc : la trace d'une
+action d'agent vient de trois implémentations distinctes, et « le journal
+marche » ne veut rien dire tant qu'on ne dit pas laquelle.
+`PromoController.auditStaffWrite` (branché le 2026-08-13, donc le moins
+éprouvé), `ModerationService.record`, et les **onze** appels en ligne
+d'`AdminController`. Trois endroits où l'on peut oublier `actorType`.
+
+**La sonde qui compte le plus est l'attribution.** « Une entrée existe » est la
+partie facile. **Un journal qui dit « un agent » sans dire lequel ne vaut rien
+quand tous les agents sont globaux** — c'est exactement la situation créée par
+le chantier. La même action, faite par A puis par B, doit produire deux
+`actorId` distincts. Un `actorId` figé, recopié ou pris sur le mauvais
+utilisateur passerait toutes les autres sondes : `actorType` serait juste et le
+journal désignerait **le mauvais responsable**, ce qui est pire que pas de
+journal. Mesuré : `A=720078bd ≠ B=f9d8ec1b`. C'est aussi la meilleure
+justification qu'aient eue les deux agents du décor.
+
+**Le témoin négatif : la même route, deux acteurs.** `auditStaffWrite` commence
+par `if (user.role === 'commercant') return;`. Donc `PATCH /promo/:id` par
+l'agent laisse une entrée, et **le même appel par le commerçant propriétaire ne
+laisse rien**. Ça établit que la sélectivité porte sur l'**acteur**, pas sur la
+route — ce qu'aucune sonde positive ne peut montrer. Sans lui, « une entrée
+existe » serait vrai par accident sur un journal qui enregistre tout, et un
+journal qui enregistre tout n'identifie personne.
+
+Le banc agit en **agent** et lit en **admin** : `GET /admin/audit-log` est
+`@Roles('admin')` seul. `portee_agent.py` éprouve ce refus ; celui-ci éprouve ce
+que le refus protège.
+
+⚠️ **Prouvé par mutation** (règle 28) : forcer `actorType: ADMIN` dans
+`auditStaffWrite` fait rendre ❌ à deux sondes — *« l'action d'un agent est
+imputée à autre chose, et il devient intraçable »*. Mutation annulée, 9/9.
+
+#### Le rejeu d'ensemble, et ce qu'il a trouvé
+
+**24 bancs, 23 verts au premier passage.** L'échec est instructif et il est de
+moi : **`notifications.py` était le quatrième appelant des routes de
+modération**, et je n'en avais mis à jour que deux dans le lot B. Il rendait
+`VALIDATION_ERROR` sur `expectedModerationStatus` manquant.
+
+Deux choses à en retenir :
+
+1. **Le banc n'a accusé personne.** Il a rendu « ⚠️ non concluant — pas de
+   notification à examiner » et s'est arrêté là. Un banc qui aurait compté ce
+   400 comme un échec métier aurait envoyé chercher un défaut de notification
+   qui n'existe pas (règle 38). La discipline « un `VALIDATION_ERROR` n'est
+   jamais un verdict » a payé sur un banc que je n'avais pas écrit pour ça.
+2. **Rendre un champ obligatoire exige d'énumérer TOUS les appelants**, pas ceux
+   qu'on a en tête. Côté Dart le compilateur l'a fait pour moi et m'a trouvé un
+   troisième écran ; côté Python personne ne le fait, et c'est le rejeu qui a
+   servi de compilateur. Le réflexe est un `grep` sur la route, pas sur le nom
+   de la fonction — `notifications.py` construisait son URL par interpolation
+   (`"/admin/moderation/%s/%s" % (pid, action)`) et échappait donc à la
+   recherche évidente.
+
+Corrigé, et le `{"reason": …}` qu'il envoyait **retiré plutôt que gardé** : les
+trois routes ne prenaient aucun corps, `whitelist: true` le jetait en silence.
+Un champ qu'on croit envoyer et que personne ne lit est pire qu'un champ absent.
+`notifications` rend désormais **8 contrôles, 0 échec**.
+
+---
+
 ## Comment tenir ce fichier
 
 - **Une entrée de journal par session**, datée, qui dit ce qui a été fait **et

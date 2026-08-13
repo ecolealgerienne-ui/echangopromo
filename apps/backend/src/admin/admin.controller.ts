@@ -643,10 +643,26 @@ export class AdminController {
   }
 
   /**
-   * Journal d'audit consultable (plan de correction, Phase 3) — admin only,
-   * y compris les actions enregistrées par un agent (transfert de communes,
-   * modération...) : un agent ne voit pas ce journal, seul l'admin doit
-   * pouvoir retracer "qui a fait quoi".
+   * Journal d'audit consultable (plan de correction, Phase 3) — **admin
+   * seulement**, y compris pour les actions enregistrées par un agent : un
+   * agent ne voit pas ce journal, seul l'admin doit pouvoir retracer « qui a
+   * fait quoi ».
+   *
+   * ⚠️ **Cette phrase citait « transfert de communes » comme exemple** — une
+   * route supprimée le 2026-08-13. L'exemple était mort et la règle vivante.
+   *
+   * ⚠️ **Ce journal est devenu le seul contrepoids à la portée globale de
+   * l'agent** (`CLAUDE.md`), depuis que les quatorze gardes d'appartenance sont
+   * tombées le 2026-08-13 : il n'existe plus aucune limite *a priori* à ce
+   * qu'un agent peut faire, seulement une trace *a posteriori*. Trois
+   * mécanismes distincts l'alimentent pour un agent —
+   * `PromoController.auditStaffWrite`, `ModerationService.record`, et les onze
+   * appels en ligne de ce contrôleur — et ils sont éprouvés ensemble par
+   * `test-journal-agent.sh`, qui vérifie surtout l'**attribution** : un journal
+   * qui dit « un agent » sans dire lequel ne vaut rien quand tous sont globaux.
+   *
+   * ⚠️ Il ne se filtre que par `actorType`, et n'expose que des UUID : lisible
+   * pour un parc de commune, difficilement pour un parc national. Point ouvert.
    */
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
