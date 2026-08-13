@@ -1,0 +1,130 @@
+# Vulnérabilités d'image ACCEPTÉES, avec leur raison et leur DATE D'EXPIRATION.
+# Lu par `scripts/audit-image.sh` (couche C4).
+#
+# ┌───────────────────────────────────────────────────────────────────────────┐
+# │ ⚠️ CE FICHIER NE CORRIGE RIEN. Chaque entrée est une DETTE ASSUMÉE, datée, │
+# │ justifiée — pas un problème résolu.                                       │
+# │                                                                           │
+# │ Le contrôle ne peut pas être neutralisé par lui : `audit-image.sh          │
+# │ --self-test` rejoue le scan en l'IGNORANT (SC-IMG.4) et exige que ce qu'il │
+# │ masque RÉAPPARAISSE. Un fichier d'exceptions qui ne masque rien fait       │
+# │ échouer ce scénario — c'est voulu : il serait périmé.                      │
+# └───────────────────────────────────────────────────────────────────────────┘
+#
+# ═══ CE QUI N'EST PAS ACCEPTÉ, ET POURQUOI C'EST ÉCRIT ICI ═══════════════════
+#
+# Mesuré le 2026-08-14 — trois autres graves corrigeables existent sur
+# `postgres:16-alpine` et ne sont PAS dans ce fichier, délibérément :
+#
+#   CVE-2026-45447  HIGH  libcrypto3 / libssl3
+#   CVE-2026-6732   HIGH  libxml2
+#
+# Elles sont dans la base Alpine, pas dans un binaire auxiliaire, et l'image
+# locale est simplement EN RETARD sur le registre : `docker pull
+# postgres:16-alpine` les fait tomber (18 graves → 15). Une exception aurait
+# masqué un retard de mise à jour, ce qui est exactement l'usage abusif que ce
+# fichier doit refuser.
+#
+# Ne sont pas acceptées non plus les 78 de `minio/minio:latest` ni les 37 de
+# `minio/mc:latest` : elles sont dans `usr/bin/minio` et `usr/bin/mc`,
+# c'est-à-dire dans un SERVEUR RÉSEAU. Le raisonnement d'atteignabilité
+# ci-dessous ne s'y transpose pas, et re-tirer l'image ne change rien (mesuré :
+# 78 avant, 78 après). Elles restent rouges, et c'est correct.
+
+vulnerabilities:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Les 15 CVE Go de `gosu`, dans l'image PostgreSQL
+  # ═══════════════════════════════════════════════════════════════════════════
+  #
+  # POURQUOI ELLES SONT ACCEPTÉES, et pourquoi ce n'est pas de la complaisance.
+  # Deux mesures ont été nécessaires ; la conclusion évidente était fausse dans
+  # ses deux moitiés.
+  #
+  # 1. AUCUNE IMAGE POSTGRESQL NE LES CORRIGE. Trivy les dit « corrigeables »
+  #    parce que le correctif existe dans la bibliothèque standard de **Go** —
+  #    pas parce qu'une image le livre. Remonter l'étiquette ne change rien ;
+  #    mesuré sur ce dépôt le 2026-08-14 (`docker pull` puis re-scan : 15 avant,
+  #    15 après), et mesuré sur trois étiquettes distinctes lors de l'audit d'un
+  #    projet voisin (`postgres:16`, `postgres:16-alpine`, `postgres:17` portent
+  #    exactement les mêmes 15).
+  #
+  # 2. LES CHEMINS DE CODE SONT INATTEIGNABLES. Les 15 tiennent dans UN SEUL
+  #    binaire, `/usr/local/bin/gosu`, dont l'unique fonction est de résoudre un
+  #    utilisateur, changer d'identité, puis `exec`. Toutes visent `net/url`,
+  #    `net/mail`, `net`, `net/http`, `mime`, `crypto/tls`, `crypto/x509` : des
+  #    chemins que ce binaire n'atteint jamais. Ce code est LIÉ au binaire, pas
+  #    EXÉCUTÉ par lui.
+  #
+  # 3. LA SURFACE EST D'UNE SECONDE. `gosu` n'est appelé qu'au démarrage du
+  #    conteneur, par l'entrypoint, avec des arguments entièrement contrôlés par
+  #    l'image — jamais par une entrée réseau.
+  #
+  # ⚠️ CE QUI FERAIT TOMBER CE RAISONNEMENT, et qu'il faut donc surveiller :
+  #    un AUTRE binaire Go ajouté à l'image, lui exposé au réseau. L'exception
+  #    est bornée au chemin `usr/local/bin/gosu` précisément pour ça — un nouveau
+  #    binaire ne serait pas couvert, et l'audit crierait.
+  #
+  # À REVOIR LE 2026-11-14 : si `gosu` a été reconstruit d'ici là, RETIRER ces
+  # 15 lignes plutôt que repousser la date. Passée cette date, trivy cesse
+  # d'appliquer l'exception et l'audit redevient rouge de lui-même — une
+  # exception qui ne vaut plus n'a aucune façon de le dire toute seule.
+  - id: CVE-2025-61726
+    paths: ["usr/local/bin/gosu"]
+    statement: "net/url — gosu n'analyse aucune URL. Non corrigé en amont dans aucune image PostgreSQL."
+    expired_at: 2026-11-14
+  - id: CVE-2025-61729
+    paths: ["usr/local/bin/gosu"]
+    statement: "crypto/x509 — gosu ne valide aucun certificat."
+    expired_at: 2026-11-14
+  - id: CVE-2025-68121
+    paths: ["usr/local/bin/gosu"]
+    statement: "crypto/tls — gosu n'établit aucune session TLS. Seule CRITICAL du lot."
+    expired_at: 2026-11-14
+  - id: CVE-2026-25679
+    paths: ["usr/local/bin/gosu"]
+    statement: "net/url (littéraux IPv6) — gosu n'analyse aucune URL."
+    expired_at: 2026-11-14
+  - id: CVE-2026-27145
+    paths: ["usr/local/bin/gosu"]
+    statement: "crypto/x509 — gosu ne valide aucun certificat."
+    expired_at: 2026-11-14
+  - id: CVE-2026-32280
+    paths: ["usr/local/bin/gosu"]
+    statement: "crypto/tls — gosu n'établit aucune session TLS."
+    expired_at: 2026-11-14
+  - id: CVE-2026-32281
+    paths: ["usr/local/bin/gosu"]
+    statement: "crypto/x509 — gosu ne valide aucun certificat."
+    expired_at: 2026-11-14
+  - id: CVE-2026-32283
+    paths: ["usr/local/bin/gosu"]
+    statement: "crypto/tls — gosu n'établit aucune session TLS."
+    expired_at: 2026-11-14
+  - id: CVE-2026-33811
+    paths: ["usr/local/bin/gosu"]
+    statement: "net (réponses CNAME) — gosu ne fait aucune résolution DNS."
+    expired_at: 2026-11-14
+  - id: CVE-2026-33814
+    paths: ["usr/local/bin/gosu"]
+    statement: "net/http HTTP/2 — gosu n'est ni client ni serveur HTTP."
+    expired_at: 2026-11-14
+  - id: CVE-2026-39820
+    paths: ["usr/local/bin/gosu"]
+    statement: "net/mail — gosu ne lit aucun courriel."
+    expired_at: 2026-11-14
+  - id: CVE-2026-39822
+    paths: ["usr/local/bin/gosu"]
+    statement: "os.Root (suivi de lien symbolique) — gosu n'utilise pas os.Root ; il exec avec des arguments fournis par l'entrypoint, pas par le réseau."
+    expired_at: 2026-11-14
+  - id: CVE-2026-39836
+    paths: ["usr/local/bin/gosu"]
+    statement: "net (octet NUL dans Dial) — gosu n'ouvre aucune socket."
+    expired_at: 2026-11-14
+  - id: CVE-2026-42499
+    paths: ["usr/local/bin/gosu"]
+    statement: "net/mail — gosu ne lit aucun courriel."
+    expired_at: 2026-11-14
+  - id: CVE-2026-42504
+    paths: ["usr/local/bin/gosu"]
+    statement: "mime — gosu n'analyse aucun contenu MIME."
+    expired_at: 2026-11-14

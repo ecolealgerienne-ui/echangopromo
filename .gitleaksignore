@@ -1,0 +1,47 @@
+# Constats de secrets ACCEPTÉS, avec leur raison.
+# Lu par `scripts/audit-secrets.sh` (couche C5).
+#
+# ⚠️ CE FICHIER NE CORRIGE RIEN. Une ligne est une dette assumée et justifiée,
+# pas un problème résolu. Le contrôle ne peut pas être neutralisé par lui :
+# `audit-secrets.sh --self-test` rejoue le scan en l'IGNORANT (SC-SEC.41) et
+# exige que ce qu'il masque réapparaisse. Un fichier d'exceptions qui ne masque
+# rien fait échouer ce scénario — c'est voulu : il serait périmé.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 1. LE PIN DE DÉVELOPPEMENT DE L'ÉCRAN DE BASCULE — fuite RÉELLE, non révocable
+# ═════════════════════════════════════════════════════════════════════════════
+# `apps/mobile/lib/features/dev/screens/dev_profile_switcher_screen.dart` portait
+#
+#     final _commercantPin = TextEditingController(text: '<6 chiffres>');
+#
+# Le PIN a été RETIRÉ DE L'ARBRE (commit 34e1425, « implémenter les 26 constats
+# de la revue multi-agents du 2026-08-05 »), mais il reste dans l'historique et
+# dans toute copie clonée. `git log -S` le rend en une commande.
+#
+# ⚠️ POURQUOI ON L'ACCEPTE PLUTÔT QUE DE LE CORRIGER. Il n'y a pas de correction
+# possible ici : retirer un secret d'un fichier ne le retire pas du dépôt, et la
+# réécriture d'historique est une décision séparée qui casse tous les clones.
+#
+# 🔴 LA SEULE REMÉDIATION RÉELLE, et elle est permanente :
+#    **NE JAMAIS créer ce couple téléphone/PIN sur l'instance de production.**
+#    Portée nulle aujourd'hui (base de développement locale) ; réelle le jour où
+#    ce numéro s'inscrirait. À reporter dans le rapport d'audit, pas seulement
+#    ici — un fichier d'exceptions n'est pas lu par ceux qui déploient.
+#
+# Deux empreintes : le même défaut vu sur deux commits (avant et après un
+# `dart format` qui a déplacé la ligne).
+6a85ab5b1ead2890ecc4ca4ede5eec9c0ce25281:apps/mobile/lib/features/dev/screens/dev_profile_switcher_screen.dart:promo-pin-en-dur:40
+c4a79e93a31f594c61cc1ce41554d30a54ae025b:apps/mobile/lib/features/dev/screens/dev_profile_switcher_screen.dart:promo-pin-en-dur:40
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 2. LE README DE SCAFFOLDING NESTJS  →  DÉPLACÉ dans `.gitleaks.toml`
+# ═════════════════════════════════════════════════════════════════════════════
+# `apps/backend/README.md` est le README généré par le CLI NestJS, jamais
+# réécrit. La règle `generic-api-key` s'y déclenche sur les URL de badges du
+# projet NestJS lui-même (`discord.gg/…`, `paypal.me/…`) : des identifiants
+# publics de l'éditeur, pas des secrets de ce dépôt.
+#
+# ⚠️ Ce constat dit tout de même quelque chose de vrai, et qui n'est PAS une
+# faille : le scaffolding du CLI n'a jamais été nettoyé (règle 16 du CLAUDE.md).
+# Le remplacer par un vrai README ferait disparaître ce faux positif au lieu de
+# le taire — c'est la meilleure issue, et elle reste à faire.

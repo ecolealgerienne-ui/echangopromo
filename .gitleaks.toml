@@ -1,0 +1,165 @@
+# Règles de détection de secrets propres à echango Promo.
+# Lu par `scripts/audit-secrets.sh` (couche C5 de la méthode d'audit).
+#
+# ⚠️ CE FICHIER EXISTE PARCE QUE LES RÈGLES PAR DÉFAUT NE VOIENT PAS NOS SECRETS.
+# Les ~170 règles livrées avec gitleaks cherchent des jetons à SIGNATURE
+# (`AKIA…`, `ghp_…`, clés PEM) : des chaînes que leur seule apparence trahit.
+# Nos secrets à nous — un PIN à six chiffres, un mot de passe qui est un mot du
+# dictionnaire (`echango`), un identifiant de commerçant — n'ont aucune forme
+# reconnaissable. Aucun scanner générique ne les trouvera jamais, et « rien à
+# signaler » serait alors indiscernable d'un scan qui n'a pas tourné.
+#
+# ── Ce que la reconnaissance a établi (2026-08-13) ──────────────────────────
+#
+# **Aucune fuite réelle dans l'historique.** Les couples téléphone/PIN qu'on y
+# trouve (`+213555000101` / `222222`, `+213555999999` / `654321`) sont du DÉCOR
+# de banc : ils vivent dans `scripts/`, dans les `.spec.ts` et dans la
+# documentation de test. Ce ne sont pas des secrets, et les bancs les fournissent
+# déjà par variables d'environnement, sans valeur par défaut.
+#
+# Les règles ci-dessous protègent donc l'AVENIR plus que le passé — ce qui est
+# leur emploi normal. Chacune vise une valeur que ce dépôt porte réellement, et
+# se déclenche le jour où elle change pour une vraie.
+
+title = "echango Promo — secrets propres au dépôt"
+
+[extend]
+# On GARDE les règles par défaut. Elles ne trouvent rien aujourd'hui, mais elles
+# couvrent ce qu'on collera demain : clé OVH S3 à la bascule du stockage, jeton
+# de notifications, clé de signature Android. `useDefault` est UNE ligne — la
+# retirer ne casse rien et ne se verrait que le jour où une vraie clé passerait.
+# C'est SC-SEC.42 qui vérifie qu'elle est toujours là.
+useDefault = true
+
+[allowlist]
+description = """
+Artefacts de build et dépendances installées. Exclus du scan d'ARBRE parce
+qu'ils sont déjà exclus de git : ils ne peuvent atteindre personne qui clone.
+"""
+paths = [
+  '''(^|/)\.git/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)build/''',
+  '''(^|/)dist/''',
+  '''(^|/)\.dart_tool/''',
+  '''(^|/)Pods/''',
+  # README de scaffolding NestJS, jamais reecrit : la regle par defaut
+  # `generic-api-key` s'y declenche sur les URL de badges du projet NestJS
+  # lui-meme (discord.gg, paypal.me) — des identifiants PUBLICS de l'editeur,
+  # pas des secrets de ce depot.
+  #
+  # Exclu ICI plutot que par une empreinte dans `.gitleaksignore` parce qu'une
+  # empreinte de scan d'ARBRE porte un chemin de conteneur (`/repo/...`), qui
+  # casse des qu'on change de montage. Un chemin relatif est portable.
+  #
+  # ⚠️ Le vrai remede n'est pas cette ligne : c'est de remplacer ce README par
+  # celui du projet (regle 16 du CLAUDE.md — nettoyer le scaffolding du CLI).
+  # Ce jour-la, retirer cette exclusion.
+  '''apps/backend/README\.md$''',
+]
+
+# ═════════════════════════════════════════════════════════════════════════════
+# R1 — téléphone en dur dans le CODE DE PRODUCTION
+# ═════════════════════════════════════════════════════════════════════════════
+# ⚠️ LE TRI SE FAIT PAR EMPLACEMENT, PAS PAR VALEUR. Aucune expression régulière
+# ne distingue un vrai numéro d'un numéro de test — `+213555000101` est du décor
+# légitime dans `scripts/` et dans un `.spec.ts`. C'est l'EMPLACEMENT qui les
+# sépare : un numéro n'a rien à faire dans le code livré au client, quelle que
+# soit sa valeur.
+#
+# Portée : sources Dart de l'app, sources TS du backend HORS fichiers de test.
+[[rules]]
+id = "promo-telephone-en-dur"
+description = "Numéro de téléphone algérien écrit en dur dans le code de production"
+regex = '''\+213[0-9]{8,9}'''
+# ⚠️ PAS DE LOOKAHEAD `(?!…)` ICI. gitleaks compile ses expressions avec RE2
+# (Go), qui ne les supporte pas — et il ne rend pas une erreur de configuration,
+# il **panique**, ce qui rend le rapport illisible et l'audit « n'a rien
+# mesuré ». L'exclusion des fichiers de test se fait donc par une liste
+# d'exceptions, en dessous.
+path = '''(apps/mobile/lib/.*\.dart|apps/backend/src/.*\.ts)$'''
+tags = ["promo", "identifiant-client"]
+[[rules.allowlists]]
+description = """
+Fichiers de TEST : le decor de banc y est legitime. C'est l'EMPLACEMENT qui
+separe un vrai numero d'un numero de test, jamais sa valeur.
+"""
+paths = ['''\.spec\.ts$''', '''_test\.dart$''', '''(^|/)test/''']
+
+# ═════════════════════════════════════════════════════════════════════════════
+# R2 — PIN en dur près d'un identifiant « pin »
+# ═════════════════════════════════════════════════════════════════════════════
+# Le littéral seul serait ininterprétable : '222222' peut être une couleur, une
+# date, un identifiant. C'est le VOISINAGE d'un identifiant contenant « pin »
+# qui en fait un secret — d'où la fenêtre de 80 caractères.
+[[rules]]
+id = "promo-pin-en-dur"
+description = "PIN (6 chiffres) écrit en dur près d'un identifiant « pin » dans le code de production"
+regex = '''(?i)pin[a-z0-9_]*\s*[=:][^\n]{0,80}['"]([0-9]{6})['"]'''
+secretGroup = 1
+# ⚠️ PAS DE LOOKAHEAD `(?!…)` ICI. gitleaks compile ses expressions avec RE2
+# (Go), qui ne les supporte pas — et il ne rend pas une erreur de configuration,
+# il **panique**, ce qui rend le rapport illisible et l'audit « n'a rien
+# mesuré ». L'exclusion des fichiers de test se fait donc par une liste
+# d'exceptions, en dessous.
+path = '''(apps/mobile/lib/.*\.dart|apps/backend/src/.*\.ts)$'''
+tags = ["promo", "credential"]
+[[rules.allowlists]]
+description = """
+Fichiers de TEST : le decor de banc y est legitime. C'est l'EMPLACEMENT qui
+separe un vrai numero d'un numero de test, jamais sa valeur.
+"""
+paths = ['''\.spec\.ts$''', '''_test\.dart$''', '''(^|/)test/''']
+
+# ═════════════════════════════════════════════════════════════════════════════
+# R3 — secret de signature JWT
+# ═════════════════════════════════════════════════════════════════════════════
+# ⚠️ Cette règle ne dit PAS « JWT_SECRET est présent ». Il l'est, à dessein, avec
+# le marque-place `change-me` dans `.env.example` — et c'est documenté comme
+# bloquant de déploiement. Un contrôle rouge en permanence finit ignoré.
+#
+# Ce qu'elle interdit, c'est l'INVERSE et c'est le vrai risque : que le secret
+# RÉEL de production entre un jour dans un fichier versionné. Ce jour-là la
+# valeur ne sera plus `change-me`, et la règle se déclenchera dans le commit même
+# qui l'introduit. Conséquence de la fuite d'un JWT_SECRET : n'importe qui forge
+# un jeton pour n'importe quel rôle, y compris admin.
+[[rules]]
+id = "promo-jwt-secret"
+description = "JWT_SECRET renseigné avec autre chose que le marque-place documenté"
+regex = '''(?im)^[ \t]*JWT_SECRET[ \t]*[:=][ \t]*(\S+)'''
+secretGroup = 1
+tags = ["promo", "deploiement", "critique"]
+[[rules.allowlists]]
+description = """
+Marques-places documentés, volontairement versionnés. Les écarter ICI plutôt que
+par une empreinte dans `.gitleaksignore` est délibéré : une empreinte tait UNE
+occurrence, cette liste dit ce qui n'est PAS un secret — et vaut donc aussi pour
+les commits à venir.
+"""
+regexes = ['''^change-me$''', '''^\$\{.*\}$''', '''^\$[A-Z_]+$''']
+
+# ═════════════════════════════════════════════════════════════════════════════
+# R4 — mots de passe d'infrastructure (Postgres, MinIO/S3)
+# ═════════════════════════════════════════════════════════════════════════════
+# Même logique que R3. Les valeurs de dev actuellement versionnées, et
+# volontairement : `echango` (Postgres), `echango123` (MinIO et S3 local),
+# `change-me-alphanumeric-only` (marque-place de production).
+#
+# Toute AUTRE valeur littérale signifie qu'un mot de passe réel vient d'entrer
+# dans le dépôt.
+[[rules]]
+id = "promo-mot-de-passe-infra"
+description = "Mot de passe d'infrastructure en clair au lieu d'une interpolation d'environnement"
+regex = '''(?im)^[ \t]*(?:POSTGRES_PASSWORD|MINIO_ROOT_PASSWORD|S3_SECRET_ACCESS_KEY|DB_PASSWORD)[ \t]*[:=][ \t]*(\S+)'''
+secretGroup = 1
+tags = ["promo", "deploiement"]
+[[rules.allowlists]]
+description = "Valeurs de développement documentées et interpolations d'environnement"
+regexes = [
+  '''^echango$''',
+  '''^echango123$''',
+  '''^change-me-alphanumeric-only$''',
+  '''^change-me$''',
+  '''^\$\{.*\}$''',
+  '''^\$[A-Z_]+$''',
+]
