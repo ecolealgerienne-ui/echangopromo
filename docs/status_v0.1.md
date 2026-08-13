@@ -3905,6 +3905,52 @@ existe des deux côtés.
 
 ---
 
+### 2026-08-13 — Sur quoi la décision a-t-elle été prise ?
+
+Les trois routes de modération ne prenaient **aucun corps** : le `{"reason": …}`
+que trois bancs leur envoyaient depuis des semaines était jeté en silence par
+`whitelist: true`. Une décision n'avait donc **aucun motif enregistré** — le
+journal disait « untel a masqué la promo X », sans dire pourquoi elle était en
+file.
+
+**Le motif enregistré est celui des signaleurs, pas du modérateur**, et c'est un
+choix. Demander sa motivation au modérateur exigerait un champ de saisie sur
+trois écrans, et une boîte de dialogue par geste ralentirait une file qu'on
+traite au rythme d'un tap. Le décompte par motif est déjà calculé par le produit
+— c'est ce que la file affiche à côté de chaque promo — et il répond à la
+question qui compte pour un audit : **sur quoi cette personne a-t-elle
+décidé ?** Le journal porte désormais
+`{"signalementsActifs": 3, "motifs": {"arnaque": 3}}`.
+
+⚠️ **Un piège d'ordre, et il ne se voit que sur une des trois résolutions.**
+`resolveVerifieOk` pose `verifiedOkAt = now`, et les **deux** requêtes qui
+comptent les signalements filtrent sur ce champ (fenêtre d'ignore de 30 jours).
+Mesuré après la résolution, le contexte d'un « vérifier OK » vaudrait donc
+systématiquement **zéro signalement, aucun motif** — le journal dirait que le
+modérateur a tranché sur rien, au moment précis où il vient de trancher sur
+trois signalements. Aucune erreur, aucun champ manquant : **juste un chiffre
+faux, et le seul qui compte pour un audit.**
+
+C'est le miroir du piège payé le 2026-08-05, où des valeurs de référence lues
+trop **tôt** décrivaient un état disparu. Ici c'est trop **tard**, et le remède
+est le même : mesurer au plus près du geste, du bon côté.
+
+**Et mon premier banc ne suffisait pas.** `moderation_course` passe de 7 à
+**10 contrôles** : la première version ne sondait le contexte qu'après
+`masquer` — or `masquer` ne touche pas `verifiedOkAt`, donc **la sonde serait
+restée verte en mesurant du mauvais côté**. Il fallait un `verifier-ok`
+**accepté**, et il n'y en avait aucun dans le banc ; ajouté en § 3 bis.
+
+⚠️ Prouvé par mutation : déplacer la mesure après `resolveVerifieOk` fait rendre
+*« signalementsActifs=0, attendu 3 — mesuré du mauvais côté de la résolution »*.
+Le verdict exige une **valeur**, pas une présence — un `metadata: {}` passerait
+un contrôle de présence et raterait tout.
+
+Rejoués : `moderation-course` 10/10, `admin-moderation` 7/7, `notifications`
+8/8, `journal-agent` 11/11.
+
+---
+
 ## Comment tenir ce fichier
 
 - **Une entrée de journal par session**, datée, qui dit ce qui a été fait **et
