@@ -4318,6 +4318,48 @@ mutuellement invisibles), `filtre_categorie` 6/6, `defaut_client` 3/3,
 hors du cercle) passe toujours, ce qui etablit que la semantique est preservee.
 Backend : tsc 0, eslint 0, **129 tests**.
 
+### 2026-08-13 — a quelle taille le GiST paye : la mesure
+
+`banc_perf` relance apres la bascule : **aucun effet mesurable**. p50 stable a
+12-13 ms des deux cotes, memes transactions SQL. Attendu, et pas une deception :
+a 156 commercants tenant dans 6 blocs, PostgreSQL parcourt la table sans
+consulter d'index — changer sa nature ne peut rien changer.
+
+Restait la seule question qui vaille, et `scripts/lib/echelle_geo.py` y repond :
+commercants synthetiques inseres dans une transaction **annulee**, `ANALYZE`,
+puis comparaison des deux plans par palier.
+
+⚠️ **La repartition change tout, et ma premiere version l'a manque.**
+
+En repartition **uniforme** sur le nord de l'Algerie : **aucun gain**, les deux
+index font jeu egal. Logique — une bande de latitude y contient une part
+proportionnelle du parc, donc filtrer sur la seule latitude suffit. Ce cas est
+FAVORABLE au btree.
+
+En repartition **par villes**, il a d'abord fallu corriger le generateur :
+aucune ville synthetique ne tombait dans la bande de latitude mesuree, et le
+tableau montrait une egalite parfaite parce qu'il ne mesurait rien d'autre que
+la taille de l'index. Un generateur de decor qui rate sa cible produit un
+resultat parfaitement lisible et parfaitement vide.
+
+Villes **alignees en latitude**, comme le sont Djelfa, Laghouat, Bou Saada et
+Aflou sur les hauts plateaux — trois passages concordants :
+
+    commercants     GiST (en place)     btree (ancien)
+    156             0,08 ms             0,06 ms
+    5 156           0,08 - 0,11 ms      0,07 - 0,10 ms
+    25 156          0,08 - 0,13 ms      0,15 - 0,22 ms
+    100 156         0,10 - 0,13 ms      0,33 - 0,39 ms
+    400 156         0,12 - 0,14 ms      0,85 - 1,23 ms
+
+Le GiST reste **plat** pendant que la table est multipliee par 2 500 ; le btree
+se degrade jusqu'a **sept a neuf fois plus lent**. La bascule commence a payer
+vers **25 000 commercants**, et devient structurante au-dela de 100 000.
+
+⚠️ `echelle_geo.py` **n'est pas un banc** : il ne rend aucun verdict et ne peut
+donc rien refuser. Il produit un tableau qu'un humain lit. Ce qui est solide est
+la FORME des deux courbes, pas les millisecondes au centieme.
+
 ---
 
 ## Comment tenir ce fichier
