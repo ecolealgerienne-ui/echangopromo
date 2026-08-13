@@ -69,6 +69,8 @@ export class ModerationService {
     expected: PromoModerationStatus,
   ): Promise<void> {
     const promo = await this.promoService.findByIdOrFail(promoId);
+    // ⚠️ AVANT de résoudre — voir `contexteDeDecision`.
+    const contexte = await this.contexteDeDecision(promoId);
     await this.promoService.resolveMasquer(promoId, expected);
     await this.notificationService.create(
       NotificationType.PROMO_HIDDEN,
@@ -80,7 +82,13 @@ export class ModerationService {
         promoDescription: promo.description,
       },
     );
-    await this.record(actorType, actorId, 'moderation_masquer', promoId);
+    await this.record(
+      actorType,
+      actorId,
+      'moderation_masquer',
+      promoId,
+      contexte,
+    );
   }
 
   async verifierOk(
@@ -90,6 +98,8 @@ export class ModerationService {
     expected: PromoModerationStatus,
   ): Promise<void> {
     const promo = await this.promoService.findByIdOrFail(promoId);
+    // ⚠️ AVANT de résoudre — voir `contexteDeDecision`.
+    const contexte = await this.contexteDeDecision(promoId);
     await this.promoService.resolveVerifieOk(promoId, expected);
     await this.notificationService.create(
       NotificationType.PROMO_VERIFIED,
@@ -101,7 +111,13 @@ export class ModerationService {
         promoDescription: promo.description,
       },
     );
-    await this.record(actorType, actorId, 'moderation_verifier_ok', promoId);
+    await this.record(
+      actorType,
+      actorId,
+      'moderation_verifier_ok',
+      promoId,
+      contexte,
+    );
   }
 
   async avertir(
@@ -111,6 +127,8 @@ export class ModerationService {
     expected: PromoModerationStatus,
   ): Promise<void> {
     const promo = await this.promoService.findByIdOrFail(promoId);
+    // ⚠️ AVANT de résoudre — voir `contexteDeDecision`.
+    const contexte = await this.contexteDeDecision(promoId);
     await this.promoService.resolveAvertir(promoId, expected);
     await this.notificationService.create(
       NotificationType.PROMO_WARNED,
@@ -122,7 +140,63 @@ export class ModerationService {
         promoDescription: promo.description,
       },
     );
-    await this.record(actorType, actorId, 'moderation_avertir', promoId);
+    await this.record(
+      actorType,
+      actorId,
+      'moderation_avertir',
+      promoId,
+      contexte,
+    );
+  }
+
+  /**
+   * ⚠️ **Le contexte de la décision est enregistré avec elle** (2026-08-13).
+   *
+   * Les trois routes ne prenaient **aucun corps** : le `{"reason": …}` que trois
+   * bancs leur envoyaient depuis des semaines était jeté en silence par
+   * `whitelist: true`. Une décision de modération n'avait donc **aucun motif
+   * enregistré** — le journal disait « untel a masqué la promo X », sans dire
+   * pourquoi elle était en file.
+   *
+   * ⚠️ **Le motif enregistré est celui des SIGNALEURS, pas du modérateur**, et
+   * c'est un choix. Demander sa motivation au modérateur exigerait un champ de
+   * saisie sur trois écrans, et une boîte de dialogue par geste ralentirait
+   * une file qu'on traite au rythme d'un tap. Le décompte par motif, lui, est
+   * déjà calculé par le produit — c'est ce que la file affiche à côté de chaque
+   * promo — et il répond à la question qui compte pour un audit : **sur quoi
+   * cette personne a-t-elle décidé ?**
+   *
+   * ⚠️ `activeReportCount` est **compté ici et non déduit** de la longueur du
+   * décompte : les deux mesurent des choses différentes (appareils distincts
+   * vs signalements par motif) et les confondre donnerait un chiffre faux dès
+   * qu'un appareil signale deux fois.
+   *
+   * Une décision prise hors file (depuis la liste de toutes les promos) porte
+   * un décompte vide — c'est l'information juste : personne ne l'avait
+   * signalée.
+   *
+   * ── ⚠️ À appeler AVANT la résolution, et ce n'est pas une préférence ───────
+   *
+   * `resolveVerifieOk` pose `verifiedOkAt = now`, et **les deux requêtes
+   * ci-dessous filtrent sur ce champ** (fenêtre d'ignore de 30 jours). Mesuré
+   * après la résolution, le contexte d'un « vérifier OK » serait donc
+   * systématiquement **zéro signalement, aucun motif** — le journal dirait que
+   * le modérateur a tranché sur rien, au moment précis où il vient de trancher
+   * sur trois signalements.
+   *
+   * C'est le miroir du piège déjà payé le 2026-08-05, où des valeurs de
+   * référence lues trop TÔT décrivaient un état disparu. Ici c'est trop TARD,
+   * et le remède est le même : **mesurer au plus près du geste**, du bon côté.
+   */
+  private async contexteDeDecision(
+    promoId: string,
+  ): Promise<Record<string, unknown>> {
+    const parMotif = await this.reportService.getReasonBreakdown([promoId]);
+    const signalements = await this.reportService.countActiveReports(promoId);
+    return {
+      signalementsActifs: signalements,
+      motifs: parMotif[promoId] ?? {},
+    };
   }
 
   private async record(
@@ -130,6 +204,7 @@ export class ModerationService {
     actorId: string,
     action: string,
     promoId: string,
+    contexte: Record<string, unknown>,
   ): Promise<void> {
     await this.auditLogService.record({
       actorType,
@@ -137,6 +212,7 @@ export class ModerationService {
       action,
       targetType: 'promo',
       targetId: promoId,
+      metadata: contexte,
     });
   }
 }

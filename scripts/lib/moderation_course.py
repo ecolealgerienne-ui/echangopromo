@@ -155,6 +155,44 @@ def verdict_refusee(statut, code, quoi):
             "la garde ne prouve pas qu'elle existe" % (quoi, statut, code or ""))
 
 
+def verdict_contexte(entree, signalements_attendus):
+    """La décision enregistre SUR QUOI elle a été prise (2026-08-13).
+
+    ⚠️ **Le piège est un piège d'ORDRE, et il ne se voit pas dans le résultat.**
+    `resolveVerifieOk` pose `verifiedOkAt = now`, et les deux requêtes qui
+    comptent les signalements filtrent sur ce champ (fenêtre d'ignore de 30
+    jours). Mesuré APRÈS la résolution, le contexte d'un « vérifier OK » vaut
+    donc toujours **zéro signalement, aucun motif** — le journal dirait que le
+    modérateur a tranché sur rien, au moment précis où il vient de trancher sur
+    trois signalements. Aucune erreur, aucun champ manquant : juste un chiffre
+    faux, et le seul qui compte pour un audit.
+
+    D'où une sonde qui exige un **compte non nul**, pas seulement un champ
+    présent. Un `metadata: {}` passerait le premier contrôle et raterait tout.
+    """
+    if entree is None:
+        return "non_concluant", "pas d'entrée de journal à examiner"
+    meta = entree.get("metadata")
+    if meta is None:
+        return ("echec",
+                "aucune metadata — la décision est tracée sans ce sur quoi "
+                "elle a été prise")
+    compte = meta.get("signalementsActifs")
+    if compte is None:
+        return "echec", "metadata sans `signalementsActifs` : %r" % meta
+    if compte != signalements_attendus:
+        return ("echec",
+                "signalementsActifs=%r, attendu %d — mesuré du mauvais côté de "
+                "la résolution (voir `contexteDeDecision`)"
+                % (compte, signalements_attendus))
+    if not meta.get("motifs"):
+        return ("echec",
+                "`motifs` vide alors que %d signalement(s) sont comptés : les "
+                "deux mesures ne viennent pas du même instant"
+                % signalements_attendus)
+    return "ok", "%d signalement(s), motifs %s" % (compte, meta.get("motifs"))
+
+
 def verdict_etat(observe, attendu, quoi):
     """⚠️ Un refus ne vaut que s'il n'a rien écrit."""
     if observe is None:
@@ -224,6 +262,9 @@ def self_test():
     _v("correction acceptée", verdict_acceptee(201, None, "avertir")[0], "ok")
     _v("périmée refusée", verdict_refusee(409, C, "verifier-ok")[0], "ok")
     _v("état inchangé", verdict_etat("normale", "normale", "statut")[0], "ok")
+    _v("contexte enregistré", verdict_contexte(
+        {"metadata": {"signalementsActifs": 3, "motifs": {"arnaque": 3}}},
+        3)[0], "ok")
 
     # ── Doivent REFUSER ──────────────────────────────────────────────────────
     # ⚠️ Le défaut d'origine : deux succès, décision écrasée en silence.
@@ -244,6 +285,20 @@ def self_test():
     # ⚠️ Refuser ET écrire.
     _v("refusée mais écrite",
        verdict_etat("verifiee_ok", "normale", "statut")[0], "echec")
+    # ⚠️ Le piège d'ORDRE : mesuré après `verifier-ok`, le contexte vaut zéro.
+    # C'est un chiffre faux, pas un champ manquant — d'où une sonde qui exige
+    # une VALEUR, pas seulement une présence.
+    _v("contexte mesuré du mauvais côté", verdict_contexte(
+        {"metadata": {"signalementsActifs": 0, "motifs": {}}}, 3)[0], "echec")
+    _v("aucune metadata", verdict_contexte({"metadata": None}, 3)[0], "echec")
+    _v("metadata sans le compte",
+       verdict_contexte({"metadata": {"motifs": {}}}, 3)[0], "echec")
+    # ⚠️ Compte juste mais motifs vides : les deux mesures ne viennent pas du
+    # même instant, et une seule des deux a été prise du bon côté.
+    _v("compte juste, motifs vides", verdict_contexte(
+        {"metadata": {"signalementsActifs": 3, "motifs": {}}}, 3)[0], "echec")
+    _v("pas d'entrée → non concluant",
+       verdict_contexte(None, 3)[0], "non_concluant")
     # ⚠️ Les indéterminés ne sont jamais des réussites.
     _v("429 → non concluant", verdict_course([(429, None), (201, None)])[0],
        "non_concluant")
@@ -254,7 +309,7 @@ def self_test():
     _v("état illisible → non concluant",
        verdict_etat(None, "normale", "statut")[0], "non_concluant")
 
-    refus = 11
+    refus = 15
     total = _ok + len(_echecs)
     print("auto-test : %d cas, dont %d refus" % (total, refus))
     for e in _echecs:
@@ -353,6 +408,24 @@ def main():
           *verdict_etat(statut_moderation(pid), "masquee", "moderationStatus"))
     time.sleep(PACE)
 
+    # ⚠️ La décision doit dire SUR QUOI elle a été prise. Trois signalements
+    # d'appareils distincts ont fait entrer cette promo en file : le journal
+    # doit les porter. Lu en ADMIN — l'agent n'a pas accès au journal.
+    st, d = appeler("POST", "/admin/login",
+                    corps={"email": _exiger("ADMIN_EMAIL"),
+                           "password": _exiger("ADMIN_PASSWORD")})
+    ja = d.get("accessToken")
+    time.sleep(PACE)
+    entree = None
+    if ja:
+        _, j = appeler("GET", "/admin/audit-log?limit=100", ja)
+        entree = next((e for e in j.get("items", [])
+                       if e.get("action") == "moderation_masquer"
+                       and e.get("targetId") == pid), None)
+    noter("… et le journal dit sur quoi",
+          *verdict_contexte(entree, len(APPAREILS)))
+    time.sleep(PACE)
+
     # ── 3. La correction délibérée passe toujours ───────────────────────────
     #
     # ⚠️ **C'est la sonde la plus importante du banc.** Une garde de concurrence
@@ -370,10 +443,38 @@ def main():
           *verdict_etat(statut_moderation(pid), "normale", "moderationStatus"))
     time.sleep(PACE)
 
+    # ── 3 bis. Le piège d'ORDRE, et il ne se déclenche QUE sur verifier-ok ──
+    #
+    # ⚠️ `resolveVerifieOk` pose `verifiedOkAt = now`, et les deux requêtes qui
+    # comptent les signalements filtrent dessus (fenêtre d'ignore de 30 jours).
+    # Mesuré du mauvais côté de la résolution, le contexte de CETTE décision
+    # vaudrait `0 signalement, aucun motif` — alors que trois appareils l'ont
+    # signalée. Aucune erreur, aucun champ manquant : juste le seul chiffre qui
+    # compte pour un audit, et il serait faux.
+    #
+    # Les autres résolutions ne touchent pas `verifiedOkAt` : la sonde du § 2
+    # resterait verte même en mesurant après. C'est ici, et nulle part ailleurs,
+    # que l'ordre s'éprouve.
+    print("\n── 3 bis. vérifier OK enregistre les signalements qu'il efface ──")
+    st, d = appeler("POST", "/admin/moderation/%s/verifier-ok" % pid, jg,
+                    {"expectedModerationStatus": "normale"})
+    noter("verifier-ok depuis normale",
+          *verdict_acceptee(st, d.get("code"), "verifier-ok"))
+    time.sleep(PACE)
+    entree_ok = None
+    if ja:
+        _, j = appeler("GET", "/admin/audit-log?limit=100", ja)
+        entree_ok = next((e for e in j.get("items", [])
+                          if e.get("action") == "moderation_verifier_ok"
+                          and e.get("targetId") == pid), None)
+    noter("… et le journal les a comptés AVANT",
+          *verdict_contexte(entree_ok, len(APPAREILS)))
+    time.sleep(PACE)
+
     # ── 4. Une décision périmée est refusée, et n'écrit rien ────────────────
     #
-    # L'écran de ce modérateur-ci affiche encore `masquee` : il n'a pas vu
-    # l'avertissement. C'est le cas exact du défaut d'origine, et le plus cher —
+    # L'écran de ce modérateur-ci affiche encore `masquee` : il n'a vu ni
+    # l'avertissement ni la vérification. C'est le cas exact du défaut d'origine, et le plus cher —
     # `verifier-ok` remettrait la promo en ligne ET ouvrirait une fenêtre
     # d'ignore de 30 jours.
     print("\n── 4. une décision prise sur un écran périmé est refusée ──")
@@ -386,7 +487,8 @@ def main():
     # laisserait la promo en VERIFIEE_OK, donc publique et protégée 30 jours,
     # tout en affichant un refus.
     noter("… et rien n'a été écrit",
-          *verdict_etat(statut_moderation(pid), "normale", "moderationStatus"))
+          *verdict_etat(statut_moderation(pid), "verifiee_ok",
+                        "moderationStatus"))
 
     print("\n" + "═" * 64)
     echecs = resultats.count("echec")
