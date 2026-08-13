@@ -4001,6 +4001,75 @@ proposition. La sonde rend `croix=0` — il n'y avait aucune invitation à
 l'écran. Quatre hypothèses fausses sur ce seul parcours, toutes corrigées par
 la mesure, aucune par le raisonnement.
 
+### 2026-08-13 — revue agent/admin : cinq bancs, deux commentaires périmés
+
+**La revue d'abord, mesurée.** Les 31 routes privilégiées (3 agent, 23 admin,
+5 curation) sont toutes touchées par au moins un banc : **aucun trou de route**.
+Et le retrait commune/wilaya est **terminé** — zéro ligne de code vivant dans le
+backend, le mobile et les bancs, uniquement des commentaires historiques. Le
+sujet était donc ailleurs : des routes touchées dont le **scénario** n'était pas
+éprouvé.
+
+**`sortie_agent`** (7 contrôles, 20 cas dont 14 refus). Comment un admin
+arrête-t-il un agent qui, depuis le 2026-08-13, agit sur tout le parc ? Mesuré :
+l'entité `Agent` n'a **aucun drapeau d'activation**, aucune route ne supprime un
+agent, et `revoke-token` **n'est pas un verrou** — l'agent se reconnecte aussitôt
+avec le même mot de passe. Le seul verrouillage réel est `reset-password`, et
+`admin_agents` n'en éprouvait que la trace au journal, jamais l'effet.
+
+**`file_moderation`** (7 contrôles, 22 cas dont 16 refus). L'écran principal de
+l'agent : personne n'éprouvait son CONTENU. Une file qui rendrait toujours la
+même liste passait les deux bancs qui la touchaient. ⚠️ Mesuré au passage : le
+seuil est de **trois appareils distincts** — un signalement isolé ne crée aucun
+travail, ce qui empêche de noyer la file avec trois requêtes (règle 7).
+
+**`tournee_agent`** (5 contrôles, 20 cas dont 14 refus). La jointure que
+personne ne parcourait : `agent_creation` s'arrête à la naissance du commerçant,
+`agent_promo` publie sur un commerçant du décor déjà là. Ce banc crée, garnit, et
+vérifie que le client voit les promos AU POINT du commerce — et ne les voit pas
+à 150 km.
+
+**`recherche_parc`** (6 contrôles, 23 cas dont 15 refus). Sept bancs appelaient
+`GET /admin/commercant`, tous en `?limit=100` sec : `search` n'était exercé par
+personne. Il cherche une cible **au-delà de la première page**, seule sonde qui
+distingue une vraie recherche d'un filtre sur page tronquée. ⚠️ **Le piège du
+« + » est confirmé par la mesure** : `%2B` trouve 1 résultat, `+` brut en trouve
+0 — non encodé, il se décode en espace, silencieusement.
+
+**`plafond_admin`** (6 contrôles, 20 cas dont 14 refus). `plafond-promos` est la
+seule route admin-seulement sur un commerçant, et `portee_agent` prouvait
+uniquement que l'agent en est **refusé**. Éprouvé dans les deux sens : serré au
+nombre d'actives, la publication rend `PROMO_ACTIVE_CAP_REACHED` ; desserré d'un
+cran, elle passe. Le refus seul serait satisfait par un serveur qui refuse
+toujours.
+
+⚠️ **Trois attendus faux de ma part, tous corrigés par la mesure** — et dans les
+trois cas le banc a rendu « non concluant » ou rouge sur un produit **correct**,
+ce qui est le bon comportement mais sur une prémisse fausse (règle 38 appliquée
+au banc lui-même) : des identifiants invalides rendent **400**, pas 401
+(`BadRequestAppException`, convention qu'`auth_login` assertait déjà) ; le PIN
+exige **6 à 12 chiffres** ; et la fiche publique **ne porte pas** les promos —
+l'écran les demande par `GET /promo?commercantId=`, périmètre explicite sans
+filtre géographique.
+
+⚠️ **Une revendication de ma revue était fausse** : je donnais le filtre
+`actorType` du journal comme non éprouvé. `journal_agent` §8 exerce
+`?actorType=agent` **et** `?actorType=admin` depuis le début. Rien à ajouter.
+
+**Deux commentaires périmés corrigés dans `admin.controller.ts`.** La file
+affirmait que les résolutions étaient des `update` inconditionnels où « dernier
+écrivain gagne, aucune erreur levée » — vrai le matin, faux le soir même
+(409 `MODERATION_STATE_CHANGED`). Le journal affirmait « n'expose que des
+UUID » — faux, `findAll` appelle `resoudreLibelles`.
+
+Prouvés par mutation sur le chemin réel : plafond desserré au lieu d'être serré,
+témoin « au loin » posé sur le commerce, masquage supprimé — les trois rendent
+rouge avec un message qui nomme le défaut.
+
+⚠️ Le décor du commerçant de banc a été **rendu à 0 promo en ligne** : la
+mutation du plafond en avait laissé une publiée. Les 9 commerçants des trois
+villes, eux, ne sont pas touchés.
+
 ---
 
 ## Comment tenir ce fichier

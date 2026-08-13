@@ -244,12 +244,25 @@ export class AdminController {
     @Query() query: ListModerationQueueQueryDto,
   ) {
     // Portée globale depuis le 2026-08-13 : `undefined` = aucun filtre de
-    // commune. ⚠️ **Tous les agents voient désormais la MÊME file**, et les
-    // trois résolutions (masquer / vérifier-ok / avertir) sont des `update`
-    // inconditionnels, sans précondition d'état ni verrou. Deux modérateurs
-    // sur la même promo, dernier écrivain gagne, aucune erreur levée
-    // (règle #13). La commune tenait lieu de partition du travail ; rien ne
-    // la remplace à ce jour — point ouvert du plan de suppression.
+    // commune. ⚠️ **Tous les agents voient désormais la MÊME file**, et la
+    // commune tenait lieu de partition du travail : rien ne la remplace à ce
+    // jour — point ouvert du plan de suppression.
+    //
+    // ⚠️ **Ce commentaire affirmait, jusqu'au 2026-08-13 au soir, que les trois
+    // résolutions étaient des `update` inconditionnels où « dernier écrivain
+    // gagne, aucune erreur levée ».** C'était vrai le matin, faux le soir, et
+    // c'est exactement le genre d'état périmé qui fait conclure : on lit, on
+    // croit la perte de décision ouverte, on part la refermer une seconde fois.
+    // Chaque résolution porte désormais l'état que le modérateur avait à
+    // l'écran (`expectedModerationStatus`), l'écriture y est conditionnée, et
+    // une décision prise sur un état dépassé rend `409
+    // MODERATION_STATE_CHANGED` — éprouvé par `test-moderation-course.sh`,
+    // mutation comprise.
+    //
+    // **Répartir le travail reste à faire ; le corrompre n'est plus possible en
+    // silence.** L'entrée et la sortie de cette file sont éprouvées par
+    // `test-file-moderation.sh`, qui mesure aussi le seuil de trois appareils
+    // distincts : un signalement isolé ne crée aucun travail.
     const result = await this.moderationService.queue(query.page, query.limit);
     return {
       ...result,
@@ -661,8 +674,18 @@ export class AdminController {
    * `test-journal-agent.sh`, qui vérifie surtout l'**attribution** : un journal
    * qui dit « un agent » sans dire lequel ne vaut rien quand tous sont globaux.
    *
-   * ⚠️ Il ne se filtre que par `actorType`, et n'expose que des UUID : lisible
-   * pour un parc de commune, difficilement pour un parc national. Point ouvert.
+   * ⚠️ **« n'expose que des UUID » était écrit ici, et c'est faux depuis le
+   * 2026-08-13** : `findAll` appelle `resoudreLibelles`, qui résout le nom de
+   * l'acteur et celui de la cible en une requête par table — y compris pour les
+   * comptes supprimés, sans quoi une trace deviendrait illisible le jour où
+   * elle compte le plus. Ce qui reste vrai : le journal **ne se filtre que par
+   * `actorType`** (page et limite mises à part), ce qui suffit pour un parc de
+   * commune et pas pour un parc national. Point ouvert, mais pas celui qui
+   * était écrit.
+   *
+   * Le filtre, lui, est éprouvé : `test-journal-agent.sh` §8 exerce
+   * `?actorType=agent` **et** `?actorType=admin`, et refuse si l'un laisse
+   * passer l'autre.
    */
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
