@@ -3217,6 +3217,151 @@ qu'il a **travaillé** — toute enveloppe qui délègue son verdict à un `||` 
 la même hypothèse, et la même erreur. Le remède n'est pas la vigilance : c'est
 qu'un contrôle produise une **mesure** que l'enveloppe puisse exiger.
 
+### 2026-08-13 — le découpage administratif a disparu
+
+**Huit lots, du retrait des gardes au `DROP` final.** `commune` et `wilaya`
+n'existent plus : ni table, ni colonne, ni relation, ni référentiel, ni
+sélecteur, ni filtre. L'agent est global. Le lieu d'un commerce ne s'exprime
+plus que par sa **position** — qui décide de tout — et par une **adresse** en
+texte libre, facultative et purement indicative.
+
+Le plan (`docs/PLAN_SUPPRESSION_COMMUNE.md`) a été écrit, puis **relu par deux
+agents adverses qui ont renversé une vingtaine de ses affirmations**. Son §11
+les consigne toutes. Trois ont changé la forme du chantier :
+
+🔴 **`whitelist` retire un champ du DTO — il ne remplit pas une colonne.** Le
+plan affirmait que les créations passeraient. Elles auraient rendu **500** de L2
+jusqu'au `DROP`, face à une colonne `NOT NULL` que plus rien n'écrivait,
+emportant le décor des bancs et donc les lots qui en dépendent. La migration
+s'est scindée en deux.
+
+🔴 **Les gardes perdues étaient quatorze, pas dix**, et la quatorzième appelait
+`assertCommuneMatches` **en propre** plutôt que via un wrapper — invisible au
+grep par lequel la liste avait été bâtie. C'est précisément la route que la
+règle 1 nomme comme l'IDOR fondateur, et **la seule route d'écriture de promo
+que l'app appelle réellement** pour un agent. Le plan concentrait son attention
+sur trois portes que personne ne pousse.
+
+🔴 **Trois affirmations rassurantes étaient fausses** : le client n'était pas
+épargné (la recopie lui aurait montré « Djelfa, Djelfa » comme adresse de
+commerce), les CGU font certifier l'adresse *exacte* et la politique la déclare
+*publique*, et le commerçant **ne peut pas effacer** ce qu'on aurait écrit à sa
+place — l'app n'envoie pas un champ vide.
+
+#### Ce que le chantier a trouvé, et qui n'avait rien à voir avec lui
+
+- 🔴 **Le banc de frontière était VIDE depuis 24 h.** Un commit qui annonçait
+  une correction de décompte avait supprimé les 489 lignes du module. Un fichier
+  Python vide sort en **0** : l'auto-test « réussissait », le banc affichait son
+  titre et rendait 0. Le seul contrôle capable de dire qu'aucune route n'est
+  ouverte par oubli était devenu un `exit 0` déguisé, pendant la fin de la
+  bascule géographique qui ajoutait et retirait des routes. L'enveloppe exige
+  désormais que l'auto-test ait **annoncé ses cas mesurés** — éprouvé par
+  mutation.
+- 🔴 **La traçabilité invoquée pour justifier les privilèges de l'agent
+  n'existait pas.** Le contrôleur de promo exemptait agent et admin des limites
+  anti-abus au motif d'un « canal audité » ; `AuditLogService` n'était importé
+  nulle part dans `promo/`. Branché. Vérifié : `promo_create_by_staff` apparaît
+  au journal.
+- 🔴 **La liste admin des commerçants servait les comptes supprimés.**
+  `deletedAt` est une colonne ordinaire, pas un `@DeleteDateColumn` : TypeORM ne
+  masque rien tout seul. Le compteur du tableau de bord les excluait déjà — la
+  liste et le compteur annonçaient deux nombres différents du même parc.
+  Quatrième copie d'un oubli dont le docstring voisin décrit déjà la famille.
+- 🔴 **`client_rayon` échouait SELON L'HEURE.** Le second numéro s'écrivait
+  `str(int(base) + 1)` où `base` vient de `%H%M%S` : entre minuit et 10 h il
+  commence par un zéro, `int("023059") + 1` rend `23060`, et `str()` le sert sur
+  **cinq** chiffres. Numéro trop court, refus de validation, et le message
+  accusait la création. Trouvé à 2 h du matin ; en ne lançant ce banc qu'aux
+  heures ouvrables, il aurait pu ne jamais l'être.
+- **Le décor était cassé avant le chantier**, deux fois, et chaque fois il
+  accusait autre chose : il rechargeait une promo *signalée* en la sélectionnant
+  sur le seul cycle de vie, puis échouait sur un brouillon en cooldown alors que
+  la voie de création existait dix lignes plus bas.
+- **Sa sonde de disponibilité visait `GET /commune` sans `--fail`** : `curl`
+  sort en 0 sur un 404, donc elle serait restée verte après la suppression de la
+  route.
+
+#### Ce qui était mort en affirmant le contraire
+
+- `communeCible` du harness : **zéro appelant**, sous un commentaire disant
+  « elle reste utile aux parcours agent ». Pendant ce temps le runner calculait
+  et passait `--dart-define=TEST_COMMUNE_ID` que rien ne lisait.
+- Un **bloc de documentation orphelin** dans `map_providers` décrivait un
+  provider supprimé la veille — rattaché à aucune déclaration, donc invisible à
+  `analyze`.
+- `_centeredOnCommune` ne portait **aucune commune** depuis la bascule.
+- Un `// ignore: unused_import` annonçait la réactivation d'une redirection
+  supprimée définitivement, sur un import en réalité **utilisé**.
+- `PromoApi.listActive(communeIds:)` : plus d'appelant depuis le lot 3.
+
+#### Deux erreurs à moi, trouvées en vérifiant
+
+- Une sonde du banc de pentest visait `GET /admin/commercant/:id` — **cette
+  route n'existe pas**. Elle a rendu 404 et échoué bruyamment ; un `{200, 404}`
+  complaisant l'aurait rendue verte pour rien.
+- Ma suspension d'`appartenance.py` sortait en **0**. Écrite en `return 2`, dans
+  un module qui finit par `main()` sans `sys.exit` — elle annonçait sa
+  suspension *tout en la déclarant réussie*. Vue en regardant le code de sortie
+  plutôt que le texte.
+
+#### La recopie a été abandonnée, et c'est le calcul qui l'a décidé
+
+Elle aurait protégé **22 fiches** sans adresse et rattachées à une commune, sur
+une base de **développement** — rien n'est publié. Contre six coûts réels, dont
+une adresse fabriquée montrée aux clients et une clause CGU contredite.
+Sauvegarde prise hors dépôt avant le `DROP` : `pg_dump` des deux tables et
+export CSV de la correspondance, avec nom et wilaya.
+
+**Mesuré avant destruction** : 35 communes, 2 liens agent↔commune,
+101 commerçants rattachés sur 120, 30 sans adresse.
+
+#### Deux bancs ont changé de sujet plutôt que de disparaître
+
+`agent_creation` éprouvait la règle 1 sur une `communeId` fournie par
+l'appelant ; il éprouve désormais le seul invariant qui reste sur cette route —
+**la position est obligatoire**, la garde qui empêche une tournée de fabriquer
+des fiches invisibles. `admin_agents` perdait ses deux routes ; ce qui survit
+est `verdict_trace`, seul contrôle du parc qui éprouve qu'une action
+d'administration **laisse une trace**.
+
+Et **les deux agents du décor restent** : ils prouvaient un cloisonnement, ils
+prouvent son contraire. Avec un seul agent, « il voit tout » serait
+indiscernable de « il voit ce qu'il voyait » — la sonde ne pourrait pas refuser.
+Mesuré : **A = B = admin**.
+
+#### Ce qui est retiré sans être remplacé
+
+Écrit dans le code, pas seulement ici : la **partition du travail de
+modération** (tous les agents voient la même file, les trois résolutions sont
+des `update` inconditionnels — deux modérateurs sur la même promo, dernier
+écrivain gagne, sans erreur) ; le **transfert de secteur** au départ d'un agent ;
+et le seul moyen dont l'admin disposait pour **restreindre** un agent — il
+n'existe plus de granularité entre « agent » et « admin moins deux écrans », ni
+aucune route de suppression d'agent. L'exception nommée de la règle 15 perd son
+cas fondateur et a été retirée avec lui.
+
+#### Points ouverts à la clôture
+
+- ⚠️ **Le parcours carte échoue, cause non établie.** « ni marqueur ni grappe
+  sur la carte ». Le serveur sert bien le commerce sur `GET /promo/map`
+  (vérifié directement), le diff sur ce parcours et sur `map_providers` est
+  strictement du commentaire, et le parcours client passe sur la même donnée au
+  même point. Les tuiles échouent en `HandshakeException` (analyse HTTPS de
+  l'antivirus, défaut de machine documenté) — mais un marqueur est un widget,
+  pas une tuile. **Ni attribué au chantier, ni disculpé.**
+- ⚠️ **`appartenance.py` est suspendu**, sort en 2, et reste à réécrire : il est
+  le seul à exercer 14 routes avec un jeton d'agent, et devra prouver
+  l'**acceptation**. Sa réécriture rend ses sondes **destructives** — elles
+  étaient sans effet de bord *parce qu'elles étaient refusées*.
+- ⚠️ **`admin_agents` laisse un agent de plus à chaque passage** : aucune route
+  de suppression d'agent n'existe.
+- ⚠️ **Le journal d'audit ne se filtre que par `actorType` et n'affiche que des
+  UUID.** Lisible pour un agent de commune, illisible pour un agent national —
+  or il est devenu le seul contrepoids à la portée globale.
+- **`formatDistance` n'est toujours appelé nulle part dans la liste client**
+  (R2(1) du chantier précédent, ouverte depuis le 2026-08-12).
+
 ---
 
 ## Comment tenir ce fichier
