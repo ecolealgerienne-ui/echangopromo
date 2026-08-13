@@ -309,7 +309,9 @@ def verdict_requetes(delta, seuil):
     if delta is None:
         return ("non_concluant",
                 "PostgreSQL injoignable (ni psycopg2, ni psql, ni docker) — "
-                "lancer ce banc depuis WSL, où vivent le backend et la base")
+                "`pip install psycopg2-binary`. ⚠️ Changer de clone n'y change "
+                "rien : la base est la même des deux côtés (un seul conteneur, "
+                "publié sur 5433), et c'est le PILOTE qui manque, pas l'accès")
     if delta > seuil:
         return ("echec",
                 "%d transactions imputables à UN appel HTTP (seuil %d), bruit "

@@ -279,8 +279,14 @@ def main():
     try:
         import psycopg2
     except ImportError:
-        print("❌ psycopg2 absent — `pip install psycopg2-binary`, ou lancer "
-              "ce banc depuis WSL. L'absence de verdict n'est pas un verdict.")
+        # ⚠️ **Ce message disait « ou lancer ce banc depuis WSL », et c'était
+        # un mauvais conseil** : WSL n'a ni `pip` ni `psql`, et `apt` y demande
+        # un mot de passe. C'est le clone **Windows** qui porte le pilote, et
+        # la base est la même dans les deux cas — un seul conteneur, publié sur
+        # le port 5433. Envoyer quelqu'un changer de machine pour joindre la
+        # même base coûte une demi-heure et ne mesure rien de plus.
+        print("❌ psycopg2 absent — `pip install psycopg2-binary`. "
+              "L'absence de verdict n'est pas un verdict.")
         return 2
 
     print("═" * 74)
