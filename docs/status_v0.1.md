@@ -4272,6 +4272,52 @@ Construction et rasterisation sont jugees separement, au **p90** : une moyenne a
 8 ms peut cacher une image sur dix a 40 ms, et c'est celle-la qui se voit. Plus
 un verdict dedie a la pire image — un p90 sain ne rattrape pas un a-coup unique.
 
+### 2026-08-13 — l'index de position passe en GiST
+
+Decision produit prise sur la mesure de P2, et appliquee.
+
+**Trois endroits qui changent ensemble** : la migration
+(`CommercantPositionGistIndex1783880000000`), `applyBoundingBox` qui passe des
+deux `BETWEEN` a `point(...) <@ box(...)`, et le decorateur `@Index` de
+l'entite, **retire** — TypeORM ne sait decrire que des colonnes, pas une
+expression.
+
+⚠️ **`migration:generate` ne rend RIEN** apres la bascule, verifie : « No
+changes in database schema were found », et aucun fichier ecrit. Ma crainte
+qu'il propose de defaire le GiST etait infondee — il ne gere pas les index
+d'expression.
+
+⚠️ **L'ordre des coordonnees est inverse, et c'est la vraie source d'erreur.**
+`point(x, y)` attend x puis y, soit `point(longitude, latitude)`, quand tout le
+reste du produit dit « lat, lng ». Une inversion ne leverait RIEN : elle rendrait
+des resultats faux, en silence. La garde n'est pas un commentaire mais la sonde
+de fidelite de `test-plan-sql.sh` — **44 promos des deux cotes** apres la
+bascule, donc pas d'inversion.
+
+**Le gain, mesure :** l'index en place remonte **53 lignes pour 53 reellement
+dans le cadre** ; l'ancien btree en remontait **77**. ⚠️ La premiere mesure
+(avant bascule) donnait 101 — l'ecart exact depend des statistiques et du plan
+retenu, la direction et la conclusion sont identiques.
+
+⚠️ **Le banc a du etre corrige AVANT de mesurer, et c'est instructif.** Sa
+reconstitution SQL portait encore les deux `BETWEEN` : elle aurait rendu le meme
+nombre de lignes — donc la sonde de fidelite serait restee VERTE — tout en
+faisant analyser un plan que le produit ne produit plus. Le piege que ce banc
+denonce, retourne contre lui-meme.
+
+⚠️ **Et la comparaison a l'ancien btree ne voulait rien dire tant que le GiST
+restait en place** : le planificateur le choisissait MEME pour la requete
+`BETWEEN`, s'en servant pour le seul predicat partiel. On mesurait le GiST deux
+fois en croyant comparer. Le banc retire donc l'index de production le temps
+d'une transaction annulee — et une seconde sonde verifie qu'il est bien revenu,
+sans quoi ce banc pourrait laisser la base amputee de son index.
+
+**Non-regression, tout vert :** `ville_client` 8/8 (les trois villes restent
+mutuellement invisibles), `filtre_categorie` 6/6, `defaut_client` 3/3,
+`client_carte` 6/6, **`client_rayon` 5/5** — le cas diagonal (dans le carre,
+hors du cercle) passe toujours, ce qui etablit que la semantique est preservee.
+Backend : tsc 0, eslint 0, **129 tests**.
+
 ---
 
 ## Comment tenir ce fichier

@@ -379,6 +379,17 @@ def main():
     # raconté. Un chiffre écrit dans un commentaire ne peut pas échouer le jour
     # où quelqu'un revient au btree (règle 30).
     cur.execute("savepoint avant_btree")
+    # ⚠️ **Le GiST doit être retiré pour que la comparaison veuille dire quelque
+    # chose.** Laissé en place, le planificateur le choisit MÊME pour la requête
+    # `BETWEEN` — il s'en sert pour le seul prédicat partiel (`latitude IS NOT
+    # NULL`), remonte 91 lignes et filtre le reste, en ignorant le btree qu'on
+    # vient de créer. On mesurerait alors le GiST deux fois en croyant comparer.
+    #
+    # Le `DROP` prend un verrou exclusif sur la table le temps de la
+    # transaction — quelques millisecondes, et **annulé** juste après. C'est le
+    # seul geste de ce banc qui puisse faire attendre une requête du produit ;
+    # il est dit plutôt que caché.
+    cur.execute('drop index "IDX_commercant_position"')
     cur.execute("""create index banc_plan_btree on commercant (latitude, longitude)
                    where latitude is not null and longitude is not null""")
     cur.execute("analyze commercant")
@@ -392,9 +403,22 @@ def main():
           "l'ancien btree %s" % (justes, n_gist, n_btree))
 
     cur2 = cx.cursor()
+    # ⚠️ Deux vérifications, pas une : l'index temporaire ne doit pas rester,
+    # ET celui du produit doit être revenu. Le banc a retiré le vrai index le
+    # temps d'une transaction ; ne contrôler que le premier laisserait passer
+    # une base amputée de son index de production.
     cur2.execute("select count(*) from pg_indexes "
-                 "where indexname = 'banc_plan_gist'")
-    noter("base rendue telle quelle", *verdict_propre(cur2.fetchone()[0]))
+                 "where indexname = 'banc_plan_btree'")
+    temporaires = cur2.fetchone()[0]
+    cur2.execute("select count(*) from pg_indexes "
+                 "where indexname = 'IDX_commercant_position'")
+    produit = cur2.fetchone()[0]
+    if produit != 1:
+        noter("base rendue telle quelle", "echec",
+              "l'index de production IDX_commercant_position est ABSENT après "
+              "le passage de ce banc — la transaction n'a pas été annulée")
+    else:
+        noter("base rendue telle quelle", *verdict_propre(temporaires))
     cx.close()
 
     print("\n" + "═" * 74)
