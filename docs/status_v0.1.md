@@ -3354,10 +3354,10 @@ cas fondateur et a été retirée avec lui.
   même point. Les tuiles échouent en `HandshakeException` (analyse HTTPS de
   l'antivirus, défaut de machine documenté) — mais un marqueur est un widget,
   pas une tuile. **Ni attribué au chantier, ni disculpé.**
-- ⚠️ **`appartenance.py` est suspendu**, sort en 2, et reste à réécrire : il est
-  le seul à exercer 14 routes avec un jeton d'agent, et devra prouver
-  l'**acceptation**. Sa réécriture rend ses sondes **destructives** — elles
-  étaient sans effet de bord *parce qu'elles étaient refusées*.
+- ~~⚠️ **`appartenance.py` est suspendu**, sort en 2, et reste à réécrire.~~
+  **Fait le 2026-08-13** : remplacé par `portee_agent.py`, qui prouve
+  l'**acceptation** sur les 14 routes — 36 contrôles, 0 échec, témoin négatif
+  prouvé par mutation sur le produit vivant. Voir l'entrée de journal du jour.
 - ⚠️ **`admin_agents` laisse un agent de plus à chaque passage** : aucune route
   de suppression d'agent n'existe.
 - ⚠️ **Le journal d'audit ne se filtre que par `actorType` et n'affiche que des
@@ -3471,6 +3471,90 @@ plafond de 5, et elles le tiennent **séparément** du seau d'authentification
 qu'on venait d'épuiser. Un `429` sur la sixième d'une route dont les cinq
 premières sont des `404`/`400` prouve aussi que le compteur s'incrémente **avant
 le traitement** — un refus métier ne rend pas la requête gratuite.
+
+---
+
+### 2026-08-13 — Lot A : le banc de portée remplace le banc d'appartenance
+
+**L'audit de couverture qui a lancé ce lot.** Question posée : les bancs
+couvrent-ils la suppression du découpage administratif ? Réponse mesurée :
+la **lecture** globale était couverte (`admin_dashboard`, A = B = admin = 80),
+la garde survivante aussi (`commercant_b`), `adresse` aussi (`client_fiche`,
+`commercant_profil`) — mais **l'écriture ne l'était pas du tout**.
+
+Le chantier a transformé **quatorze refus en acceptations**. `appartenance.py`
+prouvait les refus ; il était suspendu, et son enveloppe annonçait encore en
+en-tête « un agent n'agit que dans ses communes » — un produit mort depuis la
+veille. Personne ne vérifiait qu'un agent peut réellement suspendre, supprimer,
+valider un registre, réinitialiser un PIN ou modérer un commerçant étranger.
+**Le retrait d'une garde peut laisser derrière un `COMMERCANT_NOT_FOUND`
+résiduel ou un filtre de portée oublié dans un service** : rien n'échouerait au
+démarrage, rien n'échouerait aux tests, et le seul signal serait un agent qui,
+sur le terrain, n'y arrive pas.
+
+**`portee_agent.py` — 36 contrôles, 0 échec, 0 non concluant.**
+
+**Prouver une acceptation est plus fragile que prouver un refus**, et c'est tout
+le sujet du banc. Un refus se lit dans un code ; un `200` peut venir d'une route
+qui n'a rien fait. Trois choix de conception, chacun contre un faux vert :
+
+- **l'effet est constaté, pas le statut** — `registreStatus`, `suspended`,
+  `profilePendingReview`, ce que le CLIENT voit, et pour `reset-pin` une
+  connexion réussie avec le PIN neuf ;
+- **un `404` est un échec, pas une absence** — le commerçant existe, le banc
+  vient de le créer et le voit dans la liste. Un « introuvable » sur ces routes
+  serait exactement la forme d'une portée résiduelle ;
+- **la prémisse se construit, elle ne se lit pas** (règle 38) — le sujet est
+  inscrit par `POST /commercant/register`, sans aucun jeton d'agent :
+  `createdByAgentId` vaut `null` **par construction**. L'API n'expose pas ce
+  champ ; le savoir vaut mieux que le lire. Et c'est le cas le plus dur, un
+  auto-inscrit traînant la garde de registre.
+
+**Le témoin négatif, et pourquoi il passe en premier.** Un banc qui n'observe
+que des acceptations est vert si TOUT est accepté — il ne saurait pas dire que
+le rôle agent a obtenu les droits d'admin par accident. Trois routes restent
+`@Roles('admin')` seul (`GET /admin/agent`, `GET /admin/audit-log`,
+`PATCH .../plafond-promos`) : elles sont sondées **avant** toute écriture, pour
+qu'un banc incapable de refuser soit démasqué avant d'annoncer 14 acceptations.
+
+⚠️ **Prouvé par mutation sur le produit vivant** (règle 28) : ajouter `'agent'`
+au `@Roles` de `GET /admin/audit-log` fait rendre au banc
+« ❌ HTTP 200 — un AGENT a été admis sur une route réservée à l'admin ». Mutation
+annulée, 403 revenu.
+
+**Le banc est DESTRUCTEUR, et il ne l'était pas.** Ses sondes étaient sans effet
+de bord *parce qu'elles étaient refusées*. Trois règles tenues par la structure
+du fichier : sujet jetable créé par le banc (jamais celui du décor), `delete` en
+dernière sonde, et **l'ordre suit les préconditions métier** plutôt que la liste
+des routes — publier exige registre validé, profil validé, position posée.
+Sonder `publish` avant les trois rendrait un refus légitime que le banc lirait
+comme une garde résiduelle.
+
+**Deux défauts trouvés au premier passage, tous deux dans le banc, et ses
+propres gardes l'ont empêché d'accuser le produit :**
+
+- la sonde `reset-pin` envoyait `{"pin": …}` au lieu de `{"newPin": …}`.
+  `whitelist: true` **retire un champ inconnu sans rien dire**, puis la
+  validation meurt sur le champ manquant. La sonde a rendu « non concluant » et
+  non « échec » — c'est exactement le point : un corps invalide n'a rien dit de
+  l'autorisation ;
+- la sonde du plafond passait `promoActiveCap` (légitimement `null`, « suit le
+  réglage global ») à un verdict qui lit `None` comme « état illisible ».
+  **`None` ne peut pas être à la fois la valeur attendue et le drapeau
+  d'absence** — la règle 29 en miniature, dans le banc censé la faire respecter.
+
+**Un piège d'environnement, coûteux et à retenir.** La mutation ne prenait pas :
+`trois` processus `nest start` tournaient, dont un lancé depuis le clone
+Windows, et celui qui tenait le port 3000 datait de 25 minutes. **Le watcher ne
+recompilait plus.** Un backend qui répond n'est pas un backend à jour — vérifier
+`ss -ltnp | grep :3000` puis le `cwd` du PID avant de conclure qu'une
+modification n'a pas d'effet.
+
+**Documents remis d'équerre dans le même commit** (règle 23) :
+`docs/methode-test/run-all-scenarios.sh` annonçait « n'écrit rien non plus » sur
+un banc qui supprime désormais des comptes ; `TEST_PROMO.md` décrivait le banc
+d'appartenance au présent. Les documents **datés** (audits, rapport de pentest,
+revues) ne sont pas touchés : ils décrivent ce qui était vrai à leur date.
 
 ---
 

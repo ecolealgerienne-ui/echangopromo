@@ -371,32 +371,53 @@ juillet par `CommercantService.assertZoneMatches` et **jamais rejoué depuis**.
 C'était la faille critique de l'audit V0 ; rien ne garantit aujourd'hui qu'elle
 n'est pas revenue.
 
-**⚠️ Le banc d'appartenance est le vrai enjeu ici, plus encore que le banc de
-refus.** Sur ce produit, un agent authentifié qui agit sur la promo d'un
-commerçant hors de ses communes est le scénario d'attaque réaliste — pas
-l'appel sans jeton. Prévoir deux comptes agent rattachés à des communes
-disjointes.
+**⚠️ Le banc de portée est le vrai enjeu ici, plus encore que le banc de
+refus.** Sur ce produit, le scénario réaliste n'est pas l'appel sans jeton :
+c'est un agent authentifié qui agit sur la fiche d'un commerçant qui n'est pas
+le sien. Jusqu'au 2026-08-13 cela devait être **refusé** ; depuis, cela doit
+être **accepté**. La question n'a pas disparu, elle a changé de signe.
 
-#### Banc d'appartenance — ✅ **passé et prouvé** (2026-08-04)
+#### Banc de portée — ✅ **passé et prouvé** (2026-08-13)
 
-`scripts/test-appartenance.sh` + `scripts/lib/appartenance.py`.
-Auto-test **13 cas dont 8 refus**.
+`scripts/test-portee-agent.sh` + `scripts/lib/portee_agent.py`.
+Auto-test **14 cas dont 10 refus**.
 
 ```
-14 sondes, 0 échec, 0 non concluante
-→ les 14 routes à identifiant rendent 403 COMMERCANT_NOT_IN_AGENT_COMMUNES
+36 contrôles, 0 échec, 0 non concluant
+→ les 14 routes à identifiant ACCEPTENT un agent sur un commerçant étranger
+→ les 3 routes @Roles('admin') seul le refusent toujours
 ```
 
 Les 14 : suspend, reactivate, **delete**, registre/valider, registre/rejeter,
 profile/valider, reset-pin, les 3 actions de modération, `PATCH /promo/:id`,
 publish, stop, et `POST /promo/agent/:commercantId`.
 
-**Le piège central, mesuré avant d'écrire les assertions.** Sondées avec un
-corps vide, deux routes rendent **`400 VALIDATION_ERROR`** : la requête meurt à
-la validation, **avant** le contrôle d'appartenance. Un banc qui compterait ce
-400 comme un refus conclurait juste **par accident**, et resterait vert le jour
-où l'appartenance disparaît. Chaque sonde envoie donc un corps valide, et un
-`VALIDATION_ERROR` est déclaré **non concluant** — jamais réussi.
+⚠️ **Il remplace `test-appartenance`, qui prouvait exactement l'inverse sur les
+mêmes routes.** Le supprimer sans le remplacer aurait laissé quatorze routes
+dont personne ne sait si elles marchent : retirer une garde peut laisser
+derrière un `COMMERCANT_NOT_FOUND` résiduel ou un filtre de portée oublié dans
+un service, sans qu'aucun test ni aucun démarrage n'échoue.
+
+**Prouver une acceptation est plus fragile que prouver un refus.** Un refus se
+lit dans un code ; un `200` peut venir d'une route qui n'a rien fait. D'où :
+
+- **l'effet est constaté, pas le statut** — `suspended`, `registreStatus`, ce
+  que le CLIENT voit, une connexion réussie avec le PIN neuf ;
+- **un `404` est un échec**, pas une absence : le commerçant existe, le banc
+  vient de le créer. C'est la forme que prendrait une portée résiduelle ;
+- **le témoin négatif passe en premier** — un banc qui n'observe que des
+  acceptations serait vert si TOUT était accepté. Trois routes restent
+  `@Roles('admin')` seul, et l'agent doit y être refusé. **Prouvé par mutation
+  sur le produit vivant** : ajouter `'agent'` à `GET /admin/audit-log` fait
+  rendre ❌ au banc (règle 28).
+
+**Le piège central est hérité, et il se retourne à l'identique.** Un
+**`400 VALIDATION_ERROR`** signifie que la requête est morte à la validation,
+**avant** toute décision d'autorisation : elle n'a rien dit de la portée, dans
+un sens comme dans l'autre. Il est donc « non concluant », jamais une réussite.
+*Il s'est déclenché au premier passage — la sonde `reset-pin` envoyait `pin` au
+lieu de `newPin`. Sans cette distinction, le banc aurait accusé une garde
+résiduelle sur un produit correct (règle 38).*
 
 **Deux contrôles complémentaires** :
 
@@ -609,7 +630,7 @@ déséquilibre entre profils ne se voyait pas.
 
 | Banc | Routes exercées | Ce qu'il éprouve en propre |
 |---|---|---|
-| **`test-agent-appartenance`** ⚠️ | **les 14 routes `/admin/*`** + `PATCH /promo/:id` + `POST /promo/agent/:commercantId` | **SUSPENDU le 2026-08-13, à réécrire.** Il prouvait qu'un agent hors de ses communes était refusé sur *chacune* ; il devra prouver l'inverse — qu'il y est **accepté**. Conservé parce qu'il est le seul à exercer ces 14 routes avec un jeton d'agent. ⚠️ Sa réécriture rend ses 14 sondes **destructives** : elles étaient sans effet de bord *parce qu'elles étaient refusées* |
+| **`test-portee-agent`** ⚠️ | **les 14 routes `/admin/*`** + `PATCH /promo/:id` + `publish` + `stop` + `POST /promo/agent/:commercantId`, **plus** les 3 routes `@Roles('admin')` seul | **Neuf le 2026-08-13, remplace `test-agent-appartenance`.** Celui-ci prouvait qu'un agent hors de ses communes était **refusé** sur chacune ; celui-là prouve qu'il y est **accepté**, sur un commerçant qu'il n'a pas créé. Seul banc à exercer ces routes avec un jeton d'agent. ⚠️ **Destructif** — ses sondes étaient sans effet de bord *parce qu'elles étaient refusées* : il crée donc son propre commerçant par auto-inscription et le supprime en dernière sonde. ⚠️ ~20 écritures sur un seau de 20/min : `PACE` à 4 s, ~2 minutes |
 | `test-agent-creation` | `POST /agent/commercant`, `GET /agent/me` | ⚠️ **Sujet changé le 2026-08-13** : le commerçant créé porte **sa position**, vérifiée sur la fiche publique, et la création sans position est refusée par la validation |
 | **`test-commercant-b`** ⚠️ | `PATCH /promo/:id`, `publish`, `stop` | **Neuf le 2026-08-13.** `PROMO_NOT_OWNED_BY_COMMERCANT` devient la garde d'appartenance principale du contrôleur de promo, et n'était provoqué par **aucun** banc. Asserte le **code**, jamais le statut — six gardes partagent le 403 sur ces routes |
 | `test-agent-promo` | `POST /promo/agent/:commercantId` | l'exemption agent/admin des plafonds anti-abus |
