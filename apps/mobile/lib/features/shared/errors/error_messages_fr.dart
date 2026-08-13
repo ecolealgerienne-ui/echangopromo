@@ -27,11 +27,6 @@ const Map<String, String> errorMessagesFr = {
 
   'AGENT_EMAIL_TAKEN': 'Cet email est déjà utilisé par un agent.',
   'AGENT_NOT_FOUND': 'Agent introuvable.',
-  'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT':
-      "Au moins une de ces communes n'est pas actuellement assignée à cet agent.",
-
-  'COMMUNE_NOT_FOUND': 'Commune introuvable.',
-
   'REPORT_ALREADY_SUBMITTED': 'Vous avez déjà signalé cette promotion.',
 
   'DEVICE_ID_MISSING':
@@ -71,8 +66,6 @@ const Map<String, String> errorMessagesFr = {
   'COMMERCANT_OLD_PIN_MISMATCH': "L'ancien PIN ne correspond pas.",
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION':
       'Aucune demande de vérification en attente.',
-  'COMMERCANT_NOT_IN_AGENT_COMMUNES':
-      "Ce commerçant n'est dans aucune des communes de cet agent.",
   'COMMERCANT_TERMS_NOT_ACCEPTED':
       "Vous devez accepter les conditions d'utilisation pour créer un compte.",
   'COMMERCANT_REGISTRE_NOT_VALIDATED':

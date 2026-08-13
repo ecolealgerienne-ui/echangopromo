@@ -10,9 +10,6 @@ const Map<String, String> errorMessagesAr = {
   'ADMIN_NOT_FOUND': 'المسؤول غير موجود.',
   'AGENT_EMAIL_TAKEN': 'هذا البريد الإلكتروني مستخدم بالفعل من طرف عون آخر.',
   'AGENT_NOT_FOUND': 'العون غير موجود.',
-  'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT':
-      'إحدى هذه البلديات غير مسندة حاليًا لهذا العون.',
-  'COMMUNE_NOT_FOUND': 'البلدية غير موجودة.',
   'REPORT_ALREADY_SUBMITTED': 'لقد قمت بالإبلاغ عن هذا العرض من قبل.',
   'DEVICE_ID_MISSING': 'معرّف الجهاز مفقود. أعد تشغيل التطبيق.',
   'STORAGE_INVALID_IMAGE': 'الملف المرسل ليس صورة صالحة. أعد المحاولة بصورة.',
@@ -38,7 +35,6 @@ const Map<String, String> errorMessagesAr = {
   'COMMERCANT_OLD_PIN_MISMATCH': 'رمز PIN القديم غير مطابق.',
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION':
       'لا يوجد طلب تحقق في الانتظار.',
-  'COMMERCANT_NOT_IN_AGENT_COMMUNES': 'هذا التاجر ليس ضمن بلديات هذا العون.',
   'COMMERCANT_TERMS_NOT_ACCEPTED': 'يجب عليك قبول شروط الاستخدام لإنشاء حساب.',
   'COMMERCANT_REGISTRE_NOT_VALIDATED':
       'يجب أن يصادق مسؤول على سجلك التجاري قبل أن تتمكن من نشر العروض.',

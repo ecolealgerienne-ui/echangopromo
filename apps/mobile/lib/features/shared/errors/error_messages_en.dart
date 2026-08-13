@@ -10,9 +10,6 @@ const Map<String, String> errorMessagesEn = {
   'ADMIN_NOT_FOUND': 'Administrator not found.',
   'AGENT_EMAIL_TAKEN': 'This email is already used by an agent.',
   'AGENT_NOT_FOUND': 'Agent not found.',
-  'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT':
-      'At least one of these communes is not currently assigned to this agent.',
-  'COMMUNE_NOT_FOUND': 'Municipality not found.',
   'REPORT_ALREADY_SUBMITTED': 'You have already reported this promo.',
   'DEVICE_ID_MISSING': 'Missing device identifier. Restart the app.',
   'STORAGE_INVALID_IMAGE':
@@ -43,8 +40,6 @@ const Map<String, String> errorMessagesEn = {
   'COMMERCANT_OLD_PIN_MISMATCH': 'The old PIN does not match.',
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION':
       'No pending verification request.',
-  'COMMERCANT_NOT_IN_AGENT_COMMUNES':
-      'This merchant is not in any of this agent\'s communes.',
   'COMMERCANT_TERMS_NOT_ACCEPTED':
       'You must accept the terms of use to create an account.',
   'COMMERCANT_REGISTRE_NOT_VALIDATED':
