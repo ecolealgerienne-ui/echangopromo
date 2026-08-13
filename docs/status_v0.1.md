@@ -4202,6 +4202,76 @@ sonde verifie qu'il ne reste rien. `pg_stat_statements` a ete envisage puis
 retire : `shared_preload_libraries` est vide, il ne collecterait rien sans
 redemarrer la base du poste — hors de question pendant que l'app tourne.
 
+### 2026-08-13 — P3 : la revalidation conditionnelle, ses deux moities
+
+**Le defaut, mesure en P1.** Le backend posait un `ETag` sur toutes les reponses
+JSON, et une requete conditionnelle rendait bien `304`. Mais **aucun paquet de
+cache HTTP n'existait dans `pubspec.yaml`** : Dio n'envoyait jamais
+`If-None-Match`, donc cette capacite n'avait **aucun appelant** (regle 31).
+Chaque ouverture d'ecran retelechargeait 2,5 Ko pour la vitrine et 5,7 Ko pour
+la carte, meme quand rien n'avait change.
+
+**Cote serveur** — `Cache-Control` sur les trois routes publiques. `/promo` et
+`/promo/map` en `max-age=0, must-revalidate` : zero seconde de fraicheur,
+deliberement, car une promo masquee par la moderation doit disparaitre au
+prochain appel. On paie l'aller-retour, on n'economise que le corps.
+`/promo/config` en `max-age=300` — 89 octets de constantes redemandes a chaque
+demarrage. `private` partout : la reponse depend de `favoriteIds`, un cache
+partage servirait les favoris d'un autre.
+
+**Cote mobile** — `EtagCacheInterceptor` + `EtagCacheStore`, sans nouvelle
+dependance.
+
+⚠️ **Seuls les GET non authentifies sont mis en cache**, et c'est la regle qui
+rend ce cache sur. L'app est multi-roles sur **un seul appareil** : mettre en
+cache une reponse authentifiee sous une cle d'URL ferait servir le tableau de
+bord d'un compte a celui qui ouvre l'app ensuite.
+
+⚠️ Dio traite `304` comme une **erreur** : la reponse conditionnelle arrive dans
+`onError`, ou `handler.resolve` la remplace par le corps conserve. D'ou l'ordre
+d'enregistrement — avant l'intercepteur qui convertit en `ApiException`, sinon
+il ne verrait jamais un seul `304`.
+
+Six tests, mutation comprise (garde d'authentification retiree -> refus). 17
+tests mobiles -> **23**.
+
+⚠️ **Le banc savait se contenter d'un ETag — corrige.** `verdict_cache` rendait
+« ok » des qu'un ETag etait present ; Express en pose un d'office, donc le banc
+serait reste vert sur exactement l'ecart que P3 comble.
+
+⚠️ **La moitie serveur n'est pas encore verifiable** : le backend qui tourne
+vient du **clone WSL**. `curl -D -` montre l'ETag et pas de `Cache-Control`. Un
+`git pull` + redemarrage cote WSL, et `./scripts/test-perf.sh` passera de « non
+concluant » a « ok » sur la sonde cache.
+
+### 2026-08-13 — P4 : le profilage de la carte
+
+`perf_carte` — 16 cas d'auto-test dont 11 refus, plus
+`integration_test/perf_carte_test.dart` et un lanceur **separe**.
+
+Le serveur rend 12 a 17 ms : il n'y a rien a optimiser de ce cote. La fluidite
+ressentie se joue dans les images ratees pendant qu'on fait glisser la carte —
+le seul ecran qui la mette a l'epreuve (tuiles en continu, regroupements
+recalcules a chaque zoom, geste qui doit suivre le doigt).
+
+⚠️ **`--profile` est le point entier du script.** En `debug` le Dart est
+interprete : les temps sont deux a dix fois pires, sans rapport avec la
+production, et on partirait optimiser du code qui n'a rien.
+
+⚠️ **Un lanceur separe est necessaire** : `integrationDriver()` sans rappel
+**jette** les donnees de performance. Le parcours pourrait mesurer des milliers
+d'images et rien n'en sortirait — un profilage silencieusement vide, qui se lit
+comme un profilage reussi.
+
+⚠️ **Un emulateur n'est pas un telephone** : sans acceleration GPU la
+rasterisation y est exageree. Un depassement de ce cote se remesure sur un vrai
+appareil avant d'etre cru ; la construction, elle, est du code Dart et se
+transpose. Le banc le dit dans son verdict.
+
+Construction et rasterisation sont jugees separement, au **p90** : une moyenne a
+8 ms peut cacher une image sur dix a 40 ms, et c'est celle-la qui se voit. Plus
+un verdict dedie a la pire image — un p90 sain ne rattrape pas un a-coup unique.
+
 ---
 
 ## Comment tenir ce fichier
