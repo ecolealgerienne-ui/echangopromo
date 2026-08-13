@@ -201,15 +201,50 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final peutDemander =
         ref.watch(peutDemanderLocalisationProvider).valueOrNull ?? false;
 
-    // Premier centrage sur l'utilisateur dès que sa position est connue —
-    // après le premier rendu, sinon `MapController` n'est pas encore relié
-    // à la carte.
-    if (userPosition != null && !_centeredOnUser) {
+    // ── ⚠️ Précédence : un point ENREGISTRÉ gagne sur le GPS ────────────────
+    //
+    // Un point enregistré est un **choix** ; le GPS est une **mesure**. Tant
+    // que le client n'a rien enregistré, les deux sont à égalité — le défaut
+    // servi par le serveur et la position du téléphone sont deux cadrages
+    // également provisoires, et le premier disponible fait l'affaire. Dès
+    // qu'un point est enregistré, il l'emporte : c'est ce que le client a
+    // demandé, et une mesure n'a pas à défaire une décision.
+    //
+    // ⚠️ **C'était l'inverse jusqu'au 2026-08-13**, et le défaut se voyait mal
+    // parce qu'il fallait être loin de sa ville pour le constater. Un client
+    // qui avait enregistré Djelfa puis rouvrait l'app en voyage était emmené
+    // là où était son téléphone, sans rien pour revenir sinon refaire le
+    // geste. Mesuré au banc, sonde dans cet écran : `defaut = Djelfa`,
+    // `gps = 37.42/-122.08` (position par défaut de l'émulateur), carte
+    // cadrée sur la Californie et **zéro commerce** — le parcours carte
+    // accusait la carte depuis.
+    //
+    // Le bouton « me localiser » reste là pour y aller **à la demande** : on
+    // ne retire pas l'accès au GPS, on retire son autorité.
+    final pointEnregistre = ref.watch(clientPositionProvider);
+    if (pointEnregistre != null && !_centeredOnDefaultPoint) {
+      _centeredOnDefaultPoint = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _recenterOn(
+            LatLng(pointEnregistre.$1, pointEnregistre.$2),
+            zoom: _initialZoom,
+          );
+        }
+      });
+    } else if (pointEnregistre == null &&
+        userPosition != null &&
+        !_centeredOnUser) {
+      // Premier centrage sur l'utilisateur dès que sa position est connue —
+      // après le premier rendu, sinon `MapController` n'est pas encore relié
+      // à la carte.
       _centeredOnUser = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _recenterOn(userPosition, zoom: 15);
       });
-    } else if (userPosition == null && !_centeredOnDefaultPoint) {
+    } else if (pointEnregistre == null &&
+        userPosition == null &&
+        !_centeredOnDefaultPoint) {
       // Pas de GPS : on ouvre sur le point du client s'il en a enregistré un,
       // sinon sur celui que sert le serveur.
       //

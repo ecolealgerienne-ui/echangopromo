@@ -37,6 +37,7 @@
 library;
 
 import 'package:echango_promo/features/client/widgets/map_shop_sheet.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:echango_promo/main.dart' as app;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -99,7 +100,10 @@ void main() {
     // « jusqu'à ce que ça marche » sans borne est une boucle infinie déguisée.
     final grappe = find.byWidgetPredicate(
         (w) => w is Text && int.tryParse(w.data ?? '') != null);
-    for (var essai = 0; essai < 6 && marqueur.evaluate().isEmpty; essai++) {
+    // Étiquettes des grappes au tour précédent — voir la sortie « inséparable »
+    // plus bas.
+    String? grappesPrecedentes;
+    for (var essai = 0; essai < 8 && marqueur.evaluate().isEmpty; essai++) {
       await pomperJusquaVrai(
         tester,
         () => marqueur.evaluate().isNotEmpty || grappe.evaluate().isNotEmpty,
@@ -107,7 +111,60 @@ void main() {
         limite: const Duration(seconds: 30),
       );
       if (marqueur.evaluate().isNotEmpty) break;
-      await taper(tester, grappe.first);
+
+      // ⚠️ **`grappe.first` sur un finder qui peut s'être vidé entre-temps
+      // lève `Bad state: No element`**, et c'est exactement ce qui est arrivé
+      // le 2026-08-13 : la carte se re-regroupe pendant l'animation de zoom,
+      // donc l'élément vu par `pomperJusquaVrai` n'existe plus au moment du
+      // tap. L'échec ne disait rien de la carte — juste que le parcours avait
+      // supposé la stabilité entre deux instructions.
+      final grappes = grappe.evaluate().toList();
+      if (grappes.isEmpty) continue;
+
+      // ⚠️ **La grappe LA PLUS PROCHE DU CENTRE, jamais `grappe.first`.**
+      // Taper une grappe y zoome : en prendre une au hasard fait voyager la
+      // caméra, et six taps plus tard on est à fond de zoom sur une pile
+      // étrangère — la cible n'est plus à l'écran, et le parcours conclut
+      // « le commerce n'est pas affiché » alors qu'il l'était au départ.
+      // Mesuré le 2026-08-13 : l'écran final ne portait plus **ni marqueur ni
+      // grappe**, juste l'attribution OpenStreetMap et les filtres.
+      //
+      // La carte s'ouvre centrée sur le point de recherche, et le décor pose
+      // son commerce à côté : la grappe qui le contient est donc celle du
+      // milieu. C'est aussi ce que ferait un humain — on zoome là où on
+      // cherche, pas sur le premier amas venu.
+      final centreEcran = tester.getCenter(find.byType(FlutterMap).first);
+      Element plusProche = grappes.first;
+      var meilleureDistance = double.infinity;
+      for (final e in grappes) {
+        final d = (tester.getCenter(find.byElementPredicate((x) => x == e)) -
+                centreEcran)
+            .distance;
+        if (d < meilleureDistance) {
+          meilleureDistance = d;
+          plusProche = e;
+        }
+      }
+      final cible = find.byElementPredicate((x) => x == plusProche);
+
+      // ⚠️ **Une grappe de points CONFONDUS ne se scinde à aucun zoom.** Taper
+      // six fois n'y change rien : les commerces ont les mêmes coordonnées.
+      // Sans cette sortie, le parcours tournait jusqu'à la borne puis mourait
+      // sur la course ci-dessus — un symptôme qui n'a aucun rapport avec la
+      // cause. Le décor pose désormais chaque commerçant à SON point
+      // (`provision-decor.sh`) et le script refuse une cible empilée, mais ce
+      // banc doit savoir le DIRE plutôt que de tourner dans le vide.
+      final etiquettes = grappes.map((e) => (e.widget as Text).data).join(',');
+      if (etiquettes == grappesPrecedentes) {
+        fail('la grappe « $etiquettes » ne se scinde pas après un zoom : les '
+            'commerces qu’elle contient ont des coordonnées identiques, et '
+            'aucun zoom ne les séparera. Le marqueur « $remiseAttendue » ne '
+            'peut donc pas exister — c’est le décor qu’il faut regarder, pas '
+            'la carte.');
+      }
+      grappesPrecedentes = etiquettes;
+
+      await taper(tester, cible);
       await tester.pump(const Duration(seconds: 2));
     }
 

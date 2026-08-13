@@ -48,6 +48,45 @@ D_AGENT_B_EMAIL="${D_AGENT_B_EMAIL:-decor-agent-b@echango.local}"
 D_AGENT_B_PASSWORD="${D_AGENT_B_PASSWORD:-decor-agent-b-2026}"
 D_COMMERCANT_TEL="${D_COMMERCANT_TEL:-+213555000101}"
 D_COMMERCANT_PIN="${D_COMMERCANT_PIN:-654321}"
+
+# ── Position du commerçant du décor ──────────────────────────────────────────
+#
+# ⚠️ **Un décor appelé avec un autre numéro pose un commerce de PLUS, et
+# l'ancien reste.** Rien ne le nettoie, et jusqu'au 2026-08-13 tous atterrissaient
+# au même point : la base de développement portait **dix « Commerce Décor » aux
+# coordonnées exactement identiques**, plus quatre « Commerce Sans Point » et
+# trois « Rayon Proche », soit 21 commerces en 5 piles.
+#
+# ⚠️ **Des points confondus ne se séparent à AUCUN zoom.** La carte les regroupe
+# en une grappe qui affiche un nombre, définitivement — et le parcours carte,
+# qui tape les grappes jusqu'à voir un marqueur individuel, tournait dans le
+# vide puis mourait sur une course (`Bad state: No element`). Le produit
+# fonctionnait ; c'est le décor qui rendait la cible inatteignable.
+#
+# Chaque numéro obtient donc **son** point, dérivé de ses quatre derniers
+# chiffres. Déterministe : rejouer le même numéro rend le même point, sinon le
+# décor ne serait plus rejouable.
+#
+# ⚠️ **Le numéro par défaut garde le point historique, à l'octet près.** C'est
+# lui que `registre.py`, `client_rayon.py` et le réglage GPS de l'émulateur
+# (`adb emu geo fix`) prennent comme repère ; le décaler d'un mètre ferait
+# bouger des mesures de distance sans rapport avec ce qu'on corrige ici.
+#
+# L'écart maximal est de ~0,004° (~440 m) : assez pour que deux marqueurs se
+# séparent bien avant le zoom maximal, assez peu pour rester dans tout cadre
+# que ces bancs regardent.
+D_COMMERCANT_LAT="${D_COMMERCANT_LAT:-}"
+D_COMMERCANT_LNG="${D_COMMERCANT_LNG:-}"
+if [ -z "$D_COMMERCANT_LAT" ] || [ -z "$D_COMMERCANT_LNG" ]; then
+  if [ "$D_COMMERCANT_TEL" = "+213555000101" ]; then
+    D_COMMERCANT_LAT=34.6714
+    D_COMMERCANT_LNG=3.2630
+  else
+    _suffixe="$(printf '%s' "$D_COMMERCANT_TEL" | tr -cd '0-9' | tail -c 4)"
+    D_COMMERCANT_LAT="$(awk -v s="$_suffixe" 'BEGIN{printf "%.5f", 34.6714 + ((s % 100) - 50) * 0.00008}')"
+    D_COMMERCANT_LNG="$(awk -v s="$_suffixe" 'BEGIN{printf "%.5f", 3.2630 + ((int(s / 100) % 100) - 50) * 0.00008}')"
+  fi
+fi
 # Identifiant d'appareil du décor, requis par les routes client anonymes
 # (`@DeviceId()`). Fixe et reconnaissable : ce décor ne mesure pas de vues, il
 # a seulement besoin que l'en-tête existe.
@@ -234,9 +273,10 @@ if [ -z "$COMMERCANT_TOKEN" ]; then
   # non — d'où un décor sans point de repère.)
   out="$(api POST /commercant/register "$(jq -n --arg t "$D_COMMERCANT_TEL" \
     --arg p "$D_COMMERCANT_PIN" \
+    --arg la "$D_COMMERCANT_LAT" --arg ln "$D_COMMERCANT_LNG" \
     '{telephone:$t, nom:"Commerce Décor", adresse:"Rue du Décor", categorie:"alimentation",
       pin:$p, acceptedTerms:true,
-      latitude:34.6714, longitude:3.2630}')")"
+      latitude:($la|tonumber), longitude:($ln|tonumber)}')")"
   echo "$out" | est_erreur && fail "Inscription commerçant refusée" \
     "$(echo "$out" | jq -c '{code,message}')"
   sleep "$PACE"
@@ -260,10 +300,10 @@ pass "Commerçant connecté ($D_COMMERCANT_TEL)"
 POSITION_ACTUELLE="$(api GET /commercant/me '' "$COMMERCANT_TOKEN" | jq -r '.latitude // empty')"
 if [ -z "$POSITION_ACTUELLE" ]; then
   info "Commerçant sans position (compte antérieur) — pose via PATCH /commercant/me/position"
-  out="$(api PATCH /commercant/me/position     '{"latitude":34.6714,"longitude":3.2630}' "$COMMERCANT_TOKEN")"
+  out="$(api PATCH /commercant/me/position     "$(jq -n --arg la "$D_COMMERCANT_LAT" --arg ln "$D_COMMERCANT_LNG"        '{latitude:($la|tonumber), longitude:($ln|tonumber)}')" "$COMMERCANT_TOKEN")"
   echo "$out" | est_erreur && fail "Pose de la position refusée"     "$(echo "$out" | jq -c '{code,message}')"
   sleep "$PACE"
-  pass "Position posée (34.6714, 3.2630)"
+  pass "Position posée ($D_COMMERCANT_LAT, $D_COMMERCANT_LNG)"
 fi
 
 # Validation du registre — geste d'administration, pas geste d'utilisateur.

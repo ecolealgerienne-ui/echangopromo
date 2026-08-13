@@ -29,8 +29,14 @@
 #                      connexion commerçant bascule en mode admin dès qu'on y
 #                      saisit un e-mail. Ses cinq compteurs valent ceux du
 #                      serveur.
-#   agent              le même écran, avec le périmètre de l'agent — ses
-#                      compteurs ne sont PAS ceux de l'admin.
+#   agent              le même écran, avec le jeton de l'agent. ⚠️ « ses
+#                      compteurs ne sont PAS ceux de l'admin » disait cette
+#                      ligne — c'est faux depuis le 2026-08-13 : l'agent est
+#                      global, les cinq compteurs sont identiques. Ce que le
+#                      parcours éprouve n'a pas changé (l'écran affiche ce que
+#                      le serveur sert POUR CE RÔLE, mesuré avec SON jeton) ;
+#                      c'est la raison qui a changé, et une raison périmée fait
+#                      conclure.
 #   inscription        un commerçant s'inscrit DEPUIS L'APP : formulaire,
 #                      photo du registre, conditions — puis le script vérifie
 #                      que le compte existe et que son registre est en attente.
@@ -243,6 +249,19 @@ print('%s %s' % (d['latitude'], d['longitude']))")"
 case "$CARTE_POS" in ILLISIBLE*) echo "❌ position du commerçant — $CARTE_POS"; exit 2 ;; esac
 CARTE_LAT="${CARTE_POS% *}"
 CARTE_LNG="${CARTE_POS#* }"
+CARTE_CID="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ id)"
+[ -n "$CARTE_CID" ] || { echo "❌ carte — identifiant du commerçant du décor illisible"; exit 2; }
+# La promo EN LIGNE de ce commerçant — c'est elle qui porte la remise affichée
+# sur le marqueur, et c'est elle qu'on ajustera si sa valeur est déjà prise.
+PROMO_CARTE_ID="$(curl -s "$API_URL/promo/me/all?limit=100"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | "$PY" -c "import sys,json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for p in d.get('items', []):
+    if p.get('lifecycleStatus') == 'publiee':
+        print(p['id']); break")"
+[ -n "$PROMO_CARTE_ID" ] || { echo "❌ carte — aucune promo publiée chez le commerçant du décor"; exit 2; }
 
 BBOX="$(CLAT="$CARTE_LAT" CLNG="$CARTE_LNG" "$PY" -c "import os
 la = float(os.environ['CLAT']); ln = float(os.environ['CLNG'])
@@ -251,7 +270,24 @@ print('north=%s&south=%s&east=%s&west=%s' % (la + 0.2, la - 0.2, ln + 0.2, ln - 
 # On choisit un commerce dont la remise est UNIQUE dans la zone : le marqueur
 # n'affiche que « −XX% », donc deux commerces à la même remise rendraient la
 # désignation ambiguë — et le parcours taperait sur l'un ou l'autre en silence.
-CARTE_CHOIX="$(curl -s "$API_URL/promo/map?$BBOX" -H "X-Device-Id: $DEVICE_ID"   | "$PY" -c "import sys,json,collections
+# ⚠️ **La cible est NOTRE commerce, pas « celui qui a la meilleure remise ».**
+# La version d'origine prenait le commerce à la remise unique la plus élevée
+# dans un cadre de ±0,2° — et supposait, sans le dire, que son marqueur pouvait
+# apparaître SEUL. Deux prémisses fausses derrière cette supposition :
+#
+#   1. **des points confondus ne se séparent à aucun zoom.** La base portait
+#      DIX « Commerce Décor » aux coordonnées identiques (décors empilés, voir
+#      `provision-decor.sh`) : la grappe affichait « 10 », le parcours la tapait
+#      six fois sans rien détacher, puis mourait sur une course
+#      (`Bad state: No element`, 2026-08-13). Le produit n'avait rien ;
+#   2. **on ne contrôle pas le commerce qu'on n'a pas posé.** Viser celui du
+#      décor, dont on connaît la position et les promos, rend l'échec lisible :
+#      s'il n'apparaît pas, c'est la carte, pas le choix de la cible.
+#
+# Les deux prémisses sont désormais VÉRIFIÉES, et le script refuse plutôt que
+# de choisir mal — un parcours qui échoue sur une cible inatteignable accuse le
+# produit (règle 38).
+CARTE_CHOIX="$(curl -s "$API_URL/promo/map?$BBOX" -H "X-Device-Id: $DEVICE_ID"   | CID="$CARTE_CID" "$PY" -c "import sys,json,os,collections
 try:
     d = json.load(sys.stdin)
 except Exception:
@@ -273,25 +309,60 @@ def meilleure(promos):
         if best is None or pct > best:
             best = pct
     return best
-candidats = []
-for c in items:
-    r = meilleure(c.get('promos'))
-    if r is not None and c.get('nom'):
-        candidats.append((r, c['nom']))
-if not candidats:
-    print('ILLISIBLE aucun commerce avec remise dans la zone'); sys.exit(0)
-compte = collections.Counter(r for r, _ in candidats)
-uniques = [(r, n) for r, n in candidats if compte[r] == 1]
-if not uniques:
-    print('ILLISIBLE aucune remise unique dans la zone (%d commerce(s))' % len(candidats)); sys.exit(0)
-uniques.sort(reverse=True)
-print('%d|%s' % uniques[0])")"
+cid = os.environ['CID']
+notre = next((c for c in items if c.get('id') == cid), None)
+if notre is None:
+    print('ILLISIBLE le commerce du decor n est pas sur la carte'); sys.exit(0)
+remise = meilleure(notre.get('promos'))
+if remise is None:
+    print('ILLISIBLE le commerce du decor n a aucune promo a remise'); sys.exit(0)
+# Premisse 1 : personne d autre a ses coordonnees, sinon la grappe ne se scinde
+# jamais et le marqueur individuel n existe a aucun zoom.
+pos = (round(notre['latitude'], 6), round(notre['longitude'], 6))
+empiles = [c.get('nom') for c in items
+           if c.get('id') != cid
+           and (round(c['latitude'], 6), round(c['longitude'], 6)) == pos]
+if empiles:
+    print('ILLISIBLE %d commerce(s) a la position exacte du decor (%s) : la '
+          'grappe ne se scindera a aucun zoom' % (len(empiles), ', '.join(sorted(set(empiles)))))
+    sys.exit(0)
+# Premisse 2 : la remise doit etre unique dans la zone, sinon le marqueur
+# « -XX% » designe plusieurs commerces et le parcours tape l un ou l autre en
+# silence. On ne l ESPERE pas : on choisit une valeur libre et on l imposera a
+# la promo du decor. Un parcours qui se contente d esperer refuse un jour sur
+# deux pour une raison qui n a rien a voir avec ce qu il eprouve.
+prises = {meilleure(c.get('promos')) for c in items if c.get('id') != cid}
+libre = next((p for p in range(75, 14, -1) if p not in prises), None)
+if libre is None:
+    print('ILLISIBLE aucune remise libre entre 15%% et 75%% dans la zone')
+    sys.exit(0)
+print('%d|%d|%s' % (libre, remise, notre.get('nom')))")"
 case "$CARTE_CHOIX" in
   ILLISIBLE*) echo "❌ carte — $CARTE_CHOIX"; exit 2 ;;
 esac
-CARTE_REMISE="−${CARTE_CHOIX%%|*}%"
-CARTE_NOM="${CARTE_CHOIX#*|}"
-echo "✅ « $CARTE_NOM » · marqueur attendu : $CARTE_REMISE (remise unique dans la zone)"
+CARTE_PCT="${CARTE_CHOIX%%|*}"
+_reste="${CARTE_CHOIX#*|}"
+CARTE_PCT_ACTUEL="${_reste%%|*}"
+CARTE_NOM="${_reste#*|}"
+CARTE_REMISE="−${CARTE_PCT}%"
+
+# ⚠️ **On IMPOSE la remise, on ne la subit pas.** La promo du décor vaut
+# 1000 → 700, soit −30 % — une valeur que plusieurs commerces du parc portent
+# aussi. Le marqueur « −30 % » désignerait alors plusieurs points et le parcours
+# taperait l'un ou l'autre en silence.
+#
+# `prixAvant` reste à 1000 pour que le calcul soit exact des deux côtés :
+# l'app arrondit `(avant − après) / avant × 100`, et un prix rond rend un
+# pourcentage entier sans ambiguïté d'arrondi.
+if [ "$CARTE_PCT" != "$CARTE_PCT_ACTUEL" ]; then
+  CARTE_APRES="$(awk -v p="$CARTE_PCT" 'BEGIN{printf "%d", 1000 - p*10}')"
+  maj="$(curl -s -X PATCH "$API_URL/promo/$PROMO_CARTE_ID"     -H "Content-Type: application/json" -H "Authorization: Bearer $JETON"     -H "X-Device-Id: $DEVICE_ID"     -d "{\"prixAvant\":1000,\"prixApres\":$CARTE_APRES}")"
+  if [ -z "$(echo "$maj" | lire_champ id)" ]; then
+    echo "❌ carte — impossible d'imposer la remise $CARTE_REMISE : $maj"; exit 2
+  fi
+  echo "   remise du décor portée de −$CARTE_PCT_ACTUEL% à $CARTE_REMISE (valeur libre dans la zone)"
+fi
+echo "✅ « $CARTE_NOM » · marqueur attendu : $CARTE_REMISE (seul à sa position, remise unique)"
 fi
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "signalement" ]; then
 # ── 2 quinquies. Une promo à signaler, et son état de départ ───────────────
@@ -534,10 +605,61 @@ echo
 # permission accordée ne suffit pas si l'appareil n'a aucune position à donner.
 # Les coordonnées sont celles du décor — un point ailleurs ferait sortir le
 # commerce créé du rayon des parcours client qui suivent.
+# ⚠️ **Une seule passe ne suffit pas, et le `|| true` cachait le problème.**
+# `emu geo fix` pousse UN relevé ; l'émulateur revient ensuite à sa position par
+# défaut (37.421998, −122.084 — Mountain View). Selon le moment où l'app
+# interroge le GPS, elle recevait donc la Californie.
+#
+# Mesuré le 2026-08-13, sonde posée dans `MapScreen` : la carte ouvrait sur le
+# point enregistré à zoom 13 et rendait **22 commerces**, puis recentrait sur
+# `gps = LatLng(37.421998, -122.084)` à zoom 15 et rendait **0**. Le parcours
+# concluait « ni marqueur ni grappe » — la carte allait parfaitement bien, elle
+# regardait la Californie.
+#
+# ⚠️ Et `adb emu geo fix` rend **OK** dans ce cas : la commande réussit, le
+# relevé n'atteint simplement pas l'application. Un `|| true` par-dessus une
+# commande qui réussit déjà ne protégeait de rien — il empêchait juste de
+# remarquer que sa réussite ne voulait rien dire (règle 29).
+#
+# On réémet donc en tâche de fond pendant toute la course, et le PREMIER envoi
+# est vérifié : s'il échoue, l'appareil ne sait pas simuler de position et tout
+# parcours qui en dépend accuserait l'écran.
+POSITION_PID=""
 poser_position_simulee() {
-  adb -s "$APPAREIL" emu geo fix 3.2630 34.6714 >/dev/null 2>&1 || true
+  adb -s "$APPAREIL" emu geo fix 3.2630 34.6714 >/dev/null 2>&1 || {
+    echo "❌ « adb emu geo fix » a échoué : l'appareil ne sait pas simuler de"
+    echo "   position. Les parcours qui lisent le GPS accuseraient l'écran."
+    exit 2
+  }
+  ( while :; do
+      adb -s "$APPAREIL" emu geo fix 3.2630 34.6714 >/dev/null 2>&1
+      sleep 2
+    done ) &
+  POSITION_PID=$!
 }
 
+arreter_position_simulee() {
+  [ -n "$POSITION_PID" ] && kill "$POSITION_PID" 2>/dev/null
+  POSITION_PID=""
+}
+
+# Le miroir de la fonction ci-dessus : on RETIRE la permission dès que le paquet
+# est là. `flutter drive` réinstalle l'app à chaque parcours, donc la permission
+# repart de zéro — mais Android peut la ré-accorder si elle était déjà donnée
+# pour ce paquet, d'où une révocation active plutôt qu'une simple abstention.
+refuser_localisation_en_fond() {
+  (
+    for _ in $(seq 1 90); do
+      if adb -s "$APPAREIL" shell pm revoke com.echango.promo            android.permission.ACCESS_FINE_LOCATION >/dev/null 2>&1; then
+        adb -s "$APPAREIL" shell pm revoke com.echango.promo           android.permission.ACCESS_COARSE_LOCATION >/dev/null 2>&1
+        break
+      fi
+      sleep 2
+    done
+  ) &
+}
+
+PERMISSION_PID=""
 accorder_localisation_en_fond() {
   (
     for _ in $(seq 1 90); do
@@ -806,7 +928,7 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "client" ]; then
 fi
 
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "carte" ]; then
-  jouer parcours_carte_test.dart "client — la carte"     --dart-define=TEST_REMISE="$CARTE_REMISE"     --dart-define=TEST_COMMERCE_NOM="$CARTE_NOM"
+  SANS_GPS=oui jouer parcours_carte_test.dart "client — la carte"     --dart-define=TEST_REMISE="$CARTE_REMISE"     --dart-define=TEST_COMMERCE_NOM="$CARTE_NOM"
   noter "client — la carte ($CARTE_REMISE)" $?
   echo
 fi
