@@ -6,10 +6,15 @@ import {
   IsPhoneNumber,
   IsString,
   Matches,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 import { Categorie } from '../../common/enums/categorie.enum';
 import { PIN_SET_MESSAGE, PIN_SET_PATTERN } from '../pin.constants';
+import {
+  ADRESSE_MAX_LENGTH,
+  NOM_MAX_LENGTH,
+} from '../entities/commercant.entity';
 
 export class CreateCommercantByAgentDto {
   @IsPhoneNumber('DZ')
@@ -17,6 +22,7 @@ export class CreateCommercantByAgentDto {
 
   @IsString()
   @MinLength(2)
+  @MaxLength(NOM_MAX_LENGTH)
   nom: string;
 
   /**
@@ -32,6 +38,7 @@ export class CreateCommercantByAgentDto {
   @IsOptional()
   @IsString()
   @MinLength(2)
+  @MaxLength(ADRESSE_MAX_LENGTH)
   adresse?: string;
 
   @IsEnum(Categorie)

@@ -297,8 +297,15 @@ def self_test():
 
     # ── Doivent REFUSER ──────────────────────────────────────────────────────
     # ⚠️ La garde retirée qui serait encore là — l'objet même du banc.
+    #
+    # Le code cité était `COMMERCANT_NOT_IN_AGENT_COMMUNES` à l'écriture du
+    # banc ; il a été retiré de l'enum le 2026-08-13 avec le découpage, donc
+    # **le serveur ne peut plus le rendre**. Le remplacer par un code vivant
+    # n'affaiblit rien : ce qui est éprouvé ici est que **tout** 403 sur une
+    # route libérée est un échec, quel qu'en soit le motif. Une garde
+    # résiduelle ne se présenterait de toute façon pas sous l'ancien nom.
     _v("403 sur une route libérée",
-       verdict_acceptation(403, "COMMERCANT_NOT_IN_AGENT_COMMUNES")[0], "echec")
+       verdict_acceptation(403, "AUTH_FORBIDDEN_ROLE")[0], "echec")
     # ⚠️ La portée résiduelle déguisée en absence.
     _v("404 sur un commerçant qui existe",
        verdict_acceptation(404, "COMMERCANT_NOT_FOUND")[0], "echec")

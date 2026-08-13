@@ -3637,6 +3637,95 @@ corrigé ici, c'est noté.
 
 ---
 
+### 2026-08-13 — Lot C : constater les absences, et borner ce qui reste
+
+Trois choses que le chantier avait laissées sans filet, toutes bon marché et
+aucune anodine.
+
+#### Rien ne constatait que ce qui a disparu avait disparu
+
+`frontiere_http.py` **dérive ses routes de la source** : une route supprimée
+n'en manque pas, elle en sort. C'est le bon comportement pour ce qu'il fait —
+vérifier que ce qui existe est gardé — mais **personne ne remarquerait leur
+retour**. Côté base, `DropCommune` a tourné une fois, sans contrôle rejouable :
+rien ne disait qu'elle avait été appliquée sur un environnement donné.
+
+`absences_commune.py` — **9 contrôles, 0 échec**. Trois routes, deux tables, une
+colonne.
+
+⚠️ **Une absence est le seul état qu'un test ne constate jamais par accident, et
+le seul qui se répare tout seul en silence.** Recréer une route supprimée ne
+casse rien ; restaurer une sauvegarde antérieure au `DROP` non plus. Un banc
+d'absence est aussi vert sur une API éteinte, une mauvaise URL, une mauvaise
+base. **D'où deux témoins positifs obligatoires** — `GET /promo/config` doit
+répondre `200`, la table `commercant` doit être là. Sans eux, « la table
+`commune` est absente » et « je n'ai pas su interroger la base » rendraient le
+même verdict.
+
+**La distinction qui porte tout le banc HTTP** : les gardes sont posés route par
+route et il n'existe aucun garde global (règle 33). Une requête **sans jeton**
+sépare donc parfaitement les deux cas — `404` si la route est supprimée, `401`
+si elle existe. Aucun identifiant, aucun seau consommé, et le banc **ne peut
+rien écrire** : il s'arrêterait au refus d'authentification avant d'atteindre le
+moindre corps. Corollaire écrit dans le verdict : **`401` est un échec, pas un
+demi-succès** — il prouve qu'un garde s'est exécuté, donc qu'une route est là
+pour le porter.
+
+⚠️ **Prouvé par mutation** (règle 28) : `CREATE TABLE commune (id uuid PRIMARY
+KEY)` fait rendre ❌ à la sonde correspondante, les huit autres restant vertes.
+Table retirée, 9/9 revenus.
+
+#### `adresse` n'avait aucune borne — et c'est le seul repère de lieu qui reste
+
+`@IsString() @MinLength(2)`, rien de plus, sur un `varchar` sans longueur.
+C'est très exactement ce que la règle 34 nomme « une borne manquante, pas un
+choix ». `nom` était dans le même état, et corriger l'un sans l'autre aurait été
+arbitraire : les deux sont bornés (`NOM_MAX_LENGTH = 120`,
+`ADRESSE_MAX_LENGTH = 200`), nommés une seule fois à côté des colonnes, importés
+par les trois DTO.
+
+**Mesuré avant de choisir** : sur les 129 fiches de la base de développement, la
+plus longue adresse fait **25** caractères et le plus long nom **22**. Les
+bornes sont à un ordre de grandeur des saisies réelles.
+
+⚠️ **La colonne reste un `varchar` sans longueur, délibérément.** Contrairement
+à `PRIX_MAX` — qui recopie une contrainte que Postgres applique déjà —, il n'y a
+ici *rien à refléter* : la base accepte tout. Poser `@Column({ length: … })`
+exigerait une migration `ALTER TYPE` pour une valeur que rien n'oblige, et
+ferait diverger l'entité de la base tant qu'elle n'est pas écrite (règle 12).
+La borne est donc une décision produit **sur l'entrée**, et c'est dit plutôt que
+sous-entendu. Conséquence directe : le spec est **le seul endroit** qui puisse
+constater le refus — aucune erreur Postgres ne viendra en renfort si le
+décorateur disparaît.
+
+`commercant-input.dto.spec.ts` — **22 tests**, les trois DTO éprouvées
+séparément (elles portent les mêmes bornes sans qu'aucun code ne les relie —
+règle 30). ⚠️ **Prouvé par mutation** : retirer un seul `@MaxLength` fait tomber
+2 tests. Le banc s'est aussi trompé une fois en chemin — le jeu nominal n'avait
+ni `latitude` ni `longitude`, obligatoires pour la création par agent depuis le
+2026-08-12, et il accusait la borne d'un refus venu d'ailleurs.
+
+#### Deux affirmations fausses et un code mort
+
+- `list-commercant-query.dto.ts` disait « la recherche ne porte que sur le nom
+  et le téléphone. Ajouter `adresse` fait partie du chantier — voir le plan ».
+  C'était fait, dans le même lot. **Un commentaire qui renvoie à un plan survit
+  au plan** : il fait relire un document clos pour découvrir que la chose est
+  faite.
+- `moderation.service.ts` annonçait « scopé communes, vérifié en amont dans
+  `AdminController` » sur les trois résolutions. Rien n'est scopé, rien n'est
+  vérifié en amont. Corrigé avec le lot B.
+- `COMMERCANT_NOT_IN_AGENT_COMMUNES` était encore cité dans deux auto-tests
+  alors qu'il a quitté l'enum : un cas qui attend un code que le serveur ne peut
+  plus rendre n'éprouve plus rien. Remplacé par un code vivant dans les deux —
+  c'est la **forme** du verdict qu'on éprouve, pas le libellé.
+
+**Vérifié** : `tsc` 0, `eslint` 0, **129 tests** (107 → 129), et
+`migration:generate` rend *« No changes in database schema were found »* —
+aucun fichier écrit.
+
+---
+
 ## Comment tenir ce fichier
 
 - **Une entrée de journal par session**, datée, qui dit ce qui a été fait **et

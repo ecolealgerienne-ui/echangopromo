@@ -205,7 +205,14 @@ def self_test():
         ([(201, None), (400, "PROMO_ACTIVE_CAP_REACHED")], 6, "echec"),  # compte final faux
         ([(201, None), (400, "VALIDATION_ERROR")], 5, "non_concluant"),
         ([(201, None), (429, None)], 5, "non_concluant"),
-        ([(201, None), (403, "COMMERCANT_NOT_IN_AGENT_COMMUNES")], 5, "non_concluant"),
+        # ⚠️ Le code portait `COMMERCANT_NOT_IN_AGENT_COMMUNES` jusqu'au
+        # 2026-08-13 — retiré de l'enum avec le découpage administratif. Un cas
+        # d'auto-test qui cite un code que le serveur ne peut plus rendre
+        # n'éprouve plus rien : il vérifie que « un 403 quelconque » ne conclut
+        # pas, ce qui reste vrai et reste utile. Le code est donc remplacé par
+        # un refus d'appartenance qui EXISTE encore, plutôt que le cas soit
+        # supprimé — c'est la forme du verdict qu'on éprouve, pas le libellé.
+        ([(201, None), (403, "PROMO_NOT_OWNED_BY_COMMERCANT")], 5, "non_concluant"),
     ]
     echecs, passes = [], 0
     for resultats, act, attendu in cas:

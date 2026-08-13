@@ -43,6 +43,37 @@ export enum RegistreStatus {
 }
 
 /**
+ * Bornes de saisie du nom et de l'adresse — nommées ici, à côté des colonnes
+ * qu'elles décrivent, et importées par les trois DTO d'entrée : la borne ne
+ * doit exister qu'une fois (même convention que `PRIX_MAX`).
+ *
+ * ⚠️ **Ces deux champs n'avaient aucun plafond**, alors que la règle 34 nomme
+ * précisément « un `@IsString` sans `@MaxLength` » comme une borne manquante,
+ * pas un choix. Ils étaient déjà sans plafond avant le 2026-08-13 ; ce qui a
+ * changé ce jour-là, c'est qu'`adresse` est devenue **le seul repère de lieu en
+ * texte libre** du produit, après la suppression de `commune`/`wilaya`. Un
+ * champ qu'on vient de promouvoir mérite une borne.
+ *
+ * ⚠️ **La colonne, elle, reste un `varchar` sans longueur — délibérément.**
+ * Contrairement à `PRIX_MAX`, qui recopie une contrainte que Postgres applique
+ * déjà (`numeric(10, 2)`), il n'y a ici *rien à refléter* : la base accepte
+ * tout. Poser `@Column({ length: … })` exigerait une migration `ALTER TYPE` sur
+ * une table de production pour une valeur que rien n'oblige, et ferait diverger
+ * l'entité de la base tant qu'elle n'est pas écrite (règle 12). La borne est
+ * donc une **décision produit sur l'entrée**, appliquée au seul endroit qui la
+ * fait respecter — et c'est dit plutôt que sous-entendu.
+ *
+ * Les valeurs : 120 pour un nom de commerce, 200 pour une adresse écrite à la
+ * main. **Mesuré avant de choisir** — sur les 129 fiches de la base de
+ * développement au 2026-08-13, la plus longue adresse fait **25** caractères et
+ * le plus long nom **22**. Les bornes sont donc à un ordre de grandeur des
+ * saisies réelles : elles ne peuvent gêner personne aujourd'hui, et empêchent
+ * qu'une fiche devienne un champ de texte libre déguisé.
+ */
+export const NOM_MAX_LENGTH = 120;
+export const ADRESSE_MAX_LENGTH = 200;
+
+/**
  * Index de la zone visible de la carte (`PromoService.findActiveForMap`).
  * Déclaré ici en plus de la migration `AddCommercantPositionIndex` : sans
  * cette déclaration, un futur `migration:generate` verrait un index présent

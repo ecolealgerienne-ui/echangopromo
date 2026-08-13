@@ -12,7 +12,7 @@ import {
   RegistreStatus,
 } from '../entities/commercant.entity';
 
-/** Vue admin (plan de correction, Phase 2) : recherche nom/téléphone sur l'ensemble des commerçants. */
+/** Vue admin (plan de correction, Phase 2) : recherche nom/téléphone/adresse sur l'ensemble des commerçants. */
 export class ListCommercantQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
@@ -20,9 +20,19 @@ export class ListCommercantQueryDto extends PaginationQueryDto {
   search?: string;
 
   // ⚠️ Les filtres `communeId` et `wilaya` ont été retirés le 2026-08-13.
-  // Il ne reste **aucun** moyen de resserrer géographiquement cet écran : la
-  // recherche ci-dessus ne porte que sur le nom et le téléphone. Ajouter
-  // `adresse` à cette recherche fait partie du chantier — voir le plan.
+  //
+  // ⚠️ **Ce commentaire annonçait un travail déjà fait, et c'est un défaut en
+  // soi.** Il disait « la recherche ne porte que sur le nom et le téléphone.
+  // Ajouter `adresse` fait partie du chantier — voir le plan », alors
+  // qu'`adresse` avait été ajoutée dans le même lot
+  // (`CommercantService.findAllForAdmin`). Un commentaire qui renvoie à un plan
+  // survit au plan : il fait relire un document clos pour découvrir que la
+  // chose est faite.
+  //
+  // L'état réel : la recherche texte porte sur **nom, téléphone et adresse**,
+  // et c'est le seul moyen de resserrer un écran devenu national. `adresse`
+  // étant facultative et en texte libre, resserrer sur elle ne garantit rien —
+  // c'est une aide à la recherche, pas un filtre géographique.
 
   @IsOptional()
   @IsEnum(CommercantAccountState)
