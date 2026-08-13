@@ -87,7 +87,7 @@ DEVICE_ID="parcours-ecran-0001"
 CHOIX="${1:-tous}"
 case "$CHOIX" in
   tous|premier-lancement|plafond|creation|admin|agent|moderation|client|inscription|agent-creation|signalement|carte) ;;
-  decor-promos) ;;
+  decor-promos|decor-retouche|ville) ;;
   *) echo "❌ Parcours inconnu : « $CHOIX »."
      echo "   Attendu : premier-lancement | plafond | creation | admin | agent"
      echo "             | moderation | client | inscription | agent-creation"
@@ -939,6 +939,56 @@ if [ "$CHOIX" = "decor-promos" ]; then
   # un GPS actif ferait voyager la carte au démarrage pour rien.
   SANS_GPS=oui jouer parcours_promos_serie_test.dart "décor — promos en série"     --dart-define=TEST_COMMERCANTS="$TEST_COMMERCANTS"     --dart-define=TEST_PROMOS_A_CREER="${TEST_PROMOS_A_CREER:-5}"
   noter "décor — promos en série" $?
+fi
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "ville" ]; then
+# ── 2 septies. La ville par défaut et le geste qui la fixe ─────────────────
+#
+# ⚠️ **Les deux noms viennent du SERVEUR**, jamais d'une constante écrite ici :
+# le décor peut changer de libellé, et un parcours qui recopierait « Épicerie
+# Hassi Bahbah » échouerait en accusant la liste. On demande donc à la carte un
+# commerce de la ville visée, et un commerce d'ailleurs — hors du rayon.
+echo
+echo "── 2 septies. Ville par défaut ──"
+VILLE_LAT="${VILLE_LAT:-35.0774}"
+VILLE_LNG="${VILLE_LNG:-3.0281}"
+AILLEURS_LAT="${AILLEURS_LAT:-36.7538}"
+AILLEURS_LNG="${AILLEURS_LNG:-3.0588}"
+nom_dans_zone() { # LAT LNG
+  curl -s "$API_URL/promo/map?north=$(awk -v v=$1 'BEGIN{print v+0.03}')&south=$(awk -v v=$1 'BEGIN{print v-0.03}')&east=$(awk -v v=$2 'BEGIN{print v+0.03}')&west=$(awk -v v=$2 'BEGIN{print v-0.03}')"     -H "X-Device-Id: $DEVICE_ID" | "$PY" -c "import sys,json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for c in d.get('items', []):
+    if (c.get('promos') or []) and c.get('nom'):
+        print(c['nom']); break"
+}
+VILLE_COMMERCE="$(nom_dans_zone "$VILLE_LAT" "$VILLE_LNG")"
+VILLE_AILLEURS="$(nom_dans_zone "$AILLEURS_LAT" "$AILLEURS_LNG")"
+[ -n "$VILLE_COMMERCE" ] || { echo "❌ aucun commerce avec promo autour de $VILLE_LAT,$VILLE_LNG"; exit 2; }
+[ -n "$VILLE_AILLEURS" ] || { echo "❌ aucun commerce avec promo autour de $AILLEURS_LAT,$AILLEURS_LNG"; exit 2; }
+# ⚠️ Les deux villes doivent être hors du rayon l'une de l'autre, sinon
+# l'assertion d'absence serait fausse par construction et le parcours accuserait
+# la liste (règle 38).
+[ "$VILLE_COMMERCE" != "$VILLE_AILLEURS" ] || { echo "❌ même commerce des deux côtés — les deux points ne sont pas assez éloignés"; exit 2; }
+echo "✅ ici « $VILLE_COMMERCE » · ailleurs « $VILLE_AILLEURS »"
+
+  SANS_GPS=oui jouer parcours_ville_par_defaut_test.dart "client — ville par défaut"     --dart-define=TEST_VILLE_COMMERCE="$VILLE_COMMERCE"     --dart-define=TEST_VILLE_COMMERCE_AILLEURS="$VILLE_AILLEURS"     --dart-define=TEST_VILLE_LAT="$VILLE_LAT"     --dart-define=TEST_VILLE_LNG="$VILLE_LNG"
+  noter "client — ville par défaut" $?
+
+  # ⚠️ Un `flutter drive` SÉPARÉ, et ce n'est pas du confort : les préférences
+  # sont un singleton de processus, et l'état d'un test déteint sur le suivant.
+  # Groupés, le changement de ville voyait l'app démarrer sans point posé.
+  SANS_GPS=oui jouer parcours_ville_changement_test.dart "client — changer de ville"     --dart-define=TEST_VILLE_COMMERCE="$VILLE_COMMERCE"     --dart-define=TEST_VILLE_LAT="$VILLE_LAT"     --dart-define=TEST_VILLE_LNG="$VILLE_LNG"
+  noter "client — changer de ville" $?
+fi
+if [ "$CHOIX" = "decor-retouche" ]; then
+  [ -n "${TEST_COMMERCANTS:-}" ] || {
+    echo "❌ TEST_COMMERCANTS absent — liste « tel:pin,tel:pin,… » attendue,"
+    echo "   dans le MÊME ordre qu'à la création : l'ordre fixe l'échelle de prix."
+    exit 2; }
+  SANS_GPS=oui jouer parcours_promos_retouche_test.dart "décor — retouche des prix"     --dart-define=TEST_COMMERCANTS="$TEST_COMMERCANTS"
+  noter "décor — retouche des prix" $?
 fi
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "carte" ]; then
   SANS_GPS=oui jouer parcours_carte_test.dart "client — la carte"     --dart-define=TEST_REMISE="$CARTE_REMISE"     --dart-define=TEST_COMMERCE_NOM="$CARTE_NOM"

@@ -740,7 +740,7 @@ class _ClusterMarker extends StatelessWidget {
             ],
           ),
           child: Text(
-            '${cluster.count}',
+            '${cluster.promoCount}',
             style: textTheme.titleMedium?.copyWith(
               color: colorScheme.onPrimary,
               fontWeight: FontWeight.w700,
@@ -789,8 +789,33 @@ class _ClusterPicker extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-            child: Text(l10n.mapShopsHere(shops.length),
-                style: textTheme.titleMedium),
+            // ── ⚠️ Le titre compte des PROMOS, le sous-titre des commerces ──
+            //
+            // Il n'annonçait que des commerces, et ça a fait buter trois fois
+            // le même jour : « 15 promos dans la liste, 3 sur la carte », puis
+            // « Autre 4 + Alimentation 22 = 26, mais Toutes 24 ». Les deux
+            // fois, le produit avait raison — un ensemble de LIEUX ne
+            // s'additionne pas comme un ensemble de promos, parce qu'un
+            // commerce dont les promos sont dans deux catégories est compté
+            // dans les deux filtres et une seule fois dans « Toutes ».
+            //
+            // Le chiffre restait donc juste et **illisible** : il répondait en
+            // boutiques à un filtre qui parle en catégories de promos, sur une
+            // app dont l'objet est de chercher des promos.
+            //
+            // ⚠️ Les deux nombres sont montrés, pas l'un à la place de l'autre :
+            // la liste dessous énumère des commerces, et n'afficher qu'un
+            // total de promos rendrait ce qu'on lit incompréhensible à son
+            // tour. Chaque nombre dit ce qu'il compte.
+            //
+            // Composé à partir des deux clés existantes plutôt qu'une
+            // troisième : une clé de plus, c'est trois fichiers `.arb` à tenir
+            // en phase pour une phrase que ceux-ci disent déjà (règle 27).
+            child: Text(
+              '${l10n.promoCount(shops.fold<int>(0, (n, s) => n + s.promos.length))}'
+              ' · ${l10n.mapShopsHere(shops.length)}',
+              style: textTheme.titleMedium,
+            ),
           ),
           // `Flexible` + `shrinkWrap` : la feuille s'ajuste à deux commerces
           // comme à dix, sans occuper l'écran entier pour rien.

@@ -14,7 +14,27 @@ class ShopCluster {
 
   bool get isSingle => shops.length == 1;
   MapShop get single => shops.first;
+
+  /// Nombre de **commerces** regroupés — ce que la grappe agrège réellement.
   int get count => shops.length;
+
+  /// Nombre de **promos** portées par ces commerces.
+  ///
+  /// ⚠️ **C'est ce chiffre que la pastille affiche**, pas `count`. L'app sert à
+  /// chercher des promos : le fil client, la vitrine et l'écran de détail
+  /// comptent tous des promos, et la carte était la seule surface à compter des
+  /// boutiques. Un client lisait « 24 » sur la carte et « 44 promos » dans la
+  /// liste, pour exactement le même contenu — et en filtrant par catégorie il
+  /// obtenait 4 + 22 = 26 d'un côté, 24 de l'autre, parce qu'un commerce dont
+  /// les promos sont dans deux catégories compte dans les deux filtres et une
+  /// seule fois dans « Toutes ». Les promos, elles, s'additionnent : 12 + 32 =
+  /// 44 exactement.
+  ///
+  /// ⚠️ `count` reste, et sert toujours : c'est lui qui dit si la grappe peut
+  /// se scinder, et la feuille ouverte au clic affiche les deux nombres pour
+  /// que le lien entre la pastille et la liste des commerces reste lisible.
+  int get promoCount =>
+      shops.fold<int>(0, (total, shop) => total + shop.promos.length);
 }
 
 /// Regroupe les commerces par cellules de grille en **pixels d'écran**, pas

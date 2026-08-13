@@ -191,13 +191,27 @@ void main() {
         expect(faux.derniereSource, ImageSource.gallery,
             reason: 'le tap a atterri sur la mauvaise entrée de la feuille');
 
-        // Des prix qui varient : un décor où les cinq promos sont identiques
-        // ne permet ni de les distinguer à l’écran, ni d’éprouver un tri par
-        // remise.
+        // ── ⚠️ Les prix varient par promo ET par commerçant ───────────────
+        //
+        // La première version ne faisait varier que le rang de la promo :
+        // 1000/700, 1100/650… 1400/500. Les cinq remises allaient donc de 30 %
+        // à 64 % — **identiques pour tous les commerçants**, puisque la
+        // cinquième promo de chacun donnait exactement 64 %.
+        //
+        // Sur la carte, les trois marqueurs d'une ville affichaient alors le
+        // même « −64 % » : le marqueur porte la MEILLEURE remise du commerce,
+        // et elles étaient toutes égales. Trois points indiscernables, et un
+        // tri par remise sans objet. Constaté le 2026-08-13 à Hassi Bahbah.
+        //
+        // C'est la même erreur que pour les catégories : faire varier une
+        // dimension et oublier l'autre. Le prix après baisse donc aussi avec le
+        // rang du commerçant, ce qui décale toute son échelle de remises.
+        final prixAvant = 1000 + i * 100;
+        final prixApres = 700 - i * 50 - decalage * 30;
         await saisir(
             tester, 0, '$promoPrefixe ${rang + 1} — ${categorie.value}');
-        await saisir(tester, 1, '${1000 + i * 100}');
-        await saisir(tester, 2, '${700 - i * 50}');
+        await saisir(tester, 1, '$prixAvant');
+        await saisir(tester, 2, '$prixApres');
 
         // ── ⚠️ Une catégorie DIFFÉRENTE à chaque promo ────────────────────
         //
