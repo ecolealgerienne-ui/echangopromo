@@ -75,6 +75,34 @@ D_COMMERCANT_PIN="${D_COMMERCANT_PIN:-654321}"
 # L'écart maximal est de ~0,004° (~440 m) : assez pour que deux marqueurs se
 # séparent bien avant le zoom maximal, assez peu pour rester dans tout cadre
 # que ces bancs regardent.
+# ── Nom et adresse, en concordance avec la déclaration réelle ────────────────
+#
+# ⚠️ **Un commerçant se déclare par nom + adresse en TEXTE LIBRE + position**
+# depuis la suppression du découpage administratif : `commune` et `wilaya` ont
+# disparu, l'adresse est facultative et purement indicative, et c'est la
+# position qui décide de tout (visibilité, rayon, carte).
+#
+# Le décor doit donc dire les trois, et les faire **concorder** : un décor qui
+# pose trois commerçants dans trois villes en leur donnant le même nom et la
+# même adresse ne ressemble à aucune déclaration réelle. Il rend aussi deux
+# choses inéprouvables — la recherche admin, qui porte sur nom/téléphone/adresse
+# depuis le 2026-08-13, et toute assertion d'écran qui doit distinguer un
+# commerce d'un autre.
+#
+# Les défauts gardent les valeurs historiques : c'est le décor de Djelfa, et
+# plusieurs bancs le lisent.
+# ⚠️ **`D_SANS_PROMO=oui` s'arrête après le compte, sans créer de promo.**
+# Le décor à trois villes crée les promos **par le formulaire commerçant**
+# (`parcours_creation_promo_test.dart`) et non par l'API : un décor fabriqué par
+# un chemin que le produit n'emprunte pas ne prouve rien sur ce chemin, et c'est
+# précisément l'écran de création qu'on veut voir tenir. Sans ce mode, il
+# faudrait créer la promo ici puis la recréer à l'écran — deux promos pour un
+# commerçant qui n'en veut qu'une, et un plafond quotidien consommé pour rien.
+D_SANS_PROMO="${D_SANS_PROMO:-non}"
+
+D_COMMERCANT_NOM="${D_COMMERCANT_NOM:-Commerce Décor}"
+D_COMMERCANT_ADRESSE="${D_COMMERCANT_ADRESSE:-Rue du Décor}"
+
 D_COMMERCANT_LAT="${D_COMMERCANT_LAT:-}"
 D_COMMERCANT_LNG="${D_COMMERCANT_LNG:-}"
 if [ -z "$D_COMMERCANT_LAT" ] || [ -z "$D_COMMERCANT_LNG" ]; then
@@ -344,6 +372,11 @@ fi
 pass "Registre validé — commerçant $CID"
 
 # ─────────────────────────────────────────────────────────────────────────────
+if [ "$D_SANS_PROMO" = "oui" ]; then
+  step "5. Promo — SAUTÉE (D_SANS_PROMO=oui)"
+  info "L'appelant la créera par l'écran commerçant."
+  PROMO_ID=""
+else
 step "5. Une promo appartenant à ce commerçant"
 
 # Le banc d'appartenance a besoin d'une ressource RÉELLE à cibler : une promo
@@ -512,6 +545,7 @@ etat_promo="$(api GET "/promo/$PROMO_ID" '' "$COMMERCANT_TOKEN" \
 [ "$etat_promo" = "publiee" ] || fail \
   "Promo du décor non publiée" "lifecycleStatus=${etat_promo:-<absent>}"
 pass "Promo $PROMO_ID"
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 step "6. Le commerçant du décor est bien SUR la carte"
