@@ -416,7 +416,9 @@ permet de reconnaître un cas nouveau relevant de la même règle.
     champ de recherche puis exigeait `find.text(description)` — or **`find.text`
     matche aussi les `EditableText`**, donc le champ lui-même. L'assertion
     passait alors qu'aucune carte n'était affichée (aucune commune
-    sélectionnée, l'accueil montrait « Choisissez vos communes »).* En Flutter,
+    sélectionnée, l'accueil montrait « Choisissez vos communes » — cet écran
+    n'existe plus, il a disparu avec le découpage administratif le
+    2026-08-13 ; le défaut, lui, reste entier).* En Flutter,
     viser `(w) => w is Text && w.data == …` dès que la valeur cherchée peut
     aussi être une saisie. En général : **si ce qu'on cherche peut venir du
     test lui-même, l'assertion ne mesure rien.**

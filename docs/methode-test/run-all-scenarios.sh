@@ -69,7 +69,7 @@ BANCS=(
   # Chacun porte en tête ce qu'il éprouve ET le défaut qui l'a fait naître.
   # test-plafond-promos
   # test-fenetre-signalement
-  # test-visibilite-commune
+  # test-visibilite-rayon
 
   # ⚠️ En dernier : perturbe l'infrastructure (arrêt/redémarrage d'un service).
   # test-resilience-degradee

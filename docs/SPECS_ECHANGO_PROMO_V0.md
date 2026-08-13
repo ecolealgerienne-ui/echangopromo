@@ -98,8 +98,13 @@ auto_inscrit → autonome (directement, dès la saisie du PIN à l'inscription)
 
 **Fiche commerçant — données saisies à la création** (auto-inscription ou
 création agent) :
-- Commune sélectionnée par **wilaya puis commune** (même logique de
-  sélection guidée que côté client, §3.1), pas une liste plate.
+- **Position sur la carte** — capturée au GPS ou choisie sur la carte. C'est
+  elle, et elle seule, qui décide où le commerce apparaît. Obligatoire à la
+  création par un agent (il est sur place) ; à défaut exigée à la publication.
+- **Adresse en texte libre, facultative** — purement indicative, jamais un
+  critère de recherche géographique.
+  ⚠️ Remplace la sélection **wilaya puis commune**, supprimée le 2026-08-13
+  avec le découpage administratif tout entier.
 - **Photo du commerce, optionnelle** — pour que les clients l'identifient
   facilement dans la liste/fiche (caméra ou galerie, contrairement à la
   photo de promo prise par l'agent qui est caméra uniquement).
@@ -162,12 +167,19 @@ brouillon → publiée → arrêtée
 
 ### 3.3 Agent terrain
 
-- **Rattaché à zéro, une ou plusieurs Commune(s)** (relation many-to-many) — le
-  concept de Zone opérationnelle séparée a été abandonné (2026-07-09) : un
-  agent doit pouvoir couvrir plusieurs communes, voire une wilaya entière
-  ("assigner toute la wilaya" est une commodité d'UI qui sélectionne en masse
-  les communes de cette wilaya, pas un champ distinct), le staffing "un agent
-  par commune" n'étant pas soutenable.
+- **Sans territoire — l'agent est GLOBAL depuis le 2026-08-13.** Il était
+  rattaché à zéro, une ou plusieurs `Commune` (le concept de Zone opérationnelle
+  séparée ayant été abandonné le 2026-07-09), et cette liste bornait tout ce
+  qu'il pouvait voir et faire. Elle a disparu avec le découpage administratif.
+  ⚠️ **Ce que ça retire, et que rien ne remplace à ce jour** : la garde
+  d'appartenance de quatorze routes d'écriture, la partition du travail de
+  modération (tous les agents voient la même file, les résolutions sont des
+  écritures inconditionnelles), et le seul moyen dont l'admin disposait pour
+  **restreindre** un agent — il n'existe plus de granularité entre « agent » et
+  « admin moins deux écrans ».
+  ⚠️ Le §7 de ce document prévoyait déjà la disparition du rôle agent « à
+  l'extension multi-wilaya ». Cette décision crée exactement l'état décrit : la
+  question de savoir si le rôle survit est ouverte, pas tranchée.
 - Authentification **email + mot de passe**, compte créé exclusivement par l'Admin (pas d'auto-inscription agent).
 - Crée une fiche commerçant (numéro de téléphone, nom, adresse, catégorie) + première promo.
 - Prend la photo de la promo **obligatoirement dans l'app** (pas d'upload depuis la galerie), avec horodatage. **Pas de géolocalisation capturée** (décision explicite — écartée après discussion).
@@ -177,10 +189,12 @@ brouillon → publiée → arrêtée
 - **Agent = modérateur, mêmes écrans que l'admin** (décision produit
   2026-07-12) : dashboard, modération, liste de promos, liste/fiche
   commerçant (valider registre/profil, suspendre/réactiver, réinitialiser
-  le PIN, créer une fiche commerçant) — un seul jeu d'écrans partagé, scopé
-  automatiquement aux communes de l'agent côté backend (vue globale pour
-  l'admin). Seules deux fonctionnalités restent réservées à l'admin : la
-  gestion des agents et le journal d'audit.
+  le PIN, créer une fiche commerçant) — un seul jeu d'écrans partagé. ⚠️ Ils
+  étaient scopés aux communes de l'agent côté backend ; ils ne le sont plus
+  depuis le 2026-08-13, agent et admin reçoivent **exactement les mêmes
+  données**. Seules deux fonctionnalités restent réservées à l'admin : la
+  gestion des agents et le journal d'audit — ce sont désormais **les seules
+  choses qui distinguent les deux rôles**.
 - **Liste "commerces de mes communes" avec statut de tournée (jamais
   visité/à jour/à relancer) retirée le 2026-07-12** — décision produit,
   jugée redondante avec la fiche commerçant unifiée ci-dessus. Le statut de
@@ -195,8 +209,18 @@ brouillon → publiée → arrêtée
   modération/gestion déjà partagées avec l'agent (voir §3.3).
 - Valide ou rejette le registre envoyé par un commerçant auto-inscrit — condition désormais bloquante pour que celui-ci puisse publier (§3.2).
 - Traite la file de modération des promos signalées (masquer / valider en `vérifiée_ok` / avertir le commerçant).
-- Crée et gère les comptes agents, assigne un agent à une ou plusieurs communes.
-- **Transfère des communes** d'un agent à un autre (cas : départ d'un agent — sans ça, les fiches des communes concernées cessent d'être mises à jour silencieusement).
+- Crée et gère les comptes agents (création, réinitialisation de mot de passe,
+  révocation de session).
+  ⚠️ **Il ne leur assigne plus de territoire depuis le 2026-08-13**, et ne peut
+  donc plus les restreindre : un agent créé a d'emblée les mêmes droits
+  d'écriture que tous les autres, sur tout le parc. Il n'existe par ailleurs
+  **aucune route de suppression d'agent** — seulement la révocation.
+- ~~**Transfère des communes** d'un agent à un autre~~ — supprimé le
+  2026-08-13. ⚠️ Ce geste répondait à un besoin réel — le départ d'un agent,
+  pour que les fiches dont il s'occupait ne cessent pas d'être suivies **en
+  silence** — et **rien ne le reprend**. Sans territoire la question ne se pose
+  plus ; c'est la question inverse qui s'ouvre, celle de l'attribution du
+  travail entre agents.
 - **Réinitialise le PIN** d'un commerçant sur demande (seul recours en cas de PIN oublié, pas de flux libre-service — voir §3.2).
 - Vue globale (dashboard) : nombre de commerces actifs, nombre de promos publiées, nombre de signalements en attente.
 
@@ -206,13 +230,22 @@ brouillon → publiée → arrêtée
 
 > Détail des schémas/relations à faire dans une passe dédiée "modèle de données" — ceci n'est qu'un inventaire d'entités et de leurs statuts/cycles de vie, nécessaire pour cadrer le développement.
 
-- **Commune** — référentiel administratif officiel (wilaya → commune), utilisé pour le filtre client et pour le rattachement territorial d'un agent (many-to-many `Agent` ↔ `Commune` — le concept de Zone séparée a été abandonné).
+- ~~**Commune**~~ — référentiel administratif officiel (wilaya → commune).
+  **Supprimé le 2026-08-13**, table comprise. Le lieu d'un commerce ne
+  s'exprime plus que par sa **position** (qui décide de tout) et son
+  **adresse** en texte libre (facultative, indicative).
 - **Commerçant** — fiche + état de compte (`créé_agent` / `autonome`) + origine de vérification (`auto_inscrit` / `confirmé_agent`) + statut registre (`en_attente` / `validé` / `rejeté`, bloquant pour publier uniquement si `auto_inscrit`).
 - **Promo** — liée à un commerçant, statut (`active` / `expirée` / `signalée` / `masquée` / `vérifiée_ok`), photo, prix avant/après, catégorie, date de fin, compteur de signalements.
-- **Agent** — compte + communes assignées (many-to-many).
+- **Agent** — compte. Plus aucun territoire depuis le 2026-08-13.
 - **Admin** — compte, rôle unique en V0.
 - **Signalement (Report)** — device_id, promo_id, horodatage. Sert au calcul du seuil de modération.
-- **Journal d'audit (AuditLog)** — recommandé pour tracer les actions des agents (création, modification de fiche commerçant) et de l'admin (réinitialisation de PIN, transfert de communes) avec identité + horodatage, notamment utile en cas de communes multiples ou de transfert.
+- **Journal d'audit (AuditLog)** — trace les actions des agents (création et
+  modification de fiche commerçant, **écritures de promo depuis le
+  2026-08-13**) et de l'admin (réinitialisation de PIN, gestion des agents)
+  avec identité + horodatage.
+  ⚠️ **Il devient le seul contrepoids à la portée globale de l'agent**, et il
+  ne suffit pas encore : il ne se filtre que par `actorType` et n'affiche que
+  des UUID. Lisible pour un agent de commune, illisible pour un agent national.
 
 ---
 
@@ -221,19 +254,31 @@ brouillon → publiée → arrêtée
 ### 5.1 Expiration des promos
 Tâche planifiée (cron, ex. quotidienne) qui bascule automatiquement les promos ayant dépassé leur date de fin vers le statut `expirée`. Aucune action utilisateur ne déclenche ce changement — c'est un point critique à ne pas oublier en développement, sans quoi l'objectif de fraîcheur du contenu est compromis silencieusement.
 
-### 5.2 Commune — territoire agent et admin (plus un filtre client)
-- **Commune** : découpage officiel. ⚠️ **Ce n'est plus l'ancrage du client
-  depuis le 2026-08-12** (voir §3.1) : elle reste la frontière d'autorisation de
-  l'agent (`assertCommuneMatches`) et le filtre des écrans admin. Le commerçant
-  y est toujours rattaché — `communeId` reste `NOT NULL`, et le rendre nullable
-  ferait refuser toutes les actions d'agent en silence.
-- Le découpage opérationnel interne "Zone" (distinct de Commune) a été
-  abandonné le 2026-07-09 : un agent est rattaché directement à une ou
-  plusieurs `Commune` (relation many-to-many), un agent par commune n'étant
-  pas soutenable et le rôle agent lui-même étant amené à disparaître à
-  l'extension multi-wilaya. "Assigner toute la wilaya" reste une commodité
-  d'UI (sélection en masse des communes de cette wilaya), pas un champ
-  distinct — une seule source de vérité pour le territoire d'un agent.
+### 5.2 Le lieu — une position, et rien d'autre
+
+⚠️ **Cette section s'appelait « Commune — territoire agent et admin ». Le
+découpage administratif a été supprimé le 2026-08-13**, en trois temps :
+
+1. **2026-07-09** — le découpage opérationnel interne « Zone » est abandonné au
+   profit d'un rattachement direct de l'agent à des communes.
+2. **2026-08-12** — la commune cesse d'être l'ancrage du **client** : celui-ci
+   enregistre un point et cherche dans un rayon autour de lui (§3.1).
+3. **2026-08-13** — la commune disparaît entièrement : elle n'était plus que la
+   frontière d'autorisation de l'agent et un filtre d'écrans admin.
+
+**Ce qui reste, et qui suffit** :
+
+- La **position** du commerce décide de tout — carte, liste au rayon,
+  visibilité. Sans elle, un commerce n'existe pour aucun client, et la
+  publication est refusée.
+- L'**adresse** en texte libre est facultative et purement indicative. Elle
+  n'est jamais un critère géographique ; elle sert à reconnaître une enseigne,
+  et alimente la recherche texte des écrans admin.
+
+**Ce que ça coûte, et qu'il faut savoir** : le produit n'a plus aucune notion
+de territoire. Ni pour restreindre un agent, ni pour répartir le travail de
+modération, ni pour dire à un client où il regarde — sans géocodeur, l'app ne
+sait pas comment s'appelle l'endroit qu'elle affiche.
 
 ### 5.3 Plafond de promos actives
 5 promos **publiées** maximum par commerçant, simultanément (voir §3.2 pour le cycle de vie brouillon/publiée/arrêtée). Tri par défaut à définir (proposition : date d'expiration la plus proche en premier) — **point encore ouvert**, à trancher lors du modèle de données/UX.

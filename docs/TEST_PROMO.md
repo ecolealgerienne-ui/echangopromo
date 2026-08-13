@@ -7,6 +7,18 @@ les valeurs réelles de ce dépôt.
 Tout ce qui est chiffré ici a été **mesuré le 2026-08-04** sur `main`
 (`77e788a`), pas estimé. Chaque règle métier porte son `fichier:ligne`.
 
+⚠️ **Ce document décrit en partie un produit qui n'existe plus.** Deux chantiers
+ont retiré le découpage administratif : la bascule géographique du 2026-08-12
+(le client cherche autour d'un point qu'il enregistre) et la suppression de
+`commune`/`wilaya` du 2026-08-13 (l'agent devient global, l'adresse en texte
+libre devient le seul repère de lieu).
+
+Le **registre des bancs** et le **tableau des rôles** ci-dessous sont à jour.
+Les **récits datés** — §« scénario d'attaque », §« ce que le décor a révélé »,
+et les colonnes de parcours — ne le sont pas : ils rapportent ce qui a été
+mesuré à leur date, et les réécrire falsifierait un journal. Les lire comme de
+l'histoire, pas comme un état.
+
 ---
 
 ## 1. État des lieux mesuré
@@ -42,7 +54,6 @@ Tout ce qui est chiffré ici a été **mesuré le 2026-08-04** sur `main`
 
 | Table | Lignes |
 |---|---|
-| `commune` | 35 |
 | `commercant` | 1 |
 | `promo` | 1 — **expirée** (`dateFin` = 2026-07-09) |
 | `admin` | 1 |
@@ -152,7 +163,7 @@ partagées (`/notifications`, `/storage/upload`, `/promo/:id`) comptent pour
 | Persona | Auth. | Routes | Écrans | Particularité pour les tests |
 |---|---|---|---|---|
 | **Admin** | mot de passe | **35** | **13** | Compte **unique** en V0. Accès par URL directe `/admin`, non découvrable dans l'app. **La plus grande surface des quatre, de loin.** |
-| **Agent** | mot de passe | **26** | 3 | Rattaché à N communes. ⚠️ **14 de ses routes sont sous `/admin/*`** : il suspend, supprime, valide un registre, réinitialise un PIN, modère. Rôle appelé à disparaître à l'extension multi-wilaya — mais bien présent aujourd'hui. |
+| **Agent** | mot de passe | **26** | 3 | ⚠️ **Sans territoire depuis le 2026-08-13 : il agit sur tout le parc.** **14 de ses routes sont sous `/admin/*`** : il suspend, supprime, valide un registre, réinitialise un PIN, modère — sans aucune garde d'appartenance. Rôle appelé à disparaître, et ce chantier crée l'état qui le rendait caduc. |
 | **Commerçant** | PIN | 17 | 7 | Cycle de vie : inscription → validation registre → actif → suspendu → supprimé. Peut **s'auto-supprimer** (`DELETE /commercant/me`). |
 | **Client** | **aucune** — anonyme | 14 (ouvertes) | 4 + 4 onboarding | C'est ce qui rend 14 routes légitimement ouvertes. Identifié par un `X-Device-Id` **déclaratif, jamais vérifié** — d'où le throttle par IP sur `/report`. |
 
@@ -309,7 +320,6 @@ n'est un oubli constaté au 2026-08-04.
 | `GET /promo` | consultation client — le client est anonyme par conception |
 | `GET /promo/:id` | idem |
 | `GET /promo/map` | idem — protégée par `MAP_THROTTLE` (180/min) |
-| `GET /commune` | sélecteur wilaya → commune, chargé **en entier** par `CommuneCascadeField`. ⚠️ Ne jamais paginer par défaut (règle 15 de `CLAUDE.md`) |
 | `GET /highlight` | bandeau Top promos de l'accueil |
 | `GET /commercant/:id/public` | fiche commerçant publique |
 | `GET /p/:id` | redirection de partage vers le store |
@@ -566,7 +576,6 @@ déséquilibre entre profils ne se voyait pas.
 |---|---|---|
 | `test-client-liste` | `GET /promo`, `GET /promo/:id` | « visible » a **une seule** définition ; **aucune réponse ne porte `photoKey`** (un spread exposait l'UUID de l'agent) |
 | `test-client-carte` | `GET /promo/map` | plafond de 300 commerces, bornes de la zone visible, throttle 180/min (T5) |
-| `test-client-commune` | `GET /commune` | liste **complète**, jamais tronquée — la paginer casserait `CommuneCascadeField` (règle 15) |
 | `test-client-highlight` | `GET /highlight` | bandeau curé : 10 max, repli à 8 |
 | `test-client-fiche` | `GET /commercant/:id/public` | la projection publique — que voit un anonyme, et surtout que ne voit-il pas |
 | `test-client-applinks` | `GET /p/:id`, les 2 `.well-known` | host-scopées : à sonder avec `-H "Host: promo.echango.com"` |
@@ -587,8 +596,9 @@ déséquilibre entre profils ne se voyait pas.
 
 | Banc | Routes exercées | Ce qu'il éprouve en propre |
 |---|---|---|
-| **`test-agent-appartenance`** ⚠️ | **les 14 routes `/admin/*`** + `PATCH /promo/:id` + `POST /promo/agent/:commercantId` | **Le banc le plus important du lot** (T1). Un agent hors de ses communes doit être refusé sur *chacune* — suspendre, supprimer, valider un registre, réinitialiser un PIN, modérer. L'IDOR corrigé à l'audit V0 ne portait que sur les promos : la surface réelle est **sept fois plus grande** |
-| `test-agent-creation` | `POST /agent/commercant`, `GET /agent/me` | le commerçant créé tombe dans une commune de l'agent |
+| **`test-agent-appartenance`** ⚠️ | **les 14 routes `/admin/*`** + `PATCH /promo/:id` + `POST /promo/agent/:commercantId` | **SUSPENDU le 2026-08-13, à réécrire.** Il prouvait qu'un agent hors de ses communes était refusé sur *chacune* ; il devra prouver l'inverse — qu'il y est **accepté**. Conservé parce qu'il est le seul à exercer ces 14 routes avec un jeton d'agent. ⚠️ Sa réécriture rend ses 14 sondes **destructives** : elles étaient sans effet de bord *parce qu'elles étaient refusées* |
+| `test-agent-creation` | `POST /agent/commercant`, `GET /agent/me` | ⚠️ **Sujet changé le 2026-08-13** : le commerçant créé porte **sa position**, vérifiée sur la fiche publique, et la création sans position est refusée par la validation |
+| **`test-commercant-b`** ⚠️ | `PATCH /promo/:id`, `publish`, `stop` | **Neuf le 2026-08-13.** `PROMO_NOT_OWNED_BY_COMMERCANT` devient la garde d'appartenance principale du contrôleur de promo, et n'était provoqué par **aucun** banc. Asserte le **code**, jamais le statut — six gardes partagent le 403 sur ces routes |
 | `test-agent-promo` | `POST /promo/agent/:commercantId` | l'exemption agent/admin des plafonds anti-abus |
 
 #### Admin — 35 routes
@@ -598,8 +608,8 @@ déséquilibre entre profils ne se voyait pas.
 | `test-admin-registre` | `GET /admin/commercant`, `POST …/registre/{valider,rejeter}`, `…/profile/valider`, `…/reset-pin` | le cycle de validation |
 | `test-admin-cycle-commercant` | `POST …/suspend`, `/reactivate`, `/delete` | suspension ≠ suppression, et la suspension **libère le numéro de téléphone** |
 | `test-admin-moderation` | `GET /admin/moderation/queue`, `POST …/{masquer,verifier-ok,avertir}` | seuil de 3 signalements, fenêtre d'ignore de 30 jours |
-| `test-admin-dashboard` | `GET /admin/dashboard`, `GET /admin/promo` | le surcompte, et les filtres wilaya/commune |
-| `test-admin-agents` | `POST`/`GET /admin/agent`, `PATCH /admin/agent/:id/communes`, `POST /admin/agent/transfer-communes`, `…/reset-password` | le transfert de communes — **exactement ce que l'`AuditLogModule` devait tracer** (T2) |
+| `test-admin-dashboard` | `GET /admin/dashboard`, `GET /admin/promo` | le surcompte. ⚠️ **Sa section 4 a été retournée le 2026-08-13** : elle prouvait le cloisonnement de deux agents disjoints, elle prouve désormais que **deux agents distincts voient la même chose, égale à l'admin**. Sans un second agent, « il voit tout » serait indiscernable de « il voit ce qu'il voyait » |
+| `test-admin-agents` | `POST`/`GET /admin/agent`, `…/reset-password` | ⚠️ **Réduit le 2026-08-13** avec ses deux routes de territoire. Ce qui survit est ce qui comptait : `verdict_trace`, seul contrôle du parc qui éprouve qu'une action d'administration **laisse une trace** — **exactement ce que l'`AuditLogModule` devait faire** (T2) |
 | `test-admin-audit-log` | `GET /admin/audit-log` | module resté **non branché depuis le premier commit** ; les actions ci-dessus doivent y laisser une trace |
 | `test-admin-highlight` | `GET`/`POST /admin/highlight`, `PATCH`/`DELETE /admin/highlight/:id`, `POST /admin/highlight/reorder` | plafond de 10, réordonnancement, image importée. **Livré fin juillet, jamais éprouvé**, et porte le `HIGHLIGHT_CAP_REACHED` non traduit de P1 (T2) |
 

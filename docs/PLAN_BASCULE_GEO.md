@@ -497,6 +497,18 @@ silencieusement du périmètre de tout agent.
 > migration que la suppression — écraser une adresse saisie par le commerçant
 > par un nom de commune serait un recul, pas une préservation.
 >
+> ⚠️ **Rouvert le 2026-08-13 par deux revues adverses**, qui ont chiffré ce que
+> cet arbitrage coûte et ce qu'il protège. Il protège **une douzaine de lignes
+> d'une base de développement** — rien n'est publié. Il coûte : une adresse
+> **fabriquée montrée aux clients** sur la fiche promo, une clause CGU
+> contredite (le commerçant y certifie que son adresse est *exacte*) et une
+> politique qui la déclare *publique*, un re-blocage de publication à la
+> correction (`profilePendingReview`), et l'impossibilité de l'**effacer** —
+> l'app n'envoie pas un champ vide, on ne peut que remplacer.
+>
+> ⇒ La décision est reportée dans `PLAN_SUPPRESSION_COMMUNE.md` §9, avec ses
+> trois options. **Elle bloque le lot final, et elle seule.**
+>
 > Trois précisions qui font la différence entre une migration et une perte :
 > - elle porte sur **toutes** les lignes, y compris les comptes supprimés
 >   (`deletedAt IS NOT NULL`) : leur historique disparaîtrait aussi, et le coût
