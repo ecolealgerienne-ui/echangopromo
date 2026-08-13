@@ -29,15 +29,20 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RACINE="$(cd "$HERE/.." && pwd)"
 
-command -v python3 >/dev/null 2>&1 || {
-  echo "❌ python3 absent — l'absence de verdict n'est pas un verdict."
-  exit 2
-}
+command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1 || {
+  echo "❌ python3 ou python requis — l'absence de verdict n'est pas un verdict."
+  exit 2; }
+PY=$(command -v python3 || command -v python)
+
+# ⚠️ La console Windows est en cp1252 : sans ça, le moindre « ═ » fait planter
+# le banc en UnicodeEncodeError, et un banc qui ne peut pas AFFICHER son verdict
+# n'en rend aucun.
+export PYTHONIOENCODING=utf-8
 
 cd "$RACINE" || exit 2
 
 echo "── auto-test du banc ──"
-SORTIE_AUTOTEST="$(python3 "$HERE/lib/absences_commune.py" --self-test)" || {
+SORTIE_AUTOTEST="$("$PY" "$HERE/lib/absences_commune.py" --self-test)" || {
   echo "$SORTIE_AUTOTEST"
   echo "❌ l'auto-test échoue : le banc lui-même est en cause."
   exit 2
@@ -54,4 +59,4 @@ echo "$SORTIE_AUTOTEST" | grep -q "^auto-test : [0-9]\+ cas, dont [0-9]\+ refus$
   exit 2; }
 
 echo
-exec python3 "$HERE/lib/absences_commune.py" "$@"
+exec "$PY" "$HERE/lib/absences_commune.py" "$@"

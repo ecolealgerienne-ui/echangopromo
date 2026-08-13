@@ -32,10 +32,10 @@ command -v python3 >/dev/null 2>&1 || {
 cd "$RACINE" || exit 2
 
 echo "── auto-test du banc ──"
-python3 "$HERE/lib/cycle_commercant.py" --self-test || {
+"$PY" "$HERE/lib/cycle_commercant.py" --self-test || {
   echo "❌ l'auto-test échoue : le banc lui-même est en cause."
   exit 2
 }
 
 echo
-exec python3 "$HERE/lib/cycle_commercant.py" "$@"
+exec "$PY" "$HERE/lib/cycle_commercant.py" "$@"

@@ -34,10 +34,10 @@ command -v python3 >/dev/null 2>&1 || {
 cd "$RACINE" || exit 2
 
 echo "── auto-test du banc ──"
-python3 "$HERE/lib/concurrence_plafond.py" --self-test || {
+"$PY" "$HERE/lib/concurrence_plafond.py" --self-test || {
   echo "❌ l'auto-test échoue : le banc lui-même est en cause."
   exit 2
 }
 
 echo
-exec python3 "$HERE/lib/concurrence_plafond.py" "$@"
+exec "$PY" "$HERE/lib/concurrence_plafond.py" "$@"

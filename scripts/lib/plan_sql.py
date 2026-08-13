@@ -329,6 +329,20 @@ def main():
     cx = psycopg2.connect(**PG)
     cur = cx.cursor()
 
+    # ⚠️ **Ce banc est le seul à RETIRER l'index de production**, le temps d'une
+    # transaction annulée, pour pouvoir comparer honnêtement à l'ancien. Deux
+    # exécutions qui se chevauchent se gêneraient donc : la seconde verrait
+    # l'index absent et accuserait la première.
+    #
+    # Observé une fois le 2026-08-13, dans un enchaînement — un échec non
+    # reproductible sur les deux passages suivants. La cause n'a PAS été
+    # établie ; ce verrou supprime la seule collision plausible plutôt que de
+    # laisser une instabilité que personne ne saura interpréter. Un banc qui
+    # échoue au hasard cesse d'être lu, et c'est pire qu'un banc absent.
+    #
+    # Verrou de transaction : libéré par le `rollback`, quoi qu'il arrive.
+    cur.execute("select pg_advisory_xact_lock(783880000)")
+
     def plan(sql, forcer=False):
         cur.execute("set enable_seqscan = %s" % ("off" if forcer else "on"))
         cur.execute("explain (analyze, costs off) " + sql, p)

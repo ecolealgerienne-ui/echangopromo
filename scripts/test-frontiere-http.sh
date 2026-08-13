@@ -50,7 +50,7 @@ cd "$RACINE" || exit 2
 # ⚠️ L'auto-test d'abord, et son échec est bloquant. Un banc dont on n'a pas
 # vérifié qu'il sait dire non ne prouve rien de ce qu'il déclare ensuite.
 echo "── auto-test du banc ──"
-SORTIE_AUTOTEST="$(python3 "$HERE/lib/frontiere_http.py" --self-test)" || {
+SORTIE_AUTOTEST="$("$PY" "$HERE/lib/frontiere_http.py" --self-test)" || {
   echo "$SORTIE_AUTOTEST"
   echo "❌ l'auto-test échoue : le banc lui-même est en cause, pas les routes."
   exit 2
@@ -76,4 +76,4 @@ echo "$SORTIE_AUTOTEST" | grep -q "^auto-test : [0-9]\+ cas, dont [0-9]\+ refus$
 }
 
 echo
-exec python3 "$HERE/lib/frontiere_http.py" "$@"
+exec "$PY" "$HERE/lib/frontiere_http.py" "$@"
