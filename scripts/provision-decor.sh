@@ -375,8 +375,25 @@ if [ -z "$PROMO_ID" ]; then
       # Ce refus-ci, et lui seul, est une raison de passer à la création. Tout
       # autre reste une panne de décor : élargir ce filtre le rendrait aveugle.
       if [ "$code_pub" = "PROMO_REPUBLISH_TOO_SOON" ]; then
-        info "Brouillon encore en cooldown de republication — on créera"
-        BROUILLON_ID=""
+        # ⚠️ **Deuxième essai, par l'AGENT** (2026-08-13). Le repli « on créera »
+        # ci-dessous suppose qu'une création reste possible — or les deux voies
+        # se ferment ensemble : un brouillon en cooldown ET un plafond de
+        # 5 créations/24 h atteint, et le décor n'a plus rien. C'est arrivé au
+        # rejeu d'ensemble du 2026-08-13, et il faut alors attendre le
+        # lendemain : un décor qui n'est rejouable qu'une fois par jour n'est
+        # pas un décor.
+        #
+        # L'agent est exempté des deux limites (`trustedActor`), et c'est
+        # cohérent avec le produit depuis ce même jour : un agent agit pour
+        # n'importe quel commerçant. On republie donc le MÊME brouillon plutôt
+        # que d'en créer un de plus — la voie du commerçant reste la voie
+        # normale, celle-ci n'est qu'une issue de secours nommée.
+        info "Brouillon en cooldown — republication par l'agent (exempté)"
+        pub="$(api POST "/promo/$BROUILLON_ID/publish" '{}' "$AGENT_TOKEN")"
+        if echo "$pub" | est_erreur; then
+          info "L'agent non plus — on créera ($(echo "$pub" | jq -r '.code // "?"'))"
+          BROUILLON_ID=""
+        fi
       else
         fail "Publication du brouillon du décor refusée" \
           "$(echo "$pub" | jq -c '{code,message}')"
@@ -406,10 +423,29 @@ if [ -z "$PROMO_ID" ]; then
   PROMO_PHOTO_KEY="$(envoyer_photo "$COMMERCANT_TOKEN" promo)"
   [ -n "$PROMO_PHOTO_KEY" ] || fail "Envoi de la photo de promo impossible" \
     "le décor refuse d'annoncer une photo dont le fichier n'existe pas"
-  out="$(api POST /promo "$(jq -n --arg k "$PROMO_PHOTO_KEY" \
+  corps_promo="$(jq -n --arg k "$PROMO_PHOTO_KEY" \
     '{description:"Promo du décor", prixAvant:1000, prixApres:700,
-      categorie:"alimentation", photoKeys:[$k], dureeJours:5}')" \
-    "$COMMERCANT_TOKEN")"
+      categorie:"alimentation", photoKeys:[$k], dureeJours:5}')"
+  out="$(api POST /promo "$corps_promo" "$COMMERCANT_TOKEN")"
+  # ⚠️ **Le plafond de 5 créations/24 h ferme cette voie pour la journée**, et
+  # c'est la dernière du commerçant. On repasse alors par l'agent, exempté
+  # (`trustedActor`) — même issue de secours que pour la republication ci-dessus,
+  # et pour la même raison : un décor qui n'est rejouable qu'une fois par jour
+  # n'est pas un décor. Ce code d'erreur, et lui seul : élargir le filtre
+  # rendrait le décor aveugle à une vraie panne de création.
+  if [ "$(echo "$out" | jq -r '.code // empty')" = "PROMO_DAILY_CREATION_CAP_REACHED" ]; then
+    info "Plafond quotidien du commerçant atteint — création par l'agent"
+    # La clé S3 doit appartenir à l'ACTEUR : l'agent renvoie donc sa propre
+    # photo. `createByAgent` passe `actorId: agent`, et `assertPhotoKeysOwned`
+    # accepte alors une clé au préfixe de l'agent (voir le commentaire de
+    # `PromoController.createByAgent`).
+    PROMO_PHOTO_KEY="$(envoyer_photo "$AGENT_TOKEN" promo)"
+    [ -n "$PROMO_PHOTO_KEY" ] || fail "Envoi de la photo de promo (agent) impossible"
+    corps_promo="$(jq -n --arg k "$PROMO_PHOTO_KEY" \
+      '{description:"Promo du décor", prixAvant:1000, prixApres:700,
+        categorie:"alimentation", photoKeys:[$k], dureeJours:5}')"
+    out="$(api POST "/promo/agent/$CID" "$corps_promo" "$AGENT_TOKEN")"
+  fi
   echo "$out" | est_erreur && fail "Création promo refusée" "$(echo "$out" | jq -c '{code,message}')"
   PROMO_ID="$(echo "$out" | jq -r '.id // empty')"
   [ -n "$PROMO_ID" ] || fail "Promo créée sans id" "$(echo "$out" | head -c 200)"
@@ -479,7 +515,10 @@ export PROMO_ID='$PROMO_ID'
 
 ⚠️ Ce script vient de consommer six connexions sur un plafond de 50/min.
    La marge est confortable depuis le 2026-08-13 ; elle ne l'est plus si l'on
-   enchaîne sur `test-auth-login.sh`, dont c'est l'objet même de vider le seau.
+   enchaîne sur test-auth-login.sh, dont c'est l'objet même de vider le seau.
    Un 429 se déguise toujours en « identifiants incorrects ».
+   (Pas d'accents graves dans ce bloc : le heredoc n'est pas quoté, ils
+   seraient exécutés comme une commande — défaut introduit puis corrigé le
+   2026-08-13, il affichait « command not found » au milieu du décor.)
 
 EOF
