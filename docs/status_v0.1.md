@@ -3949,6 +3949,58 @@ un contrôle de présence et raterait tout.
 Rejoués : `moderation-course` 10/10, `admin-moderation` 7/7, `notifications`
 8/8, `journal-agent` 11/11.
 
+### 2026-08-13 — deux bancs pour les nouvelles fonctionnalités client
+
+`ville_client` (8 contrôles, 17 cas d'auto-test dont 12 refus) et
+`filtre_categorie` (6 contrôles, 17 cas dont 12 refus). Tous verts au premier
+passage réel.
+
+**Ce qu'ils couvrent, et que rien ne couvrait.** Les parcours d'écran éprouvent
+les *gestes* du client (bandeau, consentement, recentrage). Ils ne peuvent pas
+prouver que le **serveur** sépare deux villes : sur un décor tenant dans un seul
+rayon, ils resteraient verts avec un serveur qui ignore complètement le point.
+`client_rayon` ne comble pas ce trou — il éprouve la géométrie (le cadre rogné
+par la haversine) sur des commerçants qu'il fabrique autour d'un seul point.
+
+Mesuré sur le décor à trois villes : Djelfa 44 promos, Hassi Bahbah 15, Alger
+15, **aucune en commun sur les trois paires**. Les trois paires sont sondées et
+non la première : un serveur peut séparer deux villes et se tromper sur la
+troisième, et c'est celle-là qu'on n'aurait pas regardée.
+
+**L'écart de comptage du 2026-08-13 est tranché, et il n'est pas côté serveur.**
+`alimentation=32`, `autre=12`, `toutes=44` — la somme est exacte, et ce sont
+exactement les chiffres de la **liste**. La carte annonçait 40/32/8 : elle se
+borne au cadre visible, la liste au rayon. Aucune retouche serveur à faire.
+
+⚠️ **Les deux bancs ont commencé par refuser, et ils avaient raison.** Ils
+demandaient `limit=200` ; le serveur plafonne à 100 et rend `400
+VALIDATION_ERROR`. Le verdict rendu fut « liste illisible », non concluant —
+jamais un vert, jamais un échec métier imputé au produit. C'est le comportement
+que la règle 29 exige, obtenu du premier coup parce que la lecture du total
+distingue l'absence de l'illisible. La troncature au-delà d'une page est
+désormais **annoncée** : elle ne peut pas inventer un recouvrement, mais elle
+peut en cacher un.
+
+⚠️ `PYTHONIOENCODING=utf-8` est posé dans les deux enveloppes : la console
+Windows est en cp1252 et le moindre `═` faisait planter le banc en
+`UnicodeEncodeError`. Un banc qui ne peut pas **afficher** son verdict n'en rend
+aucun.
+
+**Le parcours d'écran du scénario 2 reste rouge, et sa cause est mesurée.** La
+sonde a montré que l'app fait tout juste — point lu `(35.0774, 3.0281)`, carte
+ouverte dessus, glissement de 6,2 km, proposition affichée avec le bon libellé
+(« Vous explorez une autre ville »). C'est le **test** qui rate sa cible :
+Flutter journalise *« A call to tap() … derived an Offset (368.5, 939.3) that
+would not hit test on the specified widget »*, et le tap atterrit sur le bouton
+flottant « Oublier mon point », qui efface le point. Le produit n'est pas en
+cause.
+
+⚠️ **Et je m'étais trompé une fois de plus avant cette mesure** : le commit
+précédent affirmait que le bandeau d'invitation à la localisation masquait la
+proposition. La sonde rend `croix=0` — il n'y avait aucune invitation à
+l'écran. Quatre hypothèses fausses sur ce seul parcours, toutes corrigées par
+la mesure, aucune par le raisonnement.
+
 ---
 
 ## Comment tenir ce fichier
