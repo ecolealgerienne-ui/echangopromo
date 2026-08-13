@@ -105,25 +105,15 @@ export class Commercant {
   @Column({ type: 'enum', enum: Categorie })
   categorie: Categorie;
 
-  /**
-   * ⚠️ **En sursis — la colonne tombe au lot L7** (chantier « suppression de
-   * commune »). Elle est passée `nullable` le 2026-08-13, et ce n'est pas un
-   * assouplissement : c'est ce qui permet au produit de continuer à tourner
-   * entre le retrait du champ des DTO d'inscription (L2) et le `DROP`
-   * définitif (L7).
-   *
-   * Sans ce passage, `create({ ...rest })` n'aurait plus rien posé dans une
-   * colonne `NOT NULL` : **toute création de commerçant aurait rendu 500**,
-   * emportant le décor des bancs, donc les lots qui en dépendent. Le
-   * `whitelist` du ValidationPipe ne sauve que la FORME de la requête ; il ne
-   * remplit pas une colonne.
-   *
-   * Plus personne ne l'écrit ni ne la lit — elle n'existe que pour porter la
-   * donnée jusqu'à la recopie vers `adresse`, en L7.
-   */
-  @Index()
-  @Column({ type: 'uuid', nullable: true })
-  communeId: string | null;
+  // ⚠️ **`communeId` a été détruite le 2026-08-13**, avec les tables `commune`
+  // et `agent_communes` (migration `DropCommune`). Le lieu d'un commerce ne
+  // s'exprime plus que par `latitude`/`longitude` — qui décident de tout — et
+  // par `adresse`, texte libre facultatif et purement indicatif.
+  //
+  // Aucune recopie de la commune vers l'adresse : elle aurait écrit dans un
+  // champ que les CGU font certifier « exact » au commerçant une valeur qu'il
+  // n'a jamais fournie, et qu'il n'aurait pas pu effacer. Sauvegarde hors dépôt
+  // prise avant le `DROP` — voir l'en-tête de la migration.
 
   /**
    * Plafond de promos actives **propre à ce commerçant**, ou `null` pour
