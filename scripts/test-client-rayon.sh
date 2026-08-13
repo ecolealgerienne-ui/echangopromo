@@ -42,9 +42,9 @@ cd "$RACINE" || exit 2
 # bien son point dans le cadre et hors du cercle. Un décor qui vise à côté
 # rendrait vert un serveur cassé, sans que rien ne le dise.
 echo "── auto-test des verdicts et de la géométrie ──"
-python3 scripts/lib/client_rayon.py --self-test || {
+"$PY" scripts/lib/client_rayon.py --self-test || {
   echo "❌ verdicts ou géométrie en défaut — rien n'est mesurable."
   exit 2; }
 
 echo
-python3 scripts/lib/client_rayon.py
+"$PY" scripts/lib/client_rayon.py

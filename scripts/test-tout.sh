@@ -97,7 +97,7 @@ BANCS=(
   client-highlight admin-highlight storage-upload commercant-dashboard
   commercant-profil commercant-b position-publication promo-cycle
   plafond-promos plafond-admin recherche-parc tournee-agent portee-agent
-  journal-agent absences-commune
+  journal-agent
   # — modération et signalements (seaux stricts) —
   abus-signalement file-moderation moderation-course admin-moderation
   notifications registre

@@ -43,7 +43,7 @@ cd "$RACINE" || exit 2
 # vert le jour où l'appartenance disparaît, pourvu qu'une autre garde tombe à
 # sa place.
 echo "── auto-test des verdicts ──"
-SORTIE="$(python3 scripts/lib/commercant_b.py --self-test)" || {
+SORTIE="$("$PY" scripts/lib/commercant_b.py --self-test)" || {
   echo "$SORTIE"
   echo "❌ les verdicts ne savent pas refuser — rien n'est mesurable."
   exit 2; }

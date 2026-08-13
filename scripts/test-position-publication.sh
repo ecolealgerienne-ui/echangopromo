@@ -39,9 +39,9 @@ cd "$RACINE" || exit 2
 # ⚠️ L'auto-test d'abord, et il est BLOQUANT : un banc dont les verdicts ne
 # savent pas refuser ne peut rien affirmer sur le produit (règle #28).
 echo "── auto-test des verdicts ──"
-python3 scripts/lib/position_publication.py --self-test || {
+"$PY" scripts/lib/position_publication.py --self-test || {
   echo "❌ les verdicts de ce banc ne savent pas refuser — rien n'est mesurable."
   exit 2; }
 
 echo
-python3 scripts/lib/position_publication.py
+"$PY" scripts/lib/position_publication.py
