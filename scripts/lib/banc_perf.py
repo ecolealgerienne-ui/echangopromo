@@ -95,6 +95,19 @@ import urllib.request
 API_URL = os.environ.get("API_URL", "http://localhost:3000")
 DEVICE_ID = "banc-perf-0001"
 
+# ── Accès PostgreSQL — recopiés de `docker-compose.yml`, qui est versionné ──
+#
+# ⚠️ Ce banc a rendu « PostgreSQL injoignable » pendant deux passages en portant
+# `postgres/postgres/echangopromo`, inventés faute d'avoir regardé. Les vraies
+# valeurs sont dans le compose du dépôt, et `plan_sql.py` les portait déjà
+# correctement : deux endroits, une seule vérité, et c'est celui qui se trompait
+# qui rendait le verdict le plus rassurant — « pas mesurable » plutôt que faux.
+PG_HOTE = "localhost"
+PG_PORT = "5433"
+PG_UTILISATEUR = "echango"
+PG_MOT_DE_PASSE = "echango"
+PG_BASE = "echango_promo"
+
 # ── Les seuils, nommés parce qu'ils portent une décision (règle 32) ─────────
 #
 # ⚠️ Ce ne sont pas des mesures : ce sont des **budgets**. Les mesures du
@@ -282,8 +295,16 @@ def verdict_requetes(delta, seuil):
     delta est un **proxy du nombre de requêtes**, et c'est sa forme qui compte,
     pas sa valeur au chiffre près.
 
-    À 74 promos un N+1 est invisible en temps ; à 74 000 il est fatal. C'est
+    À 310 promos un N+1 est invisible en temps ; à 310 000 il est fatal. C'est
     pour ça qu'on mesure la forme, aujourd'hui, pendant qu'elle ne coûte rien.
+
+    ⚠️ **Le nombre passé ici est un ÉCART, pas un total**, et la distinction a
+    failli produire une fausse accusation. `pg_stat_database.xact_commit` compte
+    **toute** la base : les tâches de fond, les autres requêtes, et jusqu'aux
+    connexions que la sonde ouvre pour se lire elle-même. Mesuré brut, un appel
+    à `/promo/map` semblait coûter **15 transactions** ; mesuré contre un
+    intervalle témoin de même durée sans aucun appel, il en coûte **2**. Le
+    seuil accusait le bruit de fond et le coût de sa propre mesure (règle 38).
     """
     if delta is None:
         return ("non_concluant",
@@ -291,10 +312,10 @@ def verdict_requetes(delta, seuil):
                 "lancer ce banc depuis WSL, où vivent le backend et la base")
     if delta > seuil:
         return ("echec",
-                "%d transactions pour UN appel HTTP (seuil %d) : c'est la "
-                "forme d'un N+1, invisible aujourd'hui et fatale à l'échelle"
-                % (delta, seuil))
-    return "ok", "%d transaction(s) pour l'appel" % delta
+                "%d transactions imputables à UN appel HTTP (seuil %d), bruit "
+                "de fond déduit : c'est la forme d'un N+1, invisible "
+                "aujourd'hui et fatale à l'échelle" % (delta, seuil))
+    return "ok", "%d transaction(s) imputables à l'appel, bruit déduit" % delta
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -356,11 +377,11 @@ def compter_transactions():
     try:
         import psycopg2  # noqa: PLC0415
         cx = psycopg2.connect(
-            host=os.environ.get("PGHOST", "localhost"),
-            port=int(os.environ.get("PGPORT", "5433")),
-            user=os.environ.get("PGUSER", "postgres"),
-            password=os.environ.get("PGPASSWORD", "postgres"),
-            dbname=os.environ.get("PGDATABASE", "echangopromo"))
+            host=os.environ.get("PGHOST", PG_HOTE),
+            port=int(os.environ.get("PGPORT", PG_PORT)),
+            user=os.environ.get("PGUSER", PG_UTILISATEUR),
+            password=os.environ.get("PGPASSWORD", PG_MOT_DE_PASSE),
+            dbname=os.environ.get("PGDATABASE", PG_BASE))
         try:
             cur = cx.cursor()
             cur.execute(requete)
@@ -370,12 +391,12 @@ def compter_transactions():
     except Exception:
         pass
     for argv in (
-        ["psql", "-U", os.environ.get("PGUSER", "postgres"),
-         "-d", os.environ.get("PGDATABASE", "echangopromo"), "-tAc", requete],
+        ["psql", "-U", os.environ.get("PGUSER", PG_UTILISATEUR),
+         "-d", os.environ.get("PGDATABASE", PG_BASE), "-tAc", requete],
         ["docker", "exec", os.environ.get("PGCONTAINER",
                                           "echangopromo-postgres-1"),
          "psql", "-U", os.environ.get("PGUSER", "postgres"),
-         "-d", os.environ.get("PGDATABASE", "echangopromo"), "-tAc", requete],
+         "-d", os.environ.get("PGDATABASE", PG_BASE), "-tAc", requete],
     ):
         try:
             sortie = subprocess.run(argv, capture_output=True, timeout=20)
@@ -526,25 +547,53 @@ def main():
 
     # ── La forme des requêtes SQL ───────────────────────────────────────────
     print("\n── transactions PostgreSQL par appel HTTP ──")
-    avant = compter_transactions()
-    if avant is None:
+    if compter_transactions() is None:
         noter("sonde SQL", *verdict_requetes(None, 0))
     else:
-        # ⚠️ Une seule route, la plus chargée : le delta doit être imputable à
-        # un appel et à un seul. Mesurer pendant que d'autres tournent
-        # attribuerait leurs requêtes à celui-ci.
         chemin = ROUTES[3][0]
-        appeler(chemin)
-        time.sleep(0.5)
-        avant = compter_transactions()
-        appeler(chemin)
-        time.sleep(0.5)
-        apres = compter_transactions()
-        delta = (apres - avant) if (avant is not None and apres is not None) \
-            else None
-        # Seuil large : on cherche la FORME d'un N+1 (des dizaines), pas un
-        # écart de une ou deux transactions dû au bruit du serveur.
-        noter("GET /promo/map", *verdict_requetes(delta, 10))
+
+        def delta_sur(intervalle_s, avec_appel):
+            """Transactions écoulées pendant `intervalle_s`, appel compris."""
+            avant = compter_transactions()
+            if avec_appel:
+                appeler(chemin)
+            time.sleep(intervalle_s)
+            apres = compter_transactions()
+            if avant is None or apres is None:
+                return None
+            return apres - avant
+
+        # ⚠️ **Un intervalle témoin, de même durée, SANS appel.** Sans lui on
+        # mesure aussi les tâches de fond et les connexions que cette sonde
+        # ouvre pour se lire elle-même — soit 15 transactions attribuées à un
+        # appel qui en coûte 2. Trois répétitions de chaque côté : une mesure
+        # unique de deux entiers bruités ne vaut rien.
+        temoins, mesures = [], []
+        for _ in range(3):
+            t = delta_sur(0.6, False)
+            m = delta_sur(0.6, True)
+            if t is not None and m is not None:
+                temoins.append(t)
+                mesures.append(m)
+        if not temoins:
+            noter("sonde SQL", *verdict_requetes(None, 0))
+        else:
+            bruit = sum(temoins) / float(len(temoins))
+            total = sum(mesures) / float(len(mesures))
+            impute = max(0, int(round(total - bruit)))
+            print("     bruit de fond %.1f · avec appel %.1f" % (bruit, total))
+            # ⚠️ **15, et le chiffre est raisonné, pas confortable.** Le coût
+            # imputé mesuré le 2026-08-13 oscille entre 2 et 5 selon les
+            # passages — la déduction du bruit laisse un résidu de quelques
+            # unités, et un seuil calé au ras basculerait au hasard. Un banc
+            # qui alterne vert et rouge sans que rien ne change est pire
+            # qu'absent : on cesse de le lire.
+            #
+            # Ce qu'on cherche n'est pas une unité près, c'est une FORME : un
+            # N+1 sur les 53 commerçants d'un cadre en produirait cinquante et
+            # plus. 15 laisse trois fois la marge du bruit et reste trois fois
+            # sous la signature d'une boucle.
+            noter("GET /promo/map", *verdict_requetes(impute, 15))
 
     print("\n" + "═" * 76)
     echecs = resultats.count("echec")
