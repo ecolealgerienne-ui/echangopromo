@@ -90,8 +90,9 @@ case "$CHOIX" in
 esac
 
 # Chaque parcours a besoin d'un décor DIFFÉRENT, et le dire évite de poser un
-# décor pour rien — ou pire, d'en poser un qui consomme des connexions sur un
-# plafond de 5/min avant un parcours qui n'en avait pas besoin.
+# décor pour rien — ou pire, d'en poser un qui consomme une inscription sur un
+# plafond de 5/min avant un parcours qui n'en avait pas besoin. (Les connexions,
+# elles, sont à 50/min depuis le 2026-08-13 et ne serrent plus.)
 BESOIN_COMMERCANT=non
 # `inscription` a besoin du décor UNIQUEMENT pour mesurer le plafond auprès du
 # serveur — le compte qu'il crée, lui, est neuf.
@@ -172,7 +173,7 @@ JETON="$(connexion)"
 if [ -z "$JETON" ]; then
   echo "❌ Connexion du commerçant du décor impossible."
   echo "   ⚠️ Un 429 se déguise en « identifiants incorrects » : le décor vient"
-  echo "      de consommer plusieurs connexions sur un plafond de 5/min."
+  echo "      de consommer plusieurs connexions sur un plafond de 50/min."
   exit 2
 fi
 
@@ -746,8 +747,9 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "inscription" ]; then
     JETON_NEUF="$(curl -s -X POST "$API_URL/commercant/login"       -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"       -d "{\"telephone\":\"$NOUVEAU_TEL\",\"pin\":\"$NOUVEAU_PIN\"}"       | lire_champ accessToken)"
     if [ -z "$JETON_NEUF" ]; then
       echo "❌ connexion impossible avec le compte censé venir d'être créé."
-      echo "   ⚠️ Un 429 se déguise en « identifiants incorrects » — register et"
-      echo "      login partagent le seau strict (5/min)."
+      echo "   ⚠️ Un 429 se déguise en « identifiants incorrects ». Depuis le"
+      echo "      2026-08-13 register (5/min) et login (50/min) ont des seaux"
+      echo "      SÉPARÉS : si ça bloque ici, c'est l'inscription, pas le login."
       noter "contre-mesure inscription" 1
     else
       ETAT_REGISTRE="$(curl -s "$API_URL/commercant/me"         -H "Authorization: Bearer $JETON_NEUF" -H "X-Device-Id: $DEVICE_ID"         | lire_champ registreStatus)"

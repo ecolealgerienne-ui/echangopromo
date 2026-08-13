@@ -46,7 +46,10 @@ fonctionnalités en moins, pas un autre produit. La bascule essaie
 le service ne lit que la table `admins` : `AgentLoginScreen` et
 `POST /agent/login` existaient, étaient couverts par les bancs, et **rien dans
 l'app ne les atteignait** (règle #31). Coût assumé : une connexion d'agent
-consomme deux requêtes du seau strict (5/min/IP).
+consomme **deux** requêtes du seau d'authentification. C'est ce coût, cumulé au
+NAT opérateur du parc mobile algérien, qui a fait relever ce seau de 5 à 50 le
+2026-08-13 — les connexions ont désormais leur propre seau (`AUTH_THROTTLE`),
+séparé de `register` et `report` restés à 5 (voir § Environnement).
 
 Le concept de Zone opérationnelle (découpage interne dédié
 aux tournées d'agent) a été abandonné le 2026-07-09, puis remplacé par un
@@ -711,14 +714,18 @@ tirer de l'autre.
 | Plafond | Valeur | Portée |
 |---|---|---|
 | global | 60 / min / IP | toutes les routes |
-| `STRICT_THROTTLE` | **5 / min / IP** | les 3 logins, `register`, `report` |
+| `AUTH_THROTTLE` | **50 / min / IP** | les 3 logins — **relevé de 5 le 2026-08-13** |
+| `STRICT_THROTTLE` | **5 / min / IP** | `register` et `report`, plus rien d'autre |
 | `SENSITIVE_ACTION_THROTTLE` | 20 / min / IP | les écritures — **seau partagé** |
 | `MAP_THROTTLE` | 180 / min / IP | `/promo/map` |
 | créations de promo | 5 / 24 h / commerçant | agent et admin **exemptés** |
 | promos actives | 5 / commerçant | **personne n'est exempté** |
 
 ⚠️ **Un 429 se déguise en « identifiants incorrects »** : attendre une minute
-entre deux bancs plutôt que chercher un bug d'authentification.
+entre deux bancs plutôt que chercher un bug d'authentification. ⚠️ **Et depuis
+le 2026-08-13, ce n'est plus la connexion qu'il faut soupçonner en premier** —
+elle a 50 requêtes par minute. Les deux seaux qui serrent sont l'inscription
+(5/min) et les écritures (20/min, **partagé**).
 
 **Trois pièges d'environnement, tous rencontrés le 2026-08-04 :**
 

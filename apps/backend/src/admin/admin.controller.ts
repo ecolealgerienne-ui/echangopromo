@@ -26,7 +26,7 @@ import { CommercantService } from '../commercant/commercant.service';
 import { ListCommercantQueryDto } from '../commercant/dto/list-commercant-query.dto';
 import { ResetCommercantPinDto } from '../commercant/dto/reset-commercant-pin.dto';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
-import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
+import { AUTH_THROTTLE, SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
 import { ListModerationQueueQueryDto } from './dto/list-moderation-queue-query.dto';
 import { ListPromoAdminQueryDto } from '../promo/dto/list-promo-admin-query.dto';
 import { Promo } from '../promo/entities/promo.entity';
@@ -51,7 +51,7 @@ export class AdminController {
     private readonly storageService: StorageService,
   ) {}
 
-  @Throttle(STRICT_THROTTLE)
+  @Throttle(AUTH_THROTTLE)
   @Post('login')
   async login(@Body() dto: LoginAdminDto) {
     const admin = await this.adminService.login(dto.email, dto.password);

@@ -16,7 +16,8 @@
 # ── ⚠️ Pourquoi tout passe par l'AGENT ──────────────────────────────────────
 #
 # Trois plafonds rendraient l'inscription directe impraticable :
-#   - connexion et inscription sont limitées à 5/min/IP ;
+#   - l'inscription est limitée à 5/min/IP (la connexion, elle, est passée à
+#     50/min/IP le 2026-08-13) ;
 #   - un commerçant est limité à 5 créations de promo par 24 h ;
 #   - un commerçant AUTO-INSCRIT ne peut publier qu'après validation de son
 #     registre par un admin (deux gestes de plus par commerçant).
@@ -126,7 +127,7 @@ ADMIN_TOKEN="$(api POST /admin/login "$(jq -n --arg e "$ADMIN_EMAIL" --arg p "$A
 sleep 2
 AGENT_TOKEN="$(api POST /agent/login "$(jq -n --arg e "$AGENT_EMAIL" --arg p "$AGENT_PASSWORD" \
   '{email:$e, password:$p}')" | jq -r '.accessToken // empty')"
-[ -n "$AGENT_TOKEN" ] || fail "Connexion agent impossible" "plafond de 5/min ? réessayer dans une minute"
+[ -n "$AGENT_TOKEN" ] || fail "Connexion agent impossible" "identifiants, ou plafond de 50 connexions/min ? réessayer dans une minute"
 pass "Admin et agent connectés"
 
 step "2. L'agent couvre plusieurs communes"

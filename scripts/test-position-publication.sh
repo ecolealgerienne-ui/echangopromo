@@ -19,9 +19,9 @@
 # Quatre gardes se suivent dans PromoService (registre, revue de profil,
 # position, plafond) ; sans ce décor, le banc mesurerait la première.
 #
-# ⚠️ Il consomme 3 requêtes sur le seau strict (5/min/IP) : inscription du
-# commerçant, connexion admin, et la marge. Attendre une minute après un autre
-# banc — un 429 se déguise en refus métier.
+# ⚠️ Il consomme **une** inscription sur le seau strict (5/min/IP) et 2 connexions
+# sur celui de l'authentification (50/min/IP). C'est l'inscription qui est
+# contraignante — un 429 se déguise en refus métier.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RACINE="$(cd "$HERE/.." && pwd)"

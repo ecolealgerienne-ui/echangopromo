@@ -8,8 +8,9 @@
 #   ./scripts/test-revocation-jwt.sh
 #
 # ⚠️ Ce banc RÉVOQUE les jetons admin et agent du décor — c'est son objet. Les
-# comptes restent valides, il suffit de se reconnecter ; mais il consomme
-# 3 connexions sur le seau strict de 5/min, donc à lancer isolé.
+# comptes restent valides, il suffit de se reconnecter. Il consomme 3 connexions
+# sur le seau d'authentification (50/min) — ce n'est plus lui qui impose de le
+# lancer isolé, c'est la révocation.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RACINE="$(cd "$HERE/.." && pwd)"

@@ -16,7 +16,7 @@
 # ⚠️ Ce banc ÉCRIT : il crée SON PROPRE commerçant, dépose un document, le fait
 # valider et réinitialise son PIN. Il ne touche jamais à celui du décor.
 #
-# ⚠️ Il consomme 3 connexions sur le seau strict de 5/min.
+# ⚠️ Il consomme 3 connexions sur le seau d'authentification (50/min).
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RACINE="$(cd "$HERE/.." && pwd)"

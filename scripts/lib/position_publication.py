@@ -34,8 +34,10 @@ Usage :
 position — ce que la création par agent n'autorise plus). Il ne touche à aucun
 compte existant.
 
-⚠️ Il consomme 2 requêtes sur le seau strict (5/min/IP) et ~5 sur le seau des
-écritures (20/min/IP).
+⚠️ Il consomme **une** inscription sur le seau strict (5/min/IP), une connexion
+sur celui de l'authentification (50/min/IP) et ~5 sur le seau des écritures
+(20/min/IP). Les deux seaux étroits sont donc l'inscription et les écritures ;
+la connexion ne l'est plus depuis le 2026-08-13.
 """
 
 import base64

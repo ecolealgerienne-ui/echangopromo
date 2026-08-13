@@ -81,9 +81,9 @@ ROUTES_OUVERTES = {
     ("GET", "/p/:id"): "redirection de partage vers le store",
     ("GET", "/.well-known/assetlinks.json"): "vérification App Links Android",
     ("GET", "/.well-known/apple-app-site-association"): "vérification Universal Links iOS",
-    ("POST", "/commercant/login"): "authentification — STRICT_THROTTLE",
-    ("POST", "/agent/login"): "authentification — STRICT_THROTTLE",
-    ("POST", "/admin/login"): "authentification — STRICT_THROTTLE",
+    ("POST", "/commercant/login"): "authentification — AUTH_THROTTLE",
+    ("POST", "/agent/login"): "authentification — AUTH_THROTTLE",
+    ("POST", "/admin/login"): "authentification — AUTH_THROTTLE",
     ("POST", "/commercant/register"): "inscription — STRICT_THROTTLE",
     ("POST", "/report"): "signalement client anonyme — STRICT_THROTTLE, borné par IP "
                          "parce que le X-Device-Id est déclaratif",
@@ -251,7 +251,9 @@ def jetons():
     révoqué, et une nouvelle connexion rend un jeton valide. L'ordre inverse
     invaliderait le jeton qu'on vient d'obtenir.
 
-    ⚠️ Chaque connexion consomme du STRICT_THROTTLE (5/min/IP) — d'où la pause.
+    ⚠️ Chaque connexion consomme du AUTH_THROTTLE (50/min/IP depuis le
+    2026-08-13, 5 auparavant) — la pause reste, elle ne coûte rien et le seau
+    est partagé avec tout ce qui tourne sur la même IP.
     """
     def login(chemin, corps, quoi):
         s, _ = None, None

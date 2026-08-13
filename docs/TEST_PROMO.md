@@ -196,15 +196,28 @@ C'est la liste de départ des bancs de l'étape 4 : **une règle, un banc**.
 | Plafond | Valeur | Portée |
 |---|---|---|
 | global | 60 / min / IP | toutes les routes |
-| `STRICT_THROTTLE` | **5 / min / IP** | les 3 logins, `/commercant/register`, `/report` |
+| `AUTH_THROTTLE` | **50 / min / IP** | les 3 logins — **relevé de 5 le 2026-08-13** |
+| `STRICT_THROTTLE` | **5 / min / IP** | `/commercant/register` et `/report` |
 | `SENSITIVE_ACTION_THROTTLE` | 20 / min / IP | actions d'écriture sensibles |
 | `MAP_THROTTLE` | 180 / min / IP | `/promo/map` |
 
-> ⚠️ **`STRICT_THROTTLE` = 5/min est la contrainte qui dimensionne toute la
-> suite** (mode M9 du générique). Un banc qui se connecte quatre fois de suite
-> consomme presque tout le budget d'une minute. Deux conséquences : la
-> temporisation entre bancs n'est pas optionnelle, et **une session obtenue se
-> réutilise** au lieu de se reconnecter.
+> ⚠️ **Ce paragraphe disait le contraire jusqu'au 2026-08-13**, et le changement
+> déplace la contrainte au lieu de la lever. Il affirmait que « `STRICT_THROTTLE`
+> = 5/min est la contrainte qui dimensionne toute la suite » parce que les trois
+> logins y étaient — un banc qui se connectait quatre fois de suite consommait
+> presque tout le budget d'une minute.
+>
+> Les connexions ont leur propre seau à 50/min. **Les deux seaux étroits sont
+> désormais l'inscription (5/min) et les écritures (20/min)**, et c'est sur eux
+> que se dimensionne un banc. Les deux conséquences pratiques n'ont pas changé
+> de nature, seulement de cause : la temporisation entre bancs reste utile, et
+> **une session obtenue se réutilise** — non plus parce que se reconnecter coûte
+> cher, mais parce qu'un banc qui se reconnecte mesure l'authentification au
+> lieu de ce qu'il prétend éprouver.
+>
+> Deux bancs vident encore délibérément un seau et doivent tourner **seuls** :
+> `test-auth-login.sh` (les connexions, c'est son objet) et
+> `test-abus-signalement.sh` (les signalements).
 
 ### Les données à double vie — cibles de l'étape 2
 
@@ -325,7 +338,7 @@ n'est un oubli constaté au 2026-08-04.
 | `GET /p/:id` | redirection de partage vers le store |
 | `GET /.well-known/assetlinks.json` | vérification App Links Android |
 | `GET /.well-known/apple-app-site-association` | vérification Universal Links iOS |
-| `POST /commercant/login` | authentification — `STRICT_THROTTLE` |
+| `POST /commercant/login` | authentification — `AUTH_THROTTLE` |
 | `POST /agent/login` | idem |
 | `POST /admin/login` | idem |
 | `POST /commercant/register` | inscription — `STRICT_THROTTLE` |
@@ -681,9 +694,11 @@ sert l'API — c'est le mode M3 appliqué au diagnostic.
 
 ### Les identifiants du décor
 
-⚠️ **Stables, jamais aléatoires** : `STRICT_THROTTLE` plafonne l'inscription et
-la connexion à 5/min/IP. Un décor à identifiants aléatoires devient inutilisable
-au second passage.
+⚠️ **Stables, jamais aléatoires** : `STRICT_THROTTLE` plafonne l'inscription à
+5/min/IP, et un décor à identifiants aléatoires **crée un compte à chaque
+passage** au lieu de retrouver le sien. Le relèvement des connexions à 50/min ne
+change rien ici : c'est l'inscription qui serre, et c'est elle qu'un décor
+stable évite.
 
 ```
 decor-commercant@echango.local

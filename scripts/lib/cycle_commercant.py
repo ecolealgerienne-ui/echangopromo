@@ -181,7 +181,7 @@ def main():
         "email": _exiger("AGENT_EMAIL"), "password": _exiger("AGENT_PASSWORD")})
     jg = d.get("accessToken")
     if not ja or not jg:
-        print("❌ connexion impossible — décor à rejouer, ou plafond de 5/min.")
+        print("❌ connexion impossible — décor à rejouer, ou plafond de 50 connexions/min.")
         sys.exit(2)
 
     print("════════════════════════════════════════════════════════════════")
@@ -252,7 +252,7 @@ def main():
     noter("promos dépubliées (brouillon, réversible)",
           *verdict_compte(len(promos_publiques()), 0, "promos visibles"))
     # ⚠️ Un contrôle sauté doit se NOMMER. Une version antérieure se contentait
-    # d'un `if jeton_avant:` : quand la connexion échouait (plafond de 5/min),
+    # d'un `if jeton_avant:` : quand la connexion échouait (plafond atteint),
     # la vérification disparaissait du rapport sans un mot, et le total passait
     # de 7 à 6 sans que rien ne l'explique. Un contrôle absent est indiscernable
     # d'un contrôle réussi pour qui lit vite.
@@ -261,7 +261,7 @@ def main():
         noter("session en cours révoquée", *verdict_session_revoquee(st, d.get("code")))
     else:
         noter("session en cours révoquée", "non_concluant",
-              "pas de jeton avant suspension — connexion refusée (plafond de 5/min ?)")
+              "pas de jeton avant suspension — connexion refusée (plafond de 50/min ?)")
     st, d = appeler("POST", "/commercant/register", corps={
         "telephone": TEL, "nom": "Usurpateur", "categorie": "autre",
         "pin": PIN, "acceptedTerms": True,

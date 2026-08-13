@@ -16,9 +16,12 @@
 #
 # ── ⚠️ Idempotent, et c'est une contrainte de plafond ───────────────────────
 #
-# Les identifiants sont **stables**, jamais aléatoires : `STRICT_THROTTLE`
-# plafonne connexions et inscriptions à 5/min/IP. On tente donc la connexion
-# d'abord — si elle réussit, le compte existe et on ne consomme rien de plus.
+# Les identifiants sont **stables**, jamais aléatoires : on tente donc la
+# connexion d'abord — si elle réussit, le compte existe et on ne consomme ni
+# une inscription ni une création. Le motif date de l'époque où les connexions
+# étaient plafonnées à 5/min/IP ; il reste juste pour `POST /commercant/register`,
+# resté à 5 (`STRICT_THROTTLE`), et il évite de toute façon de dupliquer un
+# compte à chaque rejeu.
 #
 # ── Usage ───────────────────────────────────────────────────────────────────
 #
@@ -29,7 +32,12 @@
 set -uo pipefail
 
 API_URL="${API_URL:-http://localhost:3000}"
-PACE="${PACE_SECONDS:-13}"   # 5 connexions/min => ~12s entre deux
+# ⚠️ Valait 13 s tant que les connexions étaient à 5/min (« ~12 s entre deux »).
+# Elles sont à 50/min depuis le 2026-08-13 (`AUTH_THROTTLE`) et ce décor en
+# consomme six : la temporisation ne protège plus rien de ce côté. Elle reste,
+# courte, parce que deux des huit pauses encadrent une inscription (seau strict,
+# toujours 5/min) et une écriture (seau des écritures, 20/min).
+PACE="${PACE_SECONDS:-2}"
 
 # ⚠️ Stables. Voir l'en-tête.
 D_ADMIN_EMAIL="${D_ADMIN_EMAIL:-decor-admin@echango.local}"
@@ -469,8 +477,9 @@ export PROMO_ID='$PROMO_ID'
 ⚠️ Le banc de refus révoque le jeton admin au démarrage — c'est son troisième
    échantillon. Ce décor étant rejouable, il suffit de le relancer si besoin.
 
-⚠️ Ce script vient de consommer plusieurs connexions sur un plafond de 5/min.
-   Attendre une minute avant de lancer un banc, sinon le 429 se déguisera en
-   « identifiants incorrects ».
+⚠️ Ce script vient de consommer six connexions sur un plafond de 50/min.
+   La marge est confortable depuis le 2026-08-13 ; elle ne l'est plus si l'on
+   enchaîne sur `test-auth-login.sh`, dont c'est l'objet même de vider le seau.
+   Un 429 se déguise toujours en « identifiants incorrects ».
 
 EOF

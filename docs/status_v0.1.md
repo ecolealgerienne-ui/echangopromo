@@ -560,8 +560,11 @@ Tout est dans `scripts/`. Chaque banc lance son auto-test avant de conclure, et
 ./scripts/test-cycle-commercant.sh
 ```
 
-⚠️ **Attendre une minute entre deux bancs** : connexions et inscriptions sont
-plafonnées à 5/min/IP, et un 429 se déguise en « identifiants incorrects ».
+⚠️ **Attendre une minute entre deux bancs** : les inscriptions sont plafonnées à
+5/min/IP et les écritures à 20/min/IP, et un 429 se déguise en « identifiants
+incorrects ». ⚠️ **Les connexions ne sont plus la contrainte** depuis le
+2026-08-13 (50/min, `AUTH_THROTTLE`) — sauf après `test-auth-login.sh`, qui vide
+ce seau exprès.
 
 ~~⚠️ **`test-cycle-commercant.sh` sort en échec, légitimement**, sur P10.~~
 **Périmé — P10 est corrigé.** `CommercantService.login` passe par
@@ -1582,8 +1585,9 @@ les deux requêtes atteignent la même règle.
 ### Ce qui reste, et qui est écrit plutôt que caché
 
 - **`test-auth-login` et `test-abus-signalement` doivent tourner SEULS** : ils
-  épuisent volontairement le seau de 5/min, et tout banc lancé dans la minute
-  suivante accuserait ses propres identifiants.
+  épuisent volontairement leur seau — celui des connexions (50/min) pour le
+  premier, celui des signalements (5/min) pour le second — et tout banc lancé
+  dans la minute suivante accuserait ses propres identifiants.
 - **`test-promo-cycle` épuise le plafond quotidien** du commerçant du décor :
   à lancer en dernier, ou sur un décor jetable.
 - La notification « expire bientôt » (cron de 1h) reste non couverte : la
@@ -3361,6 +3365,96 @@ cas fondateur et a été retirée avec lui.
   or il est devenu le seul contrepoids à la portée globale.
 - **`formatDistance` n'est toujours appelé nulle part dans la liste client**
   (R2(1) du chantier précédent, ouverte depuis le 2026-08-12).
+
+⚠️ **Les deux bancs laissés « à rejouer » par le message de commit de L7 l'ont
+été le jour même** : `client-liste` rend 6 contrôles / 0 échec et `registre`
+10 contrôles / 0 échec, sur la base d'après le `DROP`. Sept bancs au total ont
+été rejoués après la migration, aucun échec. Ce que le commit annonçait comme
+non vérifié l'est.
+
+---
+
+### 2026-08-13 — les connexions passent de 5 à 50 par minute
+
+**Demande produit** : « 5 c'est très faible pour une app de consultation ».
+Elle est fondée, et la mesure la sous-estimait plutôt qu'elle ne l'exagérait.
+
+**Ce qui était compté n'est pas ce qu'on croyait compter.** `STRICT_THROTTLE`
+plafonne **une IP**, pas un compte. Le parc mobile algérien sort massivement
+derrière du NAT opérateur : cinq tentatives par minute, ce n'est pas cinq essais
+offerts à un utilisateur, c'est **cinq utilisateurs par minute pour tout un bloc
+d'abonnés** — le sixième se voyait refuser des identifiants parfaitement
+valides. Le dépôt portait déjà deux symptômes sans les relier : une connexion
+d'agent consomme **deux** requêtes du seau (l'écran tente `/admin/login` puis
+`/agent/login`), et la moitié des bancs portent un avertissement « à lancer
+isolé, le seau est vide pendant une minute ».
+
+**Le seau a été séparé, pas relevé.** Un seul chiffre changé aurait emporté deux
+routes qui n'ont rien demandé :
+
+| | avant | après |
+|---|---|---|
+| les 3 `login` | 5/min | **`AUTH_THROTTLE`, 50/min** |
+| `POST /commercant/register` | 5/min | `STRICT_THROTTLE`, 5/min |
+| `POST /report` | 5/min | `STRICT_THROTTLE`, 5/min |
+
+`report` est **le cas fondateur de la règle 7** : trois signalements d'appareils
+distincts masquent la promo d'un concurrent et l'`X-Device-Id` n'est jamais
+vérifié. À 5/min une IP en masque une par minute et demie ; à 50/min elle en
+masquerait seize. Le relèvement demandé portait sur les *connexions* — le mot
+employé était « connexion » —, pas sur la capacité à faire disparaître les
+promos d'autrui.
+
+**Ce que le relèvement coûte, et il faut le dire.** Il n'existe **aucun compteur
+de tentatives par compte** : `CommercantService.login` compare et refuse sans
+rien mémoriser. Ce plafond IP est donc l'unique défense de la règle 2.
+
+- Mot de passe agent/admin : hors de portée, avant comme après.
+- PIN posé aujourd'hui : `PIN_SET_PATTERN` impose **6 chiffres**, soit un
+  million de combinaisons — 14 jours à 50/min depuis une IP. Tenable.
+- ⚠️ **PIN à 4 chiffres** : `PIN_VERIFY_PATTERN` accepte `\d{4,12}` pour ne pas
+  enfermer dehors les comptes antérieurs au passage à six. Dix mille
+  combinaisons : **3 h 20 à 50/min**, contre 33 h à 5/min. Pour ces comptes-là,
+  et pour eux seuls, l'attaque passe d'« une journée et demie » à « une nuit ».
+
+La contre-mesure qui referme ça n'est pas un plafond — c'est de **retirer les
+PIN à 4 chiffres du parc** (remise à 6 forcée à la prochaine connexion) ou un
+compteur de tentatives **par compte**, qui ne dépend pas de l'IP. Ni l'un ni
+l'autre n'a été fait : ce n'était pas la demande, et les deux sont des décisions
+produit. **C'est le seul point ouvert que ce changement crée.**
+
+**Le banc allait accuser le produit — règle 38, prise en flagrant délit.**
+`auth_login.py` comptait « 5 tentatives par minute » en dur : `for i in
+range(10)`, puis « pas de 429 en dix essais ⇒ le verrou ne se déclenche pas ».
+À 50/min il aurait rendu ❌ sur un produit parfaitement correct, et fait partir
+quelqu'un corriger un throttler qui n'a rien. Il ne connaît plus le plafond : il
+essaie jusqu'à `BORNE_ESSAIS = 80`, une borne de sûreté qui n'exprime aucune
+valeur produit, et **rapporte** le rang du verrou au lieu de l'exiger. Changer
+le plafond ne le casse plus ; seul le retirer le fait lever.
+
+**La temporisation du décor tombe de 13 s à 2 s.** Les huit `sleep "$PACE"` de
+`provision-decor.sh` existaient pour « ~12 s entre deux » connexions ; le décor
+en consomme six, ce qui tient très large dans 50. Deux des huit pauses encadrent
+encore une inscription (5/min) et une écriture (20/min), d'où 2 s plutôt que 0.
+**~90 secondes gagnées à chaque pose de décor.**
+
+**Ce que ça déplace dans toute la documentation.** La phrase
+« `STRICT_THROTTLE` = 5/min est la contrainte qui dimensionne toute la suite »
+(`TEST_PROMO.md`) était vraie et ne l'est plus : **les deux seaux étroits sont
+désormais l'inscription (5/min) et les écritures (20/min, partagé)**. Onze
+fichiers de bancs annonçaient « 3 connexions sur le seau strict de 5/min » —
+un état périmé qui fait conclure, exactement ce que ce dépôt reproche aux
+commentaires. Corrigés dans le même commit, y compris les messages de
+diagnostic : celui de `test-parcours-ecran.sh` disait « register et login
+partagent le seau strict » et aurait envoyé chercher au mauvais endroit.
+
+**Vérifié** : `tsc` 0, `eslint` 0, auto-test du banc de connexions (11 cas dont
+8 refus), et le banc joué en vrai contre le backend — **3 contrôles, 0 échec**,
+verrou « au 49ᵉ essai de la série », soit le 51ᵉ appel de la minute : le contrôle
+précédent (« un refus ne dit pas si le compte existe ») en avait consommé deux.
+C'est la mesure qui établit que le nouveau plafond est bien celui qui tourne, et
+non celui qui est écrit — avant le changement, le même banc voyait le verrou au
+4ᵉ essai.
 
 ---
 

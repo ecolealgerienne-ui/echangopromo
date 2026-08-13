@@ -234,7 +234,7 @@ def main():
                    {"telephone": _exiger("COMMERCANT_TEL"), "pin": _exiger("COMMERCANT_PIN")})
     jc = d.get("accessToken")
     if not ja or not jc:
-        print("❌ connexion impossible — décor à rejouer, ou plafond de 5/min atteint.")
+        print("❌ connexion impossible — décor à rejouer, ou plafond de 50 connexions/min.")
         sys.exit(2)
 
     print("════════════════════════════════════════════════════════════════")

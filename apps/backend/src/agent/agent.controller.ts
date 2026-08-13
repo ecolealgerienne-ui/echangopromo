@@ -10,7 +10,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
 import { CommercantService } from '../commercant/commercant.service';
 import { CreateCommercantByAgentDto } from '../commercant/dto/create-commercant-by-agent.dto';
-import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
+import { AUTH_THROTTLE, SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
 import { AgentService } from './agent.service';
 import { LoginAgentDto } from './dto/login-agent.dto';
 
@@ -23,7 +23,7 @@ export class AgentController {
     private readonly auditLogService: AuditLogService,
   ) {}
 
-  @Throttle(STRICT_THROTTLE)
+  @Throttle(AUTH_THROTTLE)
   @Post('login')
   async login(@Body() dto: LoginAgentDto) {
     const agent = await this.agentService.login(dto.email, dto.password);

@@ -1,9 +1,66 @@
 /**
+ * Connexions — 50 tentatives/minute par IP (décision produit du 2026-08-13,
+ * relevé depuis 5).
+ *
+ * ── Pourquoi ce seau a été séparé du seau strict ────────────────────────────
+ *
+ * Les trois `login` partageaient jusqu'ici `STRICT_THROTTLE` avec `register` et
+ * `report`. **C'est une IP qui est comptée, pas un compte** — et en Algérie le
+ * parc mobile sort massivement derrière du NAT opérateur : cinq tentatives par
+ * minute, ce n'est pas cinq essais pour un utilisateur, c'est **cinq
+ * utilisateurs par minute pour tout un bloc d'abonnés**. Le sixième se voyait
+ * refuser des identifiants parfaitement valides, sur une app dont l'usage
+ * dominant est la consultation.
+ *
+ * Le coût était déjà mesuré ailleurs dans le dépôt : une connexion d'agent
+ * consomme **deux** requêtes de ce seau (l'écran tente `POST /admin/login` puis
+ * `POST /agent/login`), et la moitié des bancs portent un avertissement « à
+ * lancer isolé, le seau est vide pendant une minute ».
+ *
+ * ── ⚠️ Ce que ce relèvement coûte, et il faut le lire ───────────────────────
+ *
+ * **Aucun compteur de tentatives par compte n'existe** (`CommercantService
+ * .login` compare et refuse, sans rien mémoriser). Ce plafond IP est donc
+ * l'unique défense de la règle 2, et le relever multiplie par dix la vitesse
+ * d'un brute-force en ligne.
+ *
+ * Sur les secrets d'aujourd'hui, c'est tenable : un mot de passe d'agent/admin
+ * est hors de portée, et `PIN_SET_PATTERN` impose **6 chiffres au minimum**
+ * depuis la création du produit — un million de combinaisons, soit 14 jours à
+ * 50/min depuis une IP, là où un attaquant sérieux disposerait de toute façon
+ * de plusieurs IP.
+ *
+ * **Le point dur est ailleurs, et il est réel** : `PIN_VERIFY_PATTERN` accepte
+ * `\d{4,12}` — quatre chiffres — pour ne pas enfermer dehors les comptes créés
+ * avant le passage à six. Dix mille combinaisons : **3 h 20 à 50/min**, contre
+ * 33 h à 5/min. Pour ces comptes-là, et pour eux seuls, le relèvement fait
+ * passer une attaque de « une journée et demie » à « une nuit ».
+ *
+ * La contre-mesure qui referme ça n'est pas un plafond — c'est de retirer les
+ * PIN à 4 chiffres du parc (forcer la remise à 6 à la prochaine connexion) ou
+ * un compteur de tentatives **par compte**, qui ne dépend pas de l'IP. Tant que
+ * ni l'un ni l'autre n'existe, ce commentaire est le seul endroit où le risque
+ * est écrit ; il ne tient rien (règle 30), il informe la prochaine décision.
+ */
+export const AUTH_THROTTLE = { default: { limit: 50, ttl: 60_000 } };
+
+/**
  * Limite stricte pour les endpoints non authentifiés ou basés sur un
- * identifiant déclaratif non vérifié (login, inscription commerçant,
- * signalement) — 5 requêtes/minute par IP, plus restrictif que la limite
- * globale par défaut (60/min, voir `ThrottlerModule.forRoot` dans
- * `app.module.ts`).
+ * identifiant déclaratif non vérifié — 5 requêtes/minute par IP, plus
+ * restrictif que la limite globale par défaut (60/min, voir
+ * `ThrottlerModule.forRoot` dans `app.module.ts`).
+ *
+ * ⚠️ **Ne couvre plus les connexions depuis le 2026-08-13** (voir
+ * `AUTH_THROTTLE`). Il ne reste que deux routes, et ce sont les deux dont le
+ * plafond EST la protection, pas une gêne :
+ * - `POST /commercant/register` — création de compte ; 50/min/IP, c'est une
+ *   ferme à comptes ;
+ * - `POST /report` — **le cas fondateur de la règle 7**. Trois signalements
+ *   d'appareils distincts masquent la promo d'un concurrent, et l'`X-Device-Id`
+ *   n'est jamais vérifié : à 5/min une IP en masque une par minute et demie, à
+ *   50/min elle en masquerait seize. Le relèvement des connexions ne devait pas
+ *   emporter celle-ci avec lui — c'est pourquoi les deux seaux sont séparés
+ *   plutôt qu'un seul chiffre changé.
  */
 export const STRICT_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
 

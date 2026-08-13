@@ -15,7 +15,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AuthService } from '../auth/auth.service';
 import type { AuthTokenPayload } from '../auth/role';
-import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
+import {
+  AUTH_THROTTLE,
+  SENSITIVE_ACTION_THROTTLE,
+  STRICT_THROTTLE,
+} from '../common/throttle';
 import { DeviceId } from '../common/decorators/device-id.decorator';
 import { StorageService } from '../storage/storage.service';
 import { CommercantService } from './commercant.service';
@@ -54,7 +58,12 @@ export class CommercantController {
     };
   }
 
-  @Throttle(STRICT_THROTTLE)
+  // ⚠️ `AUTH_THROTTLE` (50/min) et non `STRICT_THROTTLE` (5/min) comme la route
+  // juste au-dessus : c'est une IP qui est comptée, et le parc mobile sort
+  // derrière du NAT opérateur. La création de compte, elle, reste stricte —
+  // voir `common/throttle.ts` pour ce que ce relèvement coûte sur les PIN à
+  // quatre chiffres encore acceptés par `PIN_VERIFY_PATTERN`.
+  @Throttle(AUTH_THROTTLE)
   @Post('login')
   async login(@Body() dto: LoginCommercantDto) {
     const commercant = await this.commercantService.login(

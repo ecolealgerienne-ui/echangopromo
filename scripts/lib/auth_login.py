@@ -3,10 +3,19 @@
 
 ── Ce que ce banc éprouve ───────────────────────────────────────────────────
 
-1. **Le verrou de 5 tentatives par minute existe et se déclenche.** Sans lui,
-   un PIN à 6 chiffres et un mot de passe d'agent sont brute-forçables en
-   ligne — c'est la **règle 2**, et `@nestjs/throttler` n'était même pas
-   installé avant l'audit V0.
+1. **Le verrou de connexions existe et se déclenche.** Sans lui, un PIN et un
+   mot de passe d'agent sont brute-forçables en ligne — c'est la **règle 2**,
+   et `@nestjs/throttler` n'était même pas installé avant l'audit V0.
+
+   ⚠️ **Ce banc ne connaît pas le plafond, et c'est délibéré.** Il a compté
+   « 5 tentatives par minute » en dur jusqu'au 2026-08-13 — le jour où les
+   connexions sont passées à 50 (`AUTH_THROTTLE`), il aurait rendu ❌ sur un
+   produit parfaitement correct : dix essais sans 429, donc « le verrou ne se
+   déclenche pas ». C'est exactement la **règle 38**, un banc qui accuse le
+   produit parce que sa prémisse a vieilli. Il essaie donc jusqu'à une borne de
+   sûreté (`BORNE_ESSAIS`) qui n'exprime aucune valeur produit, et **rapporte**
+   le rang du verrou au lieu de l'exiger. Changer le plafond ne le casse plus ;
+   seul le retirer le fait lever.
 
 2. **Un refus ne dit pas si le compte existe.** Se tromper de mot de passe et
    viser un compte inexistant doivent être **indiscernables** : même statut,
@@ -41,15 +50,26 @@ import urllib.request
 API_URL = os.environ.get("API_URL", "http://localhost:3000")
 DEVICE_ID = "banc-auth-0001"
 
+# Borne de sûreté du banc — **pas** le plafond du produit, qu'on ne veut
+# justement pas recopier ici (voir l'en-tête). Elle est simplement plus haute
+# que tout plafond de connexion défendable : au-delà, ce n'est plus « un banc
+# un peu court », c'est qu'il n'y a pas de verrou. Le seul réglage à toucher si
+# `AUTH_THROTTLE` devait un jour dépasser cette valeur.
+BORNE_ESSAIS = 80
+
 
 def verdict_verrou(statuts):
-    """Une série d'essais doit finir par un 429, pas continuer indéfiniment."""
+    """Une série d'essais doit finir par un 429, pas continuer indéfiniment.
+
+    Le **rang** du verrou est rapporté, jamais exigé : ce banc ne sait pas où
+    le plafond est réglé, et n'a pas à le savoir.
+    """
     if not statuts:
         return "non_concluant", "aucune tentative"
     if 429 not in statuts:
         return ("echec",
                 "%d tentatives sans jamais de 429 — le verrou ne se déclenche "
-                "pas, un PIN à 6 chiffres est brute-forçable en ligne "
+                "pas, le PIN d'un commerçant est brute-forçable en ligne "
                 "(règle 2)" % len(statuts))
     rang = statuts.index(429) + 1
     return "ok", "verrou au %de essai (%d tentatives)" % (rang, len(statuts))
@@ -124,8 +144,11 @@ def self_test():
        verdict_429_reconnaissable(429, "RATE_LIMITED")[0], "ok")
 
     # ── Doivent REFUSER ──────────────────────────────────────────────────────
-    # ⚠️ La règle 2 : sans verrou, un PIN à 6 chiffres tombe en ligne.
-    _v("aucun verrou", verdict_verrou([400] * 12)[0], "echec")
+    # ⚠️ La règle 2 : sans verrou, un PIN tombe en ligne. La série fait
+    # `BORNE_ESSAIS` essais — la longueur qu'aura réellement celle du terrain
+    # quand le verrou n'existe pas. Elle valait 12 en dur, ce qui décrivait un
+    # produit plafonné à 5 et n'aurait plus rien prouvé à 50.
+    _v("aucun verrou", verdict_verrou([400] * BORNE_ESSAIS)[0], "echec")
     _v("aucune tentative → non concluant", verdict_verrou([])[0], "non_concluant")
     # ⚠️ L'annuaire : le refus dit si le compte existe.
     _v("codes différents",
@@ -182,9 +205,11 @@ def main():
           *verdict_indiscernable(inexistant, mauvais))
 
     # ── 2. Le verrou se déclenche ───────────────────────────────────────────
-    print("\n── 2. le verrou de 5 tentatives par minute ──")
+    print("\n── 2. le verrou de connexions se déclenche ──")
+    print("     (jusqu'à %d essais — le banc ne connaît pas le plafond)"
+          % BORNE_ESSAIS)
     statuts, dernier = [], (None, None)
-    for i in range(10):
+    for i in range(BORNE_ESSAIS):
         st, code = tenter("/commercant/login",
                           {"telephone": "+213555000101", "pin": "222222"})
         statuts.append(st)
