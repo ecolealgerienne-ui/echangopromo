@@ -87,6 +87,7 @@ DEVICE_ID="parcours-ecran-0001"
 CHOIX="${1:-tous}"
 case "$CHOIX" in
   tous|premier-lancement|plafond|creation|admin|agent|moderation|client|inscription|agent-creation|signalement|carte) ;;
+  decor-promos) ;;
   *) echo "❌ Parcours inconnu : « $CHOIX »."
      echo "   Attendu : premier-lancement | plafond | creation | admin | agent"
      echo "             | moderation | client | inscription | agent-creation"
@@ -103,6 +104,9 @@ BESOIN_COMMERCANT=non
 # `inscription` a besoin du décor UNIQUEMENT pour mesurer le plafond auprès du
 # serveur — le compte qu'il crée, lui, est neuf.
 case "$CHOIX" in tous|plafond|creation|client|inscription|signalement|carte) BESOIN_COMMERCANT=oui ;; esac
+# `decor-promos` n'est pas un parcours de vérification : c'est un PRODUCTEUR de
+# décor qui emprunte le formulaire commerçant. Il apporte sa propre liste de
+# comptes (`TEST_COMMERCANTS`) et n'a donc besoin d'aucun décor préalable.
 BESOIN_PRO=non
 case "$CHOIX" in tous|admin|agent|moderation|agent-creation) BESOIN_PRO=oui ;; esac
 
@@ -927,6 +931,15 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "client" ]; then
   echo
 fi
 
+if [ "$CHOIX" = "decor-promos" ]; then
+  [ -n "${TEST_COMMERCANTS:-}" ] || {
+    echo "❌ TEST_COMMERCANTS absent — liste « tel:pin,tel:pin,… » attendue."
+    exit 2; }
+  # ⚠️ Sans GPS : ce producteur n'a que faire de la position du téléphone, et
+  # un GPS actif ferait voyager la carte au démarrage pour rien.
+  SANS_GPS=oui jouer parcours_promos_serie_test.dart "décor — promos en série"     --dart-define=TEST_COMMERCANTS="$TEST_COMMERCANTS"     --dart-define=TEST_PROMOS_A_CREER="${TEST_PROMOS_A_CREER:-5}"
+  noter "décor — promos en série" $?
+fi
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "carte" ]; then
   SANS_GPS=oui jouer parcours_carte_test.dart "client — la carte"     --dart-define=TEST_REMISE="$CARTE_REMISE"     --dart-define=TEST_COMMERCE_NOM="$CARTE_NOM"
   noter "client — la carte ($CARTE_REMISE)" $?

@@ -241,6 +241,28 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   /// Dernier recours quand le zoom ne peut plus départager : on liste les
   /// commerces du groupe et l'utilisateur choisit. Une carte doit toujours
   /// mener quelque part.
+  ///
+  /// ── ⚠️ Cette feuille liste des COMMERCES, pas des promos — décision du
+  /// 2026-08-13, prise en connaissance de cause ─────────────────────────────
+  ///
+  /// L'objection est légitime et a été posée : l'app sert à chercher des
+  /// **promos**, et c'est la seule surface où le commerçant est l'unité. Le fil
+  /// client, la vitrine et l'écran de détail sont tous promo-centrés. Le
+  /// marqueur lui-même parle en promos — il affiche « −XX % », la meilleure
+  /// remise du point — et cette feuille répond par des noms de commerces : la
+  /// question et la réponse ne sont pas dans la même monnaie.
+  ///
+  /// **Le changement ne coûterait rien au serveur** : `GET /promo/map` sert
+  /// déjà les promos complètes sous chaque commerce (`toClientJson`), photos
+  /// comprises, et `MapShopSheet` les affiche déjà une fois le commerce choisi.
+  /// Seule cette étape intermédiaire est marchande.
+  ///
+  /// **Gardé tel quel malgré tout.** La réserve qui pèse : dix commerces à cinq
+  /// promos font cinquante cartes dans une feuille, et trancher entre « tout
+  /// lister » et « la meilleure par commerce » est un arbitrage d'écran qui
+  /// n'était pas le sujet du jour. C'est écrit ici plutôt que laissé à
+  /// deviner — sans ça, le prochain à ouvrir ce fichier reposera la même
+  /// question et la croira neuve.
   Future<void> _showClusterPicker(ShopCluster cluster) async {
     setState(() => _selected = null);
     final chosen = await showModalBottomSheet<MapShop>(

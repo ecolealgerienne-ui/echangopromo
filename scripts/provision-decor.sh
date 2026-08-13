@@ -302,7 +302,8 @@ if [ -z "$COMMERCANT_TOKEN" ]; then
   out="$(api POST /commercant/register "$(jq -n --arg t "$D_COMMERCANT_TEL" \
     --arg p "$D_COMMERCANT_PIN" \
     --arg la "$D_COMMERCANT_LAT" --arg ln "$D_COMMERCANT_LNG" \
-    '{telephone:$t, nom:"Commerce Décor", adresse:"Rue du Décor", categorie:"alimentation",
+    --arg nom "$D_COMMERCANT_NOM" --arg adr "$D_COMMERCANT_ADRESSE" \
+    '{telephone:$t, nom:$nom, adresse:$adr, categorie:"alimentation",
       pin:$p, acceptedTerms:true,
       latitude:($la|tonumber), longitude:($ln|tonumber)}')")"
   echo "$out" | est_erreur && fail "Inscription commerçant refusée" \
@@ -335,7 +336,26 @@ if [ -z "$POSITION_ACTUELLE" ]; then
 fi
 
 # Validation du registre — geste d'administration, pas geste d'utilisateur.
-CID="$(api GET "/admin/commercant?limit=100" '' "$ADMIN_TOKEN" \
+# ⚠️ **`?search=` et non un balayage de `?limit=100`** (2026-08-13). Cette
+# recherche parcourait la première page d'une liste triée par date de création
+# décroissante : au-delà de cent comptes en base, le commerçant du décor — l'un
+# des plus anciens — n'y était **plus**, et le décor annonçait « Commerçant
+# introuvable côté admin après inscription » sur un compte parfaitement
+# présent. C'est le piège nommé par la règle 15 : un consommateur qui traite un
+# point de terminaison paginé comme une liste complète tronque en silence dès
+# que le volume dépasse la page.
+#
+# Le filtre `search` porte sur nom/téléphone/adresse depuis le même jour. On lui
+# donne le numéro, unique parmi les comptes actifs, et on exige quand même
+# l'égalité exacte : une recherche est un filtre, pas une clé.
+#
+# ⚠️ **Sans le `+`, et ce n'est pas un détail.** Dans une chaîne de requête, `+`
+# est décodé comme un ESPACE : passer `+213555000101` tel quel fait chercher
+# « 213555000101 » précédé d'un blanc, et ne trouve rien. Le filtre est un
+# `ILIKE %…%`, donc la sous-chaîne sans indicatif suffit — et elle évite
+# d'avoir à encoder quoi que ce soit.
+D_TEL_RECHERCHE="${D_COMMERCANT_TEL#+}"
+CID="$(api GET "/admin/commercant?limit=100&search=$D_TEL_RECHERCHE" '' "$ADMIN_TOKEN" \
   | jq -r --arg t "$D_COMMERCANT_TEL" '.items[]? | select(.telephone==$t) | .id' | head -1)"
 [ -n "$CID" ] || fail "Commerçant introuvable côté admin après inscription"
 
@@ -348,7 +368,7 @@ CID="$(api GET "/admin/commercant?limit=100" '' "$ADMIN_TOKEN" \
 # ⚠️ `limit` est plafonné côté serveur : une valeur trop grande rend un 400, et
 # un `(.items // .)` complaisant se met alors à itérer l'objet d'erreur au lieu
 # d'échouer. Le repli masquait la panne — on lit donc `.items` et rien d'autre.
-liste="$(api GET "/admin/commercant?limit=100" '' "$ADMIN_TOKEN")"
+liste="$(api GET "/admin/commercant?limit=100&search=$D_TEL_RECHERCHE" '' "$ADMIN_TOKEN")"
 echo "$liste" | est_erreur && fail "Liste des commerçants refusée" \
   "$(echo "$liste" | jq -c '{code,message}')"
 ETAT="$(echo "$liste" | jq -r --arg t "$D_COMMERCANT_TEL" \
@@ -370,6 +390,34 @@ if [ "$ETAT" != "valide" ]; then
     "$(echo "$out" | jq -c '{code,message}')"
 fi
 pass "Registre validé — commerçant $CID"
+
+# ── ⚠️ Un décor idempotent CONVERGE, il ne fait pas que créer ────────────────
+#
+# Le nom et l'adresse ne sont posés qu'à l'inscription. Un compte déjà existant
+# gardait donc les valeurs de sa première pose, quoi qu'on déclare ensuite —
+# et les neuf commerçants des trois villes se sont retrouvés nommés
+# « Commerce Décor », parce qu'ils avaient été inscrits avant que le nom soit
+# paramétrable. Le décor annonçait « Épicerie Hassi Bahbah » dans sa sortie et
+# posait autre chose en base : **un décor qui décrit ce qu'il voulait faire
+# plutôt que ce qu'il a fait**.
+#
+# On rapproche donc l'état réel de l'état déclaré, à chaque passage.
+etat_actuel="$(api GET /commercant/me '' "$COMMERCANT_TOKEN"   | jq -r '[(.nom // ""), (.adresse // "")] | @tsv')"
+nom_actuel="${etat_actuel%%$'	'*}"
+adresse_actuelle="${etat_actuel#*$'	'}"
+if [ "$nom_actuel" != "$D_COMMERCANT_NOM" ] ||    [ "$adresse_actuelle" != "$D_COMMERCANT_ADRESSE" ]; then
+  info "Nom/adresse à aligner : « $nom_actuel » → « $D_COMMERCANT_NOM »"
+  out="$(api PATCH /commercant/me "$(jq -n --arg nom "$D_COMMERCANT_NOM"     --arg adr "$D_COMMERCANT_ADRESSE" '{nom:$nom, adresse:$adr}')"     "$COMMERCANT_TOKEN")"
+  echo "$out" | est_erreur && fail "Mise à jour du profil refusée"     "$(echo "$out" | jq -c '{code,message}')"
+  # ⚠️ **Toute modification de profil rallume `profilePendingReview`**, ce qui
+  # BLOQUE la publication de nouvelles promos jusqu'à validation admin. Un
+  # décor qui corrigerait un nom et laisserait le compte incapable de publier
+  # serait pire que le nom faux. On revalide donc dans la foulée — c'est le
+  # geste que l'admin ferait.
+  out="$(api POST "/admin/commercant/$CID/profile/valider" '{}' "$ADMIN_TOKEN")"
+  echo "$out" | est_erreur && fail "Validation du profil refusée"     "$(echo "$out" | jq -c '{code,message}')"
+  pass "Profil aligné et revalidé"
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 if [ "$D_SANS_PROMO" = "oui" ]; then
@@ -548,6 +596,17 @@ pass "Promo $PROMO_ID"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
+if [ "$D_SANS_PROMO" = "oui" ]; then
+  # ⚠️ **Ce contrôle porte sur la CARTE, donc sur une promo visible.** En mode
+  # sans promo il échouerait pour la seule raison qu'on lui a demandé de ne pas
+  # en créer — un décor qui s'accuse lui-même. Ce qu'il reste à vérifier ici,
+  # c'est ce que ce mode promet : le commerçant existe et porte son point.
+  step "6. Le commerçant porte bien son point"
+  pos_me="$(api GET /commercant/me '' "$COMMERCANT_TOKEN"     | jq -r 'if (.latitude != null and .longitude != null)
+             then "\(.latitude),\(.longitude)" else empty end')"
+  [ -n "$pos_me" ] || fail "Le commerçant du décor n'a pas de position"     "sans elle il n'apparaîtra sur aucune carte, et la promo créée à l'écran ne sera publiable par personne"
+  pass "Position $pos_me"
+else
 step "6. Le commerçant du décor est bien SUR la carte"
 # ⚠️ Contrôle, pas commentaire. Le décor a longtemps posé un commerçant SANS
 # coordonnées : tout passait au vert ici, et c'est le parcours « carte » qui
@@ -571,6 +630,7 @@ sur_la_carte="$(api GET "/promo/map?$bbox" | jq -r --arg id "$CID"   '[.items[]?
 pass "Commerçant présent dans le cadre du décor"
 
 echo
+fi
 echo "════════════════════════════════════════════════════════════════"
 echo "  Décor posé. Bloc à exporter avant de lancer un banc :"
 echo "════════════════════════════════════════════════════════════════"
