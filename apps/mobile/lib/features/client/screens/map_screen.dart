@@ -288,11 +288,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   /// Le rayon que couvre la carte telle qu'elle est cadrée, ou `null`.
   ///
-  /// ⚠️ **Plafonné au rayon PAR DÉFAUT du serveur, pas à son maximum.** Le
-  /// maximum (50 km) borne ce que l'API accepte ; la borne produit est plus
-  /// serrée : echango Promo sert des promos de proximité, pas des annonces
-  /// nationales. Dézoomer sur toute la wilaya n'élargit donc pas la recherche
-  /// au-delà du voisinage — la carte montre plus, la liste reste locale.
+  /// ⚠️ **Plafonné par le maximum que le SERVEUR accepte**, `maxRadiusKm`,
+  /// descendu de 50 à 5 km le 2026-08-14 : echango Promo sert des promos de
+  /// proximité, pas des annonces nationales. Dézoomer sur toute la wilaya
+  /// n'élargit donc pas la recherche — la carte montre plus, la liste reste
+  /// locale.
+  ///
+  /// ⚠️ **Le plafond a d'abord été posé dans l'app seule, et c'était insuffisant
+  /// — la borne se contournait par un appel direct à l'API.** Elle vit
+  /// maintenant dans `.env`, l'app la lit sur `GET /promo/config`, et l'app
+  /// **ne connaît toujours pas le chiffre** : si la valeur change côté serveur,
+  /// le cadrage suit sans republier (règle 32).
   ///
   /// ⚠️ Ce plafond est **aussi** appliqué à l'émission (`rayonBorne`, côté
   /// providers). Le poser ici seulement laisserait passer un rayon plus large
@@ -302,7 +308,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     return rayonDepuisLaVue(
       vue.northWest,
       vue.southEast,
-      plafondKm: ref.read(clientGeoConfigProvider).valueOrNull?.defaultRadiusKm,
+      plafondKm: ref.read(clientGeoConfigProvider).valueOrNull?.maxRadiusKm,
     );
   }
 

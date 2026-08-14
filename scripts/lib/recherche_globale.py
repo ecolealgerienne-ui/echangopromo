@@ -142,36 +142,67 @@ def verdict_rayon_applique(distances, rayon):
     return "ok", "%d résultats, tous dans %.0f km" % (len(connues), rayon)
 
 
-def verdict_rayon_suit_le_parametre(distances, rayon_defaut, rayon_demande):
-    """⚠️ La borne suit-elle le client, ou est-elle un plafond en dur ?
+def verdict_plafond_de_proximite(rayon_max, rayon_defaut):
+    """⚠️ **Le plafond annoncé respecte-t-il la règle de proximité ?**
 
-    Contrôle 3 seul, un serveur qui bornerait TOUJOURS à son défaut passerait :
-    il rendrait « tout est dans le rayon » quel que soit le `radiusKm` demandé.
-    Or c'est précisément ce que l'app fait maintenant — élargir le cadre en
-    dézoomant — et c'est ce qui remplace l'ancienne levée du rayon. Si cette
-    sonde tombe, chercher large devient impossible et la capacité que la
-    décision d'origine protégeait est perdue pour de bon.
+    Sans cette sonde, `verdict_frontiere_refuse` est **auto-référentiel** : il
+    lit le maximum sur le serveur, demande maximum + 1, et constate un refus.
+    Il resterait donc vert si quelqu'un remontait `CLIENT_MAX_RADIUS_KM` à 500 —
+    le serveur refuserait 501, et le banc applaudirait.
+
+    *Trouvé en mutant le vrai `.env` le 2026-08-14 : plafond remis à 50, le
+    contrôle a testé 51 et rendu vert. La mutation devait faire échouer le banc ;
+    elle a montré que le banc regardait ailleurs.*
+
+    La règle produit ne se dit pas « 5 km » — un chiffre en dur ici mourrait au
+    premier changement de pilote. Elle se dit : **aucun client ne peut demander
+    plus large que ce que le serveur applique par défaut.** C'est cette relation
+    qui porte « promos de proximité, pas annonces nationales », et elle se
+    vérifie sans connaître aucun chiffre.
     """
-    if distances is None:
-        return "non_concluant", "distances illisibles"
-    connues = [d for d in distances if d is not None]
-    if not connues:
-        return "non_concluant", "aucune promo positionnée"
-    au_dela = [d for d in connues if d > rayon_defaut * TOLERANCE]
-    trop_loin = [d for d in connues if d > rayon_demande * TOLERANCE]
-    if trop_loin:
+    if rayon_max is None or rayon_defaut is None:
+        return "non_concluant", "/promo/config ne sert pas les deux rayons"
+    if rayon_max > rayon_defaut:
         return ("echec",
-                "%d résultat(s) au-delà du rayon demandé de %.0f km (jusqu'à "
-                "%.1f km) — la borne ne tient pas"
-                % (len(trop_loin), rayon_demande, max(trop_loin)))
-    if not au_dela:
-        return ("non_concluant",
-                "élargir à %.0f km ne rend rien de plus qu'à %.0f km : le décor "
-                "n'a rien entre les deux, la borne ne peut pas se voir bouger"
-                % (rayon_demande, rayon_defaut))
+                "le maximum accepté (%.0f km) dépasse le rayon par défaut "
+                "(%.0f km) : un appelant peut demander plus large que ce que le "
+                "produit sert, et la règle de proximité n'est plus une frontière"
+                % (rayon_max, rayon_defaut))
     return ("ok",
-            "%d résultat(s) entre %.0f et %.0f km — la borne suit le paramètre"
-            % (len(au_dela), rayon_defaut, rayon_demande))
+            "maximum %.0f km ≤ défaut %.0f km — nul ne peut cadrer plus large "
+            "que le voisinage" % (rayon_max, rayon_defaut))
+
+
+def verdict_frontiere_refuse(statut, rayon_demande, rayon_max):
+    """⚠️ **La frontière sait-elle refuser ?** (règle 28)
+
+    Le contrôle 3 seul ne prouve rien de la borne : un serveur qui rendrait
+    toujours peu de résultats le satisferait. Ce qui fait d'un plafond une
+    frontière, c'est qu'il **rejette** ce qui le dépasse — sinon un appelant
+    direct de l'API obtient ce que l'app s'interdit, et la borne n'est qu'un
+    confort d'affichage déguisé en règle.
+
+    ⚠️ Cette sonde a remplacé « la borne suit le paramètre » le 2026-08-14,
+    quand `CLIENT_MAX_RADIUS_KM` est passé de 50 à 5 : le défaut et le maximum
+    étant devenus égaux, il n'existe plus de rayon intermédiaire à demander, et
+    l'ancienne sonde ne pouvait plus varier. Elle est **remplacée, pas
+    supprimée** — un contrôle qu'on retire en silence laisse un trou qui
+    ressemble à une couverture.
+    """
+    if statut is None:
+        return "non_concluant", "aucune réponse"
+    if statut == 400:
+        return ("ok",
+                "400 sur %.0f km (maximum %.0f) — la frontière refuse"
+                % (rayon_demande, rayon_max))
+    if statut == 200:
+        return ("echec",
+                "200 sur un rayon de %.0f km alors que le maximum annoncé est "
+                "%.0f : le plafond est déclaré mais pas appliqué, et un appel "
+                "direct contourne la règle de proximité"
+                % (rayon_demande, rayon_max))
+    return ("non_concluant",
+            "statut %d — ni un refus de validation ni un service" % statut)
 
 
 def verdict_ordre_distance(distances):
@@ -265,11 +296,22 @@ def appeler(chemin):
         return None, {}
 
 
-def distances_de(items, lat, lng):
+def distances_de(items, lat, lng, cles=("commercantLatitude",
+                                        "commercantLongitude")):
+    """⚠️ **Les deux routes ne nomment pas les coordonnées pareil**, et le
+    découvrir en silence coûte cher : `/promo` sert des promos qui portent
+    `commercantLatitude`, `/promo/map` sert des commerçants qui portent
+    `latitude`. Lire la mauvaise clé rend `None` partout, donc « aucune promo
+    positionnée » — un non-concluant qui accuse le décor alors que la sonde
+    regardait à côté. C'est arrivé ici même.
+
+    Les clés sont donc un paramètre explicite, jamais devinées : essayer l'une
+    puis l'autre masquerait un vrai changement de contrat côté serveur.
+    """
     if items is None:
         return None
-    return [distance_km(lat, lng, i.get("commercantLatitude"),
-                        i.get("commercantLongitude")) for i in items]
+    return [distance_km(lat, lng, i.get(cles[0]), i.get(cles[1]))
+            for i in items]
 
 
 _ok = 0
@@ -293,8 +335,10 @@ def self_test():
        verdict_rayon_applique([0.1, 4.9], 5)[0], "ok")
     _v("recherche bornée elle aussi",
        verdict_rayon_applique([0.1, 0.9], 5)[0], "ok")
-    _v("la borne suit le paramètre",
-       verdict_rayon_suit_le_parametre([0.1, 49.8], 5, 50)[0], "ok")
+    _v("plafond de proximité tenu",
+       verdict_plafond_de_proximite(5, 5)[0], "ok")
+    _v("au-delà du maximum, refusé",
+       verdict_frontiere_refuse(400, 51, 50)[0], "ok")
     _v("ordre croissant", verdict_ordre_distance(proche_et_loin)[0], "ok")
     _v("terme absurde sans résultat",
        verdict_recherche_honoree(0, 56)[0], "ok")
@@ -311,8 +355,12 @@ def self_test():
     # Djelfa à 245 km alors que le cadre valait 5 km.
     _v("recherche qui déborde le cadre (cas d'Alger)",
        verdict_rayon_applique([0.1, 245.4], 5)[0], "echec")
-    _v("borne qui ne tient pas même élargie",
-       verdict_rayon_suit_le_parametre([0.1, 245.4], 5, 50)[0], "echec")
+    # ⚠️ Le cas exact que la mutation du 2026-08-14 a révélé : plafond remis
+    # à 50 alors que le produit sert 5.
+    _v("plafond plus large que le défaut",
+       verdict_plafond_de_proximite(50, 5)[0], "echec")
+    _v("plafond déclaré mais pas appliqué",
+       verdict_frontiere_refuse(200, 51, 50)[0], "echec")
     # ⚠️ Le défaut le plus coûteux : `search` effacé, le catalogue entier servi.
     _v("search effacé en silence",
        verdict_recherche_honoree(56, 56)[0], "echec")
@@ -332,10 +380,13 @@ def self_test():
        "non_concluant")
     _v("commerce dans le rayon",
        verdict_perimetre_explicite([2.0], 5)[0], "non_concluant")
-    # ⚠️ Rien entre le défaut et le maximum : élargir ne change rien, donc la
-    # sonde ne peut pas distinguer une borne qui suit d'un plafond en dur.
-    _v("décor sans palier intermédiaire",
-       verdict_rayon_suit_le_parametre([0.1, 0.9], 5, 50)[0], "non_concluant")
+    # ⚠️ Ni un refus de validation ni un service : on ne conclut pas.
+    _v("statut inattendu sur la frontière",
+       verdict_frontiere_refuse(500, 51, 50)[0], "non_concluant")
+    _v("aucune réponse de la frontière",
+       verdict_frontiere_refuse(None, 51, 50)[0], "non_concluant")
+    _v("rayons de configuration illisibles",
+       verdict_plafond_de_proximite(None, 5)[0], "non_concluant")
     _v("totaux illisibles",
        verdict_recherche_honoree(None, 56)[0], "non_concluant")
 
@@ -395,21 +446,26 @@ def main():
     s2, avec = appeler("/promo?limit=100&%s&search=%s" % (geo, q))
     d_avec = distances_de(avec.get("items"), lat, lng) if s2 == 200 else None
 
-    # ⚠️ **L'échantillon du décor ne peut pas venir de la requête sous test.**
-    # Ma première version le tirait de la recherche — bornée depuis le
-    # 2026-08-14 — donc il ne contenait par construction que du proche, et le
-    # contrôle 1 rendait « décor trop pauvre » en décrivant en réalité le
-    # comportement qu'il devait juger. On élargit au maximum serveur pour voir
-    # ce que le décor a vraiment.
+    # ⚠️ **L'échantillon du décor ne peut venir d'AUCUNE requête bornée par un
+    # rayon.** Ma première version le tirait de la recherche elle-même : il ne
+    # contenait donc que du proche, et le contrôle 1 rendait « décor trop
+    # pauvre » en décrivant en réalité le comportement qu'il devait juger. Je
+    # l'ai ensuite tiré d'une recherche élargie au maximum serveur — ce qui a
+    # cessé de marcher le jour où ce maximum est descendu à 5 km.
+    #
+    # `/promo/map` travaille en RECTANGLE et n'a pas de rayon : c'est le seul
+    # prélèvement du parc qui ne dépende pas de ce qu'on éprouve.
     rmax = cfg.get("maxRadiusKm")
-    d_large = None
-    if rmax is not None:
-        s5, large = appeler("/promo?limit=100&%s&radiusKm=%s&search=%s"
-                            % (geo, rmax, q))
-        d_large = distances_de(large.get("items"), lat, lng) if s5 == 200 else None
+    s5, parc = appeler("/promo/map?north=38&south=18&east=12&west=-9")
+    d_parc = (distances_de(parc.get("items"), lat, lng,
+                           cles=("latitude", "longitude"))
+              if s5 == 200 else None)
+    if s5 == 200 and parc.get("truncated"):
+        print("  ⚠️  parc tronqué : les contrôles 1 et 7 ne voient qu'une "
+              "partie du décor")
 
     print("\n── 1. le décor permet-il de juger ? ──")
-    noter("« %s » s'étale-t-il ?" % TERME, *verdict_decor(d_large, rayon))
+    noter("le parc s'étale-t-il ?", *verdict_decor(d_parc, rayon))
 
     print("\n── 2. le témoin : sans recherche, le rayon borne ──")
     noter("liste ordinaire ⊂ rayon", *verdict_rayon_applique(d_sans, rayon))
@@ -418,18 +474,23 @@ def main():
     noter("« %s » reste dans le cadre" % TERME,
           *verdict_rayon_applique(d_avec, rayon))
 
-    print("\n── 4. mais la borne suit le cadre, elle n'est pas figée ──")
+    print("\n── 4. le plafond annoncé est celui de la proximité ──")
+    noter("maximum ≤ défaut", *verdict_plafond_de_proximite(rmax, rayon))
+
+    print("\n── 5. et la frontière sait refuser ce qui la dépasse ──")
     if rmax is None:
-        noter("recherche élargie", "non_concluant",
+        noter("au-delà du maximum", "non_concluant",
               "/promo/config ne sert pas maxRadiusKm")
     else:
-        noter("élargi à %.0f km" % rmax,
-              *verdict_rayon_suit_le_parametre(d_large, rayon, rmax))
+        trop = rmax + 1
+        s6, _ = appeler("/promo?limit=1&%s&radiusKm=%s" % (geo, trop))
+        noter("radiusKm=%.0f refusé" % trop,
+              *verdict_frontiere_refuse(s6, trop, rmax))
 
-    print("\n── 5. sa contrepartie : le proche d'abord ──")
+    print("\n── 6. sa contrepartie : le proche d'abord ──")
     noter("ordre servi par distance", *verdict_ordre_distance(d_avec))
 
-    print("\n── 6. `search` est-il seulement lu ? ──")
+    print("\n── 7. `search` est-il seulement lu ? ──")
     s3, absurde = appeler("/promo?limit=1&%s&search=%s"
                           % (geo, urllib.parse.quote(TERME_ABSURDE)))
     noter("terme absurde ⇒ 0",
@@ -437,16 +498,16 @@ def main():
               absurde.get("total") if s3 == 200 else None,
               sans.get("total") if s1 == 200 else None))
 
-    print("\n── 7. une fiche n'est pas un voisinage ──")
+    print("\n── 8. une fiche n'est pas un voisinage ──")
     # Le commerce le plus LOIN du décor : c'est celui sur lequel le contrôle a
     # une chance de distinguer quelque chose.
     # ⚠️ Pris dans l'échantillon ÉLARGI, pas dans la recherche : celle-ci est
     # bornée, son commerce « le plus loin » est donc à l'intérieur du rayon et
     # ce contrôle ne pourrait rien distinguer.
     loin = None
-    if d_large and large.get("items"):
+    if d_parc and parc.get("items"):
         paires = [(d, i)
-                  for d, i in zip(d_large, large["items"]) if d is not None]
+                  for d, i in zip(d_parc, parc["items"]) if d is not None]
         if paires:
             loin = max(paires, key=lambda p: p[0])[1]
     if loin is None:
@@ -462,7 +523,7 @@ def main():
         # alors que c'est la sonde qui mesurait autre chose que l'invariant
         # (règle 38 : établir que la mesure pouvait varier).
         s4, fiche = appeler("/promo?limit=100&commercantId=%s"
-                            % loin["commercantId"])
+                            % loin["id"])
         noter("commercantId lointain",
               *verdict_perimetre_explicite(
                   distances_de(fiche.get("items"), lat, lng)

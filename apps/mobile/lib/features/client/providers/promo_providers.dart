@@ -88,8 +88,8 @@ enum PromoSort { proximite, expireBientot, plusGrosseReduction, nouveautes }
 /// ⚠️ La phrase qui suivait ici — « la recherche reste volontairement sans
 /// rayon » — a été vraie une demi-journée. La décision a été inversée le même
 /// 2026-08-14 : la recherche respecte désormais le cadre, et le cadre est
-/// plafonné au rayon par défaut (`rayonBorne`). Un commentaire qui survit à la
-/// décision qu'il décrit est précisément ce que la règle 30 vise.
+/// plafonné par le maximum du serveur (`rayonBorne`). Un commentaire qui survit
+/// à la décision qu'il décrit est précisément ce que la règle 30 vise.
 final promoSortProvider =
     StateProvider.autoDispose<PromoSort>((ref) => PromoSort.proximite);
 
@@ -291,11 +291,12 @@ final promoListProvider =
         (ref) {
   final api = ref.watch(promoApiProvider);
   final point = ref.watch(clientPositionProvider);
-  final defaut =
-      ref.watch(clientGeoConfigProvider).valueOrNull?.defaultRadiusKm;
-  // Le cadrage du client, borné par ce que le produit autorise (proximité), et
-  // à défaut le rayon du serveur.
-  final rayonKm = rayonBorne(point?.rayonKm, defaut) ?? defaut;
+  final config = ref.watch(clientGeoConfigProvider).valueOrNull;
+  // Le cadrage du client, borné par ce que le SERVEUR accepte au plus, et à
+  // défaut le rayon qu'il applique lui-même. Les deux viennent de
+  // `GET /promo/config` : aucun chiffre n'est écrit ici (règle 32).
+  final rayonKm = rayonBorne(point?.rayonKm, config?.maxRadiusKm) ??
+      config?.defaultRadiusKm;
   final categorie = ref.watch(categoryFilterProvider);
   final favorites = ref.watch(favoritesProvider);
   final search = ref.watch(searchQueryProvider);
@@ -407,9 +408,9 @@ final topPromosProvider = FutureProvider.autoDispose<List<Highlight>>((ref) {
   // Même cadrage que la liste : deux géographies différentes sur le même écran
   // donneraient un bandeau « autour de vous » qui ne parle pas du même « vous »
   // que la liste juste en dessous.
-  final defaut =
-      ref.watch(clientGeoConfigProvider).valueOrNull?.defaultRadiusKm;
-  final rayonKm = rayonBorne(point?.rayonKm, defaut) ?? defaut;
+  final config = ref.watch(clientGeoConfigProvider).valueOrNull;
+  final rayonKm = rayonBorne(point?.rayonKm, config?.maxRadiusKm) ??
+      config?.defaultRadiusKm;
   return ref
       .watch(highlightApiProvider)
       .list(point: point?.coordonnees, radiusKm: rayonKm);
