@@ -59,7 +59,20 @@ RACINE="$(cd "$HERE/.." && pwd)"
 cd "$RACINE" || exit 2
 
 PAUSE_SECONDS="${PAUSE_SECONDS:-10}"
-PAUSE_STRICTE_SECONDS="${PAUSE_STRICTE_SECONDS:-60}"
+# ⚠️ **10 s, et non 60, parce que le SERVEUR de mesure a des seaux élargis.**
+#
+# Les 60 s n'étaient pas une marge de prudence : c'est `ttl: 60_000`, la
+# fenêtre du limiteur. Attendre moins ne rendait pas la main plus vite, ça
+# fabriquait des 429 déguisés en échecs métier.
+#
+# Ce qui a changé n'est donc pas la patience du lot mais la taille des seaux :
+# `THROTTLE_FACTOR=20` dans le `.env` de mesure (jamais en production, voir
+# `common/throttle.ts`). Le lot passait 15 min à dormir pour 13 d'exécution.
+#
+# ⚠️ Si vous lancez ce lot contre un serveur SANS ce facteur — la production,
+# par exemple — remettez 60 : `PAUSE_STRICTE_SECONDS=60 ./scripts/test-tout.sh`.
+# Sinon les 429 reviennent, et ils accusent le produit.
+PAUSE_STRICTE_SECONDS="${PAUSE_STRICTE_SECONDS:-10}"
 
 # Les bancs qui consomment le seau strict (5/min) — établi en cherchant
 # `POST /report` et `POST /commercant/register` dans leur module, pas de mémoire.

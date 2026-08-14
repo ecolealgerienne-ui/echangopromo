@@ -171,14 +171,35 @@ def actives(promos):
     return [p for p in promos if p.get("lifecycleStatus") == "publiee"]
 
 
-def preparer(jeton_agent, jeton_commercant, cid):
-    """Amène le commerçant à exactement CAP-1 promos actives."""
+def preparer(jeton_agent, jeton_commercant, cid, intouchables=()):
+    """Amène le commerçant à exactement CAP-1 promos actives.
+
+    ⚠️ **Sans jamais arrêter une promo du décor.** Cette fonction prenait
+    `act[0]` — la première venue — et a ainsi arrêté `PROMO_ID`, la promo de
+    référence dont dépendent `commercant-b` et `client-highlight`.
+
+    ⚠️ **Et c'est irréversible pour la journée** :
+    `PROMO_REPUBLISH_COOLDOWN_HOURS` vaut 24, donc republier rend
+    `PROMO_REPUBLISH_TOO_SOON`. Un ménage en fin de banc ne peut pas réparer
+    ça — mesuré le 2026-08-14, après avoir cru que si. La seule protection qui
+    vaille est de ne pas y toucher.
+
+    S'il ne reste que des promos du décor à arrêter, on renonce : un banc non
+    concluant coûte infiniment moins qu'un décor détruit pour 24 h.
+    """
     for _ in range(20):
         act = actives(promos_du_commercant(jeton_commercant))
         if len(act) == CAP - 1:
             return True
         if len(act) > CAP - 1:
-            st, d = appeler("POST", "/promo/%s/stop" % act[0]["id"], jeton_agent)
+            jetables = [p for p in act if p["id"] not in intouchables]
+            if not jetables:
+                print("   ⚠️  %d actives, toutes du décor : les arrêter les "
+                      "perdrait pour 24 h (cooldown de republication)"
+                      % len(act))
+                return False
+            st, d = appeler("POST", "/promo/%s/stop" % jetables[0]["id"],
+                            jeton_agent)
             if st not in (200, 201):
                 print("   ❌ arrêt impossible (HTTP %s, %s)" % (st, d.get("code")))
                 return False
@@ -271,15 +292,28 @@ def main():
     print("════════════════════════════════════════════════════════════════")
     print("  %d tours × %d créations simultanées\n" % (TOURS, SIMULTANEES))
 
-    # ⚠️ L'état de départ, relevé AVANT le premier geste : c'est lui, et non une
-    # supposition, qui définit « rendre le décor tel qu'on l'a trouvé ».
+    # ── ⚠️ Ce qui est intouchable est NOMMÉ, pas déduit de l'état ────────────
+    #
+    # J'ai d'abord sanctuarisé « tout ce qui était actif au départ ». Trop
+    # rigide : dès que le commerçant se retrouve au plafond — ce qui arrive
+    # après un passage interrompu — plus rien n'est jetable et le banc ne peut
+    # **jamais** retourner, indéfiniment. Un banc qui se bloque tout seul sur
+    # l'état qu'il a lui-même laissé ne mesure plus rien.
+    #
+    # Le décor a pourtant un contrat explicite : `PROMO_ID` est LA promo de
+    # référence, celle que `commercant-b` et `client-highlight` visent. Elle
+    # seule est intouchable, et pour une raison précise : arrêtée, elle est
+    # perdue 24 h (`PROMO_REPUBLISH_COOLDOWN_HOURS`). Tout le reste est du
+    # résidu de banc, et se ramasse.
+    intouchables = {i for i in [os.environ.get("PROMO_ID")] if i}
     initiales = [p["id"] for p in actives(promos_du_commercant(jc))]
-    print("  décor au départ : %d promo(s) active(s)\n" % len(initiales))
+    print("  décor au départ : %d active(s), %d intouchable(s)\n"
+          % (len(initiales), len(intouchables)))
 
     echecs, non_concluants = [], []
     for tour in range(1, TOURS + 1):
         print("── tour %d ──" % tour)
-        if not preparer(ja, jc, cid):
+        if not preparer(ja, jc, cid, intouchables=intouchables):
             non_concluants.append("tour %d : préparation impossible" % tour)
             continue
         resultats = tirer_simultanement(ja, cid, SIMULTANEES)
@@ -325,25 +359,31 @@ def main():
     # au départ, et on republie ce qui l'était.
     print("\n── ménage ──")
     fin = actives(promos_du_commercant(jc))
-    a_arreter = [p for p in fin if p["id"] not in initiales]
+    a_arreter = [p for p in fin if p["id"] not in intouchables]
     for p in a_arreter:
         appeler("POST", "/promo/%s/stop" % p["id"], ja)
     ids_fin = {p["id"] for p in fin}
-    a_republier = [i for i in initiales if i not in ids_fin]
+    a_republier = [i for i in intouchables if i not in ids_fin]
     refus = 0
     for pid in a_republier:
-        st, _ = appeler("POST", "/promo/%s/publish" % pid, jc, {})
+        st, d = appeler("POST", "/promo/%s/publish" % pid, jc, {})
         if st not in (200, 201):
             refus += 1
+            # ⚠️ `PROMO_REPUBLISH_COOLDOWN_HOURS` vaut 24 : une promo du décor
+            # arrêtée par erreur ne se récupère PAS en fin de banc. D'où la
+            # garde en amont, dans `preparer`. Ceci n'est qu'un filet, et il
+            # doit dire quand il n'a pas rattrapé.
+            print("   ⚠️  %s non republiable (%s)" % (pid[:8], d.get("code")))
     reste = len(actives(promos_du_commercant(jc)))
     print("   %d créée(s) arrêtée(s), %d du décor republiée(s)%s — %d active(s)"
           % (len(a_arreter), len(a_republier) - refus,
              " (%d refus)" % refus if refus else "", reste))
-    if reste != len(initiales):
+    if reste > len(intouchables):
         # ⚠️ Sans verdict, mais dit : le ménage n'est pas ce que ce banc
         # éprouve, et l'échouer ferait accuser le produit pour un rangement mal
         # fait. S'il rate, c'est le banc SUIVANT qui le dira.
-        print("   ⚠️  le décor comptait %d active(s) au départ" % len(initiales))
+        print("   ⚠️  %d active(s) laissée(s) pour %d intouchable(s)"
+              % (reste, len(intouchables)))
 
     print("\n════════════════════════════════════════════════════════════════")
     if non_concluants:
