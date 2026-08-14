@@ -37,6 +37,43 @@ const _maxClusterZoom = 17.0;
 /// complet ne compte que pour un seul traitement.
 const _settleDelay = Duration(milliseconds: 300);
 
+/// Temps laissé au client pour LIRE le libellé du bouton flottant avant qu'il
+/// ne se replie en rond. Sans ce délai, un client qui ne touche pas la carte
+/// garderait sous les yeux une pastille occupant 60 % de la largeur ; avec un
+/// délai trop court, il ne saurait jamais ce que fait ce rond.
+const _repliLibelleDelay = Duration(seconds: 5);
+
+/// Le geste vient-il du client, ou l'app s'est-elle recentrée toute seule ?
+///
+/// ⚠️ La distinction est le cœur du repli : `_recenterOn` déplace la caméra au
+/// démarrage (GPS, point enregistré, point serveur). Compter ces déplacements
+/// comme une exploration replierait le bouton **avant même que la carte soit
+/// affichée** — le libellé ne serait alors jamais lu par personne.
+///
+/// ⚠️ Liste **positive**, et c'est délibéré (règle 29) : une source inconnue —
+/// une version future de `flutter_map` en ajoutera — laisse la pastille
+/// DÉPLIÉE. Des deux échecs possibles, un bouton trop visible se remarque et se
+/// corrige ; un bouton replié trop tôt disparaît en silence.
+bool estExplorationCliente(MapEventSource source) => switch (source) {
+      MapEventSource.dragStart ||
+      MapEventSource.onDrag ||
+      MapEventSource.dragEnd ||
+      MapEventSource.multiFingerGestureStart ||
+      MapEventSource.onMultiFinger ||
+      MapEventSource.multiFingerEnd ||
+      MapEventSource.flingAnimationController ||
+      MapEventSource.doubleTap ||
+      MapEventSource.doubleTapHold ||
+      MapEventSource.doubleTapZoomAnimationController ||
+      MapEventSource.scrollWheel ||
+      MapEventSource.cursorKeyboardRotation =>
+        true,
+      // `tap` et `longPress` ouvrent ou referment une fiche sans rien déplacer ;
+      // `mapController`, `fitCamera` et `nonRotatedSizeChange` sont l'app
+      // elle-même. Aucun n'est une exploration.
+      _ => false,
+    };
+
 /// Carte "autour de moi" : les commerces trop proches à l'écran sont
 /// regroupés en ronds qui se scindent au zoom, jusqu'aux points exacts.
 /// Un clic sur un rond zoome dessus ; un clic sur un point ouvre la fiche
@@ -101,6 +138,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   /// batterie en recalculant le regroupement à chaque image.
   Timer? _settle;
 
+  /// Repli du bouton flottant : étendu à l'arrivée, rond ensuite.
+  ///
+  /// Deux déclencheurs, un seul état — le premier des deux qui survient gagne :
+  /// le client déplace la carte (il n'a plus besoin du libellé, il explore), ou
+  /// `_repliLibelleDelay` s'écoule (il a eu le temps de lire).
+  Timer? _repli;
+  bool _pastilleRepliee = false;
+
   /// La position arrive de façon asynchrone, après le premier rendu :
   /// `initialCenter` est déjà consommé à ce moment-là, il faut donc déplacer
   /// la caméra une fois. Ce drapeau évite de la ramener sur l'utilisateur à
@@ -118,16 +163,38 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _centeredOnDefaultPoint = false;
 
   @override
+  void initState() {
+    super.initState();
+    _repli = Timer(_repliLibelleDelay, _replierPastille);
+  }
+
+  @override
   void dispose() {
     _settle?.cancel();
+    _repli?.cancel();
     _map.dispose();
     super.dispose();
+  }
+
+  /// Idempotent : les deux déclencheurs peuvent se présenter, le second ne doit
+  /// pas reconstruire l'écran pour rien.
+  void _replierPastille() {
+    if (_pastilleRepliee || !mounted) return;
+    _repli?.cancel();
+    setState(() => _pastilleRepliee = true);
   }
 
   /// Appelé à la fin de chaque déplacement/zoom : `MapCamera` n'est pas
   /// disponible avant le premier rendu, d'où la mise à jour ici plutôt qu'en
   /// `initState`.
   void _onMapEvent(MapEvent event) {
+    // Dès le premier geste : le client explore, le libellé a fait son travail.
+    // Appelé hors du minuteur de stabilisation, à dessein — attendre 300 ms de
+    // plus ferait traîner la pastille pendant tout le déplacement, c'est-à-dire
+    // exactement au moment où elle gêne. Aucune source de geste n'est émise
+    // pendant la phase de layout, donc ce `setState` n'y tombe pas.
+    if (estExplorationCliente(event.source)) _replierPastille();
+
     final camera = event.camera;
     final visible = camera.visibleBounds;
     // Bornage indispensable : dézoomé, ou pendant la toute première passe de
@@ -435,6 +502,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       // suivi ni lecture en arrière-plan.
       floatingActionButton: _BoutonEnregistrerPoint(
         centreCourant: () => _map.camera.center,
+        repliee: _pastilleRepliee,
       ),
       body: Stack(
         children: [
@@ -1201,19 +1269,34 @@ class _InvitationLocalisation extends StatelessWidget {
 /// ⚠️ Le bouton bascule en « oublier mon point » quand il y en a un : le
 /// retrait doit être aussi accessible que l'octroi, sinon le consentement n'est
 /// pas reprenable.
+/// ⚠️ Replié, ce bouton n'est plus qu'un rond : le libellé disparaît de
+/// l'écran, donc il doit rester atteignable autrement. `tooltip` le porte — il
+/// s'affiche en bulle sur appui long **et** il est ce que lisent les lecteurs
+/// d'écran, pour qui la pastille étendue et le rond doivent dire la même chose.
 class _BoutonEnregistrerPoint extends ConsumerWidget {
-  const _BoutonEnregistrerPoint({required this.centreCourant});
+  const _BoutonEnregistrerPoint({
+    required this.centreCourant,
+    this.repliee = false,
+  });
 
   final LatLng Function() centreCourant;
+
+  /// Rond (icône seule) plutôt que pastille étendue. `isExtended` anime la
+  /// transition tout seul : pas de widget supplémentaire, pas d'animation à
+  /// écrire.
+  final bool repliee;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final dejaPose = ref.watch(clientPositionProvider) != null;
+    final libelle = dejaPose ? l10n.forgetPointAction : l10n.savePointAction;
 
     return FloatingActionButton.extended(
+      isExtended: !repliee,
+      tooltip: libelle,
       icon: Icon(dejaPose ? Icons.wrong_location_outlined : Icons.my_location),
-      label: Text(dejaPose ? l10n.forgetPointAction : l10n.savePointAction),
+      label: Text(libelle),
       onPressed: () async {
         final controleur = ref.read(clientPositionProvider.notifier);
         if (dejaPose) {

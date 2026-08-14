@@ -4528,6 +4528,79 @@ uniforme appliquait a tous le delai que seul le seau le plus serre exige
 precedent a consomme. **Aucune reinstallation d'app n'est en jeu** : ces bancs
 sont du HTTP pur, et `parcours-ecran` est exclu du lot.
 
+### 2026-08-14 — l'app sur un téléphone réel, et ce que l'écran a montré
+
+**L'app tourne sur un OnePlus 7 Pro branché en USB**, pointée sur le backend
+local. Le lien passe par `adb reverse tcp:3000` et `tcp:9000` : le téléphone
+appelle `localhost`, donc ni IP de machine, ni WiFi, ni pare-feu à ouvrir — et
+c'est exactement ce que `network_security_config.xml` autorise déjà nommément.
+Preuve prise **depuis l'appareil**, pas déduite de la machine hôte :
+`curl http://localhost:3000/promo/config` y rend `200`.
+
+⚠️ **C'est un build de debug, et ça n'est pas un raccourci.** Le fichier qui
+autorise le HTTP en clair vit dans `src/debug/` délibérément ; un build de
+release ne le fusionne pas. Un release pointé sur `http://localhost:3000`
+échouerait à chaque requête avec l'erreur réseau ordinaire d'un serveur éteint
+— le diagnostic trompeur que ce fichier documente déjà.
+
+⚠️ **`S3_CDN_BASE_URL` a changé dans le `.env` de WSL** (sauvegarde
+`.env.bak-avant-telephone`) : `10.0.2.2` est l'alias de l'hôte **vu par
+l'émulateur** et ne désigne rien sur un téléphone réel — les images restaient
+vides. Il vaut désormais `http://localhost:9000/echango-promo`, et les mêmes
+tunnels ont été posés sur l'émulateur pour qu'il suive. **Écrit ici parce que ce
+fichier n'est pas versionné et ne voyage pas** (règle 36) : personne ne le
+saura autrement, et le repli silencieux ferait croire le réglage cassé.
+
+**Ce que l'appareil a révélé et qu'aucun banc n'avait vu : 19 promos sur 56
+servaient des images en 404.** Ni photo ni vignette — les parcours automatisés
+enregistrent une clé sans jamais déposer l'objet. Deux mesures ont changé le
+travail : ces 19 promos ne portent que **11 clés distinctes** (les parcours
+réutilisent `p.jpg`, `course.jpg`, `parcours.jpg`), et chaque clé sert **à la
+fois** de photo et de vignette (`thumbnailKey = photoKeys[0]`). 11 objets
+déposés par `mc`, donc, pas 38. ⚠️ **J'avais d'abord annoncé « 38 objets »** en
+comptant les écritures au lieu des clés — le même travers que la migration
+`python3 → $PY` : compter ce qu'on touche au lieu de prouver ce qui reste.
+Recensement sur les **112 URLs d'images** : 19 échecs avant, **0** après.
+
+⚠️ **Reste ouvert, et c'est distinct** : les photos pleines du décor « réel »
+sont des **JPEG 1×1** de 160 octets — d'où la tache orange pixelisée des cartes
+« Top promos ». Les vignettes, elles, sont de vraies 240×240.
+
+### 2026-08-14 — la pastille de la carte se replie
+
+**« Chercher autour de ce point » occupait ~60 % de la largeur en permanence**
+au-dessus de la carte. Elle est désormais étendue à l'arrivée puis repliée en
+rond, sur le premier des deux déclencheurs : un geste du client, ou 5 secondes.
+C'est `isExtended` de `FloatingActionButton.extended` — une propriété pilotée
+par l'état, animation comprise.
+
+⚠️ **Le libellé long avait une raison, et cette raison avait expiré.** Il
+existait parce que le mécanisme d'enregistrement n'était proposé par rien
+(`map_screen.dart`) ; les propositions contextuelles ajoutées le 2026-08-13
+portent désormais la découverte. Une justification qui survit à son motif fait
+garder ce qu'on garderait sans elle.
+
+⚠️ **Le point délicat : distinguer un geste d'un recentrage que l'app se fait à
+elle-même.** `_recenterOn` déplace la caméra au démarrage (GPS, point
+enregistré, point serveur). Compter ces déplacements comme une exploration
+replierait le bouton **avant que la carte s'affiche** — son libellé ne serait
+jamais lu par personne. D'où `estExplorationCliente(MapEventSource)`, en
+**liste positive** : une source inconnue, qu'une montée de `flutter_map`
+ajoutera, laisse la pastille **dépliée**. Des deux échecs possibles, un bouton
+trop visible se remarque ; un bouton replié trop tôt disparaît en silence
+(règle 29).
+
+Replié, le libellé quitte l'écran : `tooltip` le porte — bulle sur appui long,
+**et** ce que lisent les lecteurs d'écran.
+
+**Éprouvé** : `test/features/client/map_repli_pastille_test.dart`, 21 cas dont
+**8 qui doivent rendre `false`**, plus un contrôle d'exhaustivité qui échoue si
+une version future ajoute une source non classée. **Mutation** : faire compter
+`mapController` comme une exploration fait tomber exactement un test, celui qui
+garde ce défaut. Les deux déclencheurs sont vérifiés **sur l'appareil**, et
+séparément : capture à 3 s (étendue), à 8 s (repliée, minuteur), et après un
+glissement à ~2 s (repliée alors que le minuteur n'avait pas pu courir).
+
 ---
 
 ## Comment tenir ce fichier
