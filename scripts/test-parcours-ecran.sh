@@ -19,9 +19,11 @@
 #
 # ── Les cinq parcours ────────────────────────────────────────────────────────
 #
-#   premier-lancement  splash → choix du rôle → localisation → accueil, et ce
+#   premier-lancement  splash → choix du rôle → localisation → carte, et ce
 #                      qui en reste dans le magasin natif. Aucun décor : il ne
-#                      touche pas au serveur.
+#                      touche pas au serveur. ⚠️ Pré-accorde la permission de
+#                      localisation par `adb shell pm grant` — l'écran n'a plus
+#                      qu'une issue, et elle passe par la boîte système.
 #   plafond            le compteur d'emplacements affiche le plafond DU SERVEUR.
 #   creation           publier une promo de bout en bout — formulaire, photo,
 #                      upload, création, retour, compteur incrémenté.
@@ -703,6 +705,40 @@ noter() { # LIBELLE CODE
 }
 
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "premier-lancement" ]; then
+  # ── La permission de localisation se DÉCIDE avant de jouer ────────────────
+  #
+  # ⚠️ **Sinon ce parcours ne peut plus aboutir.** Depuis la mise en conformité
+  # 5.1.1(iv) du 2026-08-08, l'écran de localisation n'a plus qu'un bouton, et
+  # il mène TOUJOURS à la boîte de dialogue du système — qu'`integration_test`
+  # ne peut pas toucher. Le parcours resterait bloqué là, puis échouerait au
+  # bout de trente secondes en accusant l'écran, sur un produit correct
+  # (règle #38 : une contre-mesure fondée sur une prémisse fausse accuse le
+  # produit).
+  #
+  # On accorde donc la permission *avant*, avec `pm grant` : `checkPermission`
+  # rend alors `whileInUse`, aucune boîte ne s'ouvre, et le parcours vérifie ce
+  # qu'il doit vérifier — que l'onboarding se traverse et se retient. Le chemin
+  # « refusé » relève d'un essai manuel, comme la boîte système elle-même.
+  #
+  # ⚠️ **Et on REFUSE de jouer si l'octroi échoue**, plutôt que de tenter sa
+  # chance : le paquet n'est installé qu'à partir du premier `flutter drive`,
+  # donc l'échec est attendu sur un émulateur neuf. Le dire coûte un rejeu ;
+  # se taire coûte un faux rouge qu'on ira chercher dans le code de l'écran.
+  PAQUET_APP="com.echango.promo"
+  if ! command -v adb >/dev/null 2>&1; then
+    echo "❌ adb introuvable — impossible de pré-accorder la localisation."
+    echo "   Sans elle, « premier lancement » se bloque sur la boîte système."
+    exit 2
+  fi
+  if ! adb -s "$APPAREIL" shell pm grant "$PAQUET_APP" \
+         android.permission.ACCESS_FINE_LOCATION >/dev/null 2>&1; then
+    echo "❌ pm grant a échoué sur $PAQUET_APP — l'app n'est sans doute pas"
+    echo "   encore installée sur $APPAREIL. L'installer une fois, puis rejouer :"
+    echo "     (cd apps/mobile && flutter install -d $APPAREIL)"
+    exit 2
+  fi
+  echo "   localisation pré-accordée à $PAQUET_APP"
+
   jouer parcours_premier_lancement_test.dart "premier lancement"
   noter "premier lancement" $?
   echo

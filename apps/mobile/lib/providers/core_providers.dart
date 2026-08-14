@@ -13,7 +13,6 @@ import '../data/api/notification_api.dart';
 import '../data/local/auth_session_store.dart';
 import '../data/local/device_id_store.dart';
 import '../data/local/favorites_store.dart';
-import '../data/local/location_invite_store.dart';
 import '../data/local/point_proposal_store.dart';
 import '../data/local/etag_cache_store.dart';
 import '../data/local/onboarding_store.dart';
@@ -37,10 +36,7 @@ final deviceIdProvider =
 final favoritesStoreProvider =
     Provider((ref) => FavoritesStore(ref.watch(sharedPreferencesProvider)));
 
-final locationInviteStoreProvider = Provider(
-    (ref) => LocationInviteStore(ref.watch(sharedPreferencesProvider)));
-
-/// Distinct de `locationInviteStoreProvider` : activer la localisation et
+/// Distinct de la demande de localisation : l'activer et
 /// enregistrer une ville sont deux décisions différentes, écartables
 /// séparément (voir `PointProposalStore`).
 final pointProposalStoreProvider =

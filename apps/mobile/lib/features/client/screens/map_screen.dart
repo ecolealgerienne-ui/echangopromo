@@ -51,10 +51,18 @@ class MapScreen extends ConsumerStatefulWidget {
 class _MapScreenState extends ConsumerState<MapScreen> {
   /// L'invitation à activer la localisation a-t-elle été écartée ?
   ///
-  /// Lue une fois au démarrage de l'écran : le magasin est synchrone, mais on
-  /// veut aussi pouvoir la masquer immédiatement après un geste, sans relire.
-  late bool _invitationEcartee =
-      ref.read(locationInviteStoreProvider).isDismissed();
+  /// ⚠️ **Plus aucune persistance depuis le 2026-08-14.** Ce drapeau était
+  /// initialisé depuis `LocationInviteStore`, que `main` a supprimé dans le
+  /// commit même qui corrige le second refus Apple 5.1.1(iv) — parce que le
+  /// mécanisme d'écart ÉTAIT le problème : il permettait de fermer
+  /// l'explication sans que la demande système ait lieu.
+  ///
+  /// Il ne sert donc plus qu'à masquer le bandeau immédiatement après un
+  /// accord, sans attendre le rafraîchissement du provider de permission. Il
+  /// n'y a plus rien à retenir d'une session à l'autre : le bandeau ne
+  /// s'affiche que tant que la permission est demandable, et un seul geste
+  /// suffit à sortir de cet état, quelle que soit la réponse.
+  bool _invitationEcartee = false;
 
   final MapController _map = MapController();
 
@@ -622,11 +630,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   ref.invalidate(peutDemanderLocalisationProvider);
                   if (accorde) setState(() => _invitationEcartee = true);
                 },
-                onEcarter: () async {
-                  await ref.read(locationInviteStoreProvider).markDismissed();
-                  if (!context.mounted) return;
-                  setState(() => _invitationEcartee = true);
-                },
               ),
             ),
 
@@ -1124,14 +1127,32 @@ class _PropositionPoint extends StatelessWidget {
   }
 }
 
+/// L'explication affichée AVANT la boîte de dialogue système.
+///
+/// ⚠️ **Un seul bouton, et il mène TOUJOURS à la demande système.** C'est la
+/// condition posée par Apple le 2026-08-08 (deuxième refus 5.1.1(iv)) : un
+/// message maison a le droit d'expliquer *pourquoi*, il n'a pas le droit de
+/// devenir une décision.
+///
+/// Ce bandeau portait exactement les deux motifs nommés dans ce refus, et ils
+/// ont été retirés à la fusion du 2026-08-14 :
+///   · une **croix** qui fermait le message sans que la demande système ait
+///     lieu — c'est le « second bouton » qu'Apple refuse, sous forme d'icône ;
+///   · un libellé qui **encourage** (« Activer la localisation ») là où Apple
+///     demande « Continuer » ou « Suivant ».
+///
+/// Un texte à l'impératif (« Activez la localisation pour… ») est interdit pour
+/// la même raison : il encourage autant qu'un bouton. `mapLocationInvite` décrit
+/// une conséquence, il ne demande rien.
+///
+/// ⚠️ **Et il ne harcèle pas pour autant** — ce qui était la raison d'être de la
+/// croix. Le bandeau n'est affiché que tant que la permission est encore
+/// DEMANDABLE (`peutDemanderLocalisationProvider`) : un seul geste suffit à le
+/// faire disparaître, quelle que soit la réponse donnée à la boîte système.
 class _InvitationLocalisation extends StatelessWidget {
-  const _InvitationLocalisation({
-    required this.onActiver,
-    required this.onEcarter,
-  });
+  const _InvitationLocalisation({required this.onActiver});
 
   final Future<void> Function() onActiver;
-  final Future<void> Function() onEcarter;
 
   @override
   Widget build(BuildContext context) {
@@ -1148,29 +1169,18 @@ class _InvitationLocalisation extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    l10n.mapLocationInvite,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSecondaryContainer,
-                        ),
+            Text(
+              l10n.mapLocationInvite,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSecondaryContainer,
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 18),
-                  color: colorScheme.onSecondaryContainer,
-                  tooltip: MaterialLocalizations.of(context).closeButtonLabel,
-                  onPressed: onEcarter,
-                ),
-              ],
             ),
+            const SizedBox(height: 8),
             Align(
               alignment: AlignmentDirectional.centerEnd,
               child: FilledButton(
                 onPressed: onActiver,
-                child: Text(l10n.onboardingLocationEnable),
+                child: Text(l10n.onboardingLocationContinue),
               ),
             ),
           ],
