@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -36,6 +37,130 @@ const _maxClusterZoom = 17.0;
 /// pour rester imperceptible à la main, assez long pour qu'un pincement
 /// complet ne compte que pour un seul traitement.
 const _settleDelay = Duration(milliseconds: 300);
+
+/// Temps laissé au client pour LIRE le libellé du bouton flottant avant qu'il
+/// ne se replie en rond. Sans ce délai, un client qui ne touche pas la carte
+/// garderait sous les yeux une pastille occupant 60 % de la largeur ; avec un
+/// délai trop court, il ne saurait jamais ce que fait ce rond.
+const _repliLibelleDelay = Duration(seconds: 5);
+
+/// En deçà, le cadrage ne veut plus rien dire : le point du client n'est pas
+/// mesuré au mètre, et le cercle circonscrit à la vue est déjà une
+/// approximation. Un rayon de 200 m donnerait une liste d'une rue avec une
+/// précision qu'aucune des deux données n'a.
+const _rayonPlancherKm = 1.0;
+
+/// Au-delà de ce rapport, la vue ne correspond plus au cadre enregistré : on a
+/// zoomé ou dézoomé assez pour que la liste parle d'autre chose que l'écran.
+const _cadrePerimeFacteur = 1.5;
+
+/// Le rayon qu'il faut pour couvrir ce que la carte montre.
+///
+/// ⚠️ **C'est le zoom qui parle ici, pas une constante.** Le geste « Chercher
+/// autour de ce point » prenait le centre de la carte et lui collait le rayon
+/// par défaut du serveur : cadrer une rue ou une wilaya donnait la même liste.
+/// Remarqué depuis Alger le 2026-08-14 — zoomer sur un quartier puis revenir à
+/// la liste montrait tout Alger.
+///
+/// Demi-diagonale : c'est le cercle **circonscrit** au rectangle visible, donc
+/// il couvre tout l'écran et un peu au-delà. Le cercle inscrit, lui, laisserait
+/// les coins de la carte hors de la liste — on verrait des commerces qu'on ne
+/// retrouverait pas.
+///
+/// ⚠️ Rend `null` si le plafond serveur n'est pas connu : sans lui on ne peut
+/// pas borner, et transmettre un rayon non borné vaut moins que ne rien
+/// transmettre — le serveur applique alors le sien (règle 29).
+double? rayonDepuisLaVue(LatLng nordOuest, LatLng sudEst,
+    {required double? plafondKm}) {
+  if (plafondKm == null) return null;
+  final diagonaleM = distanceTo(nordOuest, sudEst.latitude, sudEst.longitude);
+  if (diagonaleM == null) return null;
+  final demiDiagonaleKm = diagonaleM / 2000;
+  if (demiDiagonaleKm < _rayonPlancherKm) return _rayonPlancherKm;
+  return demiDiagonaleKm > plafondKm ? plafondKm : demiDiagonaleKm;
+}
+
+/// Le rectangle que décrit un rayon — l'inverse de [rayonDepuisLaVue].
+///
+/// ⚠️ **Le zoom n'est pas stocké, et c'est délibéré.** Il serait une seconde
+/// valeur disant la même chose que le rayon, et deux valeurs qui doivent
+/// s'accorder finissent par diverger : la liste cadrerait 2 km pendant que la
+/// carte en montrerait 8, sans que rien ne le signale (règle 30). Le zoom est le
+/// **rendu** du rayon, pas un fait indépendant — et il dépend en plus de la
+/// taille de l'écran, donc le stocker rendrait le cadrage faux sur un autre
+/// appareil.
+///
+/// Le rayon étant la demi-diagonale de la vue, le demi-côté du carré équivalent
+/// vaut `r / √2`. `fitCamera` en déduit le zoom exact pour l'écran courant.
+///
+/// ⚠️ Rend `null` sans rayon : un client d'avant cette version n'a rien cadré,
+/// et inventer un rectangle lui imposerait un zoom qu'il n'a pas choisi.
+LatLngBounds? cadreDepuisLeRayon(LatLng centre, double? rayonKm) {
+  if (rayonKm == null || rayonKm <= 0) return null;
+  final demiCoteKm = rayonKm / math.sqrt2;
+  final dLat = demiCoteKm / 111.32;
+  // Un degré de longitude rétrécit avec la latitude. Le cosinus est borné :
+  // près des pôles il tend vers zéro et l'écart partirait à l'infini — hors
+  // sujet en Algérie, mais un `NaN` dans un cadrage fige la carte sans erreur.
+  final cos = math.cos(centre.latitude * math.pi / 180);
+  final dLng = demiCoteKm / (111.32 * (cos.abs() < 0.01 ? 0.01 : cos));
+  // ⚠️ Bornage indispensable, et trouvé par le test : près du pôle,
+  // `latitude + dLat` dépasse 90 et `LatLng` lève une assertion — la carte se
+  // fige sans message. Même précaution que `_onMapEvent` prend déjà sur la zone
+  // visible, pour la même raison.
+  return LatLngBounds(
+    LatLng((centre.latitude - dLat).clamp(-90.0, 90.0),
+        (centre.longitude - dLng).clamp(-180.0, 180.0)),
+    LatLng((centre.latitude + dLat).clamp(-90.0, 90.0),
+        (centre.longitude + dLng).clamp(-180.0, 180.0)),
+  );
+}
+
+/// La vue montre-t-elle autre chose que ce que le cadre enregistré couvre ?
+///
+/// ⚠️ **Ce n'est pas la même question que la proposition d'exploration**, qui
+/// regarde si le CENTRE s'est éloigné. Ici on regarde la LARGEUR : depuis Alger,
+/// zoomer sur un quartier ne déplace pas le centre — la proposition ne dit rien
+/// — et pourtant la liste continue de montrer toute la ville. C'est ce cas-là,
+/// et lui seul, qui doit redéployer la pastille.
+bool cadreEstPerime(double? rayonDeLaVue, double? rayonEnregistre) {
+  if (rayonDeLaVue == null) return false;
+  // Aucun cadre posé : la pastille a quelque chose à proposer, toujours.
+  if (rayonEnregistre == null) return true;
+  final rapport = rayonDeLaVue / rayonEnregistre;
+  return rapport > _cadrePerimeFacteur || rapport < 1 / _cadrePerimeFacteur;
+}
+
+/// Le geste vient-il du client, ou l'app s'est-elle recentrée toute seule ?
+///
+/// ⚠️ La distinction est le cœur du repli : `_recenterOn` déplace la caméra au
+/// démarrage (GPS, point enregistré, point serveur). Compter ces déplacements
+/// comme une exploration replierait le bouton **avant même que la carte soit
+/// affichée** — le libellé ne serait alors jamais lu par personne.
+///
+/// ⚠️ Liste **positive**, et c'est délibéré (règle 29) : une source inconnue —
+/// une version future de `flutter_map` en ajoutera — laisse la pastille
+/// DÉPLIÉE. Des deux échecs possibles, un bouton trop visible se remarque et se
+/// corrige ; un bouton replié trop tôt disparaît en silence.
+bool estExplorationCliente(MapEventSource source) => switch (source) {
+      MapEventSource.dragStart ||
+      MapEventSource.onDrag ||
+      MapEventSource.dragEnd ||
+      MapEventSource.multiFingerGestureStart ||
+      MapEventSource.onMultiFinger ||
+      MapEventSource.multiFingerEnd ||
+      MapEventSource.flingAnimationController ||
+      MapEventSource.doubleTap ||
+      MapEventSource.doubleTapHold ||
+      MapEventSource.doubleTapZoomAnimationController ||
+      MapEventSource.scrollWheel ||
+      MapEventSource.cursorKeyboardRotation =>
+        true,
+      // `tap` et `longPress` ouvrent ou referment une fiche sans rien déplacer ;
+      // `mapController`, `fitCamera` et `nonRotatedSizeChange` sont l'app
+      // elle-même. Aucun n'est une exploration.
+      _ => false,
+    };
 
 /// Carte "autour de moi" : les commerces trop proches à l'écran sont
 /// regroupés en ronds qui se scindent au zoom, jusqu'aux points exacts.
@@ -101,6 +226,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   /// batterie en recalculant le regroupement à chaque image.
   Timer? _settle;
 
+  /// Repli du bouton flottant : étendu à l'arrivée, rond ensuite.
+  ///
+  /// Deux déclencheurs, un seul état — le premier des deux qui survient gagne :
+  /// le client déplace la carte (il n'a plus besoin du libellé, il explore), ou
+  /// `_repliLibelleDelay` s'écoule (il a eu le temps de lire).
+  Timer? _repli;
+  bool _pastilleRepliee = false;
+
   /// La position arrive de façon asynchrone, après le premier rendu :
   /// `initialCenter` est déjà consommé à ce moment-là, il faut donc déplacer
   /// la caméra une fois. Ce drapeau évite de la ramener sur l'utilisateur à
@@ -118,16 +251,78 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _centeredOnDefaultPoint = false;
 
   @override
+  void initState() {
+    super.initState();
+    _repli = Timer(_repliLibelleDelay, _replierPastille);
+  }
+
+  @override
   void dispose() {
     _settle?.cancel();
+    _repli?.cancel();
     _map.dispose();
     super.dispose();
+  }
+
+  /// Idempotent : les deux déclencheurs peuvent se présenter, le second ne doit
+  /// pas reconstruire l'écran pour rien.
+  void _replierPastille() {
+    if (_pastilleRepliee || !mounted) return;
+    _repli?.cancel();
+    setState(() => _pastilleRepliee = true);
+  }
+
+  /// Redéploie la pastille et relance son minuteur.
+  ///
+  /// ⚠️ **C'est l'inverse exact du repli, et c'est voulu.** Le repli libère la
+  /// carte pendant qu'on explore ; le redéploiement la rend quand l'exploration
+  /// a rendu le cadre faux. La pastille n'est pas un encombrement à cacher :
+  /// c'est le porteur du cadre de recherche, et il doit se montrer au moment où
+  /// le cadre ne correspond plus à l'écran.
+  void _deplierPastille() {
+    if (!mounted) return;
+    _repli?.cancel();
+    _repli = Timer(_repliLibelleDelay, _replierPastille);
+    if (_pastilleRepliee) setState(() => _pastilleRepliee = false);
+  }
+
+  /// Le rayon que couvre la carte telle qu'elle est cadrée, ou `null`.
+  ///
+  /// ⚠️ **Plafonné par le maximum que le SERVEUR accepte**, `maxRadiusKm`,
+  /// descendu de 50 à 5 km le 2026-08-14 : echango Promo sert des promos de
+  /// proximité, pas des annonces nationales. Dézoomer sur toute la wilaya
+  /// n'élargit donc pas la recherche — la carte montre plus, la liste reste
+  /// locale.
+  ///
+  /// ⚠️ **Le plafond a d'abord été posé dans l'app seule, et c'était insuffisant
+  /// — la borne se contournait par un appel direct à l'API.** Elle vit
+  /// maintenant dans `.env`, l'app la lit sur `GET /promo/config`, et l'app
+  /// **ne connaît toujours pas le chiffre** : si la valeur change côté serveur,
+  /// le cadrage suit sans republier (règle 32).
+  ///
+  /// ⚠️ Ce plafond est **aussi** appliqué à l'émission (`rayonBorne`, côté
+  /// providers). Le poser ici seulement laisserait passer un rayon plus large
+  /// déjà stocké par une version antérieure.
+  double? _rayonDeLaVue() {
+    final vue = _map.camera.visibleBounds;
+    return rayonDepuisLaVue(
+      vue.northWest,
+      vue.southEast,
+      plafondKm: ref.read(clientGeoConfigProvider).valueOrNull?.maxRadiusKm,
+    );
   }
 
   /// Appelé à la fin de chaque déplacement/zoom : `MapCamera` n'est pas
   /// disponible avant le premier rendu, d'où la mise à jour ici plutôt qu'en
   /// `initState`.
   void _onMapEvent(MapEvent event) {
+    // Dès le premier geste : le client explore, le libellé a fait son travail.
+    // Appelé hors du minuteur de stabilisation, à dessein — attendre 300 ms de
+    // plus ferait traîner la pastille pendant tout le déplacement, c'est-à-dire
+    // exactement au moment où elle gêne. Aucune source de geste n'est émise
+    // pendant la phase de layout, donc ce `setState` n'y tombe pas.
+    if (estExplorationCliente(event.source)) _replierPastille();
+
     final camera = event.camera;
     final visible = camera.visibleBounds;
     // Bornage indispensable : dézoomé, ou pendant la toute première passe de
@@ -168,6 +363,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _zoom = camera.zoom;
         _centreStabilise = camera.center;
       });
+      // La carte s'est posée : le cadre qu'elle montre correspond-il encore à
+      // celui de la liste ? Si non, la pastille redevient une proposition.
+      if (cadreEstPerime(
+          _rayonDeLaVue(), ref.read(clientPositionProvider)?.rayonKm)) {
+        _deplierPastille();
+      }
     });
   }
 
@@ -199,9 +400,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       ),
     );
     if (accepte != true) return;
-    await ref
-        .read(clientPositionProvider.notifier)
-        .enregistrer(centre.latitude, centre.longitude);
+    await ref.read(clientPositionProvider.notifier).enregistrer(
+          centre.latitude,
+          centre.longitude,
+          rayonKm: _rayonDeLaVue(),
+        );
     if (!mounted) return;
     // ⚠️ Sans cette invalidation, la vitrine et la carte garderaient leur
     // cadrage d'avant : elles ne sont pas reconstruites de zéro au retour d'une
@@ -218,6 +421,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   void _recenterOn(LatLng position, {double? zoom}) {
     _map.move(position, zoom ?? (_zoom < 14 ? 15.0 : _zoom));
+  }
+
+  /// Rouvre la carte sur le cadre que le client a enregistré.
+  ///
+  /// Sans rayon — client d'avant cette version — on retombe sur le zoom
+  /// d'ouverture : c'est une absence de cadrage, pas un cadrage large.
+  void _cadrerSurLePoint(LatLng centre, double? rayonKm) {
+    final cadre = cadreDepuisLeRayon(centre, rayonKm);
+    if (cadre == null) {
+      _recenterOn(centre, zoom: _initialZoom);
+      return;
+    }
+    _map.fitCamera(CameraFit.bounds(bounds: cadre));
   }
 
   Future<void> _openCluster(ShopCluster cluster) async {
@@ -323,9 +539,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _centeredOnDefaultPoint = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          _recenterOn(
-            LatLng(pointEnregistre.$1, pointEnregistre.$2),
-            zoom: _initialZoom,
+          // ⚠️ **Le zoom du client, pas une constante.** Jusqu'au 2026-08-14 ce
+          // centrage forçait `_initialZoom` : cadrer un quartier, enregistrer,
+          // revenir sur la carte — et elle rouvrait en vue large. Le cadre
+          // était bien enregistré (la liste, elle, le respectait), mais la
+          // carte le jetait à chaque retour, ce qui donnait à croire que
+          // l'enregistrement n'avait rien retenu.
+          _cadrerSurLePoint(
+            LatLng(pointEnregistre.latitude, pointEnregistre.longitude),
+            pointEnregistre.rayonKm,
           );
         }
       });
@@ -390,8 +612,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       } else {
         // Scénario 2 — une ville est enregistrée et le client en explore une
         // autre. `distanceTo` rend des mètres.
-        final ecart =
-            distanceTo(centre, pointEnregistre.$1, pointEnregistre.$2);
+        final ecart = distanceTo(
+            centre, pointEnregistre.latitude, pointEnregistre.longitude);
         final cle =
             PointProposalStore.cleDeVille(centre.latitude, centre.longitude);
         if (ecart != null && ecart > rayonKm * 1000 && cle != _villeEcartee) {
@@ -434,7 +656,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       // frontière est ce qui permet d'affirmer aux deux stores qu'il n'y a ni
       // suivi ni lecture en arrière-plan.
       floatingActionButton: _BoutonEnregistrerPoint(
-        centreCourant: () => _map.camera.center,
+        // ⚠️ Le bouton ne refait plus le geste, il l'appelle. Il portait sa
+        // propre copie de la notice, du dialogue et de l'enregistrement — deux
+        // chemins pour un seul consentement, et c'est celui qu'on oublie qui
+        // aurait perdu le rayon (règle 30).
+        onEnregistrer: () => _enregistrerPoint(_map.camera.center),
+        repliee: _pastilleRepliee,
       ),
       body: Stack(
         children: [
@@ -1201,57 +1428,52 @@ class _InvitationLocalisation extends StatelessWidget {
 /// ⚠️ Le bouton bascule en « oublier mon point » quand il y en a un : le
 /// retrait doit être aussi accessible que l'octroi, sinon le consentement n'est
 /// pas reprenable.
+/// ⚠️ Replié, ce bouton n'est plus qu'un rond : le libellé disparaît de
+/// l'écran, donc il doit rester atteignable autrement. `tooltip` le porte — il
+/// s'affiche en bulle sur appui long **et** il est ce que lisent les lecteurs
+/// d'écran, pour qui la pastille étendue et le rond doivent dire la même chose.
+///
+/// ⚠️ **Ce bouton ne porte plus le geste, il l'appelle.** Il en avait sa propre
+/// copie — même dialogue, même notice, même appel — à côté de celle de
+/// `_enregistrerPoint`, utilisée par la proposition d'exploration. Deux chemins
+/// pour un seul consentement : le 2026-08-14, en faisant porter le zoom au
+/// rayon, c'est exactement le genre d'endroit où l'un des deux serait resté en
+/// arrière sans que rien ne le signale (règle 30).
 class _BoutonEnregistrerPoint extends ConsumerWidget {
-  const _BoutonEnregistrerPoint({required this.centreCourant});
+  const _BoutonEnregistrerPoint({
+    required this.onEnregistrer,
+    this.repliee = false,
+  });
 
-  final LatLng Function() centreCourant;
+  /// Le geste complet — notice, consentement, enregistrement, invalidation —
+  /// tenu par l'écran, pas ici.
+  final Future<void> Function() onEnregistrer;
+
+  /// Rond (icône seule) plutôt que pastille étendue. `isExtended` anime la
+  /// transition tout seul : pas de widget supplémentaire, pas d'animation à
+  /// écrire.
+  final bool repliee;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final dejaPose = ref.watch(clientPositionProvider) != null;
+    final libelle = dejaPose ? l10n.forgetPointAction : l10n.savePointAction;
 
     return FloatingActionButton.extended(
+      isExtended: !repliee,
+      tooltip: libelle,
       icon: Icon(dejaPose ? Icons.wrong_location_outlined : Icons.my_location),
-      label: Text(dejaPose ? l10n.forgetPointAction : l10n.savePointAction),
+      label: Text(libelle),
       onPressed: () async {
-        final controleur = ref.read(clientPositionProvider.notifier);
         if (dejaPose) {
-          await controleur.retirer();
+          // Le retrait reste ici : il n'a ni notice ni cadrage à porter, et
+          // l'extraire créerait un aller-retour pour un `clear()`.
+          await ref.read(clientPositionProvider.notifier).retirer();
           if (context.mounted) invalidateAfterPositionChange(ref);
           return;
         }
-
-        final centre = centreCourant();
-        final accepte = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: Text(AppLocalizations.of(dialogContext)!.savePointAction),
-            content: Text(AppLocalizations.of(dialogContext)!.savePointNotice),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: Text(AppLocalizations.of(dialogContext)!.commonCancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child:
-                    Text(AppLocalizations.of(dialogContext)!.savePointAction),
-              ),
-            ],
-          ),
-        );
-        if (accepte != true) return;
-
-        await controleur.enregistrer(centre.latitude, centre.longitude);
-        if (!context.mounted) return;
-        // ⚠️ Sans cette invalidation, la vitrine et la carte garderaient leur
-        // cadrage d'avant : elles ne sont pas reconstruites de zéro au retour
-        // d'une boîte de dialogue (règle #37).
-        invalidateAfterPositionChange(ref);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.savePointDone)),
-        );
+        await onEnregistrer();
       },
     );
   }

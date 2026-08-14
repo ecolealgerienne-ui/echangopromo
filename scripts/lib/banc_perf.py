@@ -196,7 +196,8 @@ def verdict_poids(octets_gzip, budget):
 SEUIL_COMPRESSIBLE_O = 1024
 
 
-def verdict_compression(brut, gzip_, seuil, plancher=SEUIL_COMPRESSIBLE_O):
+def verdict_compression(brut, gzip_, seuil, plancher=SEUIL_COMPRESSIBLE_O,
+                        encodage=None):
     """⚠️ Transforme une case cochée de l'audit en contrôle exécuté.
 
     Le middleware `compression` a été ajouté le 2026-07-12 et **rien ne le
@@ -208,15 +209,40 @@ def verdict_compression(brut, gzip_, seuil, plancher=SEUIL_COMPRESSIBLE_O):
     (89 o) à son premier passage, en accusant un middleware qui se comportait
     correctement — la règle 38 dans le banc lui-même, pour la deuxième fois de
     la journée. Sous le plancher, la sonde n'a pas d'objet et le dit.
+
+    ⚠️ **Elle le disait un peu trop bien : « non concluant » à chaque lot,
+    indéfiniment, sur un comportement correct.** Diagnostiqué le 2026-08-14
+    après trois lots où ce point a été écarté d'un « déjà présent » — une
+    description, pas une cause. Un avertissement permanent sur un produit sain
+    est pire qu'inutile : il apprend à ne plus lire la colonne, et le jour où
+    elle dira quelque chose, personne ne regardera.
+
+    Sous le plancher il y a pourtant bien quelque chose à affirmer : **que le
+    middleware s'abstient**. C'est `Content-Encoding` qui le dit, sans seuil
+    arbitraire. Et si jamais il compressait quand même, ce n'est pas le produit
+    qui aurait tort — c'est le plancher de ce banc qui ne correspondrait plus au
+    middleware, et le raisonnement entier qui justifie le « ok » ci-dessous.
     """
     if brut is None or gzip_ is None:
         return "non_concluant", "une des deux mesures est illisible"
     if gzip_ <= 0:
         return "non_concluant", "réponse compressée vide"
     if brut < plancher:
-        return ("non_concluant",
-                "%d o : sous le plancher de %d o du middleware, qui ne "
-                "compresse pas — et il a raison. Rien à mesurer ici"
+        if encodage is None:
+            return ("non_concluant",
+                    "%d o, sous le plancher de %d o — mais l'en-tête "
+                    "Content-Encoding n'a pas été lu, on ne peut pas affirmer "
+                    "que le middleware s'est abstenu" % (brut, plancher))
+        if "gzip" in encodage.lower():
+            return ("echec",
+                    "%d o compressés alors que le plancher de ce banc est à "
+                    "%d o : ce n'est pas le produit qui a tort, c'est "
+                    "SEUIL_COMPRESSIBLE_O qui ne correspond plus au middleware "
+                    "— et c'est lui qui justifie les verdicts voisins"
+                    % (brut, plancher))
+        return ("ok",
+                "%d o, sous le plancher de %d o : le middleware s'abstient, "
+                "et il a raison — l'en-tête gzip coûterait plus que le gain"
                 % (brut, plancher))
     facteur = brut / float(gzip_)
     if facteur < seuil:
@@ -472,6 +498,13 @@ def self_test():
     # ⚠️ Le faux positif payé au premier passage : 89 o, sous le plancher.
     _v("trop petite pour être compressée",
        verdict_compression(89, 89, 2.0)[0], "non_concluant")
+    # ⚠️ Sous le plancher, l'abstention du middleware est AFFIRMABLE : elle se
+    # lit dans Content-Encoding, sans seuil. Trois cas distincts, là où il n'y
+    # avait qu'un « non concluant » perpétuel.
+    _v("sous le plancher, le middleware s'abstient",
+       verdict_compression(89, 89, 2.0, encodage="")[0], "ok")
+    _v("sous le plancher mais compressé : le plancher du banc est faux",
+       verdict_compression(89, 70, 2.0, encodage="gzip")[0], "echec")
     _v("aucun ETag", verdict_revalidation(None, False)[0], "non_concluant")
     _v("ETag sans réponse conditionnelle",
        verdict_revalidation(None, True)[0], "non_concluant")
@@ -534,11 +567,13 @@ def main():
         noter("latence", *verdict_latence(_percentile(latences, 95),
                                           SEUIL_P95_MS))
 
-        st, taille_gzip, _, _ = appeler(chemin, gzip_=True)
+        st, taille_gzip, _, entetes_gzip = appeler(chemin, gzip_=True)
         noter("compression",
               *verdict_compression(tailles[0],
                                    taille_gzip if st == 200 else None,
-                                   SEUIL_COMPRESSION))
+                                   SEUIL_COMPRESSION,
+                                   encodage=(entetes_gzip or {}).get(
+                                       "content-encoding", "")))
         noter("poids sur le fil",
               *verdict_poids(taille_gzip if st == 200 else None, budget))
         noter("cache HTTP", *verdict_cache(entetes))

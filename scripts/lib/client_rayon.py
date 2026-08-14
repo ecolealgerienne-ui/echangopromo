@@ -60,6 +60,11 @@ REF_LAT, REF_LNG = 34.6703, 3.2630
 
 # Rayon éprouvé, et rayon élargi qui sert à établir la prémisse.
 RAYON_KM = 3.0
+# ⚠️ **Ne sert plus qu'à l'auto-test**, qui doit rester déterministe et hors
+# réseau. À l'exécution, le rayon large vient de `maxRadiusKm` servi par
+# `/promo/config` : le garder en dur ici a fait rendre 400 le jour où la borne
+# produit est descendue à 5 km, et le banc accusait le décor pour un refus de
+# validation parfaitement légitime (règle 32).
 RAYON_LARGE_KM = 10.0
 
 JPEG_1x1 = base64.b64decode(
@@ -340,12 +345,37 @@ def main():
 
     d_proche = distance_km(REF_LAT, REF_LNG, proche_lat, proche_lng)
     d_coin = distance_km(REF_LAT, REF_LNG, coin_lat, coin_lng)
-    print("  ⓘ  proche à %.2f km, coin à %.2f km — rayon éprouvé %.0f km"
-          % (d_proche, d_coin, RAYON_KM))
+
+    # ── ⚠️ Le rayon « large » vient du SERVEUR, plus d'une constante ──────────
+    #
+    # Il valait 10 km en dur. Le 2026-08-14, `CLIENT_MAX_RADIUS_KM` est descendu
+    # de 50 à 5 km (décision produit : promos de proximité, pas annonces
+    # nationales) — et `?radiusKm=10` a commencé à rendre **400**. Le témoin du
+    # §3 tombait alors en « liste illisible » : il accusait le décor pour un
+    # refus de validation parfaitement légitime.
+    #
+    # Le lire sur `/promo/config` le fait suivre la borne au lieu de la
+    # contredire (règle 32). Et s'il ne laisse plus de place au-dessus du coin,
+    # on le DIT au lieu d'échouer : le témoin devient impossible, pas faux.
+    st_cfg, cfg = appeler("GET", "/promo/config")
+    rayon_large = (cfg or {}).get("maxRadiusKm") if st_cfg == 200 else None
+    if rayon_large is None:
+        print("  ⚠️  /promo/config ne sert pas maxRadiusKm — sans borne connue,")
+        print("      le témoin du §3 ne peut pas être posé")
+        return 2
+
+    print("  ⓘ  proche à %.2f km, coin à %.2f km — rayon éprouvé %.0f km, "
+          "large %.0f km (serveur)"
+          % (d_proche, d_coin, RAYON_KM, rayon_large))
     # ⚠️ La prémisse géométrique, vérifiée et non supposée : si le décor visait
     # à côté, tout ce qui suit mesurerait autre chose (règle #38).
-    if not (d_proche < RAYON_KM < d_coin < RAYON_LARGE_KM):
-        print("  ⚠️  décor incohérent — les distances ne encadrent pas le rayon")
+    if not (d_proche < RAYON_KM < d_coin):
+        print("  ⚠️  décor incohérent — les distances n'encadrent pas le rayon")
+        return 2
+    if d_coin >= rayon_large:
+        print("  ⚠️  le coin (%.2f km) est au-delà du maximum serveur "
+              "(%.0f km) : aucun rayon demandable ne peut le faire apparaître, "
+              "le témoin du §3 est hors de portée" % (d_coin, rayon_large))
         return 2
 
     id_proche, err = poser_commerce("Rayon Proche", proche_lat, proche_lng, base)
@@ -407,20 +437,37 @@ def main():
     time.sleep(PACE)
 
     print("\n── 3. au rayon %.0f km : le coin apparaît — il POUVAIT apparaître ──"
-          % RAYON_LARGE_KM)
-    larges = lister(RAYON_LARGE_KM)
+          % rayon_large)
+    larges = lister(rayon_large)
     noter("le coin est rendu quand le rayon s'élargit",
           *verdict_presence(larges, id_coin, True, "coin élargi"))
     noter("le tri par distance place le proche devant",
           *verdict_ordre(larges, id_proche, id_coin, "ordre"))
     time.sleep(PACE)
 
-    print("\n── 4. une recherche textuelle IGNORE le rayon ──")
-    # R8 du plan : chercher est un acte intentionnel avec une cible ; le borner
-    # au voisinage rendrait le produit moins capable qu'avant la bascule.
+    print("\n── 4. une recherche textuelle RESPECTE le rayon ──")
+    # ⚠️ **Décision inversée le 2026-08-14, et ce contrôle avec elle.** Il
+    # affirmait « une recherche textuelle IGNORE le rayon » (R8 du plan :
+    # chercher est un acte intentionnel avec une cible) et exigeait que le
+    # commerce du coin ressorte malgré le rayon serré.
+    #
+    # La décision tenait par une contrepartie — « le tri par distance reste
+    # actif, donc le proche remonte quand même » — mesurée fausse à l'écran :
+    # l'app re-triait par date, et une promo à 231,7 km s'affichait devant des
+    # dizaines à 100 mètres. Depuis Alger, chercher ramenait Djelfa à 245 km.
+    # echango Promo sert des promos de proximité, pas des annonces nationales.
+    #
+    # ⚠️ **Ce contrôle serait devenu un faux négatif crédible** : rouge sur un
+    # produit correct, il aurait envoyé corriger un code qui n'a rien (règle 38).
+    # Un banc qui défend une décision morte est pire qu'un banc absent.
     cherchees = lister(RAYON_KM, "&search=Banc%20rayon")
-    noter("le coin ressort malgré le rayon serré",
-          *verdict_presence(cherchees, id_coin, True, "recherche"))
+    noter("le coin reste hors du rayon, même cherché",
+          *verdict_presence(cherchees, id_coin, False, "recherche"))
+    # ⚠️ Le témoin qui empêche ce contrôle d'être vrai par vacuité : si la
+    # recherche ne rendait RIEN, « le coin est absent » passerait sans rien
+    # prouver (règle 28). Le proche, lui, doit être là.
+    noter("mais le proche, lui, est bien trouvé",
+          *verdict_presence(cherchees, id_proche, True, "recherche"))
 
     # ── Nettoyage : ne pas laisser deux commerces de plus à chaque passage ──
     #

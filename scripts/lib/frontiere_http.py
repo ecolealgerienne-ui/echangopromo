@@ -494,6 +494,20 @@ def main():
     if na:
         print("⚠️  %d route(s) sans sonde « mauvais rôle » : elles acceptent les 3 rôles." % na)
     print("\n%d routes protégées, %d sondes, %d échec(s)" % (len(protegees), sondes, len(echecs)))
+    # ⚠️ **La ligne que tout lanceur d'ensemble cherche**, et que ce banc ne
+    # rendait pas : il concluait dans un format à lui — « N routes protégées,
+    # M sondes » — et `test-tout.sh` le comptait donc « sauté, aucun décompte
+    # rendu » alors qu'il sortait en 0 avec 141 sondes vertes.
+    #
+    # ⚠️ **Un banc vert enregistré comme sauté est une perte de couverture
+    # silencieuse** : le tableau final le range à côté des bancs qui n'ont pas
+    # pu tourner, et personne ne va rouvrir un « sauté » pour vérifier s'il
+    # avait réussi. Mesuré le 2026-08-14, au lot où la pause symétrique venait
+    # justement de régler son 429 : le banc marchait enfin, et le lot ne le
+    # voyait toujours pas. `concurrence_plafond` avait payé ce défaut avant lui,
+    # et son commentaire le dit : un banc qui conclut dans une langue que
+    # personne ne lit ne conclut pas.
+    print("%d contrôles, %d échec(s), 0 non concluant(s)" % (sondes, len(echecs)))
     sys.exit(1 if (echecs or throttle) else 0)
 
 

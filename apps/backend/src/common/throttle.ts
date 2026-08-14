@@ -1,4 +1,55 @@
 /**
+ * Multiplicateur de TOUS les plafonds ci-dessous. Vaut 1 par défaut : la
+ * production est donc **inchangée tant que la clé est absente**.
+ *
+ * ── Pourquoi il existe ─────────────────────────────────────────────────────
+ *
+ * Le lot de bancs passait 15 minutes à DORMIR pour 13 minutes d'exécution.
+ * Ce n'est pas une question de latence — les réponses sont sous la seconde en
+ * local — mais de fenêtre : `ttl` vaut 60 s, donc un seau de 5/min ne se
+ * recharge qu'au bout d'une minute, quelle que soit la vitesse du serveur.
+ * Attendre moins ne fait pas gagner du temps, ça fabrique des 429 déguisés en
+ * échecs métier — le faux négatif le plus coûteux de ce dépôt.
+ *
+ * Le seul levier honnête est donc d'élargir les seaux LÀ OÙ ON MESURE, sans
+ * toucher à ce que la production applique.
+ *
+ * ── ⚠️ Ce qu'il ne faut jamais faire ───────────────────────────────────────
+ *
+ * Ne jamais le poser en production : ces plafonds sont l'unique défense de la
+ * règle 2 (aucun compteur de tentatives par compte n'existe). Un facteur de 20
+ * multiplie par vingt la vitesse d'un brute-force en ligne.
+ *
+ * ⚠️ **Et aucun banc n'éprouve le limiteur lui-même.** Tous les bancs traitent
+ * un 429 comme « pas un verdict » et le contournent ; aucun n'affirme qu'il
+ * refuse. Relever les seaux en local ne casse donc rien aujourd'hui — mais
+ * c'est parce qu'un trou de couverture existe, pas parce que c'est sûr.
+ */
+function facteurDeSeau(): number {
+  const brut = process.env.THROTTLE_FACTOR;
+  if (brut === undefined || brut.trim() === '') return 1;
+  const n = Number(brut);
+  // ⚠️ `Number` est bien trop accueillant pour servir de garde : `Number('')`
+  // vaut 0 et `Number(true)` vaut 1 (règle 34). D'où le contrôle explicite,
+  // et le repli JOURNALISÉ — une valeur illisible ne doit pas être
+  // indiscernable d'une absence.
+  if (!Number.isFinite(n) || n < 1) {
+    console.warn(
+      `[throttle] THROTTLE_FACTOR illisible ou < 1 (${brut}) — repli sur 1`,
+    );
+    return 1;
+  }
+  if (n !== 1) {
+    console.warn(
+      `[throttle] ⚠️  THROTTLE_FACTOR=${n} — tous les plafonds sont multipliés ` +
+        `par ${n}. Réservé aux environnements de mesure : JAMAIS en production.`,
+    );
+  }
+  return n;
+}
+
+export const THROTTLE_FACTOR = facteurDeSeau();
+/**
  * Connexions — 50 tentatives/minute par IP (décision produit du 2026-08-13,
  * relevé depuis 5).
  *
@@ -42,7 +93,9 @@
  * ni l'un ni l'autre n'existe, ce commentaire est le seul endroit où le risque
  * est écrit ; il ne tient rien (règle 30), il informe la prochaine décision.
  */
-export const AUTH_THROTTLE = { default: { limit: 50, ttl: 60_000 } };
+export const AUTH_THROTTLE = {
+  default: { limit: 50 * THROTTLE_FACTOR, ttl: 60_000 },
+};
 
 /**
  * Limite stricte pour les endpoints non authentifiés ou basés sur un
@@ -62,7 +115,9 @@ export const AUTH_THROTTLE = { default: { limit: 50, ttl: 60_000 } };
  *   emporter celle-ci avec lui — c'est pourquoi les deux seaux sont séparés
  *   plutôt qu'un seul chiffre changé.
  */
-export const STRICT_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
+export const STRICT_THROTTLE = {
+  default: { limit: 5 * THROTTLE_FACTOR, ttl: 60_000 },
+};
 
 /**
  * Limite pour les actions sensibles déjà authentifiées (création de
@@ -73,7 +128,7 @@ export const STRICT_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
  * compte compromis ne puisse pas spammer ces routes (audit V1 §2).
  */
 export const SENSITIVE_ACTION_THROTTLE = {
-  default: { limit: 20, ttl: 60_000 },
+  default: { limit: 20 * THROTTLE_FACTOR, ttl: 60_000 },
 };
 
 /**
@@ -93,4 +148,6 @@ export const SENSITIVE_ACTION_THROTTLE = {
  * par geste (temporisation) et ne redemande que le terrain qu'elle n'a pas
  * déjà (zone chargée élargie) — sans quoi aucune limite ne suffirait.
  */
-export const MAP_THROTTLE = { default: { limit: 180, ttl: 60_000 } };
+export const MAP_THROTTLE = {
+  default: { limit: 180 * THROTTLE_FACTOR, ttl: 60_000 },
+};

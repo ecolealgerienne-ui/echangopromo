@@ -4528,6 +4528,203 @@ uniforme appliquait a tous le delai que seul le seau le plus serre exige
 precedent a consomme. **Aucune reinstallation d'app n'est en jeu** : ces bancs
 sont du HTTP pur, et `parcours-ecran` est exclu du lot.
 
+### 2026-08-14 — l'app sur un téléphone réel, et ce que l'écran a montré
+
+**L'app tourne sur un OnePlus 7 Pro branché en USB**, pointée sur le backend
+local. Le lien passe par `adb reverse tcp:3000` et `tcp:9000` : le téléphone
+appelle `localhost`, donc ni IP de machine, ni WiFi, ni pare-feu à ouvrir — et
+c'est exactement ce que `network_security_config.xml` autorise déjà nommément.
+Preuve prise **depuis l'appareil**, pas déduite de la machine hôte :
+`curl http://localhost:3000/promo/config` y rend `200`.
+
+⚠️ **C'est un build de debug, et ça n'est pas un raccourci.** Le fichier qui
+autorise le HTTP en clair vit dans `src/debug/` délibérément ; un build de
+release ne le fusionne pas. Un release pointé sur `http://localhost:3000`
+échouerait à chaque requête avec l'erreur réseau ordinaire d'un serveur éteint
+— le diagnostic trompeur que ce fichier documente déjà.
+
+⚠️ **`S3_CDN_BASE_URL` a changé dans le `.env` de WSL** (sauvegarde
+`.env.bak-avant-telephone`) : `10.0.2.2` est l'alias de l'hôte **vu par
+l'émulateur** et ne désigne rien sur un téléphone réel — les images restaient
+vides. Il vaut désormais `http://localhost:9000/echango-promo`, et les mêmes
+tunnels ont été posés sur l'émulateur pour qu'il suive. **Écrit ici parce que ce
+fichier n'est pas versionné et ne voyage pas** (règle 36) : personne ne le
+saura autrement, et le repli silencieux ferait croire le réglage cassé.
+
+**Ce que l'appareil a révélé et qu'aucun banc n'avait vu : 19 promos sur 56
+servaient des images en 404.** Ni photo ni vignette — les parcours automatisés
+enregistrent une clé sans jamais déposer l'objet. Deux mesures ont changé le
+travail : ces 19 promos ne portent que **11 clés distinctes** (les parcours
+réutilisent `p.jpg`, `course.jpg`, `parcours.jpg`), et chaque clé sert **à la
+fois** de photo et de vignette (`thumbnailKey = photoKeys[0]`). 11 objets
+déposés par `mc`, donc, pas 38. ⚠️ **J'avais d'abord annoncé « 38 objets »** en
+comptant les écritures au lieu des clés — le même travers que la migration
+`python3 → $PY` : compter ce qu'on touche au lieu de prouver ce qui reste.
+Recensement sur les **112 URLs d'images** : 19 échecs avant, **0** après.
+
+⚠️ **Reste ouvert, et c'est distinct** : les photos pleines du décor « réel »
+sont des **JPEG 1×1** de 160 octets — d'où la tache orange pixelisée des cartes
+« Top promos ». Les vignettes, elles, sont de vraies 240×240.
+
+### 2026-08-14 — la pastille de la carte se replie
+
+**« Chercher autour de ce point » occupait ~60 % de la largeur en permanence**
+au-dessus de la carte. Elle est désormais étendue à l'arrivée puis repliée en
+rond, sur le premier des deux déclencheurs : un geste du client, ou 5 secondes.
+C'est `isExtended` de `FloatingActionButton.extended` — une propriété pilotée
+par l'état, animation comprise.
+
+⚠️ **Le libellé long avait une raison, et cette raison avait expiré.** Il
+existait parce que le mécanisme d'enregistrement n'était proposé par rien
+(`map_screen.dart`) ; les propositions contextuelles ajoutées le 2026-08-13
+portent désormais la découverte. Une justification qui survit à son motif fait
+garder ce qu'on garderait sans elle.
+
+⚠️ **Le point délicat : distinguer un geste d'un recentrage que l'app se fait à
+elle-même.** `_recenterOn` déplace la caméra au démarrage (GPS, point
+enregistré, point serveur). Compter ces déplacements comme une exploration
+replierait le bouton **avant que la carte s'affiche** — son libellé ne serait
+jamais lu par personne. D'où `estExplorationCliente(MapEventSource)`, en
+**liste positive** : une source inconnue, qu'une montée de `flutter_map`
+ajoutera, laisse la pastille **dépliée**. Des deux échecs possibles, un bouton
+trop visible se remarque ; un bouton replié trop tôt disparaît en silence
+(règle 29).
+
+Replié, le libellé quitte l'écran : `tooltip` le porte — bulle sur appui long,
+**et** ce que lisent les lecteurs d'écran.
+
+**Éprouvé** : `test/features/client/map_repli_pastille_test.dart`, 21 cas dont
+**8 qui doivent rendre `false`**, plus un contrôle d'exhaustivité qui échoue si
+une version future ajoute une source non classée. **Mutation** : faire compter
+`mapController` comme une exploration fait tomber exactement un test, celui qui
+garde ce défaut. Les deux déclencheurs sont vérifiés **sur l'appareil**, et
+séparément : capture à 3 s (étendue), à 8 s (repliée, minuteur), et après un
+glissement à ~2 s (repliée alors que le minuteur n'avait pas pu courir).
+
+### 2026-08-14 — la géographie du client, reprise de bout en bout
+
+Une seule observation de terrain, faite depuis Alger sur le téléphone branché,
+a ouvert quatre chantiers en cascade : **« dans la recherche il me montre aussi
+les promos de Djelfa »**. Tout ce qui suit en découle, et l'ordre compte — chaque
+correction a révélé la suivante.
+
+**1. Le tri local écrasait celui du serveur.** `promoSortProvider` valait
+`PromoSort.nouveautes` par défaut et rejouait `publishedAt DESC` **par-dessus**
+l'ordre par distance du serveur, sur toutes les listes. Mesuré : le serveur
+rendait 65 résultats strictement ordonnés de 0,1 à 245 km, l'app affichait une
+promo à **231,7 km en 5ᵉ position**, devant des dizaines à 100 mètres.
+
+⚠️ Le commentaire qui portait ce défaut disait : « `nouveautes` reproduit le tri
+par défaut déjà appliqué côté backend ». C'était **exact jusqu'à la bascule
+géographique**, et faux depuis — la phrase est restée juste d'apparence pendant
+que le fait qu'elle décrivait changeait de camp. **Aucun banc HTTP ne pouvait le
+voir** : le serveur, lui, a toujours eu raison.
+
+**2. La distance ne s'affichait pas.** La carte de promo sait le faire depuis le
+2026-08-12, mais depuis le **seul GPS** — sans permission de localisation, aucune
+distance, et une promo à 231 km ressemblait trait pour trait à celle d'en face.
+Un `pointDeReferenceProvider` porte désormais la cascade GPS → point enregistré
+→ point serveur, et **s'arrête là** : jamais `kPointDeRepliHorsLigne`. Cadrer une
+carte sur un repli est sans conséquence ; afficher « 231 km » calculés depuis un
+point arbitraire est un chiffre faux présenté comme mesuré.
+
+**3. Le geste d'enregistrement jetait le zoom.** « Chercher autour de ce point »
+prenait le centre de la carte et lui collait le rayon par défaut du serveur :
+cadrer une rue ou une wilaya donnait la même liste. Le point était donc juste et
+la **largeur** fausse — le plus difficile à voir, parce que la liste a l'air de
+marcher. Le rayon est maintenant déduit de la vue (demi-diagonale, plancher
+1 km), stocké avec le point, et la carte **rouvre sur ce cadre** au lieu de
+forcer `_initialZoom`.
+
+⚠️ **Le zoom n'est pas stocké, délibérément.** Ce serait une seconde valeur
+disant la même chose que le rayon, et deux valeurs qui doivent s'accorder
+finissent par diverger. Il dépend en plus de la taille de l'écran. Ce qui tient
+l'accord carte↔liste est un **test d'aller-retour** (rayon → cadre → rayon, à
+2 % près sur quatre rayons), pas un commentaire.
+
+**4. La recherche ignorait le rayon — décision inversée le jour même.** Elle le
+levait volontairement (« chercher est un acte intentionnel avec une cible »),
+et cette décision tenait par une contrepartie écrite juste en dessous : « le tri
+par distance reste actif ». Le point 1 a montré que cette contrepartie était
+**fausse à l'écran**. Le point 3 a rendu la levée inutile : chercher large ne
+demande plus de lever la borne, il suffit de dézoomer.
+
+**5. Puis la borne est devenue une frontière.** Décision produit : *echango
+Promo sert des promos de proximité, pas des annonces nationales.*
+`CLIENT_MAX_RADIUS_KM` passe de 50 à **5 km**. ⚠️ D'abord posée dans l'app seule,
+la borne se contournait par un appel direct à l'API — un confort d'affichage
+déguisé en règle. Elle vit maintenant dans `.env`, l'app la lit sur
+`GET /promo/config` et **ne connaît aucun chiffre**.
+
+⚠️ **Correction du 2026-08-14, le même jour : cette entrée affirmait d'abord
+qu'il n'y avait que DEUX endroits pour une clé de config, et c'était faux.**
+`.env.production.example` existe bel et bien — **à la racine du dépôt**, pas
+sous `apps/backend/`. Un `ls apps/backend/.env*` m'a fait conclure à son
+absence, et j'ai mis à jour deux endroits sur trois : la production annonçait
+encore un plafond de 50 km que le pilote n'applique plus.
+
+C'est exactement la divergence que la règle 36 existe pour empêcher, obtenue en
+appliquant la règle **avec une mauvaise carte des lieux**. Le pire n'est pas
+l'oubli : c'est que le journal a consigné par écrit que le fichier n'existait
+pas, ce qui aurait fait sauter l'étape à chaque prochaine lecture. CLAUDE.md
+porte désormais les trois chemins en toutes lettres et la parade : **chercher
+une clé, pas un fichier** — `grep -rn "MA_CLE" --include=".env*" .` depuis la
+racine.
+
+── Le banc `recherche-globale`, écrit et réécrit trois fois ────────────────
+
+Il a suivi chaque bascule, et c'est le prix d'un banc qui encode une **décision
+produit** plutôt qu'un invariant technique : quand la décision change, le banc
+doit changer dans le même commit, sinon il échoue en accusant un produit
+correct (règle 38).
+
+⚠️ **Trois fois de suite, mon échantillon du décor venait de la requête sous
+test.** D'abord la recherche elle-même, puis une recherche élargie au maximum
+serveur — qui a cessé de marcher le jour où ce maximum est descendu à 5 km. Le
+contrôle rendait alors « décor trop pauvre » en décrivant en réalité le
+comportement qu'il devait juger. Le prélèvement passe désormais par
+`/promo/map`, qui travaille en **rectangle** et n'a pas de rayon : le seul qui ne
+dépende pas de ce qu'on éprouve.
+
+⚠️ **Les deux routes ne nomment pas les coordonnées pareil** —
+`commercantLatitude` pour `/promo`, `latitude` pour `/promo/map`. Lire la
+mauvaise clé rendait « aucune promo positionnée » : un non-concluant qui accuse
+le décor alors que la sonde regarde à côté. Les clés sont maintenant un
+paramètre explicite, jamais devinées.
+
+⚠️ **Et la mutation a trouvé un défaut dans la sonde, pas dans le produit.** En
+remontant `CLIENT_MAX_RADIUS_KM` à 50 dans le vrai `.env` pour vérifier que le
+banc levait, **il est resté vert** : il lisait le maximum sur le serveur,
+demandait maximum + 1, constatait un refus. **Auto-référentiel** — il vérifiait
+que le serveur respecte sa propre annonce, jamais que cette annonce respecte la
+règle de proximité. Il serait resté vert avec un plafond à 500 km.
+
+D'où une sonde de plus, qui exprime la règle **sans aucun chiffre** : *le
+maximum accepté ne doit pas dépasser le rayon servi par défaut.* Elle survit au
+jour où le pilote changera de ville, et elle échoue bien sur le serveur muté.
+
+**État : 8 contrôles, 0 échec, 0 non concluant** — 29 cas d'auto-test dont 13
+refus.
+
+── Le décor, deux réparations ─────────────────────────────────────────────
+
+**Les 11 photos pleines en JPEG 1×1** (160 octets) sont remplacées par des
+1024×1024, la taille des vraies photos du décor. C'était la tache orange
+pixelisée des cartes « Top promos ». ⚠️ **Un recensement sur le code HTTP les
+comptait comme saines** : elles répondent 200 avec un JPEG parfaitement valide.
+Il faut lire les **dimensions** pour les voir.
+
+⚠️ Et mon premier lecteur d'en-tête ne gérait que le JPEG : il rendait « taille
+inconnue » sur **12 PNG parfaitement sains** du décor. Les remplacer aurait été
+une correction sur une mesure fausse.
+
+Recensement : 46 photos pleines, **11 dégénérées avant, 0 après** — le même
+instrument, donc il sait dire non.
+
+⚠️ **Les objets gardent leurs clés**, et `Cache-Control` vaut
+`max-age=31536000, immutable` : un appareil qui a déjà chargé une 1×1 la garde.
+Vider le cache de l'app est nécessaire pour la voir changer.
+
 ---
 
 ## Comment tenir ce fichier

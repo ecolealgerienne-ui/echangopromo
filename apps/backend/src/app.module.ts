@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { THROTTLE_FACTOR } from './common/throttle';
 import { CommercantModule } from './commercant/commercant.module';
 import { PromoModule } from './promo/promo.module';
 import { AgentModule } from './agent/agent.module';
@@ -40,7 +41,10 @@ import { typeOrmBaseOptions } from './data-source';
     // Limite globale par défaut ; les endpoints sensibles (login,
     // inscription commerçant, signalement) ont une limite plus stricte via @Throttle()
     // (specs d'audit sécurité — @nestjs/throttler n'était pas installé du tout).
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
+    // ⚠️ Le seau GLOBAL suit le même facteur que les seaux nommés : le laisser
+    // à 60 rendrait `THROTTLE_FACTOR` inopérant, puisque c'est lui qui plafonne
+    // en premier. Un réglage qui ne règle rien est pire qu'aucun réglage.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 * THROTTLE_FACTOR }]),
     // AppLinksController (App Links/Universal Links, host
     // 'promo.echango.com') utilise des chemins dédiés (`/p/:id`,
     // `.well-known/*`) qui ne recoupent jamais ceux de PromoController

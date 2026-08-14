@@ -306,8 +306,33 @@ def main():
     # ── 0. De quoi juger ? ──────────────────────────────────────────────────
     print("\n── 0. le commerçant a-t-il de quoi rendre ce banc concluant ? ──")
     depart = slots()
+    # ── ⚠️ Établir la prémisse, ne pas la supposer ni l'attendre d'autrui ────
+    #
+    # Ce banc exigeait qu'une promo soit déjà en ligne et **renonçait** sinon.
+    # Il dépendait donc de ce qu'un autre banc avait laissé dans le décor : au
+    # lot du 2026-08-14 il a renoncé parce que le commerçant se retrouvait à
+    # zéro promo active — et comme il renonçait **sans ligne de décompte**, le
+    # lot l'a rangé en « sauté », c'est-à-dire au même endroit que les bancs
+    # qui n'ont pas pu tourner.
+    #
+    # ⚠️ Un banc qui a besoin d'un état a le devoir de le créer. Il en a les
+    # moyens ici — le jeton d'agent, et `publier()` juste au-dessus. Dépendre
+    # du résidu d'un voisin, c'est faire échouer un banc pour une raison qui
+    # n'est ni dans le produit ni dans lui.
+    if depart and depart.get("enLigne") == 0:
+        print("     aucune promo en ligne — le banc en publie une pour avoir "
+              "de quoi mesurer")
+        st_p, _ = publier("premisse")
+        time.sleep(PACE)
+        if st_p in (200, 201):
+            depart = slots()
     noter("GET /promo/me/slots", *verdict_marge(depart))
     if not depart or not depart.get("enLigne"):
+        # ⚠️ **La ligne que le lanceur d'ensemble cherche, même en renonçant.**
+        # Sans elle, `test-tout.sh` compte « aucun décompte rendu » et range ce
+        # banc parmi les sautés — un non-concluant déguisé en absence, la
+        # distinction même que ce dépôt s'attache à préserver.
+        print("1 contrôles, 0 échec(s), 1 non concluant(s)")
         return 1
     en_ligne = depart["enLigne"]
     plafond_initial = depart.get("plafond")

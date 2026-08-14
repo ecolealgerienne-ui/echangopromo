@@ -59,11 +59,44 @@ RACINE="$(cd "$HERE/.." && pwd)"
 cd "$RACINE" || exit 2
 
 PAUSE_SECONDS="${PAUSE_SECONDS:-10}"
-PAUSE_STRICTE_SECONDS="${PAUSE_STRICTE_SECONDS:-60}"
+# ⚠️ **10 s, et non 60, parce que le SERVEUR de mesure a des seaux élargis.**
+#
+# Les 60 s n'étaient pas une marge de prudence : c'est `ttl: 60_000`, la
+# fenêtre du limiteur. Attendre moins ne rendait pas la main plus vite, ça
+# fabriquait des 429 déguisés en échecs métier.
+#
+# Ce qui a changé n'est donc pas la patience du lot mais la taille des seaux :
+# `THROTTLE_FACTOR=20` dans le `.env` de mesure (jamais en production, voir
+# `common/throttle.ts`). Le lot passait 15 min à dormir pour 13 d'exécution.
+#
+# ⚠️ Si vous lancez ce lot contre un serveur SANS ce facteur — la production,
+# par exemple — remettez 60 : `PAUSE_STRICTE_SECONDS=60 ./scripts/test-tout.sh`.
+# Sinon les 429 reviennent, et ils accusent le produit.
+PAUSE_STRICTE_SECONDS="${PAUSE_STRICTE_SECONDS:-10}"
 
 # Les bancs qui consomment le seau strict (5/min) — établi en cherchant
 # `POST /report` et `POST /commercant/register` dans leur module, pas de mémoire.
 STRICTS=" abus-signalement cycle-commercant file-moderation frontiere-http moderation-course portee-agent position-publication "
+
+# ── Les gros écrivains — autre seau, même remède ────────────────────────────
+#
+# `SENSITIVE_ACTION_THROTTLE` vaut 20/min et par IP, **partagé par toutes les
+# écritures**. Ces trois bancs en consomment bien plus que 20 : `plafond-promos`
+# fait à lui seul 3 tours × (jusqu'à 20 gestes de préparation + 3 créations
+# simultanées) plus son ménage.
+#
+# ⚠️ **Mesuré, pas supposé** : au lot du 2026-08-14, `plafond-admin` et
+# `tournee-agent` — les deux bancs qui suivent immédiatement `plafond-promos` —
+# rendaient `HTTP 429 RATE_LIMITED`, écrit noir sur blanc dans le tableau final
+# depuis que celui-ci garde les motifs. Le journal avait supposé le quota
+# journalier de créations ; c'était faux, et personne ne pouvait le savoir tant
+# que le lot ne gardait que des décomptes.
+#
+# Seau différent de `STRICTS` (20/min contre 5/min), mais le remède est le
+# même : laisser la minute se reconstituer avant ET après. Les deux listes
+# restent distinctes parce qu'elles nomment deux causes différentes — les
+# fusionner ferait perdre l'information au premier réglage de seuil.
+ECRIVAINS_LOURDS=" plafond-promos plafond-admin tournee-agent "
 API_URL="${API_URL:-http://localhost:3000}"
 export API_URL
 
@@ -107,7 +140,7 @@ declare -A EXCLUS=(
 BANCS=(
   # — lecture seule —
   defaut-client ville-client filtre-categorie client-carte client-fiche
-  client-applinks auth-login perf plan-sql
+  client-applinks auth-login perf plan-sql recherche-globale
   # — écritures bornées —
   frontiere-http frontiere-admin revocation-jwt admin-audit-log admin-agents
   admin-dashboard agent-creation agent-promo client-liste client-rayon
@@ -124,12 +157,46 @@ BANCS=(
 
 SEULEMENT="${SEULEMENT:-}"
 
+# ── ⚠️ Le garde qui manquait : aucune enveloppe ne doit rester hors du lot ────
+#
+# Écrire un banc et oublier de l'inscrire ici ne produit AUCUN signal : le lot
+# passe au vert avec un banc de moins, et rien ne distingue « tout va bien » de
+# « on n'a pas regardé ». C'est arrivé le 2026-08-14 — `recherche-globale` a été
+# écrit, éprouvé par mutation, committé, et n'a jamais tourné dans le lot.
+#
+# ⚠️ Le critère n'est pas « combien de bancs ai-je listés » mais **« que
+# reste-t-il dehors »**. Compter ce qu'on a fait ne dit jamais ce qui manque —
+# le même travers avait fait reprendre quatre fois la migration `python3 → $PY`.
+#
+# Une enveloppe se déclare donc explicitement : dans BANCS pour tourner, ou dans
+# EXCLUS **avec sa raison**. Un troisième état n'existe pas.
+ORPHELINS=()
+for enveloppe in "$HERE"/test-*.sh; do
+  nom="$(basename "$enveloppe" .sh)"; nom="${nom#test-}"
+  [ "$nom" = "tout" ] && continue
+  declare -p EXCLUS >/dev/null 2>&1 && [ -n "${EXCLUS[$nom]+x}" ] && continue
+  case " ${BANCS[*]} " in *" $nom "*) continue ;; esac
+  ORPHELINS+=("$nom")
+done
+if [ "${#ORPHELINS[@]}" -gt 0 ]; then
+  echo "❌ ${#ORPHELINS[@]} banc(s) ni listé(s) ni exclu(s) : ${ORPHELINS[*]}"
+  echo "   Les ajouter à BANCS, ou à EXCLUS avec la raison. Un banc oublié ne"
+  echo "   se voit nulle part : le lot rend vert sans l'avoir lancé."
+  exit 2
+fi
+
 echo "══════════════════════════════════════════════════════════════════════"
 echo "  Lot complet — $API_URL · pause ${PAUSE_SECONDS}s entre bancs"
 echo "══════════════════════════════════════════════════════════════════════"
 echo "  ${#BANCS[@]} bancs à lancer, ${#EXCLUS[@]} exclus (détaillés à la fin)"
-echo "  pauses : ${PAUSE_SECONDS}s, et ${PAUSE_STRICTE_SECONDS}s après les 7 bancs"
-echo "  qui consomment le seau strict (report / register)."
+# ⚠️ Compté, pas recopié : la phrase disait « les 7 bancs » et les listes en
+# portent dix depuis le 2026-08-14. Un nombre écrit à la main dans un message
+# devient faux au premier ajout, sans que rien ne le signale (règle 30).
+NB_LENTS=$(printf '%s %s' "$STRICTS" "$ECRIVAINS_LOURDS" | tr ' ' '\n' \
+           | grep -c . || true)
+echo "  pauses : ${PAUSE_SECONDS}s, et ${PAUSE_STRICTE_SECONDS}s de part et"
+echo "  d'autre des ${NB_LENTS} bancs qui vident un seau (report/register 5/min,"
+echo "  écritures 20/min)."
 echo
 
 RESULTATS=()
@@ -152,19 +219,73 @@ for b in "${BANCS[@]}"; do
     continue
   fi
 
-  # ⚠️ La pause dépend du banc PRÉCÉDENT : c'est lui qui a consommé le seau.
-  if [ "$PREMIER" = "1" ]; then
-    PREMIER=0
-  elif [ -n "${PRECEDENT:-}" ] && [ "${STRICTS#* $PRECEDENT }" != "$STRICTS" ]; then
+  # ── ⚠️ La pause regarde les DEUX bancs, pas seulement le précédent ─────────
+  #
+  # Elle ne dépendait que du banc précédent — « c'est lui qui a consommé le
+  # seau ». Vrai, et incomplet : un banc **gourmand** a besoin d'un seau plein
+  # AVANT de partir, pas seulement d'en laisser un après lui. `frontiere-http`
+  # échouait donc dès sa première connexion en `429 RATE_LIMITED`, quel que soit
+  # ce qui le précédait, tant que ce prédécesseur n'était pas lui-même strict.
+  #
+  # ⚠️ **Un 429 se déguise en « identifiants incorrects »** : lu vite, ce banc
+  # accusait l'authentification du produit. Il a été « sauté » à deux lots
+  # consécutifs sans que la cause soit dans le produit.
+  #
+  # Le seau étant partagé par IP, la contrainte est symétrique : on attend le
+  # temps long si l'un OU l'autre des deux bancs y touche.
+  # Deux seaux, deux listes, une seule pause : celle qui laisse la minute se
+  # reconstituer. Un banc qui touche à l'un OU l'autre la déclenche.
+  est_strict() {
+    [ -n "${1:-}" ] || return 1
+    [ "${STRICTS#* $1 }" != "$STRICTS" ] && return 0
+    [ "${ECRIVAINS_LOURDS#* $1 }" != "$ECRIVAINS_LOURDS" ] && return 0
+    return 1
+  }
+
+  # ⚠️ **La pause protège le banc qui PART, pas celui qui vient de finir** —
+  # resserré le 2026-08-14 après avoir chiffré les deux règles.
+  #
+  # La version symétrique (« l'un OU l'autre ») demandait 15 pauses longues,
+  # soit 19,5 min de sommeil sur un lot de 43 bancs. Or un seau ne gêne que le
+  # banc qui s'en sert, et **tout banc qui se sert d'un seau contraint est dans
+  # l'une des deux listes** : le protéger avant qu'il parte suffit. 10 pauses
+  # longues au lieu de 15, ~4 min de gagnées, sans qu'aucun banc listé perde sa
+  # garantie.
+  #
+  # ⚠️ Ce que ça retire : un banc NON listé qui écrirait un peu, juste après un
+  # gros écrivain, n'a plus que la pause courte. Le risque est réel et il est
+  # **observable** — depuis que le tableau final garde les motifs, un 429 s'y
+  # lit et nomme le banc. C'est ce qui rend ce resserrement acceptable ; il ne
+  # l'aurait pas été avant.
+  #
+  # ⚠️ Et les 60 s ne sont pas un chiffre prudent : `ttl: 60_000` sur TOUS les
+  # seaux (`app.module.ts`, `common/throttle.ts`). C'est la fenêtre du
+  # limiteur. Descendre en dessous n'accélère pas, ça retire la garantie —
+  # `PAUSE_STRICTE_SECONDS` reste réglable pour qui veut ce marché-là.
+  if est_strict "$b"; then
+    # Vaut aussi pour le tout premier : rien ne garantit un seau plein au
+    # démarrage du lot (un banc lancé à la main juste avant, l'app du téléphone
+    # qui rafraîchit sa liste…).
+    [ "$PREMIER" = "1" ] && echo "  (pause ${PAUSE_STRICTE_SECONDS}s — seau à reconstituer)"
     sleep "$PAUSE_STRICTE_SECONDS"
+  elif [ "$PREMIER" = "1" ]; then
+    :
   else
     sleep "$PAUSE_SECONDS"
   fi
+  PREMIER=0
   PRECEDENT="$b"
 
   echo "── $b ──"
+  # ⚠️ La durée de chaque banc, mesurée. Sans elle, toute discussion sur « le
+  # lot est trop long » porte sur les pauses par défaut — alors que la part
+  # d'exécution est peut-être la plus grosse. On ne réduit bien que ce qu'on a
+  # chiffré.
+  DEBUT=$(date +%s)
   SORTIE="$("$HERE/test-$b.sh" 2>&1)"
   CODE=$?
+  DUREE=$(( $(date +%s) - DEBUT ))
+  TOTAL_EXEC=$(( ${TOTAL_EXEC:-0} + DUREE ))
 
   # La dernière ligne de décompte, telle que chaque banc la rend.
   RESUME="$(echo "$SORTIE" | grep -E "^[0-9]+ contrôles?, " | tail -1)"
@@ -184,11 +305,26 @@ for b in "${BANCS[@]}"; do
   NONCONC="$(echo "$RESUME" | sed -E 's/.*, ([0-9]+) non concluant.*/\1/')"
   echo "  $RESUME"
 
+  # ── ⚠️ Garder le MOTIF, pas seulement le décompte ──────────────────────────
+  #
+  # Le tableau final ne retenait que « 3 contrôles, 0 échec, 2 non concluants ».
+  # Un décompte ne dit pas POURQUOI, et un lot dure vingt minutes : la cause
+  # était donc perdue au moment où on la lisait. Le journal du 2026-08-14 a dû
+  # écrire « vraisemblablement le quota journalier » — une supposition, dans un
+  # dépôt dont la règle est de ne rien reconstituer de mémoire. Elle était
+  # **fausse** : le banc concerné passe par un agent, exempté de ce quota.
+  #
+  # Les bancs impriment leur raison ligne par ligne. On garde les trois
+  # premières lignes marquées, ce qui suffit à distinguer un 429 d'un refus
+  # métier — c'est-à-dire à savoir si l'on doit corriger le produit ou le lot.
+  MOTIFS="$(echo "$SORTIE" | grep -E "^ *(❌|⚠️)" | head -3 \
+            | sed -E 's/^ +//' | tr '\n' '§')"
+
   if [ "${ECHECS:-0}" != "0" ]; then
-    RESULTATS+=("ECHEC|$b|$RESUME")
+    RESULTATS+=("ECHEC|$b|$RESUME|$MOTIFS")
     NB_ECHEC=$((NB_ECHEC + 1))
   elif [ "${NONCONC:-0}" != "0" ]; then
-    RESULTATS+=("NONCONC|$b|$RESUME")
+    RESULTATS+=("NONCONC|$b|$RESUME|$MOTIFS")
     NB_NONCONCLUANT=$((NB_NONCONCLUANT + 1))
   else
     RESULTATS+=("OK|$b|$RESUME")
@@ -201,13 +337,22 @@ echo "════════════════════════�
 echo "  Tableau final"
 echo "══════════════════════════════════════════════════════════════════════"
 for r in "${RESULTATS[@]}"; do
-  etat="${r%%|*}"; reste="${r#*|}"; nom="${reste%%|*}"; detail="${reste#*|}"
+  etat="${r%%|*}"; reste="${r#*|}"; nom="${reste%%|*}"; reste="${reste#*|}"
+  detail="${reste%%|*}"; motifs="${reste#*|}"
+  [ "$motifs" = "$detail" ] && motifs=""
   case "$etat" in
     OK)       printf "  ✅ %-26s %s\n" "$nom" "$detail" ;;
     ECHEC)    printf "  ❌ %-26s %s\n" "$nom" "$detail" ;;
     NONCONC)  printf "  ⚠️  %-26s %s\n" "$nom" "$detail" ;;
     SAUTE)    printf "  ⏭️  %-26s %s\n" "$nom" "$detail" ;;
   esac
+  # Le motif sous la ligne, indenté : c'est lui qui dit s'il faut corriger le
+  # produit ou le lot.
+  if [ -n "$motifs" ]; then
+    echo "$motifs" | tr '§' '\n' | while IFS= read -r m; do
+      [ -n "$m" ] && printf "       ↳ %s\n" "$m"
+    done
+  fi
 done
 
 if [ "${#EXCLUS[@]}" -gt 0 ]; then
@@ -221,6 +366,10 @@ fi
 echo
 printf "  %d verts · %d échec(s) · %d non concluant(s) · %d sauté(s)\n" \
   "$NB_OK" "$NB_ECHEC" "$NB_NONCONCLUANT" "$NB_SAUTE"
+# ⚠️ Le partage exécution / attente, mesuré. « Le lot est trop long » n'est pas
+# actionnable ; « 15 min d'attente pour 5 min d'exécution » l'est.
+printf "  %d min d'exécution · %d min d'attente (seaux à 60 s)\n" \
+  "$(( ${TOTAL_EXEC:-0} / 60 ))" "$(( (SECONDS - ${TOTAL_EXEC:-0}) / 60 ))"
 
 # ⚠️ Un saut n'est pas une réussite, et un non-concluant non plus. Le seul
 # code 0 possible est « tout a été lancé et tout a conclu au vert ».

@@ -1,3 +1,18 @@
+// ⚠️ **EN PREMIER, avant tout autre import — l'ordre est le sujet.**
+//
+// `ConfigModule.forRoot()` charge bien le `.env`, mais il ne s'exécute qu'à
+// l'instanciation du module. Or les décorateurs `@Throttle(...)` et les
+// constantes de `common/throttle.ts` sont évalués à l'IMPORT, donc **avant**.
+// `process.env.THROTTLE_FACTOR` y était systématiquement `undefined`.
+//
+// Mesuré le 2026-08-14, et c'est ce qui rend la chose sournoise : le serveur
+// démarrait, servait, ne se plaignait de rien — et le facteur valait 1. La clé
+// était déclarée dans les trois `.env` et **ne réglait rien**. C'est exactement
+// le défaut que la règle 36 décrit, obtenu cette fois non par un fichier oublié
+// mais par un ordre d'exécution. Le seul témoin possible était une mesure : le
+// 429 arrivait au 6ᵉ appel au lieu du 101ᵉ.
+import 'dotenv/config';
+
 import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
