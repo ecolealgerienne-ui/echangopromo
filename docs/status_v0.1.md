@@ -4656,9 +4656,20 @@ la borne se contournait par un appel direct à l'API — un confort d'affichage
 déguisé en règle. Elle vit maintenant dans `.env`, l'app la lit sur
 `GET /promo/config` et **ne connaît aucun chiffre**.
 
-⚠️ **Règle 36, précision à reporter : il n'y a que DEUX endroits ici**, pas
-trois. `apps/backend/.env.production.example` **n'existe pas** dans ce dépôt,
-contrairement à ce qu'annonce CLAUDE.md.
+⚠️ **Correction du 2026-08-14, le même jour : cette entrée affirmait d'abord
+qu'il n'y avait que DEUX endroits pour une clé de config, et c'était faux.**
+`.env.production.example` existe bel et bien — **à la racine du dépôt**, pas
+sous `apps/backend/`. Un `ls apps/backend/.env*` m'a fait conclure à son
+absence, et j'ai mis à jour deux endroits sur trois : la production annonçait
+encore un plafond de 50 km que le pilote n'applique plus.
+
+C'est exactement la divergence que la règle 36 existe pour empêcher, obtenue en
+appliquant la règle **avec une mauvaise carte des lieux**. Le pire n'est pas
+l'oubli : c'est que le journal a consigné par écrit que le fichier n'existait
+pas, ce qui aurait fait sauter l'étape à chaque prochaine lecture. CLAUDE.md
+porte désormais les trois chemins en toutes lettres et la parade : **chercher
+une clé, pas un fichier** — `grep -rn "MA_CLE" --include=".env*" .` depuis la
+racine.
 
 ── Le banc `recherche-globale`, écrit et réécrit trois fois ────────────────
 

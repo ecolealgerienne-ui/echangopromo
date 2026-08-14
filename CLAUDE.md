@@ -633,10 +633,26 @@ permet de reconnaître un cas nouveau relevant de la même règle.
     de WSL ne le porte pas.*
 
     **En pratique** : toute clé ajoutée l'est dans les **trois** endroits dans
-    le même commit — `apps/backend/.env.example`, `.env.production.example`, et
-    le `.env` de WSL (hors dépôt, donc à faire à la main et à **dire** dans le
+    le même commit —
+
+    | | |
+    |---|---|
+    | `apps/backend/.env.example` | versionné |
+    | `.env.production.example` | versionné, **à la RACINE du dépôt** |
+    | `~/projects/echangopromo/apps/backend/.env` | **hors dépôt**, dans WSL |
+
+    ⚠️ **Les deux `.example` ne sont pas dans le même dossier, et ce piège a
+    déjà coûté.** Le 2026-08-14, en abaissant `CLIENT_MAX_RADIUS_KM`, un
+    `ls apps/backend/.env*` a fait conclure que `.env.production.example`
+    n'existait pas — il était à la racine. Deux endroits sur trois ont été mis à
+    jour, la production a gardé l'ancienne valeur, et le journal a même consigné
+    par écrit que le fichier n'existait pas. **Chercher une clé, pas un
+    fichier** : `grep -rn "MA_CLE" --include=".env*" .` depuis la racine trouve
+    les deux à coup sûr.
+
+    Le troisième est hors dépôt, donc à faire à la main et à **dire** dans le
     message de commit ou le journal, sinon personne ne saura que ça reste à
-    faire). Corollaire de la règle 29 : si un repli est prévu, la valeur
+    faire. Corollaire de la règle 29 : si un repli est prévu, la valeur
     effectivement retenue doit être **journalisée au démarrage** — sans ça,
     l'absence de la clé est indiscernable de sa présence, et c'est le
     diagnostic qu'on n'aura pas le jour où le réglage « ne marche pas ».
