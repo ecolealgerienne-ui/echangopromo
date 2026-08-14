@@ -64,6 +64,26 @@ PAUSE_STRICTE_SECONDS="${PAUSE_STRICTE_SECONDS:-60}"
 # Les bancs qui consomment le seau strict (5/min) — établi en cherchant
 # `POST /report` et `POST /commercant/register` dans leur module, pas de mémoire.
 STRICTS=" abus-signalement cycle-commercant file-moderation frontiere-http moderation-course portee-agent position-publication "
+
+# ── Les gros écrivains — autre seau, même remède ────────────────────────────
+#
+# `SENSITIVE_ACTION_THROTTLE` vaut 20/min et par IP, **partagé par toutes les
+# écritures**. Ces trois bancs en consomment bien plus que 20 : `plafond-promos`
+# fait à lui seul 3 tours × (jusqu'à 20 gestes de préparation + 3 créations
+# simultanées) plus son ménage.
+#
+# ⚠️ **Mesuré, pas supposé** : au lot du 2026-08-14, `plafond-admin` et
+# `tournee-agent` — les deux bancs qui suivent immédiatement `plafond-promos` —
+# rendaient `HTTP 429 RATE_LIMITED`, écrit noir sur blanc dans le tableau final
+# depuis que celui-ci garde les motifs. Le journal avait supposé le quota
+# journalier de créations ; c'était faux, et personne ne pouvait le savoir tant
+# que le lot ne gardait que des décomptes.
+#
+# Seau différent de `STRICTS` (20/min contre 5/min), mais le remède est le
+# même : laisser la minute se reconstituer avant ET après. Les deux listes
+# restent distinctes parce qu'elles nomment deux causes différentes — les
+# fusionner ferait perdre l'information au premier réglage de seuil.
+ECRIVAINS_LOURDS=" plafond-promos plafond-admin tournee-agent "
 API_URL="${API_URL:-http://localhost:3000}"
 export API_URL
 
@@ -156,8 +176,14 @@ echo "════════════════════════�
 echo "  Lot complet — $API_URL · pause ${PAUSE_SECONDS}s entre bancs"
 echo "══════════════════════════════════════════════════════════════════════"
 echo "  ${#BANCS[@]} bancs à lancer, ${#EXCLUS[@]} exclus (détaillés à la fin)"
-echo "  pauses : ${PAUSE_SECONDS}s, et ${PAUSE_STRICTE_SECONDS}s après les 7 bancs"
-echo "  qui consomment le seau strict (report / register)."
+# ⚠️ Compté, pas recopié : la phrase disait « les 7 bancs » et les listes en
+# portent dix depuis le 2026-08-14. Un nombre écrit à la main dans un message
+# devient faux au premier ajout, sans que rien ne le signale (règle 30).
+NB_LENTS=$(printf '%s %s' "$STRICTS" "$ECRIVAINS_LOURDS" | tr ' ' '\n' \
+           | grep -c . || true)
+echo "  pauses : ${PAUSE_SECONDS}s, et ${PAUSE_STRICTE_SECONDS}s de part et"
+echo "  d'autre des ${NB_LENTS} bancs qui vident un seau (report/register 5/min,"
+echo "  écritures 20/min)."
 echo
 
 RESULTATS=()
@@ -194,7 +220,14 @@ for b in "${BANCS[@]}"; do
   #
   # Le seau étant partagé par IP, la contrainte est symétrique : on attend le
   # temps long si l'un OU l'autre des deux bancs y touche.
-  est_strict() { [ -n "${1:-}" ] && [ "${STRICTS#* $1 }" != "$STRICTS" ]; }
+  # Deux seaux, deux listes, une seule pause : celle qui laisse la minute se
+  # reconstituer. Un banc qui touche à l'un OU l'autre la déclenche.
+  est_strict() {
+    [ -n "${1:-}" ] || return 1
+    [ "${STRICTS#* $1 }" != "$STRICTS" ] && return 0
+    [ "${ECRIVAINS_LOURDS#* $1 }" != "$ECRIVAINS_LOURDS" ] && return 0
+    return 1
+  }
 
   if [ "$PREMIER" = "1" ]; then
     # ⚠️ Même le tout premier banc peut être gourmand : rien ne garantit que le

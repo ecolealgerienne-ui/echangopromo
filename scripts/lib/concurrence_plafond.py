@@ -141,8 +141,30 @@ def _exiger(nom):
 
 
 def promos_du_commercant(jeton_commercant):
-    _, d = appeler("GET", "/promo/me/all?limit=100", jeton_commercant)
-    return d.get("items", [])
+    """⚠️ **Toutes les pages, pas la première.**
+
+    Ce banc lisait `?limit=100` et s'arrêtait là. Or il crée des promos à chaque
+    passage : le commerçant du décor en portait **174** le 2026-08-14, donc
+    74 restaient invisibles. `actives()` pouvait alors annoncer moins d'actives
+    qu'il n'y en a, `preparer` en créer pour « compléter », et le plafond
+    refuser une création que le banc croyait légitime — un faux échec du produit
+    dont la cause est une page tronquée (règle 15, retournée contre un banc).
+
+    Le défaut grandit tout seul à chaque exécution : c'est le pire genre, celui
+    qui marche longtemps puis cesse sans qu'on ait rien changé.
+    """
+    tout, page = [], 1
+    while True:
+        st, d = appeler("GET", "/promo/me/all?limit=100&page=%d" % page,
+                        jeton_commercant)
+        if st != 200:
+            return tout
+        items = d.get("items", [])
+        tout.extend(items)
+        total = d.get("total")
+        if not items or total is None or len(tout) >= total:
+            return tout
+        page += 1
 
 
 def actives(promos):
@@ -249,6 +271,11 @@ def main():
     print("════════════════════════════════════════════════════════════════")
     print("  %d tours × %d créations simultanées\n" % (TOURS, SIMULTANEES))
 
+    # ⚠️ L'état de départ, relevé AVANT le premier geste : c'est lui, et non une
+    # supposition, qui définit « rendre le décor tel qu'on l'a trouvé ».
+    initiales = [p["id"] for p in actives(promos_du_commercant(jc))]
+    print("  décor au départ : %d promo(s) active(s)\n" % len(initiales))
+
     echecs, non_concluants = [], []
     for tour in range(1, TOURS + 1):
         print("── tour %d ──" % tour)
@@ -283,14 +310,40 @@ def main():
     # ⚠️ Sans verdict : le ménage n'est pas ce que ce banc éprouve, et l'échouer
     # ferait accuser le produit pour un rangement mal fait. S'il rate, c'est le
     # banc SUIVANT qui le dira, sur un plafond parfaitement lisible.
-    restantes = actives(promos_du_commercant(jc))
-    if restantes:
-        print("\n── ménage : %d promo(s) à arrêter ──" % len(restantes))
-        for p in restantes:
-            appeler("POST", "/promo/%s/stop" % p["id"], ja)
-        laissees = len(actives(promos_du_commercant(jc)))
-        print("   %s %d promo(s) active(s) laissée(s)"
-              % ("✅" if laissees == 0 else "⚠️ ", laissees))
+    # ⚠️ **« Tel qu'on l'a trouvé » veut dire les DEUX sens.** Ma première
+    # version arrêtait tout ce qui était actif — y compris les promos du décor
+    # que le banc n'avait pas créées. Elle a arrêté `PROMO_ID`, la promo de
+    # référence dont dépendent `commercant-b` et `client-highlight` : ils
+    # auraient échoué au lot suivant sur une promo introuvable, sans que rien
+    # ne désigne le coupable.
+    #
+    # ⚠️ Et le mal ne venait pas que du ménage : `preparer` arrête déjà des
+    # promos ARBITRAIRES du décor (`act[0]`) pour descendre sous le plafond.
+    # Le banc abîmait donc le décor avant même d'avoir un ménage.
+    #
+    # D'où la seule définition qui tienne : on arrête ce qui n'était pas actif
+    # au départ, et on republie ce qui l'était.
+    print("\n── ménage ──")
+    fin = actives(promos_du_commercant(jc))
+    a_arreter = [p for p in fin if p["id"] not in initiales]
+    for p in a_arreter:
+        appeler("POST", "/promo/%s/stop" % p["id"], ja)
+    ids_fin = {p["id"] for p in fin}
+    a_republier = [i for i in initiales if i not in ids_fin]
+    refus = 0
+    for pid in a_republier:
+        st, _ = appeler("POST", "/promo/%s/publish" % pid, jc, {})
+        if st not in (200, 201):
+            refus += 1
+    reste = len(actives(promos_du_commercant(jc)))
+    print("   %d créée(s) arrêtée(s), %d du décor republiée(s)%s — %d active(s)"
+          % (len(a_arreter), len(a_republier) - refus,
+             " (%d refus)" % refus if refus else "", reste))
+    if reste != len(initiales):
+        # ⚠️ Sans verdict, mais dit : le ménage n'est pas ce que ce banc
+        # éprouve, et l'échouer ferait accuser le produit pour un rangement mal
+        # fait. S'il rate, c'est le banc SUIVANT qui le dira.
+        print("   ⚠️  le décor comptait %d active(s) au départ" % len(initiales))
 
     print("\n════════════════════════════════════════════════════════════════")
     if non_concluants:
