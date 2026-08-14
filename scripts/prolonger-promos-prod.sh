@@ -85,14 +85,52 @@ fi
 # ⚠️ Le plafond global vient du `.env` qui tourne, jamais d'un 5 écrit ici : le
 # lire ailleurs ferait diverger ce script du produit le jour où il change
 # (règle 32). Absent, on retombe sur le défaut du service, et on le DIT.
-CAP_GLOBAL=$(grep -E '^PROMO_ACTIVE_CAP=' .env.production 2>/dev/null | cut -d= -f2)
-if [ -z "$CAP_GLOBAL" ]; then
-  CAP_GLOBAL=5
-  echo "⚠️  PROMO_ACTIVE_CAP absent de .env.production — repli sur 5,"
-  echo "    la même valeur que le service applique par défaut."
+#
+# ⚠️ **`tail -1`, `tr -d`, et une validation — chacun paie un vrai défaut.**
+#
+# Première version : `grep … | cut -d= -f2`. Sur un `.env.production` qui portait
+# la clé EN DOUBLE, elle a rendu deux lignes, et le SQL est parti avec
+# `COALESCE(…, 5\n5) AS cap` — « syntax error at or near "5" », le 2026-08-14 sur
+# le VPS. Un `.env` en CRLF aurait donné le même genre de dégât avec un `\r`
+# invisible.
+#
+# `tail -1` reproduit ce que fait dotenv (la dernière occurrence gagne), et la
+# validation qui suit refuse tout ce qui n'est pas un entier plutôt que de le
+# coller dans une requête. **Une valeur venue d'un fichier est une entrée** : la
+# règle 34 vaut ici comme pour le réseau.
+# ⚠️ Pas de `|| echo 0` ici : `grep -c` affiche DÉJÀ « 0 » puis sort en 1, donc
+# le repli en ajoutait un second et la variable valait « 0\n0 » — sur laquelle
+# `-gt 1` plante. Trouvé en éprouvant le correctif lui-même, cas « clé absente ».
+NB_OCCURRENCES=$(grep -cE '^PROMO_ACTIVE_CAP=' .env.production 2>/dev/null)
+CAP_GLOBAL=$(grep -E '^PROMO_ACTIVE_CAP=' .env.production 2>/dev/null \
+             | tail -1 | cut -d= -f2 | tr -d '\r' | tr -d '[:space:]')
+if [ "${NB_OCCURRENCES:-0}" -gt 1 ]; then
+  echo "⚠️  PROMO_ACTIVE_CAP apparaît $NB_OCCURRENCES fois dans .env.production."
+  echo "    La dernière gagne (comme dotenv) : $CAP_GLOBAL. À dédoublonner —"
+  echo "    deux valeurs pour une clé finissent par diverger."
 fi
+case "$CAP_GLOBAL" in
+  ''|*[!0-9]*)
+    echo "⚠️  PROMO_ACTIVE_CAP absent ou illisible dans .env.production"
+    echo "    (lu : « $CAP_GLOBAL ») — repli sur 5, la valeur que le service"
+    echo "    applique lui-même par défaut."
+    CAP_GLOBAL=5 ;;
+esac
 
-sql() { docker exec -i "$PG" psql -U echango -d echango_promo -At -c "$1"; }
+# ⚠️ Toute requête échoue BRUYAMMENT. La première version laissait `psql` se
+# plaindre puis continuait : le lot affichait une erreur au milieu, poursuivait
+# jusqu'à « Rien n'a été écrit », et l'ensemble se lisait comme un succès. Un
+# script d'écriture qui survit à sa propre erreur est un script qui ment.
+sql() {
+  local sortie
+  if ! sortie=$(docker exec -i "$PG" psql -U echango -d echango_promo \
+                  -v ON_ERROR_STOP=1 -At -c "$1" 2>&1); then
+    echo "❌ requête refusée par PostgreSQL :" >&2
+    echo "$sortie" | sed 's/^/   /' >&2
+    exit 3
+  fi
+  printf '%s\n' "$sortie"
+}
 
 CIBLE="\"lifecycleStatus\" = 'expiree' AND \"moderationStatus\" = 'normale'"
 
