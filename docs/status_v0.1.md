@@ -4601,6 +4601,119 @@ garde ce défaut. Les deux déclencheurs sont vérifiés **sur l'appareil**, et
 séparément : capture à 3 s (étendue), à 8 s (repliée, minuteur), et après un
 glissement à ~2 s (repliée alors que le minuteur n'avait pas pu courir).
 
+### 2026-08-14 — la géographie du client, reprise de bout en bout
+
+Une seule observation de terrain, faite depuis Alger sur le téléphone branché,
+a ouvert quatre chantiers en cascade : **« dans la recherche il me montre aussi
+les promos de Djelfa »**. Tout ce qui suit en découle, et l'ordre compte — chaque
+correction a révélé la suivante.
+
+**1. Le tri local écrasait celui du serveur.** `promoSortProvider` valait
+`PromoSort.nouveautes` par défaut et rejouait `publishedAt DESC` **par-dessus**
+l'ordre par distance du serveur, sur toutes les listes. Mesuré : le serveur
+rendait 65 résultats strictement ordonnés de 0,1 à 245 km, l'app affichait une
+promo à **231,7 km en 5ᵉ position**, devant des dizaines à 100 mètres.
+
+⚠️ Le commentaire qui portait ce défaut disait : « `nouveautes` reproduit le tri
+par défaut déjà appliqué côté backend ». C'était **exact jusqu'à la bascule
+géographique**, et faux depuis — la phrase est restée juste d'apparence pendant
+que le fait qu'elle décrivait changeait de camp. **Aucun banc HTTP ne pouvait le
+voir** : le serveur, lui, a toujours eu raison.
+
+**2. La distance ne s'affichait pas.** La carte de promo sait le faire depuis le
+2026-08-12, mais depuis le **seul GPS** — sans permission de localisation, aucune
+distance, et une promo à 231 km ressemblait trait pour trait à celle d'en face.
+Un `pointDeReferenceProvider` porte désormais la cascade GPS → point enregistré
+→ point serveur, et **s'arrête là** : jamais `kPointDeRepliHorsLigne`. Cadrer une
+carte sur un repli est sans conséquence ; afficher « 231 km » calculés depuis un
+point arbitraire est un chiffre faux présenté comme mesuré.
+
+**3. Le geste d'enregistrement jetait le zoom.** « Chercher autour de ce point »
+prenait le centre de la carte et lui collait le rayon par défaut du serveur :
+cadrer une rue ou une wilaya donnait la même liste. Le point était donc juste et
+la **largeur** fausse — le plus difficile à voir, parce que la liste a l'air de
+marcher. Le rayon est maintenant déduit de la vue (demi-diagonale, plancher
+1 km), stocké avec le point, et la carte **rouvre sur ce cadre** au lieu de
+forcer `_initialZoom`.
+
+⚠️ **Le zoom n'est pas stocké, délibérément.** Ce serait une seconde valeur
+disant la même chose que le rayon, et deux valeurs qui doivent s'accorder
+finissent par diverger. Il dépend en plus de la taille de l'écran. Ce qui tient
+l'accord carte↔liste est un **test d'aller-retour** (rayon → cadre → rayon, à
+2 % près sur quatre rayons), pas un commentaire.
+
+**4. La recherche ignorait le rayon — décision inversée le jour même.** Elle le
+levait volontairement (« chercher est un acte intentionnel avec une cible »),
+et cette décision tenait par une contrepartie écrite juste en dessous : « le tri
+par distance reste actif ». Le point 1 a montré que cette contrepartie était
+**fausse à l'écran**. Le point 3 a rendu la levée inutile : chercher large ne
+demande plus de lever la borne, il suffit de dézoomer.
+
+**5. Puis la borne est devenue une frontière.** Décision produit : *echango
+Promo sert des promos de proximité, pas des annonces nationales.*
+`CLIENT_MAX_RADIUS_KM` passe de 50 à **5 km**. ⚠️ D'abord posée dans l'app seule,
+la borne se contournait par un appel direct à l'API — un confort d'affichage
+déguisé en règle. Elle vit maintenant dans `.env`, l'app la lit sur
+`GET /promo/config` et **ne connaît aucun chiffre**.
+
+⚠️ **Règle 36, précision à reporter : il n'y a que DEUX endroits ici**, pas
+trois. `apps/backend/.env.production.example` **n'existe pas** dans ce dépôt,
+contrairement à ce qu'annonce CLAUDE.md.
+
+── Le banc `recherche-globale`, écrit et réécrit trois fois ────────────────
+
+Il a suivi chaque bascule, et c'est le prix d'un banc qui encode une **décision
+produit** plutôt qu'un invariant technique : quand la décision change, le banc
+doit changer dans le même commit, sinon il échoue en accusant un produit
+correct (règle 38).
+
+⚠️ **Trois fois de suite, mon échantillon du décor venait de la requête sous
+test.** D'abord la recherche elle-même, puis une recherche élargie au maximum
+serveur — qui a cessé de marcher le jour où ce maximum est descendu à 5 km. Le
+contrôle rendait alors « décor trop pauvre » en décrivant en réalité le
+comportement qu'il devait juger. Le prélèvement passe désormais par
+`/promo/map`, qui travaille en **rectangle** et n'a pas de rayon : le seul qui ne
+dépende pas de ce qu'on éprouve.
+
+⚠️ **Les deux routes ne nomment pas les coordonnées pareil** —
+`commercantLatitude` pour `/promo`, `latitude` pour `/promo/map`. Lire la
+mauvaise clé rendait « aucune promo positionnée » : un non-concluant qui accuse
+le décor alors que la sonde regarde à côté. Les clés sont maintenant un
+paramètre explicite, jamais devinées.
+
+⚠️ **Et la mutation a trouvé un défaut dans la sonde, pas dans le produit.** En
+remontant `CLIENT_MAX_RADIUS_KM` à 50 dans le vrai `.env` pour vérifier que le
+banc levait, **il est resté vert** : il lisait le maximum sur le serveur,
+demandait maximum + 1, constatait un refus. **Auto-référentiel** — il vérifiait
+que le serveur respecte sa propre annonce, jamais que cette annonce respecte la
+règle de proximité. Il serait resté vert avec un plafond à 500 km.
+
+D'où une sonde de plus, qui exprime la règle **sans aucun chiffre** : *le
+maximum accepté ne doit pas dépasser le rayon servi par défaut.* Elle survit au
+jour où le pilote changera de ville, et elle échoue bien sur le serveur muté.
+
+**État : 8 contrôles, 0 échec, 0 non concluant** — 29 cas d'auto-test dont 13
+refus.
+
+── Le décor, deux réparations ─────────────────────────────────────────────
+
+**Les 11 photos pleines en JPEG 1×1** (160 octets) sont remplacées par des
+1024×1024, la taille des vraies photos du décor. C'était la tache orange
+pixelisée des cartes « Top promos ». ⚠️ **Un recensement sur le code HTTP les
+comptait comme saines** : elles répondent 200 avec un JPEG parfaitement valide.
+Il faut lire les **dimensions** pour les voir.
+
+⚠️ Et mon premier lecteur d'en-tête ne gérait que le JPEG : il rendait « taille
+inconnue » sur **12 PNG parfaitement sains** du décor. Les remplacer aurait été
+une correction sur une mesure fausse.
+
+Recensement : 46 photos pleines, **11 dégénérées avant, 0 après** — le même
+instrument, donc il sait dire non.
+
+⚠️ **Les objets gardent leurs clés**, et `Cache-Control` vaut
+`max-age=31536000, immutable` : un appareil qui a déjà chargé une 1×1 la garde.
+Vider le cache de l'app est nécessaire pour la voir changer.
+
 ---
 
 ## Comment tenir ce fichier
