@@ -107,7 +107,7 @@ declare -A EXCLUS=(
 BANCS=(
   # — lecture seule —
   defaut-client ville-client filtre-categorie client-carte client-fiche
-  client-applinks auth-login perf plan-sql
+  client-applinks auth-login perf plan-sql recherche-globale
   # — écritures bornées —
   frontiere-http frontiere-admin revocation-jwt admin-audit-log admin-agents
   admin-dashboard agent-creation agent-promo client-liste client-rayon
@@ -123,6 +123,34 @@ BANCS=(
 )
 
 SEULEMENT="${SEULEMENT:-}"
+
+# ── ⚠️ Le garde qui manquait : aucune enveloppe ne doit rester hors du lot ────
+#
+# Écrire un banc et oublier de l'inscrire ici ne produit AUCUN signal : le lot
+# passe au vert avec un banc de moins, et rien ne distingue « tout va bien » de
+# « on n'a pas regardé ». C'est arrivé le 2026-08-14 — `recherche-globale` a été
+# écrit, éprouvé par mutation, committé, et n'a jamais tourné dans le lot.
+#
+# ⚠️ Le critère n'est pas « combien de bancs ai-je listés » mais **« que
+# reste-t-il dehors »**. Compter ce qu'on a fait ne dit jamais ce qui manque —
+# le même travers avait fait reprendre quatre fois la migration `python3 → $PY`.
+#
+# Une enveloppe se déclare donc explicitement : dans BANCS pour tourner, ou dans
+# EXCLUS **avec sa raison**. Un troisième état n'existe pas.
+ORPHELINS=()
+for enveloppe in "$HERE"/test-*.sh; do
+  nom="$(basename "$enveloppe" .sh)"; nom="${nom#test-}"
+  [ "$nom" = "tout" ] && continue
+  declare -p EXCLUS >/dev/null 2>&1 && [ -n "${EXCLUS[$nom]+x}" ] && continue
+  case " ${BANCS[*]} " in *" $nom "*) continue ;; esac
+  ORPHELINS+=("$nom")
+done
+if [ "${#ORPHELINS[@]}" -gt 0 ]; then
+  echo "❌ ${#ORPHELINS[@]} banc(s) ni listé(s) ni exclu(s) : ${ORPHELINS[*]}"
+  echo "   Les ajouter à BANCS, ou à EXCLUS avec la raison. Un banc oublié ne"
+  echo "   se voit nulle part : le lot rend vert sans l'avoir lancé."
+  exit 2
+fi
 
 echo "══════════════════════════════════════════════════════════════════════"
 echo "  Lot complet — $API_URL · pause ${PAUSE_SECONDS}s entre bancs"
