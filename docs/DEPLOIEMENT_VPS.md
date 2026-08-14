@@ -77,6 +77,83 @@ docker compose --env-file .env.production -f docker-compose.promo.yml up -d --bu
 Les migrations en attente s'appliquent automatiquement au redémarrage du
 conteneur `backend`.
 
+## Outils d'exploitation — deux scripts qui écrivent en base
+
+⚠️ **Les deux court-circuitent le produit**, et il faut le savoir avant de les
+lancer : ils écrivent directement dans PostgreSQL, donc **aucune règle métier
+n'est appliquée et aucune entrée d'audit n'est écrite**. Leur sortie est la
+seule trace de ce qu'ils ont fait — la conserver.
+
+Tous deux fonctionnent **en simulation par défaut** : sans `--appliquer`, ils
+lisent, affichent ce qu'ils feraient, et sortent sans rien changer.
+
+⚠️ Tous deux exigent d'être lancés **depuis `/opt/echangopromo`** : ils lisent
+`.env.production` et cherchent le conteneur Postgres via `docker compose`.
+
+### Remettre en ligne les promos expirées
+
+```bash
+./scripts/prolonger-promos-prod.sh 30              # simulation
+./scripts/prolonger-promos-prod.sh 30 --appliquer
+```
+
+Le nombre est une **durée en jours à partir de maintenant** : toutes les promos
+remises reçoivent la même échéance. Ce n'est pas un ajout à leur date existante
+— laquelle est de toute façon passée.
+
+Il vise `lifecycleStatus = 'expiree'` **et** `moderationStatus = 'normale'`, et
+fait deux choses : repasse le cycle de vie à `publiee` et pose la nouvelle date.
+Prolonger la date seule ne suffirait pas — une promo expirée reste invisible
+tant que son cycle de vie n'a pas changé.
+
+**Ce qu'il ne touche pas** : les promos signalées ou masquées (les remettre en
+ligne reconduirait un contenu qu'un modérateur a écarté), et les promos
+arrêtées (un arrêt est un geste volontaire du commerçant).
+
+⚠️ Le plafond de promos actives n'étant plus appliqué par le produit, le script
+le calcule lui-même par commerçant, en lisant `commercant."promoActiveCap"` et
+`PROMO_ACTIVE_CAP`. Il annonce combien de promos il laisse de côté faute de
+place — un « 0 remise » avec des expirées en attente vient de là, pas d'une
+panne.
+
+⚠️ **Pourquoi la base et non l'API** : aucune route ne prolonge une promo
+existante (`update-promo.dto.ts` ne porte ni `dureeJours` ni `dateFin`). Les
+clés `PROMO_*_DURATION_DAYS` ne valent que pour les publications à venir.
+
+### Supprimer définitivement des commerçants
+
+```bash
+./scripts/supprimer-commercants-prod.sh --telephone +213555     # simulation
+./scripts/supprimer-commercants-prod.sh --telephone +213555 --appliquer
+./scripts/supprimer-commercants-prod.sh --id <uuid> --appliquer
+./scripts/supprimer-commercants-prod.sh --tous --appliquer      # confirmation
+```
+
+⚠️⚠️ **IRRÉVERSIBLE. Faire une sauvegarde avant** (§ Sauvegardes ci-dessous).
+
+**La portée est obligatoire** — aucune valeur par défaut, et `--tous` exige une
+confirmation tapée à la main. Un script destructeur dont on peut oublier le
+filtre vide la base un jour de fatigue.
+
+⚠️ **Il ne fait pas ce que fait le produit.** `DELETE /commercant/me` est une
+suppression *douce* : `deletedAt` posé, promos passées en `SUPPRIMEE`, rien
+d'effacé. Elle ne convient pas à un nettoyage, parce que **le numéro de
+téléphone reste occupé** : `assertPhoneAvailable` filtre sur `deletedAt`, mais
+`login` ne le fait pas (défaut P10) — un numéro recyclé enferme son repreneur
+dehors.
+
+**Ce qui part** : le commerçant, ses promos (CASCADE), et les quatre tables qui
+les référencent **sans clé étrangère** — `report`, `promo_view`,
+`notification`, `commercant_view`. Sans traitement explicite, ces lignes
+resteraient à pointer vers des disparus ; personne ne le verrait, jusqu'au jour
+où un décompte de signalements ou de vues sortirait faux.
+
+**Ce qui reste** : `audit_log`, parce qu'on ne réécrit pas le journal des
+décisions. Et les diapositives curées, dont la clé passe à `NULL` — ⚠️ **à
+vérifier après coup dans `/admin/highlight`**, le script le rappelle.
+
+Tout se fait dans **une seule transaction** : tout passe, ou rien ne passe.
+
 ## Réseau Traefik — labels utilisés
 
 Voir `docker-compose.promo.yml` pour les labels exacts (routeur
