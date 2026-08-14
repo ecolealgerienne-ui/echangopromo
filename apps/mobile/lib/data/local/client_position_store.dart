@@ -37,9 +37,26 @@ class ClientPositionStore {
 
   static const _latKey = 'client_position_lat';
   static const _lngKey = 'client_position_lng';
+  static const _rayonKey = 'client_position_radius_km';
   static const _consentKey = 'client_position_consent_version';
 
   final SharedPreferences _prefs;
+
+  /// Rayon de recherche déduit du zoom au moment de l'enregistrement, ou `null`.
+  ///
+  /// ⚠️ **Ce n'est pas une donnée personnelle, c'est une précision** — il ne dit
+  /// pas où est le client, il dit quelle largeur il a cadrée. Il est stocké ici
+  /// plutôt qu'ailleurs pour une seule raison : il n'a **aucun sens sans le
+  /// point**, et il doit disparaître avec lui.
+  ///
+  /// ⚠️ La garde sur [get] n'est pas décorative : sans elle, un rayon
+  /// survivrait à l'effacement du point et s'appliquerait au point par défaut
+  /// du serveur — un cadrage que le client n'a jamais demandé là où il n'a rien
+  /// enregistré.
+  double? rayonKm() {
+    if (get() == null) return null;
+    return _prefs.getDouble(_rayonKey);
+  }
 
   /// `null` = aucun point enregistré, donc **rien à transmettre**.
   ///
@@ -58,9 +75,18 @@ class ClientPositionStore {
   /// version différente de [kPositionConsentVersion] doit être redemandée.
   String? consentVersion() => _prefs.getString(_consentKey);
 
-  Future<void> set(double latitude, double longitude) async {
+  /// ⚠️ `rayonKm` absent **efface** l'ancien plutôt que de le laisser en place.
+  /// Sans ça, un enregistrement sans rayon hériterait du cadrage précédent : le
+  /// client croirait avoir remis les compteurs à zéro et garderait une largeur
+  /// qu'il ne voit nulle part.
+  Future<void> set(double latitude, double longitude, {double? rayonKm}) async {
     await _prefs.setDouble(_latKey, latitude);
     await _prefs.setDouble(_lngKey, longitude);
+    if (rayonKm == null) {
+      await _prefs.remove(_rayonKey);
+    } else {
+      await _prefs.setDouble(_rayonKey, rayonKm);
+    }
     await _prefs.setString(_consentKey, kPositionConsentVersion);
   }
 
@@ -70,6 +96,7 @@ class ClientPositionStore {
   Future<void> clear() async {
     await _prefs.remove(_latKey);
     await _prefs.remove(_lngKey);
+    await _prefs.remove(_rayonKey);
     await _prefs.remove(_consentKey);
   }
 }

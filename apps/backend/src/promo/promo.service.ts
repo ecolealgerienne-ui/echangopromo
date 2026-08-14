@@ -912,14 +912,28 @@ export class PromoService {
               longitude: config.defaultLongitude,
             };
 
-    // Une recherche textuelle **ignore le rayon** : chercher est un acte
-    // intentionnel avec une cible, et la borner au voisinage rendrait le
-    // produit structurellement moins capable qu'avant la bascule (le client
-    // suivait jusqu'à 4 communes). Le tri par distance reste actif, donc le
-    // proche remonte quand même en tête (R8 du plan).
-    const rayonKm = query.search
-      ? null
-      : (query.radiusKm ?? config.defaultRadiusKm);
+    // ⚠️ **Une recherche textuelle respecte le rayon — décision inversée le
+    // 2026-08-14.**
+    //
+    // Elle l'ignorait jusque-là (R8 du plan) : chercher est un acte intentionnel
+    // avec une cible, et borner au voisinage rendait le produit moins capable
+    // qu'avant la bascule, où le client suivait jusqu'à 4 communes. La décision
+    // tenait par une contrepartie, écrite ici même : « le tri par distance reste
+    // actif, donc le proche remonte quand même en tête ».
+    //
+    // Deux mesures l'ont défaite. **La contrepartie était fausse à l'écran** :
+    // l'app re-triait par date par-dessus cet ordre, et une promo à 231,7 km
+    // s'affichait devant des dizaines à 100 mètres (corrigé côté app le même
+    // jour). Et surtout, **le rayon ne venait pas du client** : il valait le
+    // défaut serveur quoi qu'il cadre. Depuis Alger, chercher rendait 245 km de
+    // résultats de Djelfa.
+    //
+    // Ce qui change la donne, c'est que le rayon est désormais **déduit du
+    // zoom** (`rayonDepuisLaVue`, côté app) : chercher large ne demande plus de
+    // lever la borne, il suffit de dézoomer. La capacité que R8 protégeait est
+    // donc conservée, et elle est passée sous la main du client au lieu d'être
+    // un cas particulier caché dans le service.
+    const rayonKm = query.radiusKm ?? config.defaultRadiusKm;
 
     if (position) {
       qb.setParameters({

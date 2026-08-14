@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../data/api/promo_api.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/models/commercant.dart';
@@ -6,6 +7,7 @@ import '../../../domain/models/highlight.dart';
 import '../../../domain/models/promo.dart';
 import '../../../providers/core_providers.dart';
 import 'favorites_provider.dart';
+import 'location_providers.dart';
 import 'position_providers.dart';
 
 /// Catégorie sélectionnée par le client — recherche guidée par liste
@@ -64,16 +66,52 @@ enum PromoDensity {
 final promoDensityProvider =
     StateProvider<PromoDensity>((ref) => PromoDensity.list);
 
-enum PromoSort { expireBientot, plusGrosseReduction, nouveautes }
+enum PromoSort { proximite, expireBientot, plusGrosseReduction, nouveautes }
 
-/// `nouveautes` reproduit le tri par défaut déjà appliqué côté backend
-/// (`PromoService.findActiveForClient`, retour terrain 2026-07-14 : les
-/// plus récemment publiées en premier) ; les deux autres sont recalculés
-/// côté client, sur les promos chargées jusqu'ici (pas un tri global
-/// serveur) — acceptable tant que le tri par défaut reste celui qui pousse
-/// à charger plus de pages.
+/// ⚠️ **Le défaut était `nouveautes`, et il annulait le tri du serveur.**
+///
+/// Le commentaire qui vivait ici affirmait que `nouveautes` « reproduit le tri
+/// par défaut déjà appliqué côté backend ». C'était exact jusqu'à la bascule
+/// géographique : depuis, `findActiveForClient` ordonne **par distance**
+/// croissante dès qu'une position est en jeu, et le re-tri local écrasait donc
+/// systématiquement cet ordre — la phrase est restée juste d'apparence pendant
+/// que le fait qu'elle décrivait avait changé de camp (règle #30 : un
+/// commentaire ne peut pas échouer).
+///
+/// Ce que ça donnait, mesuré le 2026-08-14 sur le décor, `search=promo` : le
+/// serveur rendait 65 résultats de 0,1 km à 245 km, **strictement ordonnés par
+/// distance** ; l'app affichait en 5ᵉ position une promo à **231,7 km**, devant
+/// des dizaines à 100 mètres. C'est ce que le tri par recherche « globale »
+/// laissait voir, et c'est ce que `proximite` referme : la recherche reste
+/// volontairement sans rayon (`promo.service.ts`, « chercher est un acte
+/// intentionnel avec une cible »), mais sa contrepartie — le proche d'abord —
+/// est de nouveau vraie **à l'écran**, pas seulement dans la réponse serveur.
 final promoSortProvider =
-    StateProvider.autoDispose<PromoSort>((ref) => PromoSort.nouveautes);
+    StateProvider.autoDispose<PromoSort>((ref) => PromoSort.proximite);
+
+/// Réordonne [promos] **sur place**, du plus proche de [repere] au plus loin.
+///
+/// ⚠️ `repere` absent : on ne touche à rien. L'ordre reçu du serveur est déjà
+/// par distance croissante autour du point de recherche — le remplacer par un
+/// tri calculé depuis un point inventé serait pire que ne rien faire (règle 29).
+///
+/// ⚠️ Une promo sans coordonnées part à la **fin**, jamais en tête. La traiter
+/// comme « distance 0 » — ce que ferait le moindre `?? 0` — la placerait devant
+/// le commerce d'à côté, et c'est exactement le genre de valeur de repli qui
+/// rend un écran faux sans rien signaler.
+void trierParProximite(List<Promo> promos, LatLng? repere) {
+  if (repere == null) return;
+  double? ecart(Promo p) =>
+      distanceTo(repere, p.commercantLatitude, p.commercantLongitude);
+  promos.sort((a, b) {
+    final da = ecart(a);
+    final db = ecart(b);
+    if (da == null && db == null) return 0;
+    if (da == null) return 1;
+    if (db == null) return -1;
+    return da.compareTo(db);
+  });
+}
 
 enum PromoListStatus { loading, loaded, error }
 
@@ -236,14 +274,20 @@ class PromoListController extends StateNotifier<PromoListState> {
 /// serveur applique alors son propre défaut. Reproduire cette règle dans chaque
 /// écran appelant, c'est celui qu'on oublie qui transmettra (règle #30).
 ///
-/// ⚠️ Le rayon n'est envoyé qu'avec un point, et il vient de la configuration
-/// serveur — jamais d'une constante recopiée ici (règle #32).
+/// ⚠️ Le rayon n'est envoyé qu'avec un point, et il ne vient **jamais** d'une
+/// constante recopiée ici (règle #32) : soit du cadrage que le client a posé en
+/// zoomant, soit, à défaut, de la configuration serveur.
+///
+/// ⚠️ **L'ordre des deux compte.** Prendre le défaut serveur en premier — ce que
+/// faisait ce provider jusqu'au 2026-08-14 — jetait le zoom : depuis Alger,
+/// cadrer un quartier puis revenir à la liste montrait tout Alger. Le point
+/// était juste, la largeur non, et rien à l'écran ne distinguait les deux.
 final promoListProvider =
     StateNotifierProvider.autoDispose<PromoListController, PromoListState>(
         (ref) {
   final api = ref.watch(promoApiProvider);
   final point = ref.watch(clientPositionProvider);
-  final rayonKm =
+  final rayonKm = point?.rayonKm ??
       ref.watch(clientGeoConfigProvider).valueOrNull?.defaultRadiusKm;
   final categorie = ref.watch(categoryFilterProvider);
   final favorites = ref.watch(favoritesProvider);
@@ -251,7 +295,7 @@ final promoListProvider =
   final favoritesOnly = ref.watch(favoritesOnlyFilterProvider);
   return PromoListController(
     api: api,
-    point: point,
+    point: point?.coordonnees,
     favoritesOnly: favoritesOnly,
     radiusKm: rayonKm,
     categorie: categorie,
@@ -294,6 +338,26 @@ final visiblePromosProvider = Provider.autoDispose<List<Promo>>((ref) {
   }
 
   switch (sort) {
+    case PromoSort.proximite:
+      // ⚠️ **Trier ici plutôt que se contenter de l'ordre serveur**, alors que
+      // celui-ci est déjà par distance croissante. Trois raisons, et chacune
+      // suffirait :
+      //
+      // 1. l'onglet Favoris et « autres promos du magasin » sont des périmètres
+      //    explicites : le serveur n'y applique **aucun** ordre géographique
+      //    (`perimetreExplicite`). Sans ce tri local, le libellé mentirait
+      //    exactement là ;
+      // 2. le serveur ordonne depuis le point de RECHERCHE ; l'écran affiche
+      //    des distances depuis le point de RÉFÉRENCE (le GPS quand il est là).
+      //    Deux ordres différents affichés côte à côte donneraient une liste où
+      //    les distances ne sont pas croissantes — visible, et incompréhensible ;
+      // 3. le tri porte sur les pages déjà chargées, comme les deux autres.
+      //
+      // Repère absent (config pas encore répondu, pas de GPS, rien
+      // d'enregistré) : on ne touche à rien et l'ordre du serveur reste. Un
+      // tri fabriqué depuis un point inventé serait pire que pas de tri
+      // (règle 29).
+      trierParProximite(filtered, ref.watch(pointDeReferenceProvider));
     case PromoSort.expireBientot:
       filtered.sort((a, b) {
         if (a.dateFin == null || b.dateFin == null) return 0;
@@ -333,9 +397,14 @@ final promoDetailProvider =
 /// globale par nature.
 final topPromosProvider = FutureProvider.autoDispose<List<Highlight>>((ref) {
   final point = ref.watch(clientPositionProvider);
-  final rayonKm =
+  // Même cadrage que la liste : deux géographies différentes sur le même écran
+  // donneraient un bandeau « autour de vous » qui ne parle pas du même « vous »
+  // que la liste juste en dessous.
+  final rayonKm = point?.rayonKm ??
       ref.watch(clientGeoConfigProvider).valueOrNull?.defaultRadiusKm;
-  return ref.watch(highlightApiProvider).list(point: point, radiusKm: rayonKm);
+  return ref
+      .watch(highlightApiProvider)
+      .list(point: point?.coordonnees, radiusKm: rayonKm);
 });
 
 /// "Autres promos du magasin" sur la fiche promo. La promo consultée est

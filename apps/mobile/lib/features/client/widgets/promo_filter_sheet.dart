@@ -40,7 +40,7 @@ class _PromoFilterSheetContent extends ConsumerWidget {
                     ref.read(favoritesOnlyFilterProvider.notifier).state =
                         false;
                     ref.read(promoSortProvider.notifier).state =
-                        PromoSort.nouveautes;
+                        PromoSort.proximite;
                   },
                   child: Text(l10n.resetFiltersLabel),
                 ),
@@ -88,6 +88,8 @@ class _PromoFilterSheetContent extends ConsumerWidget {
 
   String _sortLabel(AppLocalizations l10n, PromoSort sort) {
     switch (sort) {
+      case PromoSort.proximite:
+        return l10n.sortProximite;
       case PromoSort.expireBientot:
         return l10n.sortExpireBientot;
       case PromoSort.plusGrosseReduction:

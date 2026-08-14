@@ -43,6 +43,57 @@ const _settleDelay = Duration(milliseconds: 300);
 /// délai trop court, il ne saurait jamais ce que fait ce rond.
 const _repliLibelleDelay = Duration(seconds: 5);
 
+/// En deçà, le cadrage ne veut plus rien dire : le point du client n'est pas
+/// mesuré au mètre, et le cercle circonscrit à la vue est déjà une
+/// approximation. Un rayon de 200 m donnerait une liste d'une rue avec une
+/// précision qu'aucune des deux données n'a.
+const _rayonPlancherKm = 1.0;
+
+/// Au-delà de ce rapport, la vue ne correspond plus au cadre enregistré : on a
+/// zoomé ou dézoomé assez pour que la liste parle d'autre chose que l'écran.
+const _cadrePerimeFacteur = 1.5;
+
+/// Le rayon qu'il faut pour couvrir ce que la carte montre.
+///
+/// ⚠️ **C'est le zoom qui parle ici, pas une constante.** Le geste « Chercher
+/// autour de ce point » prenait le centre de la carte et lui collait le rayon
+/// par défaut du serveur : cadrer une rue ou une wilaya donnait la même liste.
+/// Remarqué depuis Alger le 2026-08-14 — zoomer sur un quartier puis revenir à
+/// la liste montrait tout Alger.
+///
+/// Demi-diagonale : c'est le cercle **circonscrit** au rectangle visible, donc
+/// il couvre tout l'écran et un peu au-delà. Le cercle inscrit, lui, laisserait
+/// les coins de la carte hors de la liste — on verrait des commerces qu'on ne
+/// retrouverait pas.
+///
+/// ⚠️ Rend `null` si le plafond serveur n'est pas connu : sans lui on ne peut
+/// pas borner, et transmettre un rayon non borné vaut moins que ne rien
+/// transmettre — le serveur applique alors le sien (règle 29).
+double? rayonDepuisLaVue(LatLng nordOuest, LatLng sudEst,
+    {required double? plafondKm}) {
+  if (plafondKm == null) return null;
+  final diagonaleM = distanceTo(nordOuest, sudEst.latitude, sudEst.longitude);
+  if (diagonaleM == null) return null;
+  final demiDiagonaleKm = diagonaleM / 2000;
+  if (demiDiagonaleKm < _rayonPlancherKm) return _rayonPlancherKm;
+  return demiDiagonaleKm > plafondKm ? plafondKm : demiDiagonaleKm;
+}
+
+/// La vue montre-t-elle autre chose que ce que le cadre enregistré couvre ?
+///
+/// ⚠️ **Ce n'est pas la même question que la proposition d'exploration**, qui
+/// regarde si le CENTRE s'est éloigné. Ici on regarde la LARGEUR : depuis Alger,
+/// zoomer sur un quartier ne déplace pas le centre — la proposition ne dit rien
+/// — et pourtant la liste continue de montrer toute la ville. C'est ce cas-là,
+/// et lui seul, qui doit redéployer la pastille.
+bool cadreEstPerime(double? rayonDeLaVue, double? rayonEnregistre) {
+  if (rayonDeLaVue == null) return false;
+  // Aucun cadre posé : la pastille a quelque chose à proposer, toujours.
+  if (rayonEnregistre == null) return true;
+  final rapport = rayonDeLaVue / rayonEnregistre;
+  return rapport > _cadrePerimeFacteur || rapport < 1 / _cadrePerimeFacteur;
+}
+
 /// Le geste vient-il du client, ou l'app s'est-elle recentrée toute seule ?
 ///
 /// ⚠️ La distinction est le cœur du repli : `_recenterOn` déplace la caméra au
@@ -184,6 +235,30 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     setState(() => _pastilleRepliee = true);
   }
 
+  /// Redéploie la pastille et relance son minuteur.
+  ///
+  /// ⚠️ **C'est l'inverse exact du repli, et c'est voulu.** Le repli libère la
+  /// carte pendant qu'on explore ; le redéploiement la rend quand l'exploration
+  /// a rendu le cadre faux. La pastille n'est pas un encombrement à cacher :
+  /// c'est le porteur du cadre de recherche, et il doit se montrer au moment où
+  /// le cadre ne correspond plus à l'écran.
+  void _deplierPastille() {
+    if (!mounted) return;
+    _repli?.cancel();
+    _repli = Timer(_repliLibelleDelay, _replierPastille);
+    if (_pastilleRepliee) setState(() => _pastilleRepliee = false);
+  }
+
+  /// Le rayon que couvre la carte telle qu'elle est cadrée, ou `null`.
+  double? _rayonDeLaVue() {
+    final vue = _map.camera.visibleBounds;
+    return rayonDepuisLaVue(
+      vue.northWest,
+      vue.southEast,
+      plafondKm: ref.read(clientGeoConfigProvider).valueOrNull?.maxRadiusKm,
+    );
+  }
+
   /// Appelé à la fin de chaque déplacement/zoom : `MapCamera` n'est pas
   /// disponible avant le premier rendu, d'où la mise à jour ici plutôt qu'en
   /// `initState`.
@@ -235,6 +310,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _zoom = camera.zoom;
         _centreStabilise = camera.center;
       });
+      // La carte s'est posée : le cadre qu'elle montre correspond-il encore à
+      // celui de la liste ? Si non, la pastille redevient une proposition.
+      if (cadreEstPerime(
+          _rayonDeLaVue(), ref.read(clientPositionProvider)?.rayonKm)) {
+        _deplierPastille();
+      }
     });
   }
 
@@ -266,9 +347,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       ),
     );
     if (accepte != true) return;
-    await ref
-        .read(clientPositionProvider.notifier)
-        .enregistrer(centre.latitude, centre.longitude);
+    await ref.read(clientPositionProvider.notifier).enregistrer(
+          centre.latitude,
+          centre.longitude,
+          rayonKm: _rayonDeLaVue(),
+        );
     if (!mounted) return;
     // ⚠️ Sans cette invalidation, la vitrine et la carte garderaient leur
     // cadrage d'avant : elles ne sont pas reconstruites de zéro au retour d'une
@@ -391,7 +474,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _recenterOn(
-            LatLng(pointEnregistre.$1, pointEnregistre.$2),
+            LatLng(pointEnregistre.latitude, pointEnregistre.longitude),
             zoom: _initialZoom,
           );
         }
@@ -457,8 +540,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       } else {
         // Scénario 2 — une ville est enregistrée et le client en explore une
         // autre. `distanceTo` rend des mètres.
-        final ecart =
-            distanceTo(centre, pointEnregistre.$1, pointEnregistre.$2);
+        final ecart = distanceTo(
+            centre, pointEnregistre.latitude, pointEnregistre.longitude);
         final cle =
             PointProposalStore.cleDeVille(centre.latitude, centre.longitude);
         if (ecart != null && ecart > rayonKm * 1000 && cle != _villeEcartee) {
@@ -501,7 +584,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       // frontière est ce qui permet d'affirmer aux deux stores qu'il n'y a ni
       // suivi ni lecture en arrière-plan.
       floatingActionButton: _BoutonEnregistrerPoint(
-        centreCourant: () => _map.camera.center,
+        // ⚠️ Le bouton ne refait plus le geste, il l'appelle. Il portait sa
+        // propre copie de la notice, du dialogue et de l'enregistrement — deux
+        // chemins pour un seul consentement, et c'est celui qu'on oublie qui
+        // aurait perdu le rayon (règle 30).
+        onEnregistrer: () => _enregistrerPoint(_map.camera.center),
         repliee: _pastilleRepliee,
       ),
       body: Stack(
@@ -1273,13 +1360,22 @@ class _InvitationLocalisation extends StatelessWidget {
 /// l'écran, donc il doit rester atteignable autrement. `tooltip` le porte — il
 /// s'affiche en bulle sur appui long **et** il est ce que lisent les lecteurs
 /// d'écran, pour qui la pastille étendue et le rond doivent dire la même chose.
+///
+/// ⚠️ **Ce bouton ne porte plus le geste, il l'appelle.** Il en avait sa propre
+/// copie — même dialogue, même notice, même appel — à côté de celle de
+/// `_enregistrerPoint`, utilisée par la proposition d'exploration. Deux chemins
+/// pour un seul consentement : le 2026-08-14, en faisant porter le zoom au
+/// rayon, c'est exactement le genre d'endroit où l'un des deux serait resté en
+/// arrière sans que rien ne le signale (règle 30).
 class _BoutonEnregistrerPoint extends ConsumerWidget {
   const _BoutonEnregistrerPoint({
-    required this.centreCourant,
+    required this.onEnregistrer,
     this.repliee = false,
   });
 
-  final LatLng Function() centreCourant;
+  /// Le geste complet — notice, consentement, enregistrement, invalidation —
+  /// tenu par l'écran, pas ici.
+  final Future<void> Function() onEnregistrer;
 
   /// Rond (icône seule) plutôt que pastille étendue. `isExtended` anime la
   /// transition tout seul : pas de widget supplémentaire, pas d'animation à
@@ -1298,43 +1394,14 @@ class _BoutonEnregistrerPoint extends ConsumerWidget {
       icon: Icon(dejaPose ? Icons.wrong_location_outlined : Icons.my_location),
       label: Text(libelle),
       onPressed: () async {
-        final controleur = ref.read(clientPositionProvider.notifier);
         if (dejaPose) {
-          await controleur.retirer();
+          // Le retrait reste ici : il n'a ni notice ni cadrage à porter, et
+          // l'extraire créerait un aller-retour pour un `clear()`.
+          await ref.read(clientPositionProvider.notifier).retirer();
           if (context.mounted) invalidateAfterPositionChange(ref);
           return;
         }
-
-        final centre = centreCourant();
-        final accepte = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: Text(AppLocalizations.of(dialogContext)!.savePointAction),
-            content: Text(AppLocalizations.of(dialogContext)!.savePointNotice),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: Text(AppLocalizations.of(dialogContext)!.commonCancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child:
-                    Text(AppLocalizations.of(dialogContext)!.savePointAction),
-              ),
-            ],
-          ),
-        );
-        if (accepte != true) return;
-
-        await controleur.enregistrer(centre.latitude, centre.longitude);
-        if (!context.mounted) return;
-        // ⚠️ Sans cette invalidation, la vitrine et la carte garderaient leur
-        // cadrage d'avant : elles ne sont pas reconstruites de zéro au retour
-        // d'une boîte de dialogue (règle #37).
-        invalidateAfterPositionChange(ref);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.savePointDone)),
-        );
+        await onEnregistrer();
       },
     );
   }

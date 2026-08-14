@@ -275,7 +275,11 @@ class _PromoSliver extends ConsumerWidget {
     // ⚠️ Sert au LIBELLÉ, jamais à re-trier. L'ordre affiché reste celui du
     // serveur (`ORDER BY` en SQL) : deux tris qui divergeraient d'un epsilon
     // donneraient une liste dont l'ordre contredit ses propres étiquettes.
-    final positionClient = ref.watch(userPositionProvider).valueOrNull;
+    // ⚠️ Le repère d'affichage n'est plus le seul GPS : sans permission de
+    // localisation, AUCUNE distance ne s'affichait — et une promo à 231 km
+    // ressemblait alors trait pour trait à celle d'en face. Le repli passe
+    // par le point de recherche, jamais par une coordonnée inventée.
+    final positionClient = ref.watch(pointDeReferenceProvider);
 
     // La ligne détaillée n'a pas de hauteur fixe — le badge « expire
     // bientôt » et une description sur deux lignes la font varier. Une
@@ -370,7 +374,7 @@ class _TopBarState extends ConsumerState<_TopBar> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final filtersActive = ref.watch(favoritesOnlyFilterProvider) ||
-        ref.watch(promoSortProvider) != PromoSort.nouveautes;
+        ref.watch(promoSortProvider) != PromoSort.proximite;
     final hasSearch = ref.watch(searchQueryProvider).isNotEmpty;
 
     return Padding(
