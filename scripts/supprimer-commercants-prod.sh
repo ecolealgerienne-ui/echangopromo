@@ -132,7 +132,7 @@ sql "WITH cibles AS ($CIBLES)
      SELECT (SELECT count(*) FROM audit_log),
             (SELECT count(*) FROM highlight WHERE \"promoId\" IN
                 (SELECT id FROM promo WHERE \"commercantId\" IN (SELECT id FROM cibles)));" \
-  | awk -F'|' '{printf "  entrées d'audit gardées : %s\n  diapositives curées qui perdront leur promo : %s\n", $1, $2}'
+  | awk -F'|' '{printf "  entrees de journal gardees : %s\n  diapositives curees qui perdront leur promo : %s\n", $1, $2}'
 
 NB=$(sql "SELECT count(*) FROM ($CIBLES) t;")
 if [ "$NB" = "0" ]; then
