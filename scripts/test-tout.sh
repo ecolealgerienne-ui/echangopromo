@@ -229,22 +229,50 @@ for b in "${BANCS[@]}"; do
     return 1
   }
 
-  if [ "$PREMIER" = "1" ]; then
-    # ⚠️ Même le tout premier banc peut être gourmand : rien ne garantit que le
-    # seau est plein au démarrage du lot (un banc lancé à la main juste avant,
-    # l'app sur le téléphone qui rafraîchit sa liste…).
-    est_strict "$b" && sleep "$PAUSE_STRICTE_SECONDS"
-    PREMIER=0
-  elif est_strict "$PRECEDENT" || est_strict "$b"; then
+  # ⚠️ **La pause protège le banc qui PART, pas celui qui vient de finir** —
+  # resserré le 2026-08-14 après avoir chiffré les deux règles.
+  #
+  # La version symétrique (« l'un OU l'autre ») demandait 15 pauses longues,
+  # soit 19,5 min de sommeil sur un lot de 43 bancs. Or un seau ne gêne que le
+  # banc qui s'en sert, et **tout banc qui se sert d'un seau contraint est dans
+  # l'une des deux listes** : le protéger avant qu'il parte suffit. 10 pauses
+  # longues au lieu de 15, ~4 min de gagnées, sans qu'aucun banc listé perde sa
+  # garantie.
+  #
+  # ⚠️ Ce que ça retire : un banc NON listé qui écrirait un peu, juste après un
+  # gros écrivain, n'a plus que la pause courte. Le risque est réel et il est
+  # **observable** — depuis que le tableau final garde les motifs, un 429 s'y
+  # lit et nomme le banc. C'est ce qui rend ce resserrement acceptable ; il ne
+  # l'aurait pas été avant.
+  #
+  # ⚠️ Et les 60 s ne sont pas un chiffre prudent : `ttl: 60_000` sur TOUS les
+  # seaux (`app.module.ts`, `common/throttle.ts`). C'est la fenêtre du
+  # limiteur. Descendre en dessous n'accélère pas, ça retire la garantie —
+  # `PAUSE_STRICTE_SECONDS` reste réglable pour qui veut ce marché-là.
+  if est_strict "$b"; then
+    # Vaut aussi pour le tout premier : rien ne garantit un seau plein au
+    # démarrage du lot (un banc lancé à la main juste avant, l'app du téléphone
+    # qui rafraîchit sa liste…).
+    [ "$PREMIER" = "1" ] && echo "  (pause ${PAUSE_STRICTE_SECONDS}s — seau à reconstituer)"
     sleep "$PAUSE_STRICTE_SECONDS"
+  elif [ "$PREMIER" = "1" ]; then
+    :
   else
     sleep "$PAUSE_SECONDS"
   fi
+  PREMIER=0
   PRECEDENT="$b"
 
   echo "── $b ──"
+  # ⚠️ La durée de chaque banc, mesurée. Sans elle, toute discussion sur « le
+  # lot est trop long » porte sur les pauses par défaut — alors que la part
+  # d'exécution est peut-être la plus grosse. On ne réduit bien que ce qu'on a
+  # chiffré.
+  DEBUT=$(date +%s)
   SORTIE="$("$HERE/test-$b.sh" 2>&1)"
   CODE=$?
+  DUREE=$(( $(date +%s) - DEBUT ))
+  TOTAL_EXEC=$(( ${TOTAL_EXEC:-0} + DUREE ))
 
   # La dernière ligne de décompte, telle que chaque banc la rend.
   RESUME="$(echo "$SORTIE" | grep -E "^[0-9]+ contrôles?, " | tail -1)"
@@ -325,6 +353,10 @@ fi
 echo
 printf "  %d verts · %d échec(s) · %d non concluant(s) · %d sauté(s)\n" \
   "$NB_OK" "$NB_ECHEC" "$NB_NONCONCLUANT" "$NB_SAUTE"
+# ⚠️ Le partage exécution / attente, mesuré. « Le lot est trop long » n'est pas
+# actionnable ; « 15 min d'attente pour 5 min d'exécution » l'est.
+printf "  %d min d'exécution · %d min d'attente (seaux à 60 s)\n" \
+  "$(( ${TOTAL_EXEC:-0} / 60 ))" "$(( (SECONDS - ${TOTAL_EXEC:-0}) / 60 ))"
 
 # ⚠️ Un saut n'est pas une réussite, et un non-concluant non plus. Le seul
 # code 0 possible est « tout a été lancé et tout a conclu au vert ».
