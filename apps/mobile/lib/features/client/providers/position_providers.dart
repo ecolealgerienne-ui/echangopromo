@@ -70,6 +70,28 @@ class PointDeRecherche {
   (double, double) get coordonnees => (latitude, longitude);
 }
 
+/// Le rayon effectivement utilisable, borné par ce que le produit autorise.
+///
+/// ⚠️ **echango Promo est un service de proximité, pas un site d'annonces
+/// national** (décision produit du 2026-08-14). Le client peut cadrer plus
+/// serré que le rayon par défaut du serveur ; il ne peut pas cadrer plus large,
+/// même en dézoomant la carte au maximum.
+///
+/// ⚠️ **Borné ici plutôt qu'au seul enregistrement, et c'est le point
+/// important.** Un plafond appliqué uniquement au moment du geste laisserait
+/// passer tout rayon déjà stocké — celui d'un client qui a cadré 40 km avant
+/// cette version, par exemple. La borne doit valoir sur ce qui PART, pas sur ce
+/// qui est écrit, sinon elle dépend de l'ordre dans lequel les versions se sont
+/// succédé (règle 30 : c'est un invariant, il s'applique).
+///
+/// `null` en entrée comme en sortie reste une absence : le serveur applique
+/// alors le sien.
+double? rayonBorne(double? rayonDemande, double? plafondKm) {
+  if (rayonDemande == null) return null;
+  if (plafondKm == null) return rayonDemande;
+  return rayonDemande > plafondKm ? plafondKm : rayonDemande;
+}
+
 /// Le point que le client a enregistré, ou `null`.
 ///
 /// ⚠️ **`null` n'est pas « on ne sait pas », c'est « il n'a rien donné ».** La

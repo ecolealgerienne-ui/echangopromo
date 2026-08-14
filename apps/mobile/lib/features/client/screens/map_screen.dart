@@ -287,12 +287,22 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   /// Le rayon que couvre la carte telle qu'elle est cadrée, ou `null`.
+  ///
+  /// ⚠️ **Plafonné au rayon PAR DÉFAUT du serveur, pas à son maximum.** Le
+  /// maximum (50 km) borne ce que l'API accepte ; la borne produit est plus
+  /// serrée : echango Promo sert des promos de proximité, pas des annonces
+  /// nationales. Dézoomer sur toute la wilaya n'élargit donc pas la recherche
+  /// au-delà du voisinage — la carte montre plus, la liste reste locale.
+  ///
+  /// ⚠️ Ce plafond est **aussi** appliqué à l'émission (`rayonBorne`, côté
+  /// providers). Le poser ici seulement laisserait passer un rayon plus large
+  /// déjà stocké par une version antérieure.
   double? _rayonDeLaVue() {
     final vue = _map.camera.visibleBounds;
     return rayonDepuisLaVue(
       vue.northWest,
       vue.southEast,
-      plafondKm: ref.read(clientGeoConfigProvider).valueOrNull?.maxRadiusKm,
+      plafondKm: ref.read(clientGeoConfigProvider).valueOrNull?.defaultRadiusKm,
     );
   }
 

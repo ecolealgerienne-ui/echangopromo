@@ -82,10 +82,14 @@ enum PromoSort { proximite, expireBientot, plusGrosseReduction, nouveautes }
 /// serveur rendait 65 résultats de 0,1 km à 245 km, **strictement ordonnés par
 /// distance** ; l'app affichait en 5ᵉ position une promo à **231,7 km**, devant
 /// des dizaines à 100 mètres. C'est ce que le tri par recherche « globale »
-/// laissait voir, et c'est ce que `proximite` referme : la recherche reste
-/// volontairement sans rayon (`promo.service.ts`, « chercher est un acte
-/// intentionnel avec une cible »), mais sa contrepartie — le proche d'abord —
-/// est de nouveau vraie **à l'écran**, pas seulement dans la réponse serveur.
+/// laissait voir, et c'est ce que `proximite` referme : le proche d'abord est
+/// de nouveau vrai **à l'écran**, pas seulement dans la réponse serveur.
+///
+/// ⚠️ La phrase qui suivait ici — « la recherche reste volontairement sans
+/// rayon » — a été vraie une demi-journée. La décision a été inversée le même
+/// 2026-08-14 : la recherche respecte désormais le cadre, et le cadre est
+/// plafonné au rayon par défaut (`rayonBorne`). Un commentaire qui survit à la
+/// décision qu'il décrit est précisément ce que la règle 30 vise.
 final promoSortProvider =
     StateProvider.autoDispose<PromoSort>((ref) => PromoSort.proximite);
 
@@ -287,8 +291,11 @@ final promoListProvider =
         (ref) {
   final api = ref.watch(promoApiProvider);
   final point = ref.watch(clientPositionProvider);
-  final rayonKm = point?.rayonKm ??
+  final defaut =
       ref.watch(clientGeoConfigProvider).valueOrNull?.defaultRadiusKm;
+  // Le cadrage du client, borné par ce que le produit autorise (proximité), et
+  // à défaut le rayon du serveur.
+  final rayonKm = rayonBorne(point?.rayonKm, defaut) ?? defaut;
   final categorie = ref.watch(categoryFilterProvider);
   final favorites = ref.watch(favoritesProvider);
   final search = ref.watch(searchQueryProvider);
@@ -400,8 +407,9 @@ final topPromosProvider = FutureProvider.autoDispose<List<Highlight>>((ref) {
   // Même cadrage que la liste : deux géographies différentes sur le même écran
   // donneraient un bandeau « autour de vous » qui ne parle pas du même « vous »
   // que la liste juste en dessous.
-  final rayonKm = point?.rayonKm ??
+  final defaut =
       ref.watch(clientGeoConfigProvider).valueOrNull?.defaultRadiusKm;
+  final rayonKm = rayonBorne(point?.rayonKm, defaut) ?? defaut;
   return ref
       .watch(highlightApiProvider)
       .list(point: point?.coordonnees, radiusKm: rayonKm);

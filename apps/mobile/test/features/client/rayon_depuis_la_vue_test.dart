@@ -1,3 +1,4 @@
+import 'package:echango_promo/features/client/providers/position_providers.dart';
 import 'package:echango_promo/features/client/screens/map_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
@@ -54,6 +55,41 @@ void main() {
       final r = rayonDepuisLaVue(_nordOuestQuartier, _sudEstQuartier,
           plafondKm: null);
       expect(r, isNull);
+    });
+  });
+
+  group('rayonBorne — la borne produit', () {
+    // ⚠️ echango Promo sert des promos de proximité, pas des annonces
+    // nationales (décision du 2026-08-14). Dézoomer sur toute la wilaya montre
+    // plus de carte, pas plus de liste.
+    test('un cadrage plus large que le plafond est ramené au plafond', () {
+      expect(rayonBorne(40.0, 5.0), 5.0);
+    });
+
+    test('un cadrage plus serré est conservé tel quel', () {
+      // La borne est un plafond, pas une valeur imposée : chercher dans son
+      // quartier reste possible.
+      expect(rayonBorne(1.5, 5.0), 1.5);
+      expect(rayonBorne(5.0, 5.0), 5.0);
+    });
+
+    test('rien à borner reste une absence', () {
+      // ⚠️ `null` veut dire « le client n'a rien cadré » : y substituer le
+      // plafond enverrait un rayon en son nom (règle 29).
+      expect(rayonBorne(null, 5.0), isNull);
+    });
+
+    test('sans plafond connu, on ne rabote pas en douce', () {
+      // La config serveur n'a pas encore répondu : on transmet ce que le client
+      // a cadré plutôt qu'un chiffre inventé.
+      expect(rayonBorne(12.0, null), 12.0);
+    });
+
+    test('un rayon large déjà stocké est borné à l\'émission', () {
+      // ⚠️ Le cas qui rend cette fonction nécessaire ailleurs qu'au moment du
+      // geste : un client ayant cadré 40 km avant cette version. Une borne
+      // posée seulement à l'enregistrement ne l'aurait jamais rattrapé.
+      expect(rayonBorne(40.0, 5.0), lessThanOrEqualTo(5.0));
     });
   });
 
