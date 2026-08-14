@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -77,6 +78,42 @@ double? rayonDepuisLaVue(LatLng nordOuest, LatLng sudEst,
   final demiDiagonaleKm = diagonaleM / 2000;
   if (demiDiagonaleKm < _rayonPlancherKm) return _rayonPlancherKm;
   return demiDiagonaleKm > plafondKm ? plafondKm : demiDiagonaleKm;
+}
+
+/// Le rectangle que décrit un rayon — l'inverse de [rayonDepuisLaVue].
+///
+/// ⚠️ **Le zoom n'est pas stocké, et c'est délibéré.** Il serait une seconde
+/// valeur disant la même chose que le rayon, et deux valeurs qui doivent
+/// s'accorder finissent par diverger : la liste cadrerait 2 km pendant que la
+/// carte en montrerait 8, sans que rien ne le signale (règle 30). Le zoom est le
+/// **rendu** du rayon, pas un fait indépendant — et il dépend en plus de la
+/// taille de l'écran, donc le stocker rendrait le cadrage faux sur un autre
+/// appareil.
+///
+/// Le rayon étant la demi-diagonale de la vue, le demi-côté du carré équivalent
+/// vaut `r / √2`. `fitCamera` en déduit le zoom exact pour l'écran courant.
+///
+/// ⚠️ Rend `null` sans rayon : un client d'avant cette version n'a rien cadré,
+/// et inventer un rectangle lui imposerait un zoom qu'il n'a pas choisi.
+LatLngBounds? cadreDepuisLeRayon(LatLng centre, double? rayonKm) {
+  if (rayonKm == null || rayonKm <= 0) return null;
+  final demiCoteKm = rayonKm / math.sqrt2;
+  final dLat = demiCoteKm / 111.32;
+  // Un degré de longitude rétrécit avec la latitude. Le cosinus est borné :
+  // près des pôles il tend vers zéro et l'écart partirait à l'infini — hors
+  // sujet en Algérie, mais un `NaN` dans un cadrage fige la carte sans erreur.
+  final cos = math.cos(centre.latitude * math.pi / 180);
+  final dLng = demiCoteKm / (111.32 * (cos.abs() < 0.01 ? 0.01 : cos));
+  // ⚠️ Bornage indispensable, et trouvé par le test : près du pôle,
+  // `latitude + dLat` dépasse 90 et `LatLng` lève une assertion — la carte se
+  // fige sans message. Même précaution que `_onMapEvent` prend déjà sur la zone
+  // visible, pour la même raison.
+  return LatLngBounds(
+    LatLng((centre.latitude - dLat).clamp(-90.0, 90.0),
+        (centre.longitude - dLng).clamp(-180.0, 180.0)),
+    LatLng((centre.latitude + dLat).clamp(-90.0, 90.0),
+        (centre.longitude + dLng).clamp(-180.0, 180.0)),
+  );
 }
 
 /// La vue montre-t-elle autre chose que ce que le cadre enregistré couvre ?
@@ -370,6 +407,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _map.move(position, zoom ?? (_zoom < 14 ? 15.0 : _zoom));
   }
 
+  /// Rouvre la carte sur le cadre que le client a enregistré.
+  ///
+  /// Sans rayon — client d'avant cette version — on retombe sur le zoom
+  /// d'ouverture : c'est une absence de cadrage, pas un cadrage large.
+  void _cadrerSurLePoint(LatLng centre, double? rayonKm) {
+    final cadre = cadreDepuisLeRayon(centre, rayonKm);
+    if (cadre == null) {
+      _recenterOn(centre, zoom: _initialZoom);
+      return;
+    }
+    _map.fitCamera(CameraFit.bounds(bounds: cadre));
+  }
+
   Future<void> _openCluster(ShopCluster cluster) async {
     if (cluster.isSingle) {
       setState(() => _selected = cluster.single);
@@ -473,9 +523,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _centeredOnDefaultPoint = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          _recenterOn(
+          // ⚠️ **Le zoom du client, pas une constante.** Jusqu'au 2026-08-14 ce
+          // centrage forçait `_initialZoom` : cadrer un quartier, enregistrer,
+          // revenir sur la carte — et elle rouvrait en vue large. Le cadre
+          // était bien enregistré (la liste, elle, le respectait), mais la
+          // carte le jetait à chaque retour, ce qui donnait à croire que
+          // l'enregistrement n'avait rien retenu.
+          _cadrerSurLePoint(
             LatLng(pointEnregistre.latitude, pointEnregistre.longitude),
-            zoom: _initialZoom,
+            pointEnregistre.rayonKm,
           );
         }
       });

@@ -57,6 +57,43 @@ void main() {
     });
   });
 
+  group('cadreDepuisLeRayon', () {
+    test('aller-retour : la vue redonne le rayon dont elle vient', () {
+      // ⚠️ **C'est l'invariant qui tient la carte et la liste ensemble.** Le
+      // zoom n'est pas stocké — il serait une seconde valeur disant la même
+      // chose que le rayon, et deux valeurs qui doivent s'accorder finissent
+      // par diverger. Il est donc reconstruit, et ce test est ce qui garantit
+      // que la reconstruction rend bien le cadre d'origine.
+      const centre = LatLng(34.6703, 3.2630);
+      for (final rayon in [1.0, 4.0, 12.5, 50.0]) {
+        final cadre = cadreDepuisLeRayon(centre, rayon);
+        expect(cadre, isNotNull, reason: 'rayon $rayon');
+        final retour =
+            rayonDepuisLaVue(cadre!.northWest, cadre.southEast, plafondKm: 200);
+        expect(retour, isNotNull);
+        expect(retour!, closeTo(rayon, rayon * 0.02),
+            reason: 'rayon $rayon → cadre → $retour');
+      }
+    });
+
+    test('sans rayon, aucun cadre — et surtout pas un cadre inventé', () {
+      // Un client d'avant cette version n'a rien cadré. Lui fabriquer un
+      // rectangle lui imposerait un zoom qu'il n'a pas choisi (règle 29).
+      expect(cadreDepuisLeRayon(const LatLng(34.67, 3.26), null), isNull);
+      expect(cadreDepuisLeRayon(const LatLng(34.67, 3.26), 0), isNull);
+      expect(cadreDepuisLeRayon(const LatLng(34.67, 3.26), -3), isNull);
+    });
+
+    test('un cadre proche du pôle reste fini', () {
+      // Hors sujet en Algérie, mais un cosinus qui tend vers zéro donnerait un
+      // écart infini — et un NaN dans un cadrage fige la carte sans erreur.
+      final cadre = cadreDepuisLeRayon(const LatLng(89.99, 0), 10);
+      expect(cadre, isNotNull);
+      expect(cadre!.east.isFinite, isTrue);
+      expect(cadre.west.isFinite, isTrue);
+    });
+  });
+
   group('cadreEstPerime', () {
     test('vue identique au cadre enregistré : rien à proposer', () {
       expect(cadreEstPerime(5.0, 5.0), isFalse);
