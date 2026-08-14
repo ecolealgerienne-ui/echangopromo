@@ -180,10 +180,29 @@ for b in "${BANCS[@]}"; do
     continue
   fi
 
-  # ⚠️ La pause dépend du banc PRÉCÉDENT : c'est lui qui a consommé le seau.
+  # ── ⚠️ La pause regarde les DEUX bancs, pas seulement le précédent ─────────
+  #
+  # Elle ne dépendait que du banc précédent — « c'est lui qui a consommé le
+  # seau ». Vrai, et incomplet : un banc **gourmand** a besoin d'un seau plein
+  # AVANT de partir, pas seulement d'en laisser un après lui. `frontiere-http`
+  # échouait donc dès sa première connexion en `429 RATE_LIMITED`, quel que soit
+  # ce qui le précédait, tant que ce prédécesseur n'était pas lui-même strict.
+  #
+  # ⚠️ **Un 429 se déguise en « identifiants incorrects »** : lu vite, ce banc
+  # accusait l'authentification du produit. Il a été « sauté » à deux lots
+  # consécutifs sans que la cause soit dans le produit.
+  #
+  # Le seau étant partagé par IP, la contrainte est symétrique : on attend le
+  # temps long si l'un OU l'autre des deux bancs y touche.
+  est_strict() { [ -n "${1:-}" ] && [ "${STRICTS#* $1 }" != "$STRICTS" ]; }
+
   if [ "$PREMIER" = "1" ]; then
+    # ⚠️ Même le tout premier banc peut être gourmand : rien ne garantit que le
+    # seau est plein au démarrage du lot (un banc lancé à la main juste avant,
+    # l'app sur le téléphone qui rafraîchit sa liste…).
+    est_strict "$b" && sleep "$PAUSE_STRICTE_SECONDS"
     PREMIER=0
-  elif [ -n "${PRECEDENT:-}" ] && [ "${STRICTS#* $PRECEDENT }" != "$STRICTS" ]; then
+  elif est_strict "$PRECEDENT" || est_strict "$b"; then
     sleep "$PAUSE_STRICTE_SECONDS"
   else
     sleep "$PAUSE_SECONDS"
@@ -212,11 +231,26 @@ for b in "${BANCS[@]}"; do
   NONCONC="$(echo "$RESUME" | sed -E 's/.*, ([0-9]+) non concluant.*/\1/')"
   echo "  $RESUME"
 
+  # ── ⚠️ Garder le MOTIF, pas seulement le décompte ──────────────────────────
+  #
+  # Le tableau final ne retenait que « 3 contrôles, 0 échec, 2 non concluants ».
+  # Un décompte ne dit pas POURQUOI, et un lot dure vingt minutes : la cause
+  # était donc perdue au moment où on la lisait. Le journal du 2026-08-14 a dû
+  # écrire « vraisemblablement le quota journalier » — une supposition, dans un
+  # dépôt dont la règle est de ne rien reconstituer de mémoire. Elle était
+  # **fausse** : le banc concerné passe par un agent, exempté de ce quota.
+  #
+  # Les bancs impriment leur raison ligne par ligne. On garde les trois
+  # premières lignes marquées, ce qui suffit à distinguer un 429 d'un refus
+  # métier — c'est-à-dire à savoir si l'on doit corriger le produit ou le lot.
+  MOTIFS="$(echo "$SORTIE" | grep -E "^ *(❌|⚠️)" | head -3 \
+            | sed -E 's/^ +//' | tr '\n' '§')"
+
   if [ "${ECHECS:-0}" != "0" ]; then
-    RESULTATS+=("ECHEC|$b|$RESUME")
+    RESULTATS+=("ECHEC|$b|$RESUME|$MOTIFS")
     NB_ECHEC=$((NB_ECHEC + 1))
   elif [ "${NONCONC:-0}" != "0" ]; then
-    RESULTATS+=("NONCONC|$b|$RESUME")
+    RESULTATS+=("NONCONC|$b|$RESUME|$MOTIFS")
     NB_NONCONCLUANT=$((NB_NONCONCLUANT + 1))
   else
     RESULTATS+=("OK|$b|$RESUME")
@@ -229,13 +263,22 @@ echo "════════════════════════�
 echo "  Tableau final"
 echo "══════════════════════════════════════════════════════════════════════"
 for r in "${RESULTATS[@]}"; do
-  etat="${r%%|*}"; reste="${r#*|}"; nom="${reste%%|*}"; detail="${reste#*|}"
+  etat="${r%%|*}"; reste="${r#*|}"; nom="${reste%%|*}"; reste="${reste#*|}"
+  detail="${reste%%|*}"; motifs="${reste#*|}"
+  [ "$motifs" = "$detail" ] && motifs=""
   case "$etat" in
     OK)       printf "  ✅ %-26s %s\n" "$nom" "$detail" ;;
     ECHEC)    printf "  ❌ %-26s %s\n" "$nom" "$detail" ;;
     NONCONC)  printf "  ⚠️  %-26s %s\n" "$nom" "$detail" ;;
     SAUTE)    printf "  ⏭️  %-26s %s\n" "$nom" "$detail" ;;
   esac
+  # Le motif sous la ligne, indenté : c'est lui qui dit s'il faut corriger le
+  # produit ou le lot.
+  if [ -n "$motifs" ]; then
+    echo "$motifs" | tr '§' '\n' | while IFS= read -r m; do
+      [ -n "$m" ] && printf "       ↳ %s\n" "$m"
+    done
+  fi
 done
 
 if [ "${#EXCLUS[@]}" -gt 0 ]; then
