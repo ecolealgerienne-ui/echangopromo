@@ -265,6 +265,33 @@ def main():
         elif v == "non_concluant":
             non_concluants.append("tour %d : %s" % (tour, quoi))
 
+    # ── ⚠️ Rendre le décor tel qu'on l'a trouvé ──────────────────────────────
+    #
+    # **Ce banc laisse le commerçant AU PLAFOND, par construction** : c'est
+    # exactement ce qu'il éprouve. Tant qu'il finissait par des tours non
+    # concluants (429), la casse restait invisible — il ne créait pas assez pour
+    # saturer. Le 2026-08-14, la pause du lot a été corrigée, ce banc a réussi
+    # ses trois tours pour la première fois… et **six bancs en aval sont morts
+    # sur `PROMO_ACTIVE_CAP_REACHED`** : journal-agent, abus-signalement,
+    # file-moderation, moderation-course, admin-moderation, notifications.
+    #
+    # ⚠️ **Une correction qui fait réussir un banc peut en casser six**, et
+    # aucun des six n'accuse le vrai coupable : ils rendent un refus métier
+    # parfaitement légitime du produit. C'est le défaut le plus coûteux à
+    # diagnostiquer, parce que tout le monde a raison sauf l'ordre.
+    #
+    # ⚠️ Sans verdict : le ménage n'est pas ce que ce banc éprouve, et l'échouer
+    # ferait accuser le produit pour un rangement mal fait. S'il rate, c'est le
+    # banc SUIVANT qui le dira, sur un plafond parfaitement lisible.
+    restantes = actives(promos_du_commercant(jc))
+    if restantes:
+        print("\n── ménage : %d promo(s) à arrêter ──" % len(restantes))
+        for p in restantes:
+            appeler("POST", "/promo/%s/stop" % p["id"], ja)
+        laissees = len(actives(promos_du_commercant(jc)))
+        print("   %s %d promo(s) active(s) laissée(s)"
+              % ("✅" if laissees == 0 else "⚠️ ", laissees))
+
     print("\n════════════════════════════════════════════════════════════════")
     if non_concluants:
         print("⚠️  %d tour(s) non concluant(s) — ce ne sont pas des réussites :"
