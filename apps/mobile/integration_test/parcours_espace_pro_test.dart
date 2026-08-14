@@ -15,11 +15,22 @@
 /// **auprès du serveur, avec le jeton de CE rôle-là**, et le parcours exige
 /// de les retrouver à l'écran.
 ///
-/// Ce n'est pas un contrôle d'affichage : c'est un contrôle de **périmètre**.
-/// L'agent ne voit que ses communes, l'admin voit tout. Un agent à qui l'on
-/// servirait les compteurs globaux ne verrait rien d'anormal — les chiffres
-/// seraient plausibles, simplement pas les siens. Comparer aux chiffres du
-/// serveur *pour ce rôle* est la seule façon de distinguer les deux.
+/// ⚠️ **Ce parcours était un contrôle de PÉRIMÈTRE, et il ne l'est plus.**
+/// L'agent ne voyait que ses communes, l'admin voyait tout ; un agent à qui
+/// l'on aurait servi les compteurs globaux n'aurait rien vu d'anormal — les
+/// chiffres seraient plausibles, simplement pas les siens. Comparer aux
+/// chiffres du serveur *pour ce rôle* était la seule façon de les distinguer.
+///
+/// Depuis le 2026-08-13, agent et admin reçoivent **les mêmes compteurs**. Le
+/// parcours garde toute sa capacité à échouer — il mesure toujours auprès du
+/// serveur avec le jeton du rôle, et refuse un écran qui afficherait autre
+/// chose —, mais il a perdu son **motif** : ce n'est plus le cloisonnement
+/// qu'il éprouve, c'est la cohérence entre ce que le serveur compte et ce que
+/// l'écran montre.
+///
+/// **Ce qui distingue encore les deux rôles est ailleurs** : l'agent n'a ni le
+/// journal d'audit ni l'écran de gestion des agents. C'est là qu'un contrôle
+/// discriminant devrait porter désormais.
 ///
 /// ── Une seule porte pour les deux rôles ──────────────────────────────────
 ///

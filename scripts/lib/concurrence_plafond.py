@@ -205,7 +205,14 @@ def self_test():
         ([(201, None), (400, "PROMO_ACTIVE_CAP_REACHED")], 6, "echec"),  # compte final faux
         ([(201, None), (400, "VALIDATION_ERROR")], 5, "non_concluant"),
         ([(201, None), (429, None)], 5, "non_concluant"),
-        ([(201, None), (403, "COMMERCANT_NOT_IN_AGENT_COMMUNES")], 5, "non_concluant"),
+        # ⚠️ Le code portait `COMMERCANT_NOT_IN_AGENT_COMMUNES` jusqu'au
+        # 2026-08-13 — retiré de l'enum avec le découpage administratif. Un cas
+        # d'auto-test qui cite un code que le serveur ne peut plus rendre
+        # n'éprouve plus rien : il vérifie que « un 403 quelconque » ne conclut
+        # pas, ce qui reste vrai et reste utile. Le code est donc remplacé par
+        # un refus d'appartenance qui EXISTE encore, plutôt que le cas soit
+        # supprimé — c'est la forme du verdict qu'on éprouve, pas le libellé.
+        ([(201, None), (403, "PROMO_NOT_OWNED_BY_COMMERCANT")], 5, "non_concluant"),
     ]
     echecs, passes = [], 0
     for resultats, act, attendu in cas:
@@ -234,7 +241,7 @@ def main():
                    {"telephone": _exiger("COMMERCANT_TEL"), "pin": _exiger("COMMERCANT_PIN")})
     jc = d.get("accessToken")
     if not ja or not jc:
-        print("❌ connexion impossible — décor à rejouer, ou plafond de 5/min atteint.")
+        print("❌ connexion impossible — décor à rejouer, ou plafond de 50 connexions/min.")
         sys.exit(2)
 
     print("════════════════════════════════════════════════════════════════")
@@ -268,6 +275,12 @@ def main():
         print("  ❌ " + e)
     reussis = TOURS - len(echecs) - len(non_concluants)
     print("%d/%d tours concluants, %d échec(s)" % (reussis, TOURS, len(echecs)))
+    # ⚠️ **La ligne que tout lanceur d'ensemble cherche.** Ce banc rendait son
+    # bilan dans un format à lui — « N/M tours concluants » — et `test-tout.sh`
+    # le comptait donc « sauté, aucun décompte rendu » alors qu'il sortait en 0.
+    # Un banc qui conclut dans une langue que personne ne lit ne conclut pas.
+    print("%d contrôles, %d échec(s), %d non concluant(s)"
+          % (TOURS, len(echecs), len(non_concluants)))
     if reussis == 0:
         print("⚠️  aucun tour concluant : le banc n'a rien prouvé.")
     sys.exit(1 if (echecs or reussis == 0) else 0)

@@ -12,7 +12,6 @@ class CommercantApi {
     required String nom,
     String? adresse,
     required Categorie categorie,
-    required String communeId,
     required String pin,
     String? photoKey,
     double? latitude,
@@ -25,7 +24,6 @@ class CommercantApi {
       'nom': nom,
       if (adresse != null && adresse.isNotEmpty) 'adresse': adresse,
       'categorie': categorie.value,
-      'communeId': communeId,
       'pin': pin,
       if (photoKey != null) 'photoKey': photoKey,
       if (latitude != null) 'latitude': latitude,
@@ -77,6 +75,27 @@ class CommercantApi {
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
     });
+    return Commercant.fromJson(response.data!);
+  }
+
+  /// Pose la position du commerce, et **elle seule**.
+  ///
+  /// ⚠️ **Ne pas remplacer par `updateProfile(latitude:, longitude:)`.** Cette
+  /// route-là remet le compte en revue de profil, et la revue **bloque la
+  /// publication** : un commerçant à qui l'on vient de refuser une publication
+  /// faute de position se retrouverait bloqué une seconde fois, à attendre un
+  /// administrateur, pour avoir fait exactement ce qu'on lui demandait.
+  ///
+  /// Côté serveur, la dispense ne vaut que pour la **première** pose ; déplacer
+  /// une position déjà renseignée reste une modification de profil.
+  Future<Commercant> setPosition({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final response = await _dio.patch<Map<String, dynamic>>(
+      '/commercant/me/position',
+      data: {'latitude': latitude, 'longitude': longitude},
+    );
     return Commercant.fromJson(response.data!);
   }
 

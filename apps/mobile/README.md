@@ -7,7 +7,7 @@ App unique multi-rôles (Client / Commerçant / Agent terrain) — voir
 
 Tous les parcours des specs V0 sont implémentés et branchés à l'API :
 
-- **Client** : sélection de commune, liste des promos (filtre commune +
+- **Client** : point de recherche sur la carte, liste des promos (rayon +
   catégorie, favoris en tête), fiche promo, favoris locaux, signalement.
 - **Commerçant** : auto-inscription, revendication d'un compte créé par un
   agent, login téléphone+PIN, PIN oublié, dashboard (vues fiche), gestion
@@ -71,11 +71,11 @@ lib/
 ├── config/         # env (API_BASE_URL)
 ├── data/
 │   ├── api/        # clients REST par domaine (dio)
-│   └── local/      # device ID, favoris, commune sélectionnée, session JWT
+│   └── local/      # device ID, favoris, point de recherche, session JWT
 ├── domain/         # modèles + enums (miroir du backend)
 ├── providers/      # providers Riverpod transverses (auth, api clients)
 └── features/
-    ├── client/     # promos, favoris, commune
+    ├── client/     # promos, favoris, carte
     ├── commercant/ # auth, dashboard, promos
     ├── agent/      # zone, création commerçant, promo (caméra obligatoire)
     └── shared/     # widgets réutilisés (catégorie, sélecteur photo)

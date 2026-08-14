@@ -10,6 +10,7 @@ import {
   LessThan,
   MoreThan,
   Not,
+  ObjectLiteral,
   Repository,
   SelectQueryBuilder,
 } from 'typeorm';
@@ -17,8 +18,10 @@ import { CommercantService } from '../commercant/commercant.service';
 import { Commercant } from '../commercant/entities/commercant.entity';
 import { withTimeout } from '../common/async/with-timeout';
 import { configNumber } from '../common/config/config-number';
+import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import {
   BadRequestAppException,
+  ConflictAppException,
   NotFoundAppException,
 } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
@@ -78,8 +81,51 @@ const EXPIRING_SOON_WINDOW_HOURS = 24;
  * serait de toute façon illisible et la réponse inutilement lourde : le
  * client reçoit `truncated: true` et invite à zoomer, plutôt que de perdre
  * silencieusement des commerces (règle d'audit #15).
+ *
+ * ⚠️ **Ce n'est plus une constante, c'est un repli** : la valeur effective est
+ * lue par `maxMapCommercants()` depuis `MAX_MAP_COMMERCANTS` (`.env`).
+ *
+ * Elle n'est **pas** servie à l'app, et c'est délibéré : `client_carte.py` la
+ * **déduit** de la réponse (`truncated` + taille de la liste) au lieu de la
+ * recopier, ce qui permet de la changer sans toucher au banc (règle #32).
  */
-const MAX_MAP_COMMERCANTS = 300;
+const DEFAUT_MAX_MAP_COMMERCANTS = 300;
+
+/**
+ * Repères géographiques servis au client (`GET /promo/config`).
+ *
+ * ── Pourquoi ces valeurs vivent dans le `.env` du serveur ─────────────────
+ *
+ * Parce que le mobile n'a pas de `.env` : `lib/config/env.dart` n'expose que
+ * des `String.fromEnvironment`, compilés dans le binaire — et `CLAUDE.md`
+ * documente qu'un `--dart-define` **se perd silencieusement** selon la façon
+ * dont `flutter` est lancé. Une valeur compilée ne se change qu'en republiant
+ * sur les deux stores.
+ *
+ * Le cas concret qui l'impose : le défaut est **Alger** et le pilote est à
+ * **Djelfa**. Un rayon de 5 km autour d'Alger rend la liste vide pour tout
+ * client du pilote qui n'a pas enregistré son point. C'est une ligne de `.env`
+ * à changer, pas une soumission au store.
+ *
+ * ⚠️ Ces quatre-là sont des **replis journalisés**, pas la valeur servie :
+ * `getClientConfig()` lit la configuration à chaque appel (même contrat que
+ * `plafondActif` pour `PROMO_ACTIVE_CAP`).
+ */
+const DEFAUT_CLIENT_LATITUDE = 36.7538; // Alger
+const DEFAUT_CLIENT_LONGITUDE = 3.0588; // Alger
+const DEFAUT_CLIENT_RADIUS_KM = 5;
+
+/**
+ * Plafond du rayon acceptable sur `GET /promo`.
+ *
+ * ⚠️ **Ce n'est pas un confort, c'est une borne de sécurité** : le rayon
+ * dérive une bbox sur une route **publique et non authentifiée**. Sans
+ * plafond, `?radiusKm=100000` demande un parcours complet de la table à
+ * volonté (règle #34, second temps : « un DTO décoré n'est pas un DTO
+ * borné »). 50 km couvre une agglomération et sa périphérie ; au-delà, c'est
+ * la recherche textuelle qui prend le relais, elle qui ignore le rayon.
+ */
+const DEFAUT_CLIENT_MAX_RADIUS_KM = 50;
 
 /**
  * Délai au-delà duquel on renonce à la miniature (P9). Mesuré : une génération
@@ -165,6 +211,66 @@ export class PromoService {
     );
   }
 
+  /** Voir `DEFAUT_MAX_MAP_COMMERCANTS` — non servi à l'app, déduit de la réponse. */
+  private maxMapCommercants(): number {
+    return configNumber(
+      this.configService.get('MAX_MAP_COMMERCANTS'),
+      DEFAUT_MAX_MAP_COMMERCANTS,
+      'MAX_MAP_COMMERCANTS',
+      { minimum: 1 },
+    );
+  }
+
+  /**
+   * Repères géographiques servis à l'app (`GET /promo/config`).
+   *
+   * ⚠️ **C'est cette réponse, et non une copie compilée, qui fait foi côté
+   * app** — même contrat que `plafond` dans `getSlotUsage`. Recopier l'une de
+   * ces valeurs dans le mobile la ferait diverger au premier changement de
+   * `.env`, et `check_server_rules.dart` ne saurait même pas le voir : ses
+   * regex capturent `(\d+)` et font `int.parse`, donc `36.7538` y serait lu
+   * `36` **en rendant vert** (revue 2026-08-12, règle #32).
+   *
+   * ⚠️ Les latitudes et longitudes passent un intervalle **signé** :
+   * `{ minimum: -180 }` est ce qui lève le refus de zéro et du négatif dans
+   * `configNumber`. Sans lui, toute longitude ouest — Oran, Tlemcen, Sidi Bel
+   * Abbès — retomberait sur le repli, en silence pour qui ne lit pas les
+   * journaux.
+   */
+  getClientConfig(): {
+    defaultLatitude: number;
+    defaultLongitude: number;
+    defaultRadiusKm: number;
+    maxRadiusKm: number;
+  } {
+    return {
+      defaultLatitude: configNumber(
+        this.configService.get('CLIENT_DEFAULT_LATITUDE'),
+        DEFAUT_CLIENT_LATITUDE,
+        'CLIENT_DEFAULT_LATITUDE',
+        { minimum: -90, maximum: 90 },
+      ),
+      defaultLongitude: configNumber(
+        this.configService.get('CLIENT_DEFAULT_LONGITUDE'),
+        DEFAUT_CLIENT_LONGITUDE,
+        'CLIENT_DEFAULT_LONGITUDE',
+        { minimum: -180, maximum: 180 },
+      ),
+      defaultRadiusKm: configNumber(
+        this.configService.get('CLIENT_DEFAULT_RADIUS_KM'),
+        DEFAUT_CLIENT_RADIUS_KM,
+        'CLIENT_DEFAULT_RADIUS_KM',
+        { minimum: 1 },
+      ),
+      maxRadiusKm: configNumber(
+        this.configService.get('CLIENT_MAX_RADIUS_KM'),
+        DEFAUT_CLIENT_MAX_RADIUS_KM,
+        'CLIENT_MAX_RADIUS_KM',
+        { minimum: 1 },
+      ),
+    };
+  }
+
   /**
    * **L'unique endroit où se lit « propre au commerçant, sinon global ».**
    *
@@ -195,6 +301,17 @@ export class PromoService {
    * Le commentaire disant « la définition ne vit qu'ici » existait déjà : il
    * ne tenait rien, un commentaire ne pouvant pas échouer (règle #30).
    *
+   * ⚠️ **Et il ne le tenait toujours pas jusqu'au 2026-08-12.** Ce même fichier
+   * portait une sixième copie, locale à `findActiveForMap` — cinq conditions
+   * identiques, réécrites 650 lignes plus bas, sous d'autres noms de paramètres.
+   * Le titre ci-dessus l'affirmait, le code le démentait, et personne ne l'avait
+   * vu parce que **les deux copies disaient la même chose** : une duplication
+   * n'échoue pas, elle attend. Trouvée par relecture au moment d'ajouter une
+   * sixième condition (la position du commerçant, bascule géographique) — qui
+   * n'aurait porté que sur l'une des deux, donc sur la liste et pas sur la
+   * carte. Fusionnée avant, pas après : on n'ajoute rien à une définition qui
+   * n'est pas la seule.
+   *
    * Exige que `commercant` soit déjà joint sous cet alias.
    */
   private applyVisibleConditions(
@@ -211,6 +328,108 @@ export class PromoService {
       .andWhere('commercant.deletedAt IS NULL')
       .andWhere('commercant.suspendedAt IS NULL');
   }
+
+  /**
+   * Cadre rectangulaire sur la position du commerçant.
+   *
+   * **Une seule définition, deux appelants** : la carte (`findActiveForMap`) et
+   * la liste au rayon (`findActiveForClient`). Le critère de la règle #30 est
+   * « si l'un change, l'autre doit-il changer ? » — ici oui, c'est la même
+   * question posée deux fois, et un commentaire « même filtre que la carte »
+   * n'aurait rien tenu.
+   *
+   * ⚠️ C'est ce cadre, et lui seul, qui **peut** emprunter
+   * `IDX_commercant_position`. L'ordre par distance, lui, porte sur une
+   * expression calculée et ne peut être servi par aucun index : le cadre est
+   * donc ce qui rend le tri abordable, pas un raffinement.
+   *
+   * ⚠️ **« Emprunte » ne s'écrit pas au présent** : à 154 commerçants tenant
+   * dans 6 blocs, PostgreSQL fait un `Seq Scan` — et **il a raison**, aucun
+   * index ne bat un parcours complet à cette taille. `enable_seqscan = off`
+   * établit que l'index est bien **utilisable** ; il n'est simplement pas
+   * encore choisi.
+   *
+   * ⚠️ **Deux `BETWEEN` jusqu'au 2026-08-13, et c'était une dimension de
+   * trop.** Un btree `(latitude, longitude)` n'utilise que sa première colonne
+   * pour une plage : sur un cadre de 5 km il remontait **101 lignes sur 154**
+   * là où 53 correspondent. Le GiST sur `point(longitude, latitude)` — natif,
+   * sans PostGIS — en remonte exactement 53, soit 48 lignes de moins lues puis
+   * jetées à chaque requête. Décision produit prise après mesure ;
+   * `test-plan-sql.sh` la tient.
+   *
+   * Exige que `commercant` soit déjà joint sous cet alias.
+   */
+  private applyBoundingBox<T extends ObjectLiteral>(
+    qb: SelectQueryBuilder<T>,
+    bornes: { north: number; south: number; east: number; west: number },
+  ): SelectQueryBuilder<T> {
+    // ⚠️ **`point(longitude, latitude)` — l'ordre est inversé par rapport au
+    // reste du produit**, parce que `point(x, y)` attend l'abscisse d'abord.
+    // Un index construit sur `point(lat, lng)` et interrogé par une boîte
+    // `(lng, lat)` ne lèverait rien : il rendrait des résultats FAUX, en
+    // silence, et seulement pour les points où l'inversion sort du cadre.
+    // L'index de `CommercantPositionGistIndex1783880000000` respecte le même
+    // ordre, et `test-plan-sql.sh` compare le nombre de lignes servies à celui
+    // de l'API — une inversion y ferait diverger les deux totaux.
+    return qb.andWhere(
+      'point(commercant.longitude, commercant.latitude) ' +
+        '<@ box(point(:bboxWest, :bboxSouth), point(:bboxEast, :bboxNorth))',
+      {
+        bboxSouth: bornes.south,
+        bboxNorth: bornes.north,
+        bboxWest: bornes.west,
+        bboxEast: bornes.east,
+      },
+    );
+  }
+
+  /**
+   * Cadre englobant un rayon, en degrés.
+   *
+   * 111.32 km par degré de latitude ; en longitude, ce même degré rétrécit
+   * avec le cosinus de la latitude. À Djelfa (34.7°) un degré de longitude ne
+   * vaut plus que ~91 km : dériver le cadre sans ce cosinus donnerait une
+   * boîte trop étroite d'est en ouest, qui **exclurait des commerces réellement
+   * dans le rayon** — un manque, jamais un excès, donc invisible à l'usage.
+   *
+   * Le cadre est volontairement **plus large que le cercle** (ses coins en
+   * dépassent). C'est le tri fin par distance qui rogne ces coins, §9.2 du
+   * plan : un banc doit éprouver un point dans le carré et hors du cercle,
+   * sinon une implémentation qui oublie le rognage rend vert.
+   */
+  private cadreAutour(
+    latitude: number,
+    longitude: number,
+    rayonKm: number,
+  ): { north: number; south: number; east: number; west: number } {
+    const deltaLat = rayonKm / 111.32;
+    // Aux pôles le cosinus tend vers 0 et le delta exploserait ; on borne le
+    // cadre au globe plutôt que de produire des bornes infinies.
+    const cosLat = Math.max(Math.cos((latitude * Math.PI) / 180), 0.01);
+    const deltaLon = rayonKm / (111.32 * cosLat);
+    return {
+      north: Math.min(latitude + deltaLat, 90),
+      south: Math.max(latitude - deltaLat, -90),
+      east: Math.min(longitude + deltaLon, 180),
+      west: Math.max(longitude - deltaLon, -180),
+    };
+  }
+
+  /**
+   * Distance à vol d'oiseau en kilomètres, en SQL (haversine).
+   *
+   * ⚠️ Le `LEAST(1, GREATEST(-1, …))` n'est pas décoratif : l'argument d'`acos`
+   * doit rester dans [-1, 1], et l'arithmétique flottante le fait déborder
+   * d'un epsilon quand le commerçant est **exactement** sur le point de
+   * référence. Sans la borne, Postgres lève `input is out of range` — donc un
+   * 500 sur le cas le plus banal qui soit : le client cherche depuis
+   * l'intérieur du commerce.
+   */
+  private readonly distanceKmSql = `(6371 * acos(LEAST(1, GREATEST(-1,
+      sin(radians(:refLat)) * sin(radians(commercant.latitude))
+      + cos(radians(:refLat)) * cos(radians(commercant.latitude))
+        * cos(radians(commercant.longitude) - radians(:refLng))
+    ))))`;
 
   /**
    * Est-elle réellement en ligne *maintenant* ? Le cron d'expiration ne passe
@@ -473,6 +692,7 @@ export class PromoService {
     if (!dto.asDraft) {
       this.commercantService.assertRegistreValidated(commercant);
       this.commercantService.assertProfileValidated(commercant);
+      this.commercantService.assertPositionSet(commercant);
     }
     this.assertPriceOrder(dto.prixAvant, dto.prixApres);
     this.assertPhotoKeysOwned(dto.photoKeys, commercantId, options?.actorId);
@@ -552,14 +772,44 @@ export class PromoService {
     this.commercantService.assertAccountActive(commercant);
     this.commercantService.assertRegistreValidated(commercant);
     this.commercantService.assertProfileValidated(commercant);
+    this.commercantService.assertPositionSet(commercant);
 
     const dateFin = this.resolveDateFin();
     return this.withCommercantLock(promo.commercantId, async (manager) => {
       await this.assertUnderCap(manager, promo.commercantId);
-      promo.lifecycleStatus = PromoLifecycleStatus.PUBLIEE;
-      promo.dateFin = dateFin;
-      promo.publishedAt = new Date();
-      return manager.save(promo);
+      // ⚠️ **`update` CIBLÉ, jamais `save(promo)`** — et c'est un correctif, pas
+      // un style. `promo` est un instantané pris AVANT l'attente du verrou
+      // consultatif ; `save` diffe cet instantané contre la ligne en base et
+      // réémet **toute** colonne ayant dérivé entre-temps, `moderationStatus`
+      // compris.
+      //
+      // Mesuré le 2026-08-14, avec témoin négatif : sans modération
+      // concurrente, l'`UPDATE` ne portait pas `moderationStatus` ; avec un
+      // `masquer` pendant la fenêtre, il le réémettait à `normale` — **la promo
+      // masquée redevenait publique**, sans erreur nulle part. La variante
+      // `verifier-ok` effaçait en plus `verifiedOkAt`, donc la fenêtre d'ignore
+      // de 30 jours, et remettait la promo en file.
+      //
+      // C'est exactement le défaut corrigé sur `update()` le 2026-08-05 ; la
+      // correction n'avait pas été portée ici. Fenêtre mesurée 3,7–4,7 ms, mais
+      // élargissable à volonté depuis l'extérieur : le verrou consultatif que
+      // cette méthode prend elle-même suffit à la tenir ouverte (voir le banc
+      // de `docs/audit_securite_2026-08-14.md` §4.2).
+      await manager.update(
+        Promo,
+        { id: promo.id },
+        {
+          lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
+          dateFin,
+          publishedAt: new Date(),
+        },
+      );
+      // Relecture DANS la transaction : hors d'elle, l'écriture n'est pas
+      // encore visible.
+      return manager.findOneOrFail(Promo, {
+        where: { id: promo.id },
+        relations: { commercant: true },
+      });
     });
   }
 
@@ -572,8 +822,16 @@ export class PromoService {
         'Seule une promo publiée peut être arrêtée',
       );
     }
-    promo.lifecycleStatus = PromoLifecycleStatus.ARRETEE;
-    return this.promos.save(promo);
+    // Même correctif que `publish` : `save(promo)` réémettait toute colonne
+    // ayant dérivé depuis le chargement de l'instantané, `moderationStatus`
+    // compris. La fenêtre est ici plus courte (aucun await intermédiaire), mais
+    // le mécanisme est identique — et un correctif appliqué à un seul des deux
+    // sites laisse l'invariant tenu par rien (règle 30).
+    await this.promos.update(
+      { id: promo.id },
+      { lifecycleStatus: PromoLifecycleStatus.ARRETEE },
+    );
+    return this.findByIdOrFail(promoId);
   }
 
   /**
@@ -597,11 +855,91 @@ export class PromoService {
         .innerJoinAndSelect('promo.commercant', 'commercant'),
     );
 
-    if (query.communeIds?.length) {
-      qb.andWhere('commercant.communeId IN (:...communeIds)', {
-        communeIds: query.communeIds,
+    // ── Périmètre géographique (bascule 2026-08-12) ────────────────────────
+    //
+    // ⚠️ Le rayon est centré sur **un point**, jamais sur une ville : aucun
+    // centroïde de commune n'intervient nulle part ici. Le point vient du
+    // client (celui qu'il a enregistré) ou, à défaut, de la configuration
+    // serveur.
+    //
+    // ⚠️ **Et le défaut ne s'applique QUE si la requête ne porte aucun autre
+    // périmètre.** `commercantId` en est un : « autres promos du magasin »
+    // interroge une fiche précise, pas un voisinage (§5.6 du plan).
+    //
+    // ⚠️ `communeIds` faisait partie de cette liste jusqu'au 2026-08-13 — il
+    // protégeait l'app déjà installée, qui envoyait les communes de Djelfa et
+    // aucune position. Son retrait change donc le sens d'une requête ancienne :
+    // « toutes les promos de mes 4 communes » devient « les promos dans 5 km du
+    // point par défaut ». Le `ValidationPipe` étant monté sans
+    // `forbidNonWhitelisted`, ce basculement est **muet** — pas d'erreur, pas
+    // de journal. Sans conséquence ici (rien n'est publié), mais c'est le mode
+    // de défaillance à connaître le jour où une version sera en magasin.
+    // ⚠️ L'onglet Favoris est un périmètre à part entière, et **le plus
+    // explicite de tous** : le client a désigné ces promos une par une. Les
+    // recadrer géographiquement les lui retirerait au premier déménagement du
+    // point de recherche.
+    const favorisSeuls =
+      query.favoritesOnly === true && Boolean(query.favoriteIds?.length);
+    if (favorisSeuls) {
+      qb.andWhere('promo.id IN (:...favoritesOnlyIds)', {
+        favoritesOnlyIds: query.favoriteIds,
       });
     }
+
+    const perimetreExplicite = favorisSeuls || Boolean(query.commercantId);
+
+    const config = this.getClientConfig();
+
+    if (query.radiusKm !== undefined && query.radiusKm > config.maxRadiusKm) {
+      // Refus, jamais un rabotage silencieux : l'app lit `maxRadiusKm` sur
+      // `GET /promo/config` et n'a aucune raison de dépasser. Une requête qui
+      // dépasse est soit un client cassé, soit un abus — dans les deux cas
+      // c'est une information, pas quelque chose à corriger en douce
+      // (règle #29).
+      throw new BadRequestAppException(
+        ErrorCode.VALIDATION_ERROR,
+        `Rayon de recherche trop grand (${query.radiusKm} km) — maximum ${config.maxRadiusKm} km`,
+      );
+    }
+
+    const position =
+      query.latitude !== undefined && query.longitude !== undefined
+        ? { latitude: query.latitude, longitude: query.longitude }
+        : perimetreExplicite
+          ? null
+          : {
+              latitude: config.defaultLatitude,
+              longitude: config.defaultLongitude,
+            };
+
+    // Une recherche textuelle **ignore le rayon** : chercher est un acte
+    // intentionnel avec une cible, et la borner au voisinage rendrait le
+    // produit structurellement moins capable qu'avant la bascule (le client
+    // suivait jusqu'à 4 communes). Le tri par distance reste actif, donc le
+    // proche remonte quand même en tête (R8 du plan).
+    const rayonKm = query.search
+      ? null
+      : (query.radiusKm ?? config.defaultRadiusKm);
+
+    if (position) {
+      qb.setParameters({
+        refLat: position.latitude,
+        refLng: position.longitude,
+      });
+    }
+
+    if (position && rayonKm !== null) {
+      // Le cadre d'abord (il emprunte l'index), la distance ensuite (elle
+      // rogne les coins du carré). L'ordre des deux conditions n'a pas
+      // d'importance pour Postgres, mais leur présence conjointe si : le
+      // cadre seul rendrait des commerces jusqu'à 41 % trop loin en diagonale.
+      this.applyBoundingBox(
+        qb,
+        this.cadreAutour(position.latitude, position.longitude, rayonKm),
+      );
+      qb.andWhere(`${this.distanceKmSql} <= :rayonKm`, { rayonKm });
+    }
+
     if (query.categorie) {
       qb.andWhere('promo.categorie = :categorie', {
         categorie: query.categorie,
@@ -635,6 +973,13 @@ export class PromoService {
         'discount_ratio',
       ).orderBy('discount_ratio', 'DESC');
       qb.addOrderBy('promo.publishedAt', 'DESC', 'NULLS LAST');
+      // Départage final — voir le commentaire de la branche par défaut : deux
+      // promos de même remise et même instant de publication s'ordonnaient
+      // arbitrairement, et `skip/take` faisait alors réapparaître ou
+      // disparaître des lignes d'une page à l'autre. Le défaut existait déjà
+      // ici avant la bascule ; le corriger d'un seul côté aurait laissé
+      // l'autre (règle #30).
+      qb.addOrderBy('promo.id', 'ASC');
       qb.skip((query.page - 1) * query.limit).take(query.limit);
       const [items, total] = await qb.getManyAndCount();
       return toPaginatedResult(items, total, query.page, query.limit);
@@ -652,11 +997,33 @@ export class PromoService {
       ).setParameter('favoriteIds', query.favoriteIds);
       qb.orderBy('favorite_rank', 'ASC');
     }
+
+    // Le tri par distance ne se demande pas, il se déduit : `sort` n'a **pas**
+    // de valeur par défaut dans le DTO, donc `undefined` veut dire « le client
+    // n'a rien demandé » et se distingue d'un `recent` explicite. Un client
+    // déjà installé, qui n'envoie pas de position, garde donc exactement
+    // l'ordre d'avant — ce que `list-promo-query.dto.ts` interdit de changer.
+    //
+    // Les favoris restent devant : c'est un choix explicite de l'utilisateur,
+    // la proximité n'a pas à le lui reprendre.
+    if (position && query.sort === undefined) {
+      qb.addSelect(this.distanceKmSql, 'distance_km');
+      qb.addOrderBy('distance_km', 'ASC');
+    }
+
     // NULLS LAST : toutes les promos ici sont PUBLIEE donc publishedAt est
     // normalement toujours renseigné, mais une ligne pré-migration mal
     // backfillée ne doit pas remonter en tête d'un tri DESC (comportement
     // par défaut de Postgres pour NULL en DESC).
     qb.addOrderBy('promo.publishedAt', 'DESC', 'NULLS LAST');
+    // ⚠️ **Départage déterministe, sans quoi la pagination n'est pas stable.**
+    // Toutes les promos d'un même commerçant ont **exactement** la même
+    // distance : sans ce dernier critère, l'ordre entre elles est arbitraire et
+    // Postgres est libre de le changer d'une requête à l'autre — donc entre la
+    // page 1 et la page 2, où `skip/take` fait alors réapparaître ou disparaître
+    // des lignes. La pagination existait déjà (règle #15) ; c'est sa
+    // **stabilité** qui manquait.
+    qb.addOrderBy('promo.id', 'ASC');
     qb.skip((query.page - 1) * query.limit).take(query.limit);
 
     const [items, total] = await qb.getManyAndCount();
@@ -678,37 +1045,27 @@ export class PromoService {
     commercants: { commercant: Commercant; promos: Promo[] }[];
     truncated: boolean;
   }> {
-    const visiblePromoConditions = (qb: SelectQueryBuilder<Promo>) =>
-      qb
-        .where('promo.lifecycleStatus = :lifecycleStatus', {
-          lifecycleStatus: PromoLifecycleStatus.PUBLIEE,
-        })
-        .andWhere('promo.moderationStatus IN (:...moderationStatuses)', {
-          moderationStatuses: VISIBLE_MODERATION_STATUSES,
-        })
-        .andWhere('promo.dateFin > NOW()')
-        .andWhere('commercant.deletedAt IS NULL')
-        .andWhere('commercant.suspendedAt IS NULL');
+    // Lu une fois pour toute la méthode : les trois usages (limite SQL, seuil
+    // de troncature, découpe) doivent parler du **même** plafond. Trois
+    // lectures de configuration indépendantes pourraient diverger si la valeur
+    // changeait entre-temps, et la réponse dirait alors `truncated: false` sur
+    // une liste tronquée.
+    const plafond = this.maxMapCommercants();
 
-    const commercantsQb = visiblePromoConditions(
-      this.promos
-        .createQueryBuilder('promo')
-        .innerJoin('promo.commercant', 'commercant'),
+    const commercantsQb = this.applyBoundingBox(
+      this.applyVisibleConditions(
+        this.promos
+          .createQueryBuilder('promo')
+          .innerJoin('promo.commercant', 'commercant'),
+      )
+        .andWhere('commercant.latitude IS NOT NULL')
+        .andWhere('commercant.longitude IS NOT NULL'),
+      query,
     )
-      .andWhere('commercant.latitude IS NOT NULL')
-      .andWhere('commercant.longitude IS NOT NULL')
-      .andWhere('commercant.latitude BETWEEN :south AND :north', {
-        south: query.south,
-        north: query.north,
-      })
-      .andWhere('commercant.longitude BETWEEN :west AND :east', {
-        west: query.west,
-        east: query.east,
-      })
       .select('commercant.id', 'id')
       .distinct(true)
       // +1 pour détecter le dépassement sans seconde requête de comptage.
-      .limit(MAX_MAP_COMMERCANTS + 1);
+      .limit(plafond + 1);
 
     if (query.categorie) {
       commercantsQb.andWhere('promo.categorie = :categorie', {
@@ -717,14 +1074,12 @@ export class PromoService {
     }
 
     const rows = await commercantsQb.getRawMany<{ id: string }>();
-    const truncated = rows.length > MAX_MAP_COMMERCANTS;
-    const commercantIds = rows
-      .slice(0, MAX_MAP_COMMERCANTS)
-      .map((row) => row.id);
+    const truncated = rows.length > plafond;
+    const commercantIds = rows.slice(0, plafond).map((row) => row.id);
     if (commercantIds.length === 0)
       return { commercants: [], truncated: false };
 
-    const promosQb = visiblePromoConditions(
+    const promosQb = this.applyVisibleConditions(
       this.promos
         .createQueryBuilder('promo')
         .innerJoinAndSelect('promo.commercant', 'commercant'),
@@ -760,99 +1115,15 @@ export class PromoService {
   }
 
   /**
-   * Où centrer la carte pour un client qui n'a pas (ou pas encore) de position
-   * GPS, mais qui a choisi ses communes.
-   *
-   * ── Pourquoi ce calcul et pas une colonne ────────────────────────────────
-   *
-   * `Commune` ne porte **que** `id`/`nom`/`wilaya` — aucune coordonnée, et le
-   * seed les crée par nom seul. Ajouter latitude/longitude aurait demandé
-   * d'inventer 36 paires de coordonnées pour les communes de Djelfa : des
-   * chiffres plausibles, faux, et impossibles à distinguer de vrais une fois
-   * en base. On dérive donc le centre des **positions réelles** des
-   * commerçants qui ont quelque chose à montrer.
-   *
-   * ── Ce qu'il renvoie quand il ne sait pas ────────────────────────────────
-   *
-   * `null`, jamais un point de repli. Une commune sans commerçant positionné
-   * n'a pas de centre connu, et un centre inventé enverrait le client
-   * regarder un endroit où il n'y a rien — en lui laissant croire qu'il n'y a
-   * rien *là où il habite*. C'est l'appelant qui décide quoi faire de
-   * l'absence (règle #29).
-   *
-   * La moyenne suffit ici : à l'échelle d'une commune algérienne les points
-   * sont assez groupés pour qu'un barycentre tombe dans la zone habitée. Ce
-   * ne serait plus vrai sur un territoire éclaté — à revoir à l'extension
-   * multi-wilaya, pas avant.
-   */
-  async findMapCenterForCommunes(
-    communeIds: string[],
-  ): Promise<{ latitude: number; longitude: number } | null> {
-    if (communeIds.length === 0) return null;
-
-    // Les mêmes cinq conditions que partout ailleurs : le centre doit désigner
-    // ce que la carte affichera, pas ce qui existe en base. Passer par
-    // `applyVisibleConditions` plutôt que de les réécrire est ce qui le
-    // garantit (règle #9).
-    //
-    // ⚠️ La moyenne se prend sur une sous-requête, pas directement.
-    // `AVG(DISTINCT latitude)` et `AVG(DISTINCT longitude)` dédoublonneraient
-    // **indépendamment** : ils dédupliquent des coordonnées, pas des
-    // commerçants, et recomposeraient un point qui ne correspond à aucune
-    // répartition réelle. Il faut dédoublonner le commerçant d'abord — sinon
-    // un commerce à 5 promos pèse aussi cinq fois et tire le centre vers lui.
-    const positions = this.applyVisibleConditions(
-      this.promos
-        .createQueryBuilder('promo')
-        .innerJoin('promo.commercant', 'commercant'),
-    )
-      .andWhere('commercant.communeId IN (:...communeIds)', { communeIds })
-      .andWhere('commercant.latitude IS NOT NULL')
-      .andWhere('commercant.longitude IS NOT NULL')
-      // `id` dans le SELECT : c'est lui qui rend le DISTINCT « par commerçant »
-      // plutôt que « par couple de coordonnées » — deux commerces à la même
-      // adresse restent deux points.
-      .select('commercant.id', 'id')
-      .addSelect('commercant.latitude', 'latitude')
-      .addSelect('commercant.longitude', 'longitude')
-      .distinct(true);
-
-    const [sql, parameters] = positions.getQueryAndParameters();
-    const rows = await this.promos.manager.query<
-      { latitude: string | null; longitude: string | null }[]
-    >(
-      `SELECT AVG("latitude") AS latitude, AVG("longitude") AS longitude FROM (${sql}) AS positions`,
-      parameters,
-    );
-    const row = rows[0];
-
-    if (!row?.latitude || !row.longitude) return null;
-
-    const latitude = Number(row.latitude);
-    const longitude = Number(row.longitude);
-    // `AVG` sort en chaîne côté pilote Postgres, et une chaîne illisible
-    // donnerait `NaN` — que `JSON.stringify` sérialise en `null` sans erreur,
-    // donc un centre absent déguisé en centre présent (règle #34).
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-
-    return { latitude, longitude };
-  }
-
-  /**
    * Vue admin/agent (plan de correction, Phase 2) : toutes les promos, tous
    * statuts confondus (contrairement à `findActiveForClient`) — permet de
    * repérer et masquer un contenu problématique sans attendre 3
-   * signalements. `scopedCommuneIds` restreint aux communes d'un agent ;
-   * `undefined` = vue globale (admin).
+   * signalements. Vue globale pour l'admin comme pour l'agent depuis le
+   * 2026-08-13 (chantier « agent global »).
    */
   async findAllForAdmin(
     query: ListPromoAdminQueryDto,
-    scopedCommuneIds?: string[],
   ): Promise<PaginatedResult<Promo>> {
-    if (scopedCommuneIds && scopedCommuneIds.length === 0) {
-      return toPaginatedResult([], 0, query.page, query.limit);
-    }
-
     const qb = this.promos
       .createQueryBuilder('promo')
       .innerJoinAndSelect('promo.commercant', 'commercant')
@@ -862,19 +1133,6 @@ export class PromoService {
       qb.andWhere(
         '(promo.description ILIKE :search OR commercant.nom ILIKE :search)',
         { search: `%${query.search}%` },
-      );
-    }
-    if (query.communeId) {
-      qb.andWhere('commercant.communeId = :communeId', {
-        communeId: query.communeId,
-      });
-    }
-    if (query.wilaya) {
-      qb.innerJoin('commercant.commune', 'commune').andWhere(
-        'commune.wilaya = :wilaya',
-        {
-          wilaya: query.wilaya,
-        },
       );
     }
     if (query.categorie) {
@@ -890,11 +1148,6 @@ export class PromoService {
     if (query.moderationStatus) {
       qb.andWhere('promo.moderationStatus = :moderationStatus', {
         moderationStatus: query.moderationStatus,
-      });
-    }
-    if (scopedCommuneIds) {
-      qb.andWhere('commercant.communeId IN (:...scopedCommuneIds)', {
-        scopedCommuneIds,
       });
     }
     qb.skip((query.page - 1) * query.limit).take(query.limit);
@@ -1111,22 +1364,24 @@ export class PromoService {
   }
 
   /** Décision admin : masquer une promo signalée à tort ou réellement abusive (specs §3.4). */
-  async resolveMasquer(promoId: string): Promise<void> {
-    await this.promos.update(
-      { id: promoId },
-      { moderationStatus: PromoModerationStatus.MASQUEE },
-    );
+  async resolveMasquer(
+    promoId: string,
+    expected: PromoModerationStatus,
+  ): Promise<void> {
+    await this.resolveModeration(promoId, expected, {
+      moderationStatus: PromoModerationStatus.MASQUEE,
+    });
   }
 
   /** Décision admin : promo légitime — ouvre la fenêtre d'ignore de 30 jours (specs §5.4). */
-  async resolveVerifieOk(promoId: string): Promise<void> {
-    await this.promos.update(
-      { id: promoId },
-      {
-        moderationStatus: PromoModerationStatus.VERIFIEE_OK,
-        verifiedOkAt: new Date(),
-      },
-    );
+  async resolveVerifieOk(
+    promoId: string,
+    expected: PromoModerationStatus,
+  ): Promise<void> {
+    await this.resolveModeration(promoId, expected, {
+      moderationStatus: PromoModerationStatus.VERIFIEE_OK,
+      verifiedOkAt: new Date(),
+    });
   }
 
   /**
@@ -1135,7 +1390,10 @@ export class PromoService {
    * brouillon) le temps que le commerçant la vérifie et la republie
    * explicitement via `publish` (pas de republication automatique).
    */
-  async resolveAvertir(promoId: string): Promise<void> {
+  async resolveAvertir(
+    promoId: string,
+    expected: PromoModerationStatus,
+  ): Promise<void> {
     // Le déblocage ne visait que `SIGNALEE`, jamais `MASQUEE` : « avertir »
     // après « masquer » laissait le masque en place tout en notifiant
     // « republiez-la ». Le commerçant republiait, consommait un de ses 5
@@ -1143,14 +1401,51 @@ export class PromoService {
     // `moderationStatus` n'est affiché sur aucun écran commerçant (revue
     // 2026-08-05, règle #8). L'avertissement lève donc tout statut bloquant :
     // c'est le retour en brouillon qui porte la sanction, pas le masque.
-    await this.promos.update(
-      { id: promoId },
-      {
-        moderationStatus: PromoModerationStatus.NORMALE,
-        lifecycleStatus: PromoLifecycleStatus.BROUILLON,
-        dateFin: null,
-      },
+    await this.resolveModeration(promoId, expected, {
+      moderationStatus: PromoModerationStatus.NORMALE,
+      lifecycleStatus: PromoLifecycleStatus.BROUILLON,
+      dateFin: null,
+    });
+  }
+
+  /**
+   * L'écriture des trois résolutions de modération — **conditionnée à l'état
+   * que le modérateur avait sous les yeux** (2026-08-13).
+   *
+   * ⚠️ **Le `WHERE` porte la garde, pas un `if` en amont.** Un contrôle en
+   * deux temps (lire le statut, comparer, écrire) rouvrirait très exactement la
+   * course qu'on ferme : entre la lecture et l'écriture, l'autre modérateur
+   * passe. C'est la règle 13 — « vérifier puis écrire » sur une contrainte
+   * métier n'est jamais sûr sans que la base l'arbitre. Ici un seul `UPDATE …
+   * WHERE "moderationStatus" = :attendu` suffit : Postgres verrouille la ligne,
+   * et **`affected` tranche**.
+   *
+   * ⚠️ **Pourquoi pas le verrou consultatif** qui protège déjà le plafond de
+   * promos actives : il sérialise, il n'arbitre pas. Deux `UPDATE`
+   * inconditionnels sérialisés s'écrasent tout aussi bien, simplement l'un
+   * après l'autre. Un verrou empêche l'entrelacement, pas la perte de décision.
+   *
+   * `affected === 0` a deux causes possibles — la promo a disparu, ou son état
+   * a changé. `ModerationService` a déjà établi l'existence juste avant ;
+   * l'ambiguïté résiduelle penche donc vers le conflit, qui est aussi la
+   * lecture la plus utile pour celui qui reçoit le refus.
+   */
+  private async resolveModeration(
+    promoId: string,
+    expected: PromoModerationStatus,
+    changement: QueryDeepPartialEntity<Promo>,
+  ): Promise<void> {
+    const resultat = await this.promos.update(
+      { id: promoId, moderationStatus: expected },
+      changement,
     );
+    if (resultat.affected === 0) {
+      throw new ConflictAppException(
+        ErrorCode.MODERATION_STATE_CHANGED,
+        'Cette promo a été traitée par un autre modérateur entre-temps. ' +
+          'Rafraîchissez la file avant de décider à nouveau.',
+      );
+    }
   }
 
   /**
@@ -1283,25 +1578,21 @@ export class PromoService {
    * 2026-07-12). Filtre aussi sur `dateFin` comme `findActiveForClient` —
    * sans ça, une promo expirée reste comptée comme "publiée" jusqu'au
    * passage du cron quotidien (`expireOutdatedPromosCron`), jusqu'à 24h de
-   * statistique fausse. `communeIds` restreint aux communes d'un agent —
-   * `undefined` = vue globale (admin).
+   * statistique fausse. Vue globale pour l'admin comme pour l'agent depuis le
+   * 2026-08-13 (chantier « agent global »).
    */
-  async countVisible(communeIds?: string[]): Promise<number> {
-    if (communeIds && communeIds.length === 0) return 0;
-
-    // La jointure sur `commercant` est désormais inconditionnelle : elle ne
-    // servait qu'au filtre par commune, si bien que la vue admin (sans
-    // `communeIds`) comptait les promos de comptes supprimés ou suspendus —
-    // le dashboard annonçait des promos publiées qu'aucun client ne voyait.
-    const qb = this.applyVisibleConditions(
+  async countVisible(): Promise<number> {
+    // ⚠️ **La jointure sur `commercant` RESTE, et ce n'est pas un vestige.**
+    // Elle a l'air de ne plus servir à rien maintenant que le filtre par
+    // commune est parti — c'est exactement le raisonnement qui l'avait rendue
+    // conditionnelle la première fois, et le défaut qui en découlait : la vue
+    // admin comptait les promos de comptes supprimés ou suspendus, et le
+    // dashboard annonçait des promos publiées qu'aucun client ne voyait.
+    // `applyVisibleConditions` s'appuie sur l'alias `commercant`.
+    return this.applyVisibleConditions(
       this.promos
         .createQueryBuilder('promo')
         .innerJoin('promo.commercant', 'commercant'),
-    );
-
-    if (communeIds) {
-      qb.andWhere('commercant.communeId IN (:...communeIds)', { communeIds });
-    }
-    return qb.getCount();
+    ).getCount();
   }
 }

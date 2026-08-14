@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Manifeste de confidentialité — obligatoire côté Apple, et absent jusqu'au
+  2026-08-12.
+
+  ⚠️ CE QUI EST DÉCLARÉ, ET POURQUOI EXACTEMENT CELA.
+
+  Le client enregistre lui-même un point sur la carte ; ce sont les commerces
+  proches de ce point qui lui sont proposés. Ce point est transmis au service,
+  donc c'est de la localisation collectée — même s'il n'est envoyé qu'après un
+  geste explicite, et même s'il peut venir d'un centrage GPS que l'utilisateur
+  a validé. Sous-déclarer est le seul risque réellement coûteux ici :
+  « collectée, sans suivi » n'ôte rien au produit, une déclaration fausse coûte
+  un refus — et il y en a déjà eu un sur ce sujet le 2026-08-05.
+
+  Ce qui n'est PAS déclaré, parce que ce n'est pas fait : aucun suivi, aucune
+  lecture de position en arrière-plan, aucun historique, aucun partage avec des
+  tiers, aucune publicité. L'app reste utilisable sans jamais accorder la
+  permission de localisation, puisque le point se pose à la main sur la carte.
+
+  Voir docs/PLAN_BASCULE_GEO.md §2.1 et §2.2.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeCoarseLocation</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

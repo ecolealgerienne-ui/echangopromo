@@ -106,6 +106,97 @@ describe('configNumber — le plancher', () => {
   });
 });
 
+/**
+ * **L'intervalle signé — et ce que ce banc doit surtout empêcher.**
+ *
+ * Le cas fondateur : `configNumber` refusait `n <= 0` **avant** d'évaluer le
+ * plancher (`n <= 0` testé ligne 115, `minimum` ligne 127). `options.minimum`
+ * ne levait donc pas le garde-fou, il s'y ajoutait — et **toute longitude
+ * négative retombait sur le défaut**, en silence pour qui ne lit pas les
+ * journaux. Oran (−0.64), Tlemcen (−1.31), Sidi Bel Abbès (−0.63) : tout
+ * l'ouest algérien. Le backend démarrait, servait Alger, et personne ne
+ * l'aurait su avant qu'un utilisateur ne le signale.
+ *
+ * ⚠️ **La moitié de ces cas existe pour prouver que le garde-fou n'a PAS été
+ * levé partout** (règle #28 : autant de cas qui doivent refuser que de cas qui
+ * passent). Un correctif qui se contenterait de supprimer `n <= 0` ferait
+ * passer tous les cas « doit accepter » ci-dessous **et rougir les cinq
+ * derniers** — c'est exactement ce qu'on attend d'eux.
+ */
+describe('configNumber — l’intervalle signé (coordonnées)', () => {
+  beforeEach(() => _resetConfigNumberLog());
+
+  const LON = { minimum: -180, maximum: 180 };
+  const LAT = { minimum: -90, maximum: 90 };
+
+  // ── Doivent PASSER ────────────────────────────────────────────────────────
+
+  it('accepte une longitude négative — le cas qui a motivé ce correctif', () => {
+    expect(configNumber('-0.64', 3.06, 'CLIENT_DEFAULT_LONGITUDE', LON)).toBe(
+      -0.64,
+    );
+  });
+
+  it('accepte zéro — Greenwich et l’équateur sont des valeurs légitimes', () => {
+    expect(configNumber('0', 3.06, 'CLIENT_DEFAULT_LONGITUDE', LON)).toBe(0);
+    expect(configNumber('0', 36.75, 'CLIENT_DEFAULT_LATITUDE', LAT)).toBe(0);
+  });
+
+  it('accepte les bornes exactes, des deux côtés', () => {
+    expect(configNumber('-180', 3.06, 'LON', LON)).toBe(-180);
+    expect(configNumber('180', 3.06, 'LON', LON)).toBe(180);
+    expect(configNumber('-90', 36.75, 'LAT', LAT)).toBe(-90);
+    expect(configNumber('90', 36.75, 'LAT', LAT)).toBe(90);
+  });
+
+  it('accepte un décimal signé', () => {
+    expect(configNumber('36.7538', 0, 'LAT', LAT)).toBe(36.7538);
+    expect(configNumber('-1.31', 0, 'LON', LON)).toBe(-1.31);
+  });
+
+  // ── Doivent REFUSER — l’intervalle borne des DEUX côtés ───────────────────
+
+  it('refuse une valeur sous le minimum signé', () => {
+    expect(configNumber('-200', 3.06, 'LON', LON)).toBe(3.06);
+    expect(configNumber('-90.1', 36.75, 'LAT', LAT)).toBe(36.75);
+  });
+
+  it('refuse une valeur au-dessus du maximum', () => {
+    expect(configNumber('200', 3.06, 'LON', LON)).toBe(3.06);
+    expect(configNumber('4000', 3.06, 'LON', LON)).toBe(3.06);
+  });
+
+  it('refuse toujours le non-numérique, l’infini et NaN en mode signé', () => {
+    expect(configNumber('abc', 3.06, 'LON', LON)).toBe(3.06);
+    expect(configNumber('', 3.06, 'LON', LON)).toBe(3.06);
+    expect(configNumber(Infinity, 3.06, 'LON', LON)).toBe(3.06);
+    expect(configNumber(NaN, 3.06, 'LON', LON)).toBe(3.06);
+    expect(configNumber(true, 3.06, 'LON', LON)).toBe(3.06);
+  });
+
+  // ── Doivent REFUSER — le garde-fou historique n’a PAS été levé ailleurs ───
+
+  it('refuse encore zéro et le négatif SANS options — rien n’a changé pour les plafonds', () => {
+    expect(configNumber('-3', 5)).toBe(5);
+    expect(configNumber('0', 5)).toBe(5);
+    expect(configNumber('-3', 5, 'PROMO_ACTIVE_CAP')).toBe(5);
+  });
+
+  it('un minimum POSITIF ne lève pas le garde-fou', () => {
+    expect(configNumber('-3', 3, 'SEUIL', { minimum: 2 })).toBe(3);
+    expect(configNumber('0', 3, 'SEUIL', { minimum: 2 })).toBe(3);
+  });
+
+  // ⚠️ Un `maximum` seul borne, il ne DÉCLARE rien : c'est le minimum négatif
+  // ou nul qui dit « cette clé peut être signée ». Sans ce cas, on pourrait
+  // croire qu'ajouter un plafond suffit à autoriser les négatifs.
+  it('un maximum seul ne déclare pas un intervalle signé', () => {
+    expect(configNumber('-5', 5, 'CAP', { maximum: 180 })).toBe(5);
+    expect(configNumber('200', 5, 'CAP', { maximum: 180 })).toBe(5);
+    expect(configNumber('42', 5, 'CAP', { maximum: 180 })).toBe(42);
+  });
+});
+
 describe('configNumber — la trace laissée par le repli', () => {
   let warn: jest.SpyInstance;
   // Les messages sont collectés ici plutôt que relus dans `warn.mock.calls` :
@@ -160,5 +251,38 @@ describe('configNumber — la trace laissée par le repli', () => {
     configNumber(undefined, 5, 'PROMO_ACTIVE_CAP');
     configNumber(undefined, 7, 'PROMO_MAX_DURATION_DAYS');
     expect(messages).toHaveLength(2);
+  });
+
+  // ⚠️ `-3` se lit parfaitement — il est refusé, pas illisible. Confondre les
+  // deux dans le journal fait chercher une faute de frappe là où il y a un
+  // désaccord sur l'intervalle attendu, et c'est ce journal-là qui est la
+  // contrepartie du repli (règle #29).
+  it('distingue « nulle ou négative » de « illisible »', () => {
+    configNumber('-3', 5, 'PROMO_ACTIVE_CAP');
+    expect(messages[0]).toContain('négative');
+    expect(messages[0]).not.toContain('illisible');
+  });
+
+  it('nomme la borne franchie, des deux côtés', () => {
+    configNumber('200', 3.06, 'CLIENT_DEFAULT_LONGITUDE', {
+      minimum: -180,
+      maximum: 180,
+    });
+    expect(messages[0]).toContain('maximum');
+    expect(messages[0]).toContain('180');
+
+    configNumber('-200', 3.06, 'AUTRE_LON', { minimum: -180, maximum: 180 });
+    expect(messages[1]).toContain('minimum');
+    expect(messages[1]).toContain('-180');
+  });
+
+  it('ne dit rien sur une coordonnée valide, fût-elle négative', () => {
+    expect(
+      configNumber('-0.64', 3.06, 'CLIENT_DEFAULT_LONGITUDE', {
+        minimum: -180,
+        maximum: 180,
+      }),
+    ).toBe(-0.64);
+    expect(messages).toHaveLength(0);
   });
 });

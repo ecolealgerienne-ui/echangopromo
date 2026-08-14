@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/models/map_shop.dart';
 import '../../../providers/core_providers.dart';
-import 'commune_providers.dart';
 import 'promo_providers.dart';
 
 /// Zone visible de la carte, mise à jour à la fin de chaque déplacement.
@@ -53,31 +52,15 @@ class MapBounds {
   int get hashCode => Object.hash(north, south, east, west);
 }
 
-/// Centre de carte déduit des communes choisies, pour le client dont la
-/// position GPS est inconnue (localisation refusée, service coupé, ou position
-/// pas encore remontée).
-///
-/// ── Pourquoi il existe ────────────────────────────────────────────────────
-///
-/// Sans GPS, la carte s'ouvrait sur `_fallbackCenter` — Djelfa, écrit en dur.
-/// Invisible au pilote (mono-wilaya), faux dès qu'un client suit des communes
-/// ailleurs : il aurait ouvert la carte sur une ville qui n'est pas la sienne,
-/// vue comme vide, sans rien pour le lui dire.
-///
-/// `null` quand le serveur ne connaît pas de centre : la carte garde alors son
-/// repli. Une erreur réseau est traitée pareil — un centrage n'est pas une
-/// donnée dont l'absence mérite d'interrompre l'écran.
-final mapCenterForCommunesProvider =
-    FutureProvider.autoDispose<({double latitude, double longitude})?>(
-        (ref) async {
-  final communeIds = ref.watch(selectedCommunesProvider);
-  if (communeIds.isEmpty) return null;
-  try {
-    return await ref.watch(promoApiProvider).fetchMapCenter(communeIds);
-  } catch (_) {
-    return null;
-  }
-});
+// ⚠️ **Un bloc de documentation ORPHELIN était ici, et il a survécu à son
+// sujet.** Il décrivait `mapCenterForCommunesProvider`, supprimé lors de la
+// bascule géographique du 2026-08-12 : le commentaire n'était rattaché à
+// aucune déclaration, donc `analyze` ne le voyait pas et rien ne pouvait le
+// signaler. Il a fallu une relecture adverse pour le trouver.
+//
+// Ce qu'il expliquait est repris ailleurs : le centre par défaut vient
+// désormais du point que le client a enregistré, puis de `GET /promo/config`
+// (voir `centreParDefautProvider`).
 
 /// Commerces de la zone visible. `autoDispose` + `family` : chaque zone est
 /// une requête distincte, et le cache se libère en quittant l'écran plutôt

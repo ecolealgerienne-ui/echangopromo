@@ -21,13 +21,35 @@
  *
  * ── Ce qu'elle refuse, et ce qu'elle en fait ──────────────────────────────
  *
- * Une valeur illisible (`'abc'`, `''`, `Infinity`, un négatif) retombe sur
- * [defaut]. C'est un repli assumé, contre la règle #29, et pour une raison
- * précise : il n'existe pas de plafond « absent » qui aurait du sens ici, et
- * refuser au démarrage rendrait une faute de frappe dans `.env` capable
- * d'empêcher le backend de servir. Le repli est donc **journalisé** — c'est
- * ce qui le distingue d'un défaut silencieux : l'information d'absence n'est
- * pas détruite, elle est déplacée dans le journal.
+ * Une valeur illisible (`'abc'`, `''`, `Infinity`) ou hors de l'intervalle
+ * attendu retombe sur [defaut]. C'est un repli assumé, contre la règle #29,
+ * et pour une raison précise : il n'existe pas de plafond « absent » qui
+ * aurait du sens ici, et refuser au démarrage rendrait une faute de frappe
+ * dans `.env` capable d'empêcher le backend de servir. Le repli est donc
+ * **journalisé** — c'est ce qui le distingue d'un défaut silencieux :
+ * l'information d'absence n'est pas détruite, elle est déplacée dans le
+ * journal.
+ *
+ * ── Pourquoi zéro et le négatif sont refusés PAR DÉFAUT, mais plus toujours ─
+ *
+ * Toutes les clés lues jusqu'ici sont des plafonds, des durées ou des
+ * cooldowns : zéro et négatif n'y ont aucun sens, et le refus est éprouvé
+ * (`config-number.spec.ts`). ⚠️ **Mais ce garde-fou n'était pas levable, et
+ * `options.minimum` ne le levait pas** — il s'y ajoutait, le test `n <= 0`
+ * étant appliqué avant le plancher.
+ *
+ * Ça n'avait aucune conséquence tant que la configuration ne portait que des
+ * plafonds. Ça en a une le jour où elle porte une **coordonnée** : les
+ * longitudes de tout l'ouest algérien sont négatives — Oran (−0.64), Tlemcen
+ * (−1.31), Sidi Bel Abbès (−0.63). Régler la position par défaut sur Oran
+ * aurait donné un backend qui démarre, sert Alger, et un journal que personne
+ * ne relit (règle #36 : le repli qui fonctionne est ce qui rend l'absence
+ * indiscernable de la présence).
+ *
+ * D'où la règle, **explicite et non déductible** : c'est un `minimum` **négatif
+ * ou nul** qui déclare un intervalle signé et lève le garde-fou. Sans lui, le
+ * refus de zéro et du négatif reste actif, exactement comme avant — un appelant
+ * qui n'a rien demandé ne change pas de comportement.
  */
 import { Logger } from '@nestjs/common';
 
@@ -71,8 +93,25 @@ export function configNumber(
      * alors à masquer la promo d'un concurrent, `X-Device-Id` n'étant jamais
      * vérifié côté serveur. Rendre une valeur réglable sans borne, c'est
      * rendre ce genre de réglage possible **depuis un fichier**, sans revue.
+     *
+     * ⚠️ **Un minimum négatif ou nul fait plus que borner : il déclare un
+     * intervalle signé** et lève le refus de zéro et du négatif (voir l'en-tête
+     * du fichier). C'est volontairement le seul moyen de le lever — un appelant
+     * qui passe `{ minimum: 2 }` garde le comportement d'avant, garde-fou
+     * compris.
      */
     minimum?: number;
+
+    /**
+     * Valeur maximale acceptée. Au-dessus, repli journalisé.
+     *
+     * Née avec les coordonnées (`{ minimum: -180, maximum: 180 }`) : une
+     * longitude à 4000 est aussi fausse qu'une longitude à `'abc'`, mais rien
+     * ne la refusait — le refus de zéro et du négatif ne borde que d'un côté.
+     * Règle #34, second temps : « un DTO décoré n'est pas un DTO borné », et
+     * une lecture de configuration non plus.
+     */
+    maximum?: number;
   },
 ): number {
   // ⚠️ **L'absence se dit, elle aussi.** Elle ne se distingue autrement en
@@ -110,9 +149,7 @@ export function configNumber(
 
   const n = Number(brut);
 
-  const plancher = options?.minimum ?? Number.MIN_VALUE;
-
-  if (!Number.isFinite(n) || n <= 0) {
+  if (!Number.isFinite(n)) {
     // ⚠️ `String`, pas `JSON.stringify` : ce dernier rend `null` pour `NaN`
     // **et** pour `Infinity`, effaçant du journal la seule chose qu'il doit
     // montrer. Ce message est la contrepartie du repli — s'il est illisible,
@@ -124,10 +161,35 @@ export function configNumber(
     return defaut;
   }
 
-  if (n < plancher) {
+  // Un `minimum` négatif ou nul est la **déclaration** d'un intervalle signé.
+  // Tout le reste — pas d'options, ou un minimum positif — garde le garde-fou
+  // historique intact.
+  const intervalleSigne =
+    options?.minimum !== undefined && options.minimum <= 0;
+
+  if (!intervalleSigne && n <= 0) {
+    // Message distinct de « illisible » : `-3` se lit parfaitement, il est
+    // refusé. Confondre les deux dans le journal, c'est faire chercher une
+    // faute de frappe là où il y a un désaccord sur l'intervalle attendu.
     signaler(
       cle,
-      `${cle ?? 'valeur'} de configuration sous le minimum autorisé (${n} < ${plancher}) — repli sur ${defaut}`,
+      `${cle ?? 'valeur'} de configuration nulle ou négative (${n}) — repli sur ${defaut}`,
+    );
+    return defaut;
+  }
+
+  if (options?.minimum !== undefined && n < options.minimum) {
+    signaler(
+      cle,
+      `${cle ?? 'valeur'} de configuration sous le minimum autorisé (${n} < ${options.minimum}) — repli sur ${defaut}`,
+    );
+    return defaut;
+  }
+
+  if (options?.maximum !== undefined && n > options.maximum) {
+    signaler(
+      cle,
+      `${cle ?? 'valeur'} de configuration au-dessus du maximum autorisé (${n} > ${options.maximum}) — repli sur ${defaut}`,
     );
     return defaut;
   }

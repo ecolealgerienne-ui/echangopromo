@@ -2,7 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../domain/enums/onboarding_role.dart';
 
 /// État du parcours de premier lancement (splash → rôle → localisation),
-/// stocké en local à côté des communes sélectionnées (`SelectedCommuneStore`)
+/// stocké en local à côté du point de recherche (`ClientPositionStore`)
 /// — aucun compte, aucune donnée envoyée au backend.
 class OnboardingStore {
   OnboardingStore(this._prefs);

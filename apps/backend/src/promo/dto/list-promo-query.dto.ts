@@ -1,16 +1,22 @@
 import { Transform } from 'class-transformer';
 import {
-  ArrayMaxSize,
-  ArrayMinSize,
   IsArray,
+  IsBoolean,
+  IsDefined,
   IsEnum,
+  IsLatitude,
+  IsLongitude,
+  IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 import { Categorie } from '../../common/enums/categorie.enum';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
+import { versNombre } from '../../common/transforms/vers-nombre';
 
 /**
  * Tri de la liste client. `recent` est le défaut historique (favoris
@@ -28,22 +34,21 @@ export enum PromoSortOrder {
 }
 
 export class ListPromoQueryDto extends PaginationQueryDto {
-  /**
-   * Jusqu'à 4 communes (décision produit 2026-07-12, pensée pour les
-   * grandes villes comme Alger où les communes sont accolées — une promo
-   * dans l'une intéresse un client dans la voisine). Plafond imposé ici,
-   * pas seulement côté app : une garde uniquement client se contourne en
-   * appelant l'API directement.
-   */
-  @IsOptional()
-  @IsArray()
-  @ArrayMinSize(1)
-  @ArrayMaxSize(4)
-  @IsUUID(undefined, { each: true })
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.split(',').filter(Boolean) : value,
-  )
-  communeIds?: string[];
+  // ⚠️ **`communeIds` retiré le 2026-08-13, et son retrait est silencieux par
+  // construction.** `main.ts` monte le `ValidationPipe` avec `whitelist: true`
+  // mais **sans** `forbidNonWhitelisted` : un client qui enverrait encore
+  // `?communeIds=…` ne recevrait aucune erreur, le paramètre serait simplement
+  // effacé. Or il alimentait `perimetreExplicite` — la même requête passerait
+  // donc de « toutes les promos de mes 4 communes » à « les promos dans 5 km
+  // du point par défaut », sans une ligne de journal.
+  //
+  // Ce n'est pas un risque ici : rien n'est publié, aucune app installée
+  // n'existe (`docs/DEPLOIEMENT_STORES.md`). Écrit quand même, parce que le
+  // jour où une version sera en magasin, ce mode de défaillance-là ne se verra
+  // ni dans les journaux ni dans les taux d'erreur.
+  //
+  // Côté app, le paramètre était **déjà mort** depuis la bascule géographique
+  // (aucun appelant de `PromoApi.listActive(communeIds:)`, règle #31).
 
   @IsOptional()
   @IsEnum(Categorie)
@@ -79,6 +84,83 @@ export class ListPromoQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID()
   commercantId?: string;
+
+  /**
+   * Point autour duquel chercher (bascule géographique, 2026-08-12).
+   *
+   * ⚠️ **Ce n'est pas « la position du client ».** C'est le point qu'il a
+   * **enregistré lui-même**, sur la carte ou après s'être centré via le GPS —
+   * la distinction est juridique autant que technique, et elle est ce qui
+   * permet d'affirmer aux deux stores que l'app ne collecte pas de
+   * localisation de capteur (voir `docs/PLAN_BASCULE_GEO.md` §2.1). Rien
+   * n'oblige ce point à être là où le client se trouve.
+   *
+   * Absent, le serveur applique son propre défaut (`GET /promo/config`) —
+   * **sauf** si la requête porte déjà un périmètre explicite (`commercantId`,
+   * ou l'onglet Favoris), auquel cas aucun filtre géographique ne s'applique :
+   * « autres promos du magasin » interroge une fiche précise, pas un
+   * voisinage. ⚠️ `communeIds` figurait dans cette liste jusqu'au 2026-08-13.
+   *
+   * Les deux vont ensemble : `@ValidateIf` rend chacune obligatoire dès que
+   * l'autre est là. Une latitude seule est une requête cassée, pas une
+   * requête sans position — et la traiter comme une absence serait un défaut
+   * silencieux (règle #29).
+   */
+  @ValidateIf(
+    (o: ListPromoQueryDto) =>
+      o.latitude !== undefined || o.longitude !== undefined,
+  )
+  @IsDefined()
+  @Transform(versNombre)
+  @IsLatitude()
+  latitude?: number;
+
+  @ValidateIf(
+    (o: ListPromoQueryDto) =>
+      o.latitude !== undefined || o.longitude !== undefined,
+  )
+  @IsDefined()
+  @Transform(versNombre)
+  @IsLongitude()
+  longitude?: number;
+
+  /**
+   * Rayon de recherche, en kilomètres. Absent, celui de `GET /promo/config`.
+   *
+   * ⚠️ **Aucun `@Max` ici, et c'est délibéré** : le plafond réel est
+   * `CLIENT_MAX_RADIUS_KM`, une valeur de configuration. L'écrire aussi dans ce
+   * DTO en ferait une seconde source qui divergerait au premier changement de
+   * `.env` (règle #32, cas fondateur du « Plafond de 5 promos » recopié dans
+   * les `.arb`). Le refus est donc prononcé par le service, contre la valeur
+   * effective.
+   *
+   * `@IsNumber()` refuse déjà `NaN` et `Infinity` par défaut — ce qui, avec
+   * `versNombre`, ferme aussi le cas `?radiusKm=` (règle #34 : établir que
+   * c'est un nombre fini, jamais le supposer).
+   */
+  @IsOptional()
+  @Transform(versNombre)
+  @IsNumber()
+  @IsPositive()
+  radiusKm?: number;
+
+  /**
+   * Ne renvoyer **que** les favoris, et sans aucun cadrage géographique.
+   *
+   * ⚠️ Un favori est un choix explicite du client : rien ne justifie qu'une
+   * règle de proximité le lui retire. Le filtre était purement local — appliqué
+   * aux pages déjà chargées — ce qui marchait tant que la fenêtre valait quatre
+   * communes ; avec un rayon de 5 km, **un favori posé sur un commerce à 8 km
+   * disparaissait de l'onglet sans un mot**. Un élément qui s'évapore sans
+   * erreur ni message est exactement la classe de défaut que ce dépôt traque
+   * (R7 du plan de bascule).
+   */
+  @IsOptional()
+  @Transform(
+    ({ value }: { value: unknown }) => value === 'true' || value === true,
+  )
+  @IsBoolean()
+  favoritesOnly?: boolean;
 
   @IsOptional()
   @IsEnum(PromoSortOrder)

@@ -23,8 +23,8 @@ Quatre règles sondées :
    garantir. C'est la classe de défaut qui a frappé `countPendingModeration`.
 4. **Aucun secret dans le journal.** Il est lisible par tout admin et conservé
    longtemps ; y écrire un PIN ou un jeton en ferait le pire endroit du
-   système. Aujourd'hui `metadata` ne porte que des identifiants de commune —
-   cette sonde est là pour que ça le reste.
+   système. Aujourd'hui `metadata` ne porte que des identifiants de ressource
+   (commerçant, promo, plafond) — cette sonde est là pour que ça le reste.
 
 ⚠️ **L'ordre est vérifié, pas supposé** : deux actions sont faites dans un ordre
 connu, la seconde doit précéder la première. Sans ça, la première page d'un
@@ -225,7 +225,7 @@ def self_test():
     _v("filtre propre",
        verdict_filtre([{"actorType": "admin"}], "admin")[0], "ok")
     _v("journal sans secret",
-       verdict_secrets([{"metadata": {"communeIds": ["x"]}}])[0], "ok")
+       verdict_secrets([{"metadata": {"commercantId": "x"}}])[0], "ok")
     _v("ordre respecté",
        verdict_ordre([{"action": "b"}, {"action": "a"}], "b", "a")[0], "ok")
 

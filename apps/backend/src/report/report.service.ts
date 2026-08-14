@@ -2,8 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
-import { Commercant } from '../commercant/entities/commercant.entity';
-import { Commune } from '../commune/entities/commune.entity';
 import { ConflictAppException } from '../common/errors/app-exception';
 import { configNumber } from '../common/config/config-number';
 import { ErrorCode } from '../common/errors/error-code.enum';
@@ -124,10 +122,16 @@ export class ReportService {
    * même logique que `countActiveReports`, appliquée par-signalement
    * plutôt qu'après coup).
    *
-   * `communeIds` restreint la file aux communes d'un agent (plan de
-   * correction, Phase 2 : agent = modérateur) — `undefined` = vue globale
-   * (admin). Jointure supplémentaire vers `Commercant` seulement dans ce cas,
-   * pour ne pas alourdir la requête admin la plus fréquente.
+   * ⚠️ **File NATIONALE depuis le 2026-08-13.** `communeIds` la restreignait
+   * aux communes de l'agent ; il est parti avec le territoire, et la jointure
+   * conditionnelle vers `Commercant` qui n'existait que pour lui aussi.
+   *
+   * Ce que ça retire et que rien ne remplace : la **partition du travail**.
+   * Tous les agents voient la même file, et les trois résolutions
+   * (`resolveMasquer`, `resolveVerifieOk`, `resolveAvertir`) sont des `update`
+   * inconditionnels, sans précondition d'état ni verrou. Deux modérateurs sur
+   * la même promo — « masquer » puis « avertir » — et elle reste visible, sans
+   * erreur (règle #13).
    *
    * `moderationStatus = SIGNALEE` explicite (bug trouvé en relecture,
    * Phase 2/5) : sans ce filtre, une promo déjà résolue (masquée, avertie,
@@ -137,10 +141,7 @@ export class ReportService {
    * désenflait jamais après une décision, cassant tout le workflow agent
    * introduit en Phase 2.
    */
-  private pendingModerationQueryBuilder(
-    communeIds?: string[],
-    filter?: { communeId?: string; wilaya?: string },
-  ): SelectQueryBuilder<Report> {
+  private pendingModerationQueryBuilder(): SelectQueryBuilder<Report> {
     const qb = this.reports
       .createQueryBuilder('report')
       .innerJoin(Promo, 'promo', 'promo.id = report.promoId')
@@ -165,28 +166,6 @@ export class ReportService {
         threshold: this.seuilModeration(),
       });
 
-    if (communeIds || filter?.communeId || filter?.wilaya) {
-      qb.innerJoin(
-        Commercant,
-        'commercant',
-        'commercant.id = promo.commercantId',
-      );
-    }
-    if (communeIds) {
-      qb.andWhere('commercant.communeId IN (:...communeIds)', { communeIds });
-    }
-    if (filter?.communeId) {
-      qb.andWhere('commercant.communeId = :filterCommuneId', {
-        filterCommuneId: filter.communeId,
-      });
-    }
-    if (filter?.wilaya) {
-      qb.innerJoin(
-        Commune,
-        'commune',
-        'commune.id = commercant.communeId',
-      ).andWhere('commune.wilaya = :wilaya', { wilaya: filter.wilaya });
-    }
     return qb;
   }
 
@@ -194,15 +173,9 @@ export class ReportService {
   async listPendingModeration(
     page: number,
     limit: number,
-    communeIds?: string[],
-    filter?: { communeId?: string; wilaya?: string },
   ): Promise<PaginatedResult<{ promoId: string; activeReportCount: number }>> {
-    if (communeIds && communeIds.length === 0) {
-      return toPaginatedResult([], 0, page, limit);
-    }
-
-    const total = await this.countPendingModeration(communeIds, filter);
-    const rows = await this.pendingModerationQueryBuilder(communeIds, filter)
+    const total = await this.countPendingModeration();
+    const rows = await this.pendingModerationQueryBuilder()
       .orderBy('report.promoId', 'ASC')
       .offset((page - 1) * limit)
       .limit(limit)
@@ -232,15 +205,9 @@ export class ReportService {
    * décompte côté base (pas de transfert des lignes), contrairement à un
    * `getRawMany().length`.
    */
-  async countPendingModeration(
-    communeIds?: string[],
-    filter?: { communeId?: string; wilaya?: string },
-  ): Promise<number> {
-    if (communeIds && communeIds.length === 0) return 0;
-    const [sql, parameters] = this.pendingModerationQueryBuilder(
-      communeIds,
-      filter,
-    ).getQueryAndParameters();
+  async countPendingModeration(): Promise<number> {
+    const [sql, parameters] =
+      this.pendingModerationQueryBuilder().getQueryAndParameters();
     const rows = await this.reports.manager.query<{ count: number }[]>(
       `SELECT COUNT(*)::int AS count FROM (${sql}) AS grouped`,
       parameters,

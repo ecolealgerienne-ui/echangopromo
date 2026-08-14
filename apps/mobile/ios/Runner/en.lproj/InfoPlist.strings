@@ -1,0 +1,3 @@
+"NSLocationWhenInUseUsageDescription" = "Used to center the map on you and show distances — and, if you are a merchant, to save your shop's location so customers can find it.";
+"NSCameraUsageDescription" = "Used to take a photo of your shop or of a promo.";
+"NSPhotoLibraryUsageDescription" = "Used to pick an existing photo of your shop from your gallery.";

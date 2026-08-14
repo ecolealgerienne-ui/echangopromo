@@ -560,8 +560,11 @@ Tout est dans `scripts/`. Chaque banc lance son auto-test avant de conclure, et
 ./scripts/test-cycle-commercant.sh
 ```
 
-⚠️ **Attendre une minute entre deux bancs** : connexions et inscriptions sont
-plafonnées à 5/min/IP, et un 429 se déguise en « identifiants incorrects ».
+⚠️ **Attendre une minute entre deux bancs** : les inscriptions sont plafonnées à
+5/min/IP et les écritures à 20/min/IP, et un 429 se déguise en « identifiants
+incorrects ». ⚠️ **Les connexions ne sont plus la contrainte** depuis le
+2026-08-13 (50/min, `AUTH_THROTTLE`) — sauf après `test-auth-login.sh`, qui vide
+ce seau exprès.
 
 ~~⚠️ **`test-cycle-commercant.sh` sort en échec, légitimement**, sur P10.~~
 **Périmé — P10 est corrigé.** `CommercantService.login` passe par
@@ -1707,8 +1710,9 @@ les deux requêtes atteignent la même règle.
 ### Ce qui reste, et qui est écrit plutôt que caché
 
 - **`test-auth-login` et `test-abus-signalement` doivent tourner SEULS** : ils
-  épuisent volontairement le seau de 5/min, et tout banc lancé dans la minute
-  suivante accuserait ses propres identifiants.
+  épuisent volontairement leur seau — celui des connexions (50/min) pour le
+  premier, celui des signalements (5/min) pour le second — et tout banc lancé
+  dans la minute suivante accuserait ses propres identifiants.
 - **`test-promo-cycle` épuise le plafond quotidien** du commerçant du décor :
   à lancer en dernier, ou sur un décor jetable.
 - La notification « expire bientôt » (cron de 1h) reste non couverte : la
@@ -2873,6 +2877,1656 @@ alors la page, l'app non — `network_security_config.xml` gouverne la pile
 Java/Android, pas `HttpClient` de `dart:io`, qui a son propre magasin de racines.
 L'avertissement est désormais dans le fichier. Le remède est côté machine :
 exclure le domaine de l'inspection HTTPS.
+
+---
+
+### 2026-08-12 — Bascule géographique : décision, plan, et les deux premiers lots
+
+**Décision produit.** L'ancrage du produit passe de la hiérarchie
+administrative (wilaya → commune) au **point GPS**. Motif : ne plus maintenir
+un référentiel saisi à la main (`seed-communes.ts`, 35 communes reconstituées
+par recherche web, avec un avertissement en tête disant que la liste n'est pas
+vérifiée) et pouvoir sortir d'Algérie sans réécrire le modèle.
+
+**Le plan est dans `docs/PLAN_BASCULE_GEO.md`** — 12 décisions actées, 7
+arbitrages tranchés, 12 pièges, 9 lots. Ne pas le résumer ici : deux sources
+divergeraient.
+
+**Ce qui a été fait** : lot 0 (`configNumber` accepte les intervalles signés) et
+lot 1 (les clés de configuration géographiques + `GET /promo/config`).
+
+#### Ce qu'on a appris, et qui vaut plus que les commits
+
+**Un garde-fou juste peut devenir faux sans qu'une ligne bouge — il suffit que
+le domaine change.** `configNumber` refusait `n <= 0` **avant** d'évaluer
+`options.minimum` (`config-number.ts`, ligne 115 contre 127) : le plancher s'y
+**ajoutait** au lieu de le remplacer. Irréprochable tant que la configuration ne
+portait que des plafonds et des durées. Le jour où elle porte une **coordonnée**,
+ça devient : *toute longitude ouest retombe sur le repli*. Oran (−0.64), Tlemcen
+(−1.31), Sidi Bel Abbès (−0.63) — le backend démarre, sert Alger, et laisse une
+ligne de journal que personne ne relit (règle #36 : le repli qui fonctionne rend
+l'absence indiscernable de la présence). **Aucun test ne l'aurait signalé, parce
+que le comportement était volontaire et éprouvé.**
+
+**Et une capacité correcte, appelée avec les mauvaises options, ne produit
+aucune erreur.** Corriger `configNumber` ne suffisait pas : encore fallait-il que
+`getClientConfig` lui passe `{ minimum: -180 }`. C'est le trou de la règle #31
+transposé aux paramètres — d'où `promo.service.client-config.spec.ts`, dont le
+cas central est « `CLIENT_DEFAULT_LONGITUDE=-0.64` doit ressortir à −0.64 ».
+Éprouvé par mutation : retirer l'option fait rougir 3 cas. Sans ce banc, rien
+dans le dépôt ne l'aurait dit.
+
+**Le plan lui-même a été relu de façon adversariale, et il était faux sur une
+quinzaine de points.** Deux relecteurs indépendants ont contrôlé ~70 et ~60
+références `fichier:ligne`. Le socle a tenu ; le reste, non. Les trois plus
+coûteux, tous consignés dans le §11 du plan :
+- il affirmait que `applyVisibleConditions` était « l'unique définition » de
+  *visible* — `findActiveForMap` la **redéclare** (`promo.service.ts:681-691`).
+  Une duplication règle #30 **préexistante**, que le commentaire de `:186-196`
+  dément 500 lignes plus bas ;
+- son plan de vérification **ne pouvait pas prouver ce qu'il prétendait** :
+  retirer la position d'un commerçant passe par `PATCH /commercant/me`, qui
+  allume `profilePendingReview` — le banc aurait constaté le mauvais code
+  d'erreur en étant **vert pour la mauvaise raison** ;
+- il décrivait un piège `NaN` qui **n'existe pas** (`class-transformer` n'appelle
+  pas le `@Transform` d'une clé absente), en manquant le vrai, qui est son
+  miroir : `?latitude=` vide vaut `0`, et `@IsLatitude()` l'accepte.
+
+⚠️ **La leçon n'est pas « faire relire ».** C'est qu'un document dense en
+`fichier:ligne` *inspire confiance en proportion de sa précision*, et qu'une
+référence exacte à 95 % se lit comme exacte à 100 %. Les erreurs n'étaient pas
+de la négligence : c'étaient des endroits où le raisonnement était allé **plus
+loin que la lecture**.
+
+#### Le lot 2, et ce que la vérification en vrai a appris
+
+`GET /promo` apprend `latitude`/`longitude`/`radiusKm`. **Le rayon est centré
+sur un point, jamais sur une ville** — aucun centroïde de commune n'intervient.
+
+**La contrainte qui a dicté le code n'est pas la nouvelle fonctionnalité, c'est
+l'app déjà installée.** Le point par défaut ne s'applique **que** si la requête
+ne porte aucun autre périmètre : sans cette exception, une requête portant les
+`communeIds` de Djelfa serait croisée avec un rayon autour du point par défaut
+et n'afficherait plus rien. Même raison pour `commercantId` (« autres promos du
+magasin » interroge une fiche, pas un voisinage).
+
+**Trois pièges que seule l'exécution réelle pouvait fermer :**
+
+- **`acos` déborde de son domaine quand le commerçant est exactement sur le
+  point de référence.** L'arithmétique flottante pousse l'argument juste
+  au-dessus de 1 et Postgres lève `input is out of range` — un 500 sur le cas le
+  plus banal qui soit, chercher depuis l'intérieur du commerce. Mesuré après
+  correction (`LEAST(1, GREATEST(-1, …))`) : **distance à soi-même = 0.000000**
+  pour les neuf commerçants positionnés.
+- **Le cosinus de la latitude n'est pas un raffinement.** À Djelfa (34,7°) un
+  degré de longitude ne vaut plus que ~91 km. L'omettre donne un cadre trop
+  étroit d'est en ouest, qui **exclut** des commerces réellement dans le rayon —
+  un manque, donc invisible à l'usage.
+- **`?latitude=` (présent, vide) valait l'équateur.** `Number('')` rend `0`, et
+  `@IsLatitude()` **accepte** zéro. Une requête cassée aurait cherché au large du
+  Gabon sans une erreur. Vérifié en vrai : `400` désormais. ⚠️ Le plan de
+  bascule décrivait, lui, un piège `NaN` sur paramètre **absent** — qui n'existe
+  pas (`class-transformer` n'appelle pas le transform d'une clé absente). Le vrai
+  piège était son miroir exact, et c'est la relecture adversariale qui l'a vu.
+
+**Mesuré contre le serveur qui tourne** : `GET /promo/config` sert des
+**nombres** (pas des chaînes) lus depuis le `.env` de WSL ; la requête
+haversine + bbox + `addSelect` + `getManyAndCount` **s'exécute** (200) — le §12
+du plan la donnait comme non vérifiée ; le dépassement de rayon rend
+`400 VALIDATION_ERROR` avec le plafond **venu de la configuration** ; une
+latitude sans longitude rend 400. Distances de contrôle depuis Djelfa : 0,5 à
+2,5 km pour les huit commerces locaux, **1571 km** pour « Lala » — qui est en
+Île-de-France, une donnée de test à nettoyer.
+
+#### Le lot 2a — une duplication qui attendait depuis toujours
+
+`applyVisibleConditions` s'annonce depuis sa création comme **« l'unique
+définition de promo visible par un client »**, et son commentaire raconte même
+comment quatre copies éparses ont été fusionnées le 2026-08-05. Le même fichier
+en portait une **sixième**, locale à `findActiveForMap` : les cinq mêmes
+conditions, réécrites 650 lignes plus bas, sous d'autres noms de paramètres.
+
+Le titre l'affirmait, le code le démentait, et personne ne l'avait vu **parce
+que les deux copies disaient la même chose**. C'est ce qui rend ce défaut
+particulier : une duplication n'échoue pas, elle attend.
+
+Ce qui l'a révélée n'est pas une relecture de confort, c'est la préparation de
+la **sixième condition** (la position du commerçant, décision 8). Elle n'aurait
+porté que sur l'une des deux copies — donc sur la liste et pas sur la carte. Un
+commerçant sans position aurait disparu de la liste **en restant visible sur la
+carte**, sans erreur ni journal. D'où la fusion livrée **avant** le lot 4, et
+dans un lot à part.
+
+⚠️ **Ce que sa vérification établit, et ce qu'elle n'établit pas.** Les trois
+requêtes concernées répondent `200` contre le vrai Postgres (carte, carte avec
+filtre catégorie, liste au point) — donc la requête fusionnée est valide, les
+alias et les paramètres ne se télescopent pas. **L'équivalence, elle, repose sur
+la lecture** (mêmes cinq conditions, même ordre, seuls les noms de paramètres
+changent) et non sur un diff du SQL généré. La base étant expirée, aucune de ces
+réponses ne contient de ligne : elles ne prouvent pas que le filtrage
+sélectionne.
+
+#### La mesure qui manquait, et ce qu'elle dit vraiment
+
+**44 commerçants sans position sur 53** (83 %), mais **zéro promo en ligne**
+parmi eux. Sur cette base, le basculement n'éteindrait donc **rien**.
+
+⚠️ **Et ce chiffre ne répond pas à la question qu'on lui posait.** C'est la base
+de **développement**, pas le terrain : elle ne dit pas si la régularisation du
+parc réel est une campagne ou trois appels. Ce qu'elle dit, en revanche, est
+plus utile — **40 des 44 ont été créés APRÈS le correctif du 2026-08-05**. Ils
+viennent donc des modules de `scripts/lib/`, qui ne posent aucune coordonnée :
+**c'est le harnais de test qui fabrique les commerçants sans position**. Cela
+confirme d'un coup les deux exigences du plan : corriger les 9 sites dans le
+même commit que le blocage (§5.5, règle #38), et rendre la position obligatoire
+sur l'écran de création par l'agent (§5.11), par lequel ces 9 sites passent tous.
+
+**Toute la base a expiré** (promos du 2026-08-05, durée 5 à 7 jours) : 90 promos
+publiées, **aucune non expirée**. Les vérifications ci-dessus rendent donc des
+listes vides. ⚠️ **Elles prouvent que les requêtes s'exécutent, pas que le
+filtrage sélectionne** — une liste vide satisfait n'importe quelle assertion
+d'absence (règle #28). Le contrôle qui manque est celui du §9.2 du plan : un
+point **dans le carré et hors du cercle**, à écrire dans `client_liste.py`.
+
+#### Le lot 4 — publier exige une position, et ce qu'un banc a rattrapé
+
+Publier sans position était un geste sans effet : la carte filtre sur un cadre
+et la liste sur un rayon, qu'un `NULL` ne peut satisfaire ni l'un ni l'autre. Le
+commerçant voyait « 3 en ligne » sur un stock que personne ne voyait.
+
+**Deux décisions qui ne valent qu'ensemble** — l'aval et la source :
+
+- **`PATCH /commercant/me/position`**, qui n'allume pas la revue de profil à la
+  **première** pose. Sans elle, le commerçant bloqué qui corrige par la route
+  générale entre aussitôt dans un second blocage, plus long : il attend un
+  admin. Il ne peut pas s'en sortir seul.
+- **La position devient obligatoire à la création par agent** — serveur *et*
+  écran — alors qu'elle reste facultative à l'auto-inscription. C'est la mesure
+  du jour qui l'impose : 40 des 44 commerçants sans position venaient de cette
+  route. Écoper sans fermer le robinet aurait laissé chaque tournée d'agent
+  reconstituer le parc qu'on venait de régulariser.
+
+**Ce qu'un banc a rattrapé, et qui n'aurait rien produit d'autre qu'un vert.**
+
+Le banc `test-position-publication` a été écrit, éprouvé par mutation, et a
+rendu **❌ au premier passage contre le serveur réel**. Il avait raison : le
+refus venait de `COMMERCANT_REGISTRE_NOT_VALIDATED`, pas de la position.
+**C'était le scénario qui était faux, pas le produit.**
+
+Quatre gardes se suivent dans `PromoService` — registre, revue de profil,
+position, plafond — et **rendent toutes 403**. Un commerçant auto-inscrit est
+arrêté par la première, bien avant d'atteindre celle qu'on croyait mesurer.
+
+⚠️ **Si ce banc s'était contenté du statut HTTP, il serait passé au vert en
+mesurant une règle qu'il n'atteignait pas.** Il aurait « prouvé » le blocage de
+position sans jamais l'avoir déclenché — et personne n'aurait eu de raison d'y
+revenir. C'est exactement le faux positif que la règle #28 vise, et il ne s'est
+révélé que parce que le verdict exigeait le **code d'erreur**.
+
+Corollaire, à retenir pour les prochains bancs : **là où plusieurs gardes
+partagent un même statut, le statut ne mesure rien.** Et établir la prémisse
+(« cette garde est-elle seulement *atteignable* ? ») ne se déduit pas d'une
+lecture du code, ça se construit dans le décor — ici en levant le blocage
+registre, puis en **vérifiant** l'état de départ avant de mesurer quoi que ce
+soit.
+
+Verdict final contre le serveur réel : refus `COMMERCANT_POSITION_REQUIRED`,
+brouillon toujours accepté (la régression de `promo.service.ts` n'a pas été
+refabriquée), position posée, publication acceptée **sans détour par un admin**
+— ce dernier point étant ce qui prouve que la route dédiée tient sa promesse.
+
+#### Les lots 3, 5, 6, 7 et 8 — la bascule est complète
+
+**Lot 3 (l'app).** Le client enregistre un point et voit les promos autour. La
+porte de consentement vit **à un seul endroit** — `clientPositionProvider` rend
+`null` tant que rien n'est enregistré, et aucune coordonnée ne part alors.
+
+Le geste d'enregistrement **est** le consentement : point et consentement se
+posent ensemble et se retirent ensemble, dans le même store. Cet invariant rend
+impossible l'état qui ferait mentir les CGU — un point présent sans
+consentement — et rend la porte triviale à vérifier.
+
+⚠️ **Le défaut qui serait passé inaperçu** : `markCompleted()` n'était appelé
+**que** depuis l'écran de localisation supprimé. Sans son déplacement vers le
+choix du rôle, l'onboarding serait revenu **à chaque lancement** — sans erreur,
+sans test rouge, sans rien pour le dire. Il avait été repéré par la relecture
+adversariale, pas par le code.
+
+**Lot 5.** `GET /promo/map/center` retirée : sa seule raison d'être était écrite
+dans son propre doc (« pour un client qui n'a pas de GPS mais a choisi ses
+communes »), et ce cas n'existe plus. ⚠️ Le dépinglage dans `frontiere_http.py`
+**devait** être dans le même commit : le banc échoue sur une route ouverte non
+épinglée, mais se contente d'un **avertissement** sur une entrée épinglée
+disparue. Rien ne l'aurait rattrapée.
+
+Ses deux contrôles sont **réécrits, pas supprimés** — et le remplaçant du décor
+est plus fort que l'original : il demande la carte elle-même et exige d'y
+trouver *ce* commerçant, là où un barycentre de commune pouvait être non nul
+sans qu'il y soit.
+
+**Lot 6.** Les trois filtres wilaya fusionnés. Vérifié en vrai, et pas seulement
+« ça répond 200 » : 72 commerçants sans filtre, 72 pour Djelfa, **0 pour une
+wilaya inexistante**. Un filtre qui rend tout aurait rendu 72 partout.
+
+**Lots 7 et 8.** Specs §3.1/§3.2/§5.2, `ARCHITECTURE.md`, et la règle 33 de
+`CLAUDE.md` (14 → **15** routes ouvertes : `/promo/config` arrive, `/promo/map/center`
+part — décompte **mesuré par le banc**, pas compté à la main). Côté stores : `PrivacyInfo.xcprivacy`
+(obligatoire chez Apple, **absent jusqu'ici**) et `InfoPlist.strings` dans les
+trois langues — la justification de localisation était en français seul dans une
+app trilingue.
+
+⚠️ **La déclaration store a changé de sens, et c'est le point à ne pas rater.**
+Le plan disait d'abord « ne pas déclarer la position du capteur, elle ne quitte
+pas l'appareil ». C'était faux dès lors que le client peut poser son point
+depuis un centrage GPS — le parcours le plus naturel. Des coordonnées dérivées
+du capteur et transmises restent de la localisation collectée, même envoyées une
+seule fois sur un geste explicite. **Sous-déclarer est le seul risque qui coûte
+vraiment** : « collectée, sans suivi » n'ôte rien au produit, une déclaration
+fausse coûte un refus — et il y en a déjà eu un sur ce sujet le 2026-08-05.
+
+#### Le rejeu complet des bancs — 6 défauts, tous dans l'outillage
+
+Les **30 bancs** ont été rejoués après la bascule. **Aucun n'a trouvé de défaut
+dans le produit.** Les six qu'ils ont trouvés étaient dans le décor, dans les
+bancs eux-mêmes, ou dans mes propres décomptes — ce qui est le bon résultat,
+mais mérite d'être dit précisément.
+
+**1. Le décor ne pouvait plus publier.** Son commerçant date d'avant le
+correctif du 2026-08-05, et `provision-decor.sh` est idempotent **par la
+connexion** : un compte existant n'est jamais réinscrit, donc les coordonnées
+ajoutées à sa charge utile ne l'atteignent jamais. Il s'arrêtait sur
+`COMMERCANT_POSITION_REQUIRED`, **et tous les bancs derrière lui restaient
+bloqués**. C'est mot pour mot le risque résiduel que le §5.5 du plan avait
+prévu. Réparé par `PATCH /commercant/me/position` — la route existe pour ce cas.
+
+**2. L'étape 6 du décor lisait la mauvaise clé.** La projection de
+`GET /promo/map` est **plate** : le commerçant *est* l'item, ses promos sont
+imbriquées dessous. Le contrôle cherchait `.commercant.id`, écrit sans regarder
+la réponse. Il a rendu ❌ sur un décor parfaitement posé — bon sens d'erreur :
+il a échoué franchement au lieu de compter 0 en silence.
+
+**3. 🔴 `client_highlight.py` ne sondait plus rien.** Il interrogeait
+`?communeIds=`, paramètre supprimé par la bascule. `ValidationPipe({whitelist:
+true})` **retire en silence tout paramètre inconnu** : les deux réponses
+comparées seraient devenues identiques *parce qu'on n'avait rien demandé*, et
+le banc aurait conclu « la curation ne dépend pas de la commune » sans jamais
+avoir fait varier quoi que ce soit. **Vert pour la mauvaise raison,
+indéfiniment.** C'est le défaut le plus intéressant de la campagne, et aucun
+outil ne pouvait le voir : le banc passait.
+
+**4. Et sa contrepartie manquait.** « La curation ne change pas avec le
+cadrage » est satisfaite par un serveur qui **ignore le paramètre** — il rendrait
+la même chose partout. On prouverait l'immobilité en croyant prouver la
+globalité. D'où une seconde sonde : le **repli**, lui, DOIT suivre le point.
+⚠️ Les deux s'excluent — la réponse contient *soit* la curation *soit* le repli
+— donc elles portent sur deux états successifs du serveur, dans cet ordre.
+
+**5. 🔴 `GET /promo/config` n'était plus épinglée.** Le lot 1 l'avait ajoutée
+juste au-dessus de `GET /commune` ; le lot 5 supprimait `/promo/map/center` par
+une découpe entre deux repères textuels, et l'a emportée. Le banc de frontière
+l'a attrapée au premier rejeu avec un **échec dur** — c'est sa polarité, et elle
+a payé. Ni compilation, ni test, ni lint ne l'auraient vue.
+
+**6. Mes décomptes de routes étaient faux.** J'avais écrit 16 en additionnant de
+tête ; le banc mesurait 15. Trois fichiers l'affirmaient. C'est exactement ce que
+la règle 33 portait déjà — son « les 14 actuelles » était périmé depuis le
+2026-08-05, et personne ne l'avait vu **parce qu'un nombre dans une phrase ne
+peut pas échouer**. Les trois valeurs sont désormais alignées sur ce que le banc
+mesure.
+
+⚠️ **Un artefact de campagne, à ne pas prendre pour un défaut** : à force de
+rejeux, le commerçant du décor a épuisé son plafond de 5 créations / 24 h — que
+`promo-cycle` épuise d'ailleurs volontairement. Le décor échouait alors sans
+rapport avec la bascule. Contourné en repartant sur un numéro neuf
+(`D_COMMERCANT_TEL`), pas en touchant au produit.
+
+#### Les parcours sur appareil — 2 défauts de plus, et une incohérence d'écran
+
+Sept parcours joués sur émulateur. **Aucun défaut de produit**, deux défauts de
+parcours, et une incohérence d'interface que seul l'appareil pouvait montrer.
+
+✅ premier lancement · liste et fiche · carte · signalement · création de promo ·
+création par l'agent · auto-inscription du commerçant.
+
+**Le parcours « carte » supposait une densité faible.** Il attendait le marqueur
+individuel d'un commerce **sans jamais zoomer** — il présupposait donc qu'aucune
+grappe ne se forme, ce que rien ne stipulait ni ne vérifiait. Il a échoué sur un
+décor à 13 commerces en affichant « 11 » et « 2 » : **le produit regroupait
+correctement, c'est le parcours qui supposait** — et cette précondition sera
+fausse en production bien avant de l'être ici. Il ouvre désormais les grappes
+comme le ferait un utilisateur, borné à 6 essais.
+
+**Et la densité venait de mon propre banc** : `client_rayon.py` laissait deux
+commerçants derrière lui à chaque exécution. Un banc qui laisse des traces finit
+par faire échouer un **autre** banc, et l'échec accuse alors le mauvais endroit.
+Il s'auto-supprime maintenant.
+
+**Le parcours de l'agent ne captait pas de position**, devenue obligatoire sur
+cet écran. Il restait bloqué sur le formulaire et son message d'échec parlait de
+« téléphone déjà pris ? » — très loin de la vraie cause. En le corrigeant, une
+incohérence est apparue : ⚠️ **le bouton s'annonçait toujours « Localiser mon
+commerce (optionnel) »** sur un écran qui refuse la validation sans lui. Un champ
+qui se dit facultatif et bloque quand même est pire qu'un champ vide : il fait
+chercher l'erreur ailleurs. `LocationCaptureField` prend donc un drapeau
+`requis`, et le libellé le suit.
+
+⚠️ **Cette entrée était fausse jusqu'au 2026-08-13, et de la pire façon : elle
+déclarait corrigé un défaut qui ne l'était pas.** Le drapeau avait bien été ajouté
+au widget, et l'écran de l'agent le passait bien à `true` — mais
+`CommercantFieldsForm` **ne le transmettait pas** à `LocationCaptureField`. Le
+bouton continuait donc d'afficher « (optionnel) » sur l'écran par lequel passe
+tout le parc.
+
+Rien ne pouvait le dire : `requis` a une valeur par défaut, donc l'oubli
+**compile**. Ni `analyze`, ni les vérificateurs, ni les parcours ne regardent un
+libellé. Et j'avais tenu pour faite une modification dont je n'avais vérifié que
+la compilation — c'est exactement le mode de panne du paramètre optionnel non
+transmis : invisible partout.
+
+Trouvé par l'analyse d'impact du chantier suivant, pas par un contrôle. Corrigé
+et rejoué sur appareil le 2026-08-13.
+
+**Passe de confirmation du 2026-08-13 — 7 parcours rejoués, 7 verts**, après un
+décor neuf. Elle a révélé une exigence d'environnement que la bascule a créée
+sans que rien ne la dise :
+
+⚠️ **La permission de localisation doit être accordée PENDANT l'installation.**
+`flutter drive` réinstalle l'application à chaque parcours, ce qui efface les
+permissions — elles sont attachées au paquet, pas à l'appareil. Et un parcours ne
+peut pas taper la boîte de dialogue système : elle n'appartient pas à
+l'application. Le parcours « agent crée un commerçant » attendait donc 45 s puis
+échouait sur « la position n'a pas été captée », **sur un produit parfaitement
+sain**. `test-parcours-ecran.sh` accorde désormais la permission en tâche de
+fond dès que le paquet apparaît, et pose une position simulée — les deux sont
+nécessaires, la permission ne servant à rien si l'appareil n'a aucune position à
+donner.
+
+⚠️ **Un piège de paramétrage à ne pas reprendre pour un défaut** : lancer le
+parcours « liste et fiche » sur « Promo du décor » échoue, parce que le parcours
+exige **exactement une** carte et que plusieurs décors successifs portent tous
+cette description. Le flux prévu crée une promo à description horodatée par
+passage — c'est ce que fait le script.
+
+⚠️ **Ce que ces parcours n'ont pas pu couvrir** : l'émulateur était plein
+(`INSTALL_FAILED_INSUFFICIENT_STORAGE`) tant que deux applications d'autres
+projets y étaient installées. Elles ont été désinstallées sur demande. Restent
+non joués : espace pro, modération admin, plafond commerçant — non touchés par
+la bascule, et leurs paramètres demandent le calcul complet du décor d'écran.
+
+#### Points ouverts à la clôture
+
+- ✅ **Les six clés sont désormais dans le `.env` du clone WSL**, réglées sur
+  **Djelfa** (34.6703 / 3.2630) et non Alger : c'est l'environnement du pilote,
+  et un rayon de 5 km autour d'Alger y rendrait toute liste vide — ce qui se lit
+  comme un bug, pas comme un réglage.
+- ✅ **Le cas « dans le carré, hors du cercle » est couvert** —
+  `scripts/test-client-rayon.sh`, écrit et passé le 2026-08-12. Banc dédié
+  plutôt qu'une extension de `client_liste.py` : celui-ci couvre la
+  **visibilité** et n'a aucune raison de fabriquer deux commerces à des
+  distances calculées.
+
+  Il pose lui-même son décor via l'agent — route qui **exige** désormais une
+  position, donc un décor bancal y est refusé franchement au lieu de produire
+  des commerces invisibles. Mesuré : proche à 1,00 km **présent** au rayon 3 ;
+  coin à 3,90 km **absent** au rayon 3 et **présent** au rayon 10. Ce second
+  point est la prémisse (règle #38) : sans lui, l'absence au rayon 3 pourrait
+  venir de n'importe quelle autre cause.
+
+  ⚠️ Son auto-test bloquant ne vérifie pas que les verdicts savent refuser, il
+  vérifie **aussi la géométrie du décor** : que le point posé est bien dans le
+  cadre et hors du cercle. Un décor qui viserait à côté rendrait vert un
+  serveur cassé — et rien d'autre ne le dirait.
+
+  ⚠️ **La base de décor reste expirée par ailleurs** (promos du 5 août) : toute
+  autre mesure de filtrage y rendrait des listes vides, qui satisfont n'importe
+  quelle assertion d'absence.
+- ⚠️ **Rien n'a été exécuté sur appareil.** L'app compile, `analyze` rend 0
+  problème et les 4 vérificateurs passent, mais aucun parcours d'intégration
+  n'a tourné depuis la bascule. Ceux qui posaient `selected_commune_ids` ont été
+  réécrits pour poser le point du décor — **cette réécriture n'est pas
+  vérifiée**, et la règle 37 rappelle qu'aucun test hors appareil ne voit une
+  invalidation manquante.
+- ⚠️ **Le clone WSL portait 2 fichiers modifiés non commités** (`provision-decor.sh`,
+  `seed-demo.sh`) — le **même** travail que le commit `aa7154a` déjà sur `origin`,
+  refait localement et jamais poussé. Mis en `git stash` (récupérable), pas
+  supprimé. C'est la divergence des deux clones que `CLAUDE.md` annonce, prise
+  sur le fait.
+- **`@aws-sdk/s3-request-presigner` manquait de `node_modules`** sur ce poste
+  (déclaré dans `package.json`, jamais installé) : `highlight.service.spec.ts`
+  ne se chargeait pas. Réglé par `npm install`. La suite complète rend **107
+  tests verts sur 10 fichiers**.
+
+### 2026-08-13 — le banc de frontière était vide depuis 24 h
+
+**Le module `scripts/lib/frontiere_http.py` faisait 0 octet**, et le banc rendait
+0 sans rien mesurer. Trouvé par l'analyse d'impact du chantier suivant, comme le
+défaut précédent — deux fois de suite, c'est une revue adverse qui a vu ce
+qu'aucun contrôle ne pouvait voir.
+
+**Ce qui s'est passé.** Le commit `72d43d3` annonçait la correction d'un
+décompte (16 → 15 dans trois fichiers). Il a bien corrigé `CLAUDE.md` et ce
+fichier-ci — et **supprimé les 489 lignes du module** au passage, là où le
+correctif attendu était un chiffre dans un commentaire. Le message de commit
+parlait de trois fichiers, le diff en touchait trois : rien ne dépassait.
+
+**Pourquoi rien n'a levé, et c'est tout le sujet.** `python3 fichier_vide.py`
+sort en **0**. L'auto-test bloquant « réussissait », le `exec` qui suit
+« réussissait », et le banc affichait son seul titre avant de rendre 0. Le
+contrôle qui tient la règle 33 — le **seul** capable de dire qu'aucune route
+n'est ouverte par oubli — était devenu un `exit 0` déguisé. C'est le cas de la
+règle 28 dans sa forme la plus pure : il ne rassurait pas *à tort*, il ne
+regardait **rien du tout**.
+
+⚠️ **Et il l'a fait dans une fenêtre où le produit bougeait beaucoup** : ces
+24 h couvrent la fin de la bascule géographique, qui ajoutait et retirait des
+routes. Aucune n'a été vérifiée.
+
+**Trois corrections** (`47b5474`) :
+
+1. le module est restauré depuis `72d43d3^`, avec le 16 → 15 que ce commit
+   entendait faire — le dictionnaire porte bien **15** entrées ;
+2. **l'enveloppe n'accepte plus un code de sortie pour un verdict.** Elle exige
+   désormais que l'auto-test ait annoncé ses cas *mesurés*
+   (`auto-test : N cas, dont M refus`). Un module vide, tronqué, ou qui
+   n'exécute plus son auto-test échoue bruyamment. **Éprouvé par mutation** :
+   module vidé ⇒ `exit 2` avec le bon message ; restauré ⇒ `git diff` muet ;
+3. le **« sur 48 »** écrit en dur dans le message `--only` se mesure. Il était
+   déjà faux — la mesure rend **51**. Un nombre dans une phrase ne peut pas
+   échouer : c'est exactement ce que `72d43d3` prétendait corriger, dans le
+   fichier qu'il a supprimé.
+
+**Mesure de reprise** (décor du jour, backend WSL) : `auto-test 17/17, dont 6
+refus` · **51 routes protégées sur 66**, 15 ouvertes épinglées, 3 host-scopées ·
+**147 sondes, 0 échec**. Le banc refuse aussi correctement sans identifiants
+(« aucune valeur par défaut ici », règle 29) — vérifié en premier passage.
+
+**Ce qu'on en retient, et qui dépasse ce fichier.** Un banc peut mourir sans
+rougir. Le code de sortie d'un interpréteur mesure qu'il n'a **pas planté**, pas
+qu'il a **travaillé** — toute enveloppe qui délègue son verdict à un `||` fait
+la même hypothèse, et la même erreur. Le remède n'est pas la vigilance : c'est
+qu'un contrôle produise une **mesure** que l'enveloppe puisse exiger.
+
+### 2026-08-13 — le découpage administratif a disparu
+
+**Huit lots, du retrait des gardes au `DROP` final.** `commune` et `wilaya`
+n'existent plus : ni table, ni colonne, ni relation, ni référentiel, ni
+sélecteur, ni filtre. L'agent est global. Le lieu d'un commerce ne s'exprime
+plus que par sa **position** — qui décide de tout — et par une **adresse** en
+texte libre, facultative et purement indicative.
+
+Le plan (`docs/PLAN_SUPPRESSION_COMMUNE.md`) a été écrit, puis **relu par deux
+agents adverses qui ont renversé une vingtaine de ses affirmations**. Son §11
+les consigne toutes. Trois ont changé la forme du chantier :
+
+🔴 **`whitelist` retire un champ du DTO — il ne remplit pas une colonne.** Le
+plan affirmait que les créations passeraient. Elles auraient rendu **500** de L2
+jusqu'au `DROP`, face à une colonne `NOT NULL` que plus rien n'écrivait,
+emportant le décor des bancs et donc les lots qui en dépendent. La migration
+s'est scindée en deux.
+
+🔴 **Les gardes perdues étaient quatorze, pas dix**, et la quatorzième appelait
+`assertCommuneMatches` **en propre** plutôt que via un wrapper — invisible au
+grep par lequel la liste avait été bâtie. C'est précisément la route que la
+règle 1 nomme comme l'IDOR fondateur, et **la seule route d'écriture de promo
+que l'app appelle réellement** pour un agent. Le plan concentrait son attention
+sur trois portes que personne ne pousse.
+
+🔴 **Trois affirmations rassurantes étaient fausses** : le client n'était pas
+épargné (la recopie lui aurait montré « Djelfa, Djelfa » comme adresse de
+commerce), les CGU font certifier l'adresse *exacte* et la politique la déclare
+*publique*, et le commerçant **ne peut pas effacer** ce qu'on aurait écrit à sa
+place — l'app n'envoie pas un champ vide.
+
+#### Ce que le chantier a trouvé, et qui n'avait rien à voir avec lui
+
+- 🔴 **Le banc de frontière était VIDE depuis 24 h.** Un commit qui annonçait
+  une correction de décompte avait supprimé les 489 lignes du module. Un fichier
+  Python vide sort en **0** : l'auto-test « réussissait », le banc affichait son
+  titre et rendait 0. Le seul contrôle capable de dire qu'aucune route n'est
+  ouverte par oubli était devenu un `exit 0` déguisé, pendant la fin de la
+  bascule géographique qui ajoutait et retirait des routes. L'enveloppe exige
+  désormais que l'auto-test ait **annoncé ses cas mesurés** — éprouvé par
+  mutation.
+- 🔴 **La traçabilité invoquée pour justifier les privilèges de l'agent
+  n'existait pas.** Le contrôleur de promo exemptait agent et admin des limites
+  anti-abus au motif d'un « canal audité » ; `AuditLogService` n'était importé
+  nulle part dans `promo/`. Branché. Vérifié : `promo_create_by_staff` apparaît
+  au journal.
+- 🔴 **La liste admin des commerçants servait les comptes supprimés.**
+  `deletedAt` est une colonne ordinaire, pas un `@DeleteDateColumn` : TypeORM ne
+  masque rien tout seul. Le compteur du tableau de bord les excluait déjà — la
+  liste et le compteur annonçaient deux nombres différents du même parc.
+  Quatrième copie d'un oubli dont le docstring voisin décrit déjà la famille.
+- 🔴 **`client_rayon` échouait SELON L'HEURE.** Le second numéro s'écrivait
+  `str(int(base) + 1)` où `base` vient de `%H%M%S` : entre minuit et 10 h il
+  commence par un zéro, `int("023059") + 1` rend `23060`, et `str()` le sert sur
+  **cinq** chiffres. Numéro trop court, refus de validation, et le message
+  accusait la création. Trouvé à 2 h du matin ; en ne lançant ce banc qu'aux
+  heures ouvrables, il aurait pu ne jamais l'être.
+- **Le décor était cassé avant le chantier**, deux fois, et chaque fois il
+  accusait autre chose : il rechargeait une promo *signalée* en la sélectionnant
+  sur le seul cycle de vie, puis échouait sur un brouillon en cooldown alors que
+  la voie de création existait dix lignes plus bas.
+- **Sa sonde de disponibilité visait `GET /commune` sans `--fail`** : `curl`
+  sort en 0 sur un 404, donc elle serait restée verte après la suppression de la
+  route.
+
+#### Ce qui était mort en affirmant le contraire
+
+- `communeCible` du harness : **zéro appelant**, sous un commentaire disant
+  « elle reste utile aux parcours agent ». Pendant ce temps le runner calculait
+  et passait `--dart-define=TEST_COMMUNE_ID` que rien ne lisait.
+- Un **bloc de documentation orphelin** dans `map_providers` décrivait un
+  provider supprimé la veille — rattaché à aucune déclaration, donc invisible à
+  `analyze`.
+- `_centeredOnCommune` ne portait **aucune commune** depuis la bascule.
+- Un `// ignore: unused_import` annonçait la réactivation d'une redirection
+  supprimée définitivement, sur un import en réalité **utilisé**.
+- `PromoApi.listActive(communeIds:)` : plus d'appelant depuis le lot 3.
+
+#### Deux erreurs à moi, trouvées en vérifiant
+
+- Une sonde du banc de pentest visait `GET /admin/commercant/:id` — **cette
+  route n'existe pas**. Elle a rendu 404 et échoué bruyamment ; un `{200, 404}`
+  complaisant l'aurait rendue verte pour rien.
+- Ma suspension d'`appartenance.py` sortait en **0**. Écrite en `return 2`, dans
+  un module qui finit par `main()` sans `sys.exit` — elle annonçait sa
+  suspension *tout en la déclarant réussie*. Vue en regardant le code de sortie
+  plutôt que le texte.
+
+#### La recopie a été abandonnée, et c'est le calcul qui l'a décidé
+
+Elle aurait protégé **22 fiches** sans adresse et rattachées à une commune, sur
+une base de **développement** — rien n'est publié. Contre six coûts réels, dont
+une adresse fabriquée montrée aux clients et une clause CGU contredite.
+Sauvegarde prise hors dépôt avant le `DROP` : `pg_dump` des deux tables et
+export CSV de la correspondance, avec nom et wilaya.
+
+**Mesuré avant destruction** : 35 communes, 2 liens agent↔commune,
+101 commerçants rattachés sur 120, 30 sans adresse.
+
+#### Deux bancs ont changé de sujet plutôt que de disparaître
+
+`agent_creation` éprouvait la règle 1 sur une `communeId` fournie par
+l'appelant ; il éprouve désormais le seul invariant qui reste sur cette route —
+**la position est obligatoire**, la garde qui empêche une tournée de fabriquer
+des fiches invisibles. `admin_agents` perdait ses deux routes ; ce qui survit
+est `verdict_trace`, seul contrôle du parc qui éprouve qu'une action
+d'administration **laisse une trace**.
+
+Et **les deux agents du décor restent** : ils prouvaient un cloisonnement, ils
+prouvent son contraire. Avec un seul agent, « il voit tout » serait
+indiscernable de « il voit ce qu'il voyait » — la sonde ne pourrait pas refuser.
+Mesuré : **A = B = admin**.
+
+#### Ce qui est retiré sans être remplacé
+
+Écrit dans le code, pas seulement ici : la **partition du travail de
+modération** (tous les agents voient la même file) — ⚠️ **la suite de cette
+phrase est périmée depuis le 2026-08-13** : elle disait « les trois résolutions
+sont des `update` inconditionnels, dernier écrivain gagne, sans erreur », et
+c'est corrigé (voir l'entrée de journal du jour, lot B). Répartir le travail
+reste à faire ; le corrompre n'est plus possible en silence ;
+le **transfert de secteur** au départ d'un agent ;
+et le seul moyen dont l'admin disposait pour **restreindre** un agent — il
+n'existe plus de granularité entre « agent » et « admin moins deux écrans », ni
+aucune route de suppression d'agent. L'exception nommée de la règle 15 perd son
+cas fondateur et a été retirée avec lui.
+
+#### Points ouverts à la clôture
+
+- ⚠️ **Le parcours carte échoue, cause non établie.** « ni marqueur ni grappe
+  sur la carte ». Le serveur sert bien le commerce sur `GET /promo/map`
+  (vérifié directement), le diff sur ce parcours et sur `map_providers` est
+  strictement du commentaire, et le parcours client passe sur la même donnée au
+  même point. Les tuiles échouent en `HandshakeException` (analyse HTTPS de
+  l'antivirus, défaut de machine documenté) — mais un marqueur est un widget,
+  pas une tuile. **Ni attribué au chantier, ni disculpé.**
+- ~~⚠️ **`appartenance.py` est suspendu**, sort en 2, et reste à réécrire.~~
+  **Fait le 2026-08-13** : remplacé par `portee_agent.py`, qui prouve
+  l'**acceptation** sur les 14 routes — 36 contrôles, 0 échec, témoin négatif
+  prouvé par mutation sur le produit vivant. Voir l'entrée de journal du jour.
+- ⚠️ **`admin_agents` laisse un agent de plus à chaque passage** : aucune route
+  de suppression d'agent n'existe.
+- ⚠️ **Le journal d'audit ne se filtre que par `actorType` et n'affiche que des
+  UUID.** Lisible pour un agent de commune, illisible pour un agent national —
+  or il est devenu le seul contrepoids à la portée globale.
+- ~~**`formatDistance` n'est toujours appelé nulle part dans la liste client**
+  (R2(1) du chantier précédent, ouverte depuis le 2026-08-12).~~ **Fait le
+  2026-08-13** — la chaîne était coupée dans le modèle Dart, voir l'entrée de
+  journal du jour.
+
+⚠️ **Les deux bancs laissés « à rejouer » par le message de commit de L7 l'ont
+été le jour même** : `client-liste` rend 6 contrôles / 0 échec et `registre`
+10 contrôles / 0 échec, sur la base d'après le `DROP`. Sept bancs au total ont
+été rejoués après la migration, aucun échec. Ce que le commit annonçait comme
+non vérifié l'est.
+
+---
+
+### 2026-08-13 — les connexions passent de 5 à 50 par minute
+
+**Demande produit** : « 5 c'est très faible pour une app de consultation ».
+Elle est fondée, et la mesure la sous-estimait plutôt qu'elle ne l'exagérait.
+
+**Ce qui était compté n'est pas ce qu'on croyait compter.** `STRICT_THROTTLE`
+plafonne **une IP**, pas un compte. Le parc mobile algérien sort massivement
+derrière du NAT opérateur : cinq tentatives par minute, ce n'est pas cinq essais
+offerts à un utilisateur, c'est **cinq utilisateurs par minute pour tout un bloc
+d'abonnés** — le sixième se voyait refuser des identifiants parfaitement
+valides. Le dépôt portait déjà deux symptômes sans les relier : une connexion
+d'agent consomme **deux** requêtes du seau (l'écran tente `/admin/login` puis
+`/agent/login`), et la moitié des bancs portent un avertissement « à lancer
+isolé, le seau est vide pendant une minute ».
+
+**Le seau a été séparé, pas relevé.** Un seul chiffre changé aurait emporté deux
+routes qui n'ont rien demandé :
+
+| | avant | après |
+|---|---|---|
+| les 3 `login` | 5/min | **`AUTH_THROTTLE`, 50/min** |
+| `POST /commercant/register` | 5/min | `STRICT_THROTTLE`, 5/min |
+| `POST /report` | 5/min | `STRICT_THROTTLE`, 5/min |
+
+`report` est **le cas fondateur de la règle 7** : trois signalements d'appareils
+distincts masquent la promo d'un concurrent et l'`X-Device-Id` n'est jamais
+vérifié. À 5/min une IP en masque une par minute et demie ; à 50/min elle en
+masquerait seize. Le relèvement demandé portait sur les *connexions* — le mot
+employé était « connexion » —, pas sur la capacité à faire disparaître les
+promos d'autrui.
+
+**Ce que le relèvement coûte, et il faut le dire.** Il n'existe **aucun compteur
+de tentatives par compte** : `CommercantService.login` compare et refuse sans
+rien mémoriser. Ce plafond IP est donc l'unique défense de la règle 2.
+
+- Mot de passe agent/admin : hors de portée, avant comme après.
+- PIN posé aujourd'hui : `PIN_SET_PATTERN` impose **6 chiffres**, soit un
+  million de combinaisons — 14 jours à 50/min depuis une IP. Tenable.
+- ⚠️ **PIN à 4 chiffres** : `PIN_VERIFY_PATTERN` accepte `\d{4,12}` pour ne pas
+  enfermer dehors les comptes antérieurs au passage à six. Dix mille
+  combinaisons : **3 h 20 à 50/min**, contre 33 h à 5/min. Pour ces comptes-là,
+  et pour eux seuls, l'attaque passe d'« une journée et demie » à « une nuit ».
+
+La contre-mesure qui referme ça n'est pas un plafond — c'est de **retirer les
+PIN à 4 chiffres du parc** (remise à 6 forcée à la prochaine connexion) ou un
+compteur de tentatives **par compte**, qui ne dépend pas de l'IP. Ni l'un ni
+l'autre n'a été fait : ce n'était pas la demande, et les deux sont des décisions
+produit. **C'est le seul point ouvert que ce changement crée.**
+
+**Le banc allait accuser le produit — règle 38, prise en flagrant délit.**
+`auth_login.py` comptait « 5 tentatives par minute » en dur : `for i in
+range(10)`, puis « pas de 429 en dix essais ⇒ le verrou ne se déclenche pas ».
+À 50/min il aurait rendu ❌ sur un produit parfaitement correct, et fait partir
+quelqu'un corriger un throttler qui n'a rien. Il ne connaît plus le plafond : il
+essaie jusqu'à `BORNE_ESSAIS = 80`, une borne de sûreté qui n'exprime aucune
+valeur produit, et **rapporte** le rang du verrou au lieu de l'exiger. Changer
+le plafond ne le casse plus ; seul le retirer le fait lever.
+
+**La temporisation du décor tombe de 13 s à 2 s.** Les huit `sleep "$PACE"` de
+`provision-decor.sh` existaient pour « ~12 s entre deux » connexions ; le décor
+en consomme six, ce qui tient très large dans 50. Deux des huit pauses encadrent
+encore une inscription (5/min) et une écriture (20/min), d'où 2 s plutôt que 0.
+**~90 secondes gagnées à chaque pose de décor.**
+
+**Ce que ça déplace dans toute la documentation.** La phrase
+« `STRICT_THROTTLE` = 5/min est la contrainte qui dimensionne toute la suite »
+(`TEST_PROMO.md`) était vraie et ne l'est plus : **les deux seaux étroits sont
+désormais l'inscription (5/min) et les écritures (20/min, partagé)**. Onze
+fichiers de bancs annonçaient « 3 connexions sur le seau strict de 5/min » —
+un état périmé qui fait conclure, exactement ce que ce dépôt reproche aux
+commentaires. Corrigés dans le même commit, y compris les messages de
+diagnostic : celui de `test-parcours-ecran.sh` disait « register et login
+partagent le seau strict » et aurait envoyé chercher au mauvais endroit.
+
+**Vérifié** : `tsc` 0, `eslint` 0, auto-test du banc de connexions (11 cas dont
+8 refus), et le banc joué en vrai contre le backend — **3 contrôles, 0 échec**,
+verrou « au 49ᵉ essai de la série », soit le 51ᵉ appel de la minute : le contrôle
+précédent (« un refus ne dit pas si le compte existe ») en avait consommé deux.
+C'est la mesure qui établit que le nouveau plafond est bien celui qui tourne, et
+non celui qui est écrit — avant le changement, le même banc voyait le verrou au
+4ᵉ essai.
+
+⚠️ **Et la séparation elle-même a été éprouvée, pas supposée** (règle 28 : un
+contrôle doit prouver qu'il sait refuser). Sept requêtes de suite sur chacune
+des deux routes restées strictes, **juste après** avoir vidé le seau des
+connexions :
+
+```
+POST /report               404 404 404 404 404 429 429
+POST /commercant/register  400 400 400 400 400 429 429
+```
+
+Cinq passent, la sixième est refusée : les deux routes tiennent toujours leur
+plafond de 5, et elles le tiennent **séparément** du seau d'authentification
+qu'on venait d'épuiser. Un `429` sur la sixième d'une route dont les cinq
+premières sont des `404`/`400` prouve aussi que le compteur s'incrémente **avant
+le traitement** — un refus métier ne rend pas la requête gratuite.
+
+---
+
+### 2026-08-13 — Lot A : le banc de portée remplace le banc d'appartenance
+
+**L'audit de couverture qui a lancé ce lot.** Question posée : les bancs
+couvrent-ils la suppression du découpage administratif ? Réponse mesurée :
+la **lecture** globale était couverte (`admin_dashboard`, A = B = admin = 80),
+la garde survivante aussi (`commercant_b`), `adresse` aussi (`client_fiche`,
+`commercant_profil`) — mais **l'écriture ne l'était pas du tout**.
+
+Le chantier a transformé **quatorze refus en acceptations**. `appartenance.py`
+prouvait les refus ; il était suspendu, et son enveloppe annonçait encore en
+en-tête « un agent n'agit que dans ses communes » — un produit mort depuis la
+veille. Personne ne vérifiait qu'un agent peut réellement suspendre, supprimer,
+valider un registre, réinitialiser un PIN ou modérer un commerçant étranger.
+**Le retrait d'une garde peut laisser derrière un `COMMERCANT_NOT_FOUND`
+résiduel ou un filtre de portée oublié dans un service** : rien n'échouerait au
+démarrage, rien n'échouerait aux tests, et le seul signal serait un agent qui,
+sur le terrain, n'y arrive pas.
+
+**`portee_agent.py` — 36 contrôles, 0 échec, 0 non concluant.**
+
+**Prouver une acceptation est plus fragile que prouver un refus**, et c'est tout
+le sujet du banc. Un refus se lit dans un code ; un `200` peut venir d'une route
+qui n'a rien fait. Trois choix de conception, chacun contre un faux vert :
+
+- **l'effet est constaté, pas le statut** — `registreStatus`, `suspended`,
+  `profilePendingReview`, ce que le CLIENT voit, et pour `reset-pin` une
+  connexion réussie avec le PIN neuf ;
+- **un `404` est un échec, pas une absence** — le commerçant existe, le banc
+  vient de le créer et le voit dans la liste. Un « introuvable » sur ces routes
+  serait exactement la forme d'une portée résiduelle ;
+- **la prémisse se construit, elle ne se lit pas** (règle 38) — le sujet est
+  inscrit par `POST /commercant/register`, sans aucun jeton d'agent :
+  `createdByAgentId` vaut `null` **par construction**. L'API n'expose pas ce
+  champ ; le savoir vaut mieux que le lire. Et c'est le cas le plus dur, un
+  auto-inscrit traînant la garde de registre.
+
+**Le témoin négatif, et pourquoi il passe en premier.** Un banc qui n'observe
+que des acceptations est vert si TOUT est accepté — il ne saurait pas dire que
+le rôle agent a obtenu les droits d'admin par accident. Trois routes restent
+`@Roles('admin')` seul (`GET /admin/agent`, `GET /admin/audit-log`,
+`PATCH .../plafond-promos`) : elles sont sondées **avant** toute écriture, pour
+qu'un banc incapable de refuser soit démasqué avant d'annoncer 14 acceptations.
+
+⚠️ **Prouvé par mutation sur le produit vivant** (règle 28) : ajouter `'agent'`
+au `@Roles` de `GET /admin/audit-log` fait rendre au banc
+« ❌ HTTP 200 — un AGENT a été admis sur une route réservée à l'admin ». Mutation
+annulée, 403 revenu.
+
+**Le banc est DESTRUCTEUR, et il ne l'était pas.** Ses sondes étaient sans effet
+de bord *parce qu'elles étaient refusées*. Trois règles tenues par la structure
+du fichier : sujet jetable créé par le banc (jamais celui du décor), `delete` en
+dernière sonde, et **l'ordre suit les préconditions métier** plutôt que la liste
+des routes — publier exige registre validé, profil validé, position posée.
+Sonder `publish` avant les trois rendrait un refus légitime que le banc lirait
+comme une garde résiduelle.
+
+**Deux défauts trouvés au premier passage, tous deux dans le banc, et ses
+propres gardes l'ont empêché d'accuser le produit :**
+
+- la sonde `reset-pin` envoyait `{"pin": …}` au lieu de `{"newPin": …}`.
+  `whitelist: true` **retire un champ inconnu sans rien dire**, puis la
+  validation meurt sur le champ manquant. La sonde a rendu « non concluant » et
+  non « échec » — c'est exactement le point : un corps invalide n'a rien dit de
+  l'autorisation ;
+- la sonde du plafond passait `promoActiveCap` (légitimement `null`, « suit le
+  réglage global ») à un verdict qui lit `None` comme « état illisible ».
+  **`None` ne peut pas être à la fois la valeur attendue et le drapeau
+  d'absence** — la règle 29 en miniature, dans le banc censé la faire respecter.
+
+**Un piège d'environnement, coûteux et à retenir.** La mutation ne prenait pas :
+`trois` processus `nest start` tournaient, dont un lancé depuis le clone
+Windows, et celui qui tenait le port 3000 datait de 25 minutes. **Le watcher ne
+recompilait plus.** Un backend qui répond n'est pas un backend à jour — vérifier
+`ss -ltnp | grep :3000` puis le `cwd` du PID avant de conclure qu'une
+modification n'a pas d'effet.
+
+**Documents remis d'équerre dans le même commit** (règle 23) :
+`docs/methode-test/run-all-scenarios.sh` annonçait « n'écrit rien non plus » sur
+un banc qui supprime désormais des comptes ; `TEST_PROMO.md` décrivait le banc
+d'appartenance au présent. Les documents **datés** (audits, rapport de pentest,
+revues) ne sont pas touchés : ils décrivent ce qui était vrai à leur date.
+
+---
+
+### 2026-08-13 — Lot B : la course de modération est fermée
+
+**Le seul point du chantier « agent global » qui pouvait corrompre des données
+sans que personne ne le voie.** Les trois résolutions étaient des
+`UPDATE … WHERE id = ?` **inconditionnels**, et la file est devenue nationale et
+non partitionnée : tous les agents du pays regardent la même liste, rien ne leur
+attribue un lot.
+
+```
+A masque la promo.                       → MASQUEE, retirée du public
+B, dont l'écran datait d'avant, vérifie. → VERIFIEE_OK, remise en ligne
+                                           + fenêtre d'ignore de 30 jours
+```
+
+Les deux reçoivent `200`. Les deux gestes entrent au journal comme deux succès
+indépendants. **Rien ne dit que la décision de A a été annulée** — ni un écran,
+ni une notification, ni une ligne de journal. La promo retirée redevient
+publique **et** protégée un mois contre les signalements suivants.
+
+**Le correctif n'est pas un verrou, et c'est le point.** Un verrou sérialise, il
+n'arbitre pas : deux `UPDATE` inconditionnels sérialisés s'écrasent tout aussi
+bien, simplement l'un après l'autre. Ce qui manquait était une **comparaison**.
+Chaque décision porte désormais l'état que le modérateur avait à l'écran, et
+l'écriture y est conditionnée :
+
+```sql
+UPDATE promo SET … WHERE id = ? AND "moderationStatus" = ?   -- affected tranche
+```
+
+`affected = 0` ⇒ `409 MODERATION_STATE_CHANGED`. **Le `WHERE` porte la garde,
+pas un `if` en amont** : lire puis comparer puis écrire rouvrirait exactement la
+course qu'on ferme (règle 13).
+
+**Pourquoi l'état vient du client.** Parce que le client est le seul à savoir ce
+que le modérateur a vu. Les trois écrans qui appellent ces routes affichent déjà
+`moderationStatus` — la file (`signalee` par construction), la liste de toutes
+les promos, et le détail d'une promo. La valeur existait des deux côtés ; il ne
+restait qu'à la faire voyager. **Obligatoire, pas optionnelle** (règle 29) : un
+champ facultatif ferait retomber tout appelant qui l'oublie sur l'ancien
+comportement sans le dire — une protection présente dans le code et absente à
+l'exécution, ce qui est pire que son absence puisqu'on la croirait acquise.
+
+⚠️ **Et c'est ce choix qui a trouvé le troisième appelant.** Paramètre
+positionnel obligatoire ⇒ `flutter analyze` a signalé `admin_promos_screen.dart`,
+que je n'avais pas ouvert. Cet écran sert **toutes** les promos, donc les quatre
+statuts : un défaut y aurait fait échouer en silence toute décision prise sur
+une promo non signalée.
+
+**Ce que la garde n'interdit pas, et il fallait le prouver.** Revenir sur sa
+propre décision reste possible : un admin qui ouvre une promo déjà masquée voit
+`masquee`, l'envoie, et son avertissement passe. C'est le flux corrigé le
+2026-08-05 (« avertir depuis MASQUÉE »). Une garde du type « on ne tranche que
+ce qui est `signalee` » l'aurait cassé — c'est la sonde 3 du banc, et la plus
+importante des quatre (règle 38).
+
+**`moderation_course.py` — 7 contrôles, 0 échec.** Deux `masquer` **vraiment
+simultanés** (deux fils), exactement un `2xx` et un `409`. Auto-test 16 cas dont
+11 refus, incluant les trois façons de se tromper : deux succès (le défaut
+d'origine), deux refus (le correctif trop strict, sur lequel un banc qui ne
+cherche qu'un refus serait vert), et un refus au mauvais code (indiscernable
+d'une panne).
+
+⚠️ **Prouvé par mutation** (règle 28) : retirer `moderationStatus: expected` du
+`WHERE` fait rendre au banc *« les DEUX décisions ont été acceptées »*, et la
+promo finit en `verifiee_ok` — publique et protégée 30 jours — après une
+décision prise sur un écran périmé. C'est le défaut d'origine, reproduit à
+l'identique. Mutation annulée, 7/7 revenus.
+
+**Une dernière chose que ce lot a révélée sans la chercher** : les trois routes
+ne prenaient **aucun corps**. Le `{"reason": …}` que trois bancs leur envoyaient
+depuis des semaines était **silencieusement jeté** par `whitelist: true`. Une
+décision de modération n'a donc jamais eu de motif enregistré — ce n'est pas
+corrigé ici, c'est noté.
+
+---
+
+### 2026-08-13 — Lot C : constater les absences, et borner ce qui reste
+
+Trois choses que le chantier avait laissées sans filet, toutes bon marché et
+aucune anodine.
+
+#### Rien ne constatait que ce qui a disparu avait disparu
+
+`frontiere_http.py` **dérive ses routes de la source** : une route supprimée
+n'en manque pas, elle en sort. C'est le bon comportement pour ce qu'il fait —
+vérifier que ce qui existe est gardé — mais **personne ne remarquerait leur
+retour**. Côté base, `DropCommune` a tourné une fois, sans contrôle rejouable :
+rien ne disait qu'elle avait été appliquée sur un environnement donné.
+
+`absences_commune.py` — **9 contrôles, 0 échec**. Trois routes, deux tables, une
+colonne.
+
+⚠️ **Une absence est le seul état qu'un test ne constate jamais par accident, et
+le seul qui se répare tout seul en silence.** Recréer une route supprimée ne
+casse rien ; restaurer une sauvegarde antérieure au `DROP` non plus. Un banc
+d'absence est aussi vert sur une API éteinte, une mauvaise URL, une mauvaise
+base. **D'où deux témoins positifs obligatoires** — `GET /promo/config` doit
+répondre `200`, la table `commercant` doit être là. Sans eux, « la table
+`commune` est absente » et « je n'ai pas su interroger la base » rendraient le
+même verdict.
+
+**La distinction qui porte tout le banc HTTP** : les gardes sont posés route par
+route et il n'existe aucun garde global (règle 33). Une requête **sans jeton**
+sépare donc parfaitement les deux cas — `404` si la route est supprimée, `401`
+si elle existe. Aucun identifiant, aucun seau consommé, et le banc **ne peut
+rien écrire** : il s'arrêterait au refus d'authentification avant d'atteindre le
+moindre corps. Corollaire écrit dans le verdict : **`401` est un échec, pas un
+demi-succès** — il prouve qu'un garde s'est exécuté, donc qu'une route est là
+pour le porter.
+
+⚠️ **Prouvé par mutation** (règle 28) : `CREATE TABLE commune (id uuid PRIMARY
+KEY)` fait rendre ❌ à la sonde correspondante, les huit autres restant vertes.
+Table retirée, 9/9 revenus.
+
+#### `adresse` n'avait aucune borne — et c'est le seul repère de lieu qui reste
+
+`@IsString() @MinLength(2)`, rien de plus, sur un `varchar` sans longueur.
+C'est très exactement ce que la règle 34 nomme « une borne manquante, pas un
+choix ». `nom` était dans le même état, et corriger l'un sans l'autre aurait été
+arbitraire : les deux sont bornés (`NOM_MAX_LENGTH = 120`,
+`ADRESSE_MAX_LENGTH = 200`), nommés une seule fois à côté des colonnes, importés
+par les trois DTO.
+
+**Mesuré avant de choisir** : sur les 129 fiches de la base de développement, la
+plus longue adresse fait **25** caractères et le plus long nom **22**. Les
+bornes sont à un ordre de grandeur des saisies réelles.
+
+⚠️ **La colonne reste un `varchar` sans longueur, délibérément.** Contrairement
+à `PRIX_MAX` — qui recopie une contrainte que Postgres applique déjà —, il n'y a
+ici *rien à refléter* : la base accepte tout. Poser `@Column({ length: … })`
+exigerait une migration `ALTER TYPE` pour une valeur que rien n'oblige, et
+ferait diverger l'entité de la base tant qu'elle n'est pas écrite (règle 12).
+La borne est donc une décision produit **sur l'entrée**, et c'est dit plutôt que
+sous-entendu. Conséquence directe : le spec est **le seul endroit** qui puisse
+constater le refus — aucune erreur Postgres ne viendra en renfort si le
+décorateur disparaît.
+
+`commercant-input.dto.spec.ts` — **22 tests**, les trois DTO éprouvées
+séparément (elles portent les mêmes bornes sans qu'aucun code ne les relie —
+règle 30). ⚠️ **Prouvé par mutation** : retirer un seul `@MaxLength` fait tomber
+2 tests. Le banc s'est aussi trompé une fois en chemin — le jeu nominal n'avait
+ni `latitude` ni `longitude`, obligatoires pour la création par agent depuis le
+2026-08-12, et il accusait la borne d'un refus venu d'ailleurs.
+
+#### Deux affirmations fausses et un code mort
+
+- `list-commercant-query.dto.ts` disait « la recherche ne porte que sur le nom
+  et le téléphone. Ajouter `adresse` fait partie du chantier — voir le plan ».
+  C'était fait, dans le même lot. **Un commentaire qui renvoie à un plan survit
+  au plan** : il fait relire un document clos pour découvrir que la chose est
+  faite.
+- `moderation.service.ts` annonçait « scopé communes, vérifié en amont dans
+  `AdminController` » sur les trois résolutions. Rien n'est scopé, rien n'est
+  vérifié en amont. Corrigé avec le lot B.
+- `COMMERCANT_NOT_IN_AGENT_COMMUNES` était encore cité dans deux auto-tests
+  alors qu'il a quitté l'enum : un cas qui attend un code que le serveur ne peut
+  plus rendre n'éprouve plus rien. Remplacé par un code vivant dans les deux —
+  c'est la **forme** du verdict qu'on éprouve, pas le libellé.
+
+**Vérifié** : `tsc` 0, `eslint` 0, **129 tests** (107 → 129), et
+`migration:generate` rend *« No changes in database schema were found »* —
+aucun fichier écrit.
+
+---
+
+### 2026-08-13 — Le journal d'audit, côté agent
+
+`CLAUDE.md` dit du journal qu'il **« est devenu le seul contrepoids à la portée
+globale »** de l'agent. Ce contrepoids n'était éprouvé pour personne d'autre que
+l'admin : `audit_log.py` se connecte en admin, agit en admin, et n'assertent que
+`actorType == "admin"` — son auto-test compte même une entrée `agent` comme un
+échec, parce qu'il vérifie le chemin admin.
+
+**`journal_agent.py` — 9 contrôles, 0 échec.** Auto-test 17 cas dont 12 refus.
+
+**Trois mécanismes, pas un.** C'est la raison d'être du banc : la trace d'une
+action d'agent vient de trois implémentations distinctes, et « le journal
+marche » ne veut rien dire tant qu'on ne dit pas laquelle.
+`PromoController.auditStaffWrite` (branché le 2026-08-13, donc le moins
+éprouvé), `ModerationService.record`, et les **onze** appels en ligne
+d'`AdminController`. Trois endroits où l'on peut oublier `actorType`.
+
+**La sonde qui compte le plus est l'attribution.** « Une entrée existe » est la
+partie facile. **Un journal qui dit « un agent » sans dire lequel ne vaut rien
+quand tous les agents sont globaux** — c'est exactement la situation créée par
+le chantier. La même action, faite par A puis par B, doit produire deux
+`actorId` distincts. Un `actorId` figé, recopié ou pris sur le mauvais
+utilisateur passerait toutes les autres sondes : `actorType` serait juste et le
+journal désignerait **le mauvais responsable**, ce qui est pire que pas de
+journal. Mesuré : `A=720078bd ≠ B=f9d8ec1b`. C'est aussi la meilleure
+justification qu'aient eue les deux agents du décor.
+
+**Le témoin négatif : la même route, deux acteurs.** `auditStaffWrite` commence
+par `if (user.role === 'commercant') return;`. Donc `PATCH /promo/:id` par
+l'agent laisse une entrée, et **le même appel par le commerçant propriétaire ne
+laisse rien**. Ça établit que la sélectivité porte sur l'**acteur**, pas sur la
+route — ce qu'aucune sonde positive ne peut montrer. Sans lui, « une entrée
+existe » serait vrai par accident sur un journal qui enregistre tout, et un
+journal qui enregistre tout n'identifie personne.
+
+Le banc agit en **agent** et lit en **admin** : `GET /admin/audit-log` est
+`@Roles('admin')` seul. `portee_agent.py` éprouve ce refus ; celui-ci éprouve ce
+que le refus protège.
+
+⚠️ **Prouvé par mutation** (règle 28) : forcer `actorType: ADMIN` dans
+`auditStaffWrite` fait rendre ❌ à deux sondes — *« l'action d'un agent est
+imputée à autre chose, et il devient intraçable »*. Mutation annulée, 9/9.
+
+#### Le rejeu d'ensemble, et ce qu'il a trouvé
+
+**24 bancs, 23 verts au premier passage.** L'échec est instructif et il est de
+moi : **`notifications.py` était le quatrième appelant des routes de
+modération**, et je n'en avais mis à jour que deux dans le lot B. Il rendait
+`VALIDATION_ERROR` sur `expectedModerationStatus` manquant.
+
+Deux choses à en retenir :
+
+1. **Le banc n'a accusé personne.** Il a rendu « ⚠️ non concluant — pas de
+   notification à examiner » et s'est arrêté là. Un banc qui aurait compté ce
+   400 comme un échec métier aurait envoyé chercher un défaut de notification
+   qui n'existe pas (règle 38). La discipline « un `VALIDATION_ERROR` n'est
+   jamais un verdict » a payé sur un banc que je n'avais pas écrit pour ça.
+2. **Rendre un champ obligatoire exige d'énumérer TOUS les appelants**, pas ceux
+   qu'on a en tête. Côté Dart le compilateur l'a fait pour moi et m'a trouvé un
+   troisième écran ; côté Python personne ne le fait, et c'est le rejeu qui a
+   servi de compilateur. Le réflexe est un `grep` sur la route, pas sur le nom
+   de la fonction — `notifications.py` construisait son URL par interpolation
+   (`"/admin/moderation/%s/%s" % (pid, action)`) et échappait donc à la
+   recherche évidente.
+
+Corrigé, et le `{"reason": …}` qu'il envoyait **retiré plutôt que gardé** : les
+trois routes ne prenaient aucun corps, `whitelist: true` le jetait en silence.
+Un champ qu'on croit envoyer et que personne ne lit est pire qu'un champ absent.
+`notifications` rend désormais **8 contrôles, 0 échec**.
+
+---
+
+### 2026-08-13 — Le journal devient lisible
+
+Le journal disait vrai et ne servait à rien : l'écran affichait
+`agent 3f2a…` et `commercant 9c11…`. Personne ne retrace « qui a fait quoi »
+là-dedans sans ouvrir la base à côté.
+
+⚠️ **Ce n'était pas du confort.** C'était supportable tant que l'agent était
+borné à ses communes — la question « de qui s'agit-il » avait une réponse
+courte. Depuis que les quatorze gardes sont tombées, ce journal est le **seul**
+contrepoids à la portée globale : il n'existe plus de limite *a priori*,
+seulement une trace *a posteriori*. **Une trace illisible n'est pas un
+contrepoids, c'est un contrepoids qu'on croit avoir.**
+
+`GET /admin/audit-log` sert désormais `actorLabel` et `targetLabel` :
+`Agent Décor B (decor-agent-b@echango.local)`,
+`Commerce Décor (+213555000101)`.
+
+**Quatre décisions, chacune contre une règle précise :**
+
+- **Une requête par TABLE, pas une par entrée** (règle 14). Le pattern
+  `Promise.all(items.map(async (e) => repo.findOne(…)))` est un N+1 quasi
+  certain, et il l'aurait été : jusqu'à **200 requêtes** pour une page de 100
+  entrées. Quatre suffisent, quel que soit le volume — identifiants dédupliqués
+  d'abord, une même personne occupant typiquement des dizaines de lignes
+  d'affilée.
+- **Une vue explicite, jamais un spread** (règle 4). `{...entity, actorLabel}`
+  transformerait l'instance en objet plain et désactiverait silencieusement le
+  `ClassSerializerInterceptor`. `AuditLog` n'a rien d'`@Exclude()` aujourd'hui ;
+  la forme protège du jour où l'on en ajoutera un.
+- **Un libellé introuvable vaut `null`** (règle 29). « Agent supprimé » ou « — »
+  écrirait une information qu'on n'a pas et rendrait indiscernables « l'acteur
+  n'existe plus » et « je n'ai pas su le résoudre ». Le client retombe alors sur
+  l'UUID, seule vérité disponible — et c'est écrit à l'écran comme la bonne
+  réponse, pas comme un pis-aller.
+- **Les comptes supprimés sont résolus quand même.** On lit les tables sans le
+  filtre `deletedAt IS NULL` des services : un journal qui perd le nom d'un
+  commerçant le jour où on le supprime perd sa valeur **exactement quand elle
+  compte** — c'est la suppression qu'on veut pouvoir retracer.
+
+Quatre entités d'autres modules sont déclarées en direct dans `AuditLogModule`
+(règle 9) : les quatre modules concernés importent déjà `AuditLogModule` pour
+écrire, et les importer en retour créerait quatre cycles. L'accès est en lecture
+seule et ne reproduit aucune règle métier — le seul besoin est de remplacer un
+UUID par un libellé.
+
+**Éprouvé dans le même commit**, et c'est le point : `journal_agent.py` passe de
+9 à **11 contrôles**, avec une sonde par libellé. ⚠️ Le verdict distingue
+**champ absent** et **champ `null`** — le premier dit « pas déployé », le second
+« pas résolu », et les confondre ferait passer une régression pour un cas
+limite. Prouvé par mutation : forcer `actorLabel: null` fait rendre ❌ à la sonde
+de l'acteur, la sonde de la cible restant verte.
+
+`admin_audit_log.py` rejoué : **7/7**, y compris sa sonde « aucun secret dans le
+journal » — les deux libellés n'exposent que du nom, de l'e-mail et un numéro
+que l'admin voit déjà sur ses autres écrans, sur une route qui lui est réservée.
+
+---
+
+### 2026-08-13 — La distance dans la liste : la chaîne était coupée au milieu
+
+R2(1), ouverte depuis le 2026-08-12. Le diagnostic écrit alors — *« `formatDistance`
+n'est appelé nulle part dans la liste client »* — décrivait le symptôme. **La
+cause était deux étages plus haut** : `Promo.fromJson` ne lisait pas
+`commercantLatitude` / `commercantLongitude`.
+
+Le serveur les sert depuis le 2026-08-12, avec un commentaire qui dit
+explicitement *« pour que l'app puisse **afficher** la distance dans la liste »*.
+Le modèle Dart les jetait. `PromoCard` n'avait donc rien à afficher, et
+`formatDistance` n'était appelé que par la fiche et la carte.
+
+⚠️ **C'est la règle 31 dans sa forme la plus discrète.** Une capacité écrite des
+deux côtés, documentée côté serveur, sans appelant **au milieu** : rien
+n'échoue, rien n'avertit, le serveur a raison, l'app compile — et la
+fonctionnalité est simplement absente. Personne ne la cherche, puisque le code
+existe des deux côtés.
+
+**Trois précautions dans le raccordement :**
+
+- La distance est lue **une fois pour toute la liste**, pas dans l'`itemBuilder` :
+  celui-ci est rappelé à chaque défilement, et un `ref.watch` par carte visible
+  relirait la position à chaque image.
+- Elle sert au **libellé, jamais à re-trier**. L'ordre reste celui du serveur
+  (`ORDER BY` en SQL) — deux tris qui divergeraient d'un epsilon donneraient une
+  liste dont l'ordre contredit ses propres étiquettes.
+- `null` **n'est pas « 0 m »** : la ligne disparaît. Un repli à zéro afficherait
+  « à 0 m » sur une position inconnue, et placerait un commerce sans coordonnées
+  au large du golfe de Guinée (règle 29).
+
+**Éprouvé des deux côtés, parce que la chaîne a deux moitiés :**
+
+- **Serveur** — `client_liste.py` gagne une sonde : la projection doit **porter**
+  les deux champs, et au moins une promo doit les avoir non nuls. Mesuré 33/33.
+  ⚠️ Elle accepte un parc mixte (un `null` est légitime) mais refuse une
+  projection muette. Prouvé par mutation : retirer `commercantLatitude` de la
+  projection fait rendre ❌ — *« l'app ne peut plus calculer de distance, et rien
+  d'autre ne le signalerait »*. Auto-test : 21 cas dont 12 refus.
+- **Client** — `promo_test.dart` gagne trois cas, dont ⚠️ **le piège du JSON** :
+  Postgres rend `3` et non `3.0` pour une longitude entière, `jsonDecode` en fait
+  un `int`, et un `as double?` lève. Le décodage passe donc par `num?`. **Le
+  méridien de Greenwich (longitude 0) est le cas réel** — un entier parfaitement
+  légitime, et celui qui planterait. Prouvé par mutation : revenir à `as double?`
+  fait tomber ce test. 14 → **17 tests Dart**.
+
+---
+
+### 2026-08-13 — Sur quoi la décision a-t-elle été prise ?
+
+Les trois routes de modération ne prenaient **aucun corps** : le `{"reason": …}`
+que trois bancs leur envoyaient depuis des semaines était jeté en silence par
+`whitelist: true`. Une décision n'avait donc **aucun motif enregistré** — le
+journal disait « untel a masqué la promo X », sans dire pourquoi elle était en
+file.
+
+**Le motif enregistré est celui des signaleurs, pas du modérateur**, et c'est un
+choix. Demander sa motivation au modérateur exigerait un champ de saisie sur
+trois écrans, et une boîte de dialogue par geste ralentirait une file qu'on
+traite au rythme d'un tap. Le décompte par motif est déjà calculé par le produit
+— c'est ce que la file affiche à côté de chaque promo — et il répond à la
+question qui compte pour un audit : **sur quoi cette personne a-t-elle
+décidé ?** Le journal porte désormais
+`{"signalementsActifs": 3, "motifs": {"arnaque": 3}}`.
+
+⚠️ **Un piège d'ordre, et il ne se voit que sur une des trois résolutions.**
+`resolveVerifieOk` pose `verifiedOkAt = now`, et les **deux** requêtes qui
+comptent les signalements filtrent sur ce champ (fenêtre d'ignore de 30 jours).
+Mesuré après la résolution, le contexte d'un « vérifier OK » vaudrait donc
+systématiquement **zéro signalement, aucun motif** — le journal dirait que le
+modérateur a tranché sur rien, au moment précis où il vient de trancher sur
+trois signalements. Aucune erreur, aucun champ manquant : **juste un chiffre
+faux, et le seul qui compte pour un audit.**
+
+C'est le miroir du piège payé le 2026-08-05, où des valeurs de référence lues
+trop **tôt** décrivaient un état disparu. Ici c'est trop **tard**, et le remède
+est le même : mesurer au plus près du geste, du bon côté.
+
+**Et mon premier banc ne suffisait pas.** `moderation_course` passe de 7 à
+**10 contrôles** : la première version ne sondait le contexte qu'après
+`masquer` — or `masquer` ne touche pas `verifiedOkAt`, donc **la sonde serait
+restée verte en mesurant du mauvais côté**. Il fallait un `verifier-ok`
+**accepté**, et il n'y en avait aucun dans le banc ; ajouté en § 3 bis.
+
+⚠️ Prouvé par mutation : déplacer la mesure après `resolveVerifieOk` fait rendre
+*« signalementsActifs=0, attendu 3 — mesuré du mauvais côté de la résolution »*.
+Le verdict exige une **valeur**, pas une présence — un `metadata: {}` passerait
+un contrôle de présence et raterait tout.
+
+Rejoués : `moderation-course` 10/10, `admin-moderation` 7/7, `notifications`
+8/8, `journal-agent` 11/11.
+
+### 2026-08-13 — deux bancs pour les nouvelles fonctionnalités client
+
+`ville_client` (8 contrôles, 17 cas d'auto-test dont 12 refus) et
+`filtre_categorie` (6 contrôles, 17 cas dont 12 refus). Tous verts au premier
+passage réel.
+
+**Ce qu'ils couvrent, et que rien ne couvrait.** Les parcours d'écran éprouvent
+les *gestes* du client (bandeau, consentement, recentrage). Ils ne peuvent pas
+prouver que le **serveur** sépare deux villes : sur un décor tenant dans un seul
+rayon, ils resteraient verts avec un serveur qui ignore complètement le point.
+`client_rayon` ne comble pas ce trou — il éprouve la géométrie (le cadre rogné
+par la haversine) sur des commerçants qu'il fabrique autour d'un seul point.
+
+Mesuré sur le décor à trois villes : Djelfa 44 promos, Hassi Bahbah 15, Alger
+15, **aucune en commun sur les trois paires**. Les trois paires sont sondées et
+non la première : un serveur peut séparer deux villes et se tromper sur la
+troisième, et c'est celle-là qu'on n'aurait pas regardée.
+
+**L'écart de comptage du 2026-08-13 est tranché, et il n'est pas côté serveur.**
+`alimentation=32`, `autre=12`, `toutes=44` — la somme est exacte, et ce sont
+exactement les chiffres de la **liste**. La carte annonçait 40/32/8 : elle se
+borne au cadre visible, la liste au rayon. Aucune retouche serveur à faire.
+
+⚠️ **Les deux bancs ont commencé par refuser, et ils avaient raison.** Ils
+demandaient `limit=200` ; le serveur plafonne à 100 et rend `400
+VALIDATION_ERROR`. Le verdict rendu fut « liste illisible », non concluant —
+jamais un vert, jamais un échec métier imputé au produit. C'est le comportement
+que la règle 29 exige, obtenu du premier coup parce que la lecture du total
+distingue l'absence de l'illisible. La troncature au-delà d'une page est
+désormais **annoncée** : elle ne peut pas inventer un recouvrement, mais elle
+peut en cacher un.
+
+⚠️ `PYTHONIOENCODING=utf-8` est posé dans les deux enveloppes : la console
+Windows est en cp1252 et le moindre `═` faisait planter le banc en
+`UnicodeEncodeError`. Un banc qui ne peut pas **afficher** son verdict n'en rend
+aucun.
+
+**Le parcours d'écran du scénario 2 reste rouge, et sa cause est mesurée.** La
+sonde a montré que l'app fait tout juste — point lu `(35.0774, 3.0281)`, carte
+ouverte dessus, glissement de 6,2 km, proposition affichée avec le bon libellé
+(« Vous explorez une autre ville »). C'est le **test** qui rate sa cible :
+Flutter journalise *« A call to tap() … derived an Offset (368.5, 939.3) that
+would not hit test on the specified widget »*, et le tap atterrit sur le bouton
+flottant « Oublier mon point », qui efface le point. Le produit n'est pas en
+cause.
+
+⚠️ **Et je m'étais trompé une fois de plus avant cette mesure** : le commit
+précédent affirmait que le bandeau d'invitation à la localisation masquait la
+proposition. La sonde rend `croix=0` — il n'y avait aucune invitation à
+l'écran. Quatre hypothèses fausses sur ce seul parcours, toutes corrigées par
+la mesure, aucune par le raisonnement.
+
+### 2026-08-13 — revue agent/admin : cinq bancs, deux commentaires périmés
+
+**La revue d'abord, mesurée.** Les 31 routes privilégiées (3 agent, 23 admin,
+5 curation) sont toutes touchées par au moins un banc : **aucun trou de route**.
+Et le retrait commune/wilaya est **terminé** — zéro ligne de code vivant dans le
+backend, le mobile et les bancs, uniquement des commentaires historiques. Le
+sujet était donc ailleurs : des routes touchées dont le **scénario** n'était pas
+éprouvé.
+
+**`sortie_agent`** (7 contrôles, 20 cas dont 14 refus). Comment un admin
+arrête-t-il un agent qui, depuis le 2026-08-13, agit sur tout le parc ? Mesuré :
+l'entité `Agent` n'a **aucun drapeau d'activation**, aucune route ne supprime un
+agent, et `revoke-token` **n'est pas un verrou** — l'agent se reconnecte aussitôt
+avec le même mot de passe. Le seul verrouillage réel est `reset-password`, et
+`admin_agents` n'en éprouvait que la trace au journal, jamais l'effet.
+
+**`file_moderation`** (7 contrôles, 22 cas dont 16 refus). L'écran principal de
+l'agent : personne n'éprouvait son CONTENU. Une file qui rendrait toujours la
+même liste passait les deux bancs qui la touchaient. ⚠️ Mesuré au passage : le
+seuil est de **trois appareils distincts** — un signalement isolé ne crée aucun
+travail, ce qui empêche de noyer la file avec trois requêtes (règle 7).
+
+**`tournee_agent`** (5 contrôles, 20 cas dont 14 refus). La jointure que
+personne ne parcourait : `agent_creation` s'arrête à la naissance du commerçant,
+`agent_promo` publie sur un commerçant du décor déjà là. Ce banc crée, garnit, et
+vérifie que le client voit les promos AU POINT du commerce — et ne les voit pas
+à 150 km.
+
+**`recherche_parc`** (6 contrôles, 23 cas dont 15 refus). Sept bancs appelaient
+`GET /admin/commercant`, tous en `?limit=100` sec : `search` n'était exercé par
+personne. Il cherche une cible **au-delà de la première page**, seule sonde qui
+distingue une vraie recherche d'un filtre sur page tronquée. ⚠️ **Le piège du
+« + » est confirmé par la mesure** : `%2B` trouve 1 résultat, `+` brut en trouve
+0 — non encodé, il se décode en espace, silencieusement.
+
+**`plafond_admin`** (6 contrôles, 20 cas dont 14 refus). `plafond-promos` est la
+seule route admin-seulement sur un commerçant, et `portee_agent` prouvait
+uniquement que l'agent en est **refusé**. Éprouvé dans les deux sens : serré au
+nombre d'actives, la publication rend `PROMO_ACTIVE_CAP_REACHED` ; desserré d'un
+cran, elle passe. Le refus seul serait satisfait par un serveur qui refuse
+toujours.
+
+⚠️ **Trois attendus faux de ma part, tous corrigés par la mesure** — et dans les
+trois cas le banc a rendu « non concluant » ou rouge sur un produit **correct**,
+ce qui est le bon comportement mais sur une prémisse fausse (règle 38 appliquée
+au banc lui-même) : des identifiants invalides rendent **400**, pas 401
+(`BadRequestAppException`, convention qu'`auth_login` assertait déjà) ; le PIN
+exige **6 à 12 chiffres** ; et la fiche publique **ne porte pas** les promos —
+l'écran les demande par `GET /promo?commercantId=`, périmètre explicite sans
+filtre géographique.
+
+⚠️ **Une revendication de ma revue était fausse** : je donnais le filtre
+`actorType` du journal comme non éprouvé. `journal_agent` §8 exerce
+`?actorType=agent` **et** `?actorType=admin` depuis le début. Rien à ajouter.
+
+**Deux commentaires périmés corrigés dans `admin.controller.ts`.** La file
+affirmait que les résolutions étaient des `update` inconditionnels où « dernier
+écrivain gagne, aucune erreur levée » — vrai le matin, faux le soir même
+(409 `MODERATION_STATE_CHANGED`). Le journal affirmait « n'expose que des
+UUID » — faux, `findAll` appelle `resoudreLibelles`.
+
+Prouvés par mutation sur le chemin réel : plafond desserré au lieu d'être serré,
+témoin « au loin » posé sur le commerce, masquage supprimé — les trois rendent
+rouge avec un message qui nomme le défaut.
+
+⚠️ Le décor du commerçant de banc a été **rendu à 0 promo en ligne** : la
+mutation du plafond en avait laissé une publiée. Les 9 commerçants des trois
+villes, eux, ne sont pas touchés.
+
+### 2026-08-13 — la frontière admin, dernier écart des quatre rôles
+
+**`frontiere_admin`** — 19 contrôles, 19 cas d'auto-test dont 14 refus. Vert au
+premier passage réel.
+
+**Le trou, mesuré.** Neuf routes sont `@Roles('admin')` **seul**, et toutes
+leurs écritures n'étaient jamais exercées qu'avec un jeton **admin** : aucun
+banc ne les attaquait avec un jeton d'**agent**. Trois seulement avaient un
+témoin négatif (`GET /admin/agent`, `GET /admin/audit-log`, `PATCH
+…/plafond-promos`). **Un `GET` refusé ne prouve rien du `POST` d'à côté** — la
+polarité est par route, et la route qu'on oublie est ouverte (règle 33).
+
+Ce que ça coûterait : `POST /admin/agent` atteignable, c'est un agent qui se
+fabrique des comptes ; les cinq routes de curation atteignables, c'est un agent
+qui décide de la vitrine nationale.
+
+**Résultat : les neuf refusent l'agent en `403 AUTH_FORBIDDEN_ROLE`**, et
+l'admin franchit chacune. Rien n'était ouvert — mais c'est désormais **prouvé**
+plutôt que lu dans le code, ce que la règle 33 interdit précisément de faire.
+
+⚠️ **Le témoin positif est gratuit, et c'est le point technique du banc** : les
+gardes NestJS s'exécutent **avant** les pipes de validation. Un corps vide
+ressort donc en `400 VALIDATION_ERROR` pour l'admin — preuve qu'il a franchi la
+garde — et en `403` pour l'agent, **avant** d'être regardé. Aucun agent créé,
+aucune curation modifiée. Seule exception, jouée en dernier :
+`POST /admin/me/revoke-token`, dont le témoin positif révoque pour de bon le
+jeton de l'admin.
+
+⚠️ **Et sa limite est écrite, parce que sa mutation l'a révélée.** Jeton admin
+substitué à celui de l'agent — une garde tombée simulée — : **5 échecs et 5 non
+concluants, jamais un faux vert**. Ces cinq non-concluants disent quelque chose :
+sur les quatre routes visant un UUID absent, une garde tombée se manifeste en
+`404 …_NOT_FOUND`, et la ressource inexistante **masque** l'absence de garde. Le
+rendre pleinement sensible imposerait de viser des cibles réelles — donc de
+révoquer un vrai jeton, réinitialiser un vrai mot de passe et supprimer une
+vraie entrée de vitrine à chaque passage. Choix assumé : sensibilité totale sur
+les cinq routes sans `:id`, « non concluant plutôt que faux » sur les quatre
+autres.
+
+**Les quatre rôles sont désormais couverts** : client, commerçant, agent, admin.
+
+### 2026-08-13 — P1 : le premier banc de performance
+
+`banc_perf` — 25 controles, 29 cas d'auto-test dont 19 refus. 0 echec.
+
+Le depot portait 46 bancs de correction et **aucune mesure de performance**. Une
+cible de fluidite qu'on ne mesure pas est un commentaire (regle 30).
+
+**Les chiffres de reference, 2026-08-13, en local sur 74 promos :**
+
+| Route | p50 | p95 | brut | gzip |
+|---|---|---|---|---|
+| `/promo/config` | 5 ms | 9 ms | 89 o | — |
+| `/promo?limit=20` | 12 ms | 17 ms | 15 516 o | **2 559 o** |
+| idem + point client | 11 ms | 12 ms | 15 516 o | **2 559 o** |
+| `/promo/map` | 12 ms | 16 ms | 39 323 o | **5 731 o** |
+
+La compression divise par 6,1 et 6,9 : le point 4 de `AUDIT_PERFORMANCE_V0`
+etait une case cochee, c'est desormais un controle execute.
+
+⚠️ **Deux erreurs de ma part, corrigees par la mesure.**
+
+D'abord j'ai annonce « aucun cache HTTP » apres avoir cherche `ETag` dans le
+CODE. **Faux** : Express en pose un d'office, et une requete conditionnelle rend
+bien `304` sur les quatre routes. Chercher dans le code ce qui se lit dans la
+reponse coute un diagnostic entier.
+
+Ensuite le banc a rendu ROUGE sur `/promo/config` en accusant le middleware
+`compression` — qui ne compresse pas sous 1 Ko, et **a raison** : l'en-tete gzip
+couterait plus que le gain. Regle 38 dans mon propre banc, pour la deuxieme fois
+de la journee.
+
+**Ce qui reste vraiment ouvert, et qui est mesure :**
+
+· `Cache-Control` est absent — l'app economise le corps, jamais le trajet ;
+· **aucun paquet de cache HTTP dans `pubspec.yaml`** : Dio n'envoie jamais
+  `If-None-Match`, donc l'`ETag` du serveur **n'est utilise par aucun vrai
+  client**. C'est une capacite servie sans appelant (regle 31) ;
+· la sonde SQL (transactions par appel, la seule qui voit venir un N+1) rend
+  « non concluant » depuis Windows : ni psycopg2, ni psql, ni docker. Elle
+  mesure depuis WSL.
+
+⚠️ Ce banc n'est **pas** un test de charge : un appel a la fois, sans
+concurrence. Il repond a « cette route est-elle bien formee ? », pas a « que se
+passe-t-il a 500 utilisateurs ? ».
+
+Prouve par mutation : seuil de compression porte a x20 → trois refus nommant le
+facteur reel.
+
+### 2026-08-13 — P2 : le plan SQL, la forme et non la duree
+
+`plan_sql` — 5 controles, 17 cas d'auto-test dont 13 refus. 0 echec, 1 non
+concluant qui est **une decision produit a prendre**, pas un defaut.
+
+**Pourquoi la forme et pas le temps.** `banc_perf` rend 12 ms en p50 sur la
+liste. A 310 promos et 154 commercants, ce chiffre n'apprend rien : deux petites
+tables se parcourent instantanement. Ce qui ne depend pas de la taille du jour,
+c'est le plan.
+
+⚠️ **La reconstitution SQL est validee avant tout le reste** : 44 promos rendues
+par ma requete, 44 par l'API pour le meme point. Sans cette egalite le banc
+s'arrete — un plan tire d'une requete approximative est credible et faux, donc
+pire qu'aucun plan.
+
+**Ce que le plan montre, et qui dementait un commentaire du code.**
+`promo.service.ts` affirmait que le `BETWEEN` « emprunte
+IDX_commercant_position ». Le plan reel fait un **Seq Scan** sur `commercant`,
+101 lignes ecartees sur 154 — et PostgreSQL a raison, aucun index ne bat un
+parcours complet sur 6 blocs. `enable_seqscan = off` etablit que l'index est
+bien **utilisable** ; il n'est simplement pas choisi. Le commentaire est corrige
+au present mesure.
+
+**Le defaut de fond, mesure sans rien ecrire en base :**
+
+    btree (latitude, longitude)          101 lignes remontees
+    gist  (point(longitude, latitude))    53 lignes remontees   <- les 53 justes
+
+Un btree ne restreint que sur sa **premiere** colonne : la longitude n'est qu'un
+filtre interne. Le GiST ecarte 48 lignes de plus AVANT la lecture de table, et
+il ne demande **pas PostGIS** — `point` et `<@ box` sont natifs. Invisible a
+l'echelle du quartier, structurel a l'echelle nationale : une bande de latitude
+traversant l'Algerie contiendrait une grande part du parc.
+
+⚠️ Le banc **ne recommande rien** : changer d'index changerait aussi la requete
+(`point(...) <@ box(...)` au lieu des deux `BETWEEN`). C'est une decision
+produit. Le banc la garde mesuree en attendant qu'elle soit prise.
+
+⚠️ L'index de comparaison est cree dans une transaction **annulee**, et une
+sonde verifie qu'il ne reste rien. `pg_stat_statements` a ete envisage puis
+retire : `shared_preload_libraries` est vide, il ne collecterait rien sans
+redemarrer la base du poste — hors de question pendant que l'app tourne.
+
+### 2026-08-13 — P3 : la revalidation conditionnelle, ses deux moities
+
+**Le defaut, mesure en P1.** Le backend posait un `ETag` sur toutes les reponses
+JSON, et une requete conditionnelle rendait bien `304`. Mais **aucun paquet de
+cache HTTP n'existait dans `pubspec.yaml`** : Dio n'envoyait jamais
+`If-None-Match`, donc cette capacite n'avait **aucun appelant** (regle 31).
+Chaque ouverture d'ecran retelechargeait 2,5 Ko pour la vitrine et 5,7 Ko pour
+la carte, meme quand rien n'avait change.
+
+**Cote serveur** — `Cache-Control` sur les trois routes publiques. `/promo` et
+`/promo/map` en `max-age=0, must-revalidate` : zero seconde de fraicheur,
+deliberement, car une promo masquee par la moderation doit disparaitre au
+prochain appel. On paie l'aller-retour, on n'economise que le corps.
+`/promo/config` en `max-age=300` — 89 octets de constantes redemandes a chaque
+demarrage. `private` partout : la reponse depend de `favoriteIds`, un cache
+partage servirait les favoris d'un autre.
+
+**Cote mobile** — `EtagCacheInterceptor` + `EtagCacheStore`, sans nouvelle
+dependance.
+
+⚠️ **Seuls les GET non authentifies sont mis en cache**, et c'est la regle qui
+rend ce cache sur. L'app est multi-roles sur **un seul appareil** : mettre en
+cache une reponse authentifiee sous une cle d'URL ferait servir le tableau de
+bord d'un compte a celui qui ouvre l'app ensuite.
+
+⚠️ Dio traite `304` comme une **erreur** : la reponse conditionnelle arrive dans
+`onError`, ou `handler.resolve` la remplace par le corps conserve. D'ou l'ordre
+d'enregistrement — avant l'intercepteur qui convertit en `ApiException`, sinon
+il ne verrait jamais un seul `304`.
+
+Six tests, mutation comprise (garde d'authentification retiree -> refus). 17
+tests mobiles -> **23**.
+
+⚠️ **Le banc savait se contenter d'un ETag — corrige.** `verdict_cache` rendait
+« ok » des qu'un ETag etait present ; Express en pose un d'office, donc le banc
+serait reste vert sur exactement l'ecart que P3 comble.
+
+⚠️ **La moitie serveur n'est pas encore verifiable** : le backend qui tourne
+vient du **clone WSL**. `curl -D -` montre l'ETag et pas de `Cache-Control`. Un
+`git pull` + redemarrage cote WSL, et `./scripts/test-perf.sh` passera de « non
+concluant » a « ok » sur la sonde cache.
+
+### 2026-08-13 — P4 : le profilage de la carte
+
+`perf_carte` — 16 cas d'auto-test dont 11 refus, plus
+`integration_test/perf_carte_test.dart` et un lanceur **separe**.
+
+Le serveur rend 12 a 17 ms : il n'y a rien a optimiser de ce cote. La fluidite
+ressentie se joue dans les images ratees pendant qu'on fait glisser la carte —
+le seul ecran qui la mette a l'epreuve (tuiles en continu, regroupements
+recalcules a chaque zoom, geste qui doit suivre le doigt).
+
+⚠️ **`--profile` est le point entier du script.** En `debug` le Dart est
+interprete : les temps sont deux a dix fois pires, sans rapport avec la
+production, et on partirait optimiser du code qui n'a rien.
+
+⚠️ **Un lanceur separe est necessaire** : `integrationDriver()` sans rappel
+**jette** les donnees de performance. Le parcours pourrait mesurer des milliers
+d'images et rien n'en sortirait — un profilage silencieusement vide, qui se lit
+comme un profilage reussi.
+
+⚠️ **Un emulateur n'est pas un telephone** : sans acceleration GPU la
+rasterisation y est exageree. Un depassement de ce cote se remesure sur un vrai
+appareil avant d'etre cru ; la construction, elle, est du code Dart et se
+transpose. Le banc le dit dans son verdict.
+
+Construction et rasterisation sont jugees separement, au **p90** : une moyenne a
+8 ms peut cacher une image sur dix a 40 ms, et c'est celle-la qui se voit. Plus
+un verdict dedie a la pire image — un p90 sain ne rattrape pas un a-coup unique.
+
+### 2026-08-13 — l'index de position passe en GiST
+
+Decision produit prise sur la mesure de P2, et appliquee.
+
+**Trois endroits qui changent ensemble** : la migration
+(`CommercantPositionGistIndex1783880000000`), `applyBoundingBox` qui passe des
+deux `BETWEEN` a `point(...) <@ box(...)`, et le decorateur `@Index` de
+l'entite, **retire** — TypeORM ne sait decrire que des colonnes, pas une
+expression.
+
+⚠️ **`migration:generate` ne rend RIEN** apres la bascule, verifie : « No
+changes in database schema were found », et aucun fichier ecrit. Ma crainte
+qu'il propose de defaire le GiST etait infondee — il ne gere pas les index
+d'expression.
+
+⚠️ **L'ordre des coordonnees est inverse, et c'est la vraie source d'erreur.**
+`point(x, y)` attend x puis y, soit `point(longitude, latitude)`, quand tout le
+reste du produit dit « lat, lng ». Une inversion ne leverait RIEN : elle rendrait
+des resultats faux, en silence. La garde n'est pas un commentaire mais la sonde
+de fidelite de `test-plan-sql.sh` — **44 promos des deux cotes** apres la
+bascule, donc pas d'inversion.
+
+**Le gain, mesure :** l'index en place remonte **53 lignes pour 53 reellement
+dans le cadre** ; l'ancien btree en remontait **77**. ⚠️ La premiere mesure
+(avant bascule) donnait 101 — l'ecart exact depend des statistiques et du plan
+retenu, la direction et la conclusion sont identiques.
+
+⚠️ **Le banc a du etre corrige AVANT de mesurer, et c'est instructif.** Sa
+reconstitution SQL portait encore les deux `BETWEEN` : elle aurait rendu le meme
+nombre de lignes — donc la sonde de fidelite serait restee VERTE — tout en
+faisant analyser un plan que le produit ne produit plus. Le piege que ce banc
+denonce, retourne contre lui-meme.
+
+⚠️ **Et la comparaison a l'ancien btree ne voulait rien dire tant que le GiST
+restait en place** : le planificateur le choisissait MEME pour la requete
+`BETWEEN`, s'en servant pour le seul predicat partiel. On mesurait le GiST deux
+fois en croyant comparer. Le banc retire donc l'index de production le temps
+d'une transaction annulee — et une seconde sonde verifie qu'il est bien revenu,
+sans quoi ce banc pourrait laisser la base amputee de son index.
+
+**Non-regression, tout vert :** `ville_client` 8/8 (les trois villes restent
+mutuellement invisibles), `filtre_categorie` 6/6, `defaut_client` 3/3,
+`client_carte` 6/6, **`client_rayon` 5/5** — le cas diagonal (dans le carre,
+hors du cercle) passe toujours, ce qui etablit que la semantique est preservee.
+Backend : tsc 0, eslint 0, **129 tests**.
+
+### 2026-08-13 — a quelle taille le GiST paye : la mesure
+
+`banc_perf` relance apres la bascule : **aucun effet mesurable**. p50 stable a
+12-13 ms des deux cotes, memes transactions SQL. Attendu, et pas une deception :
+a 156 commercants tenant dans 6 blocs, PostgreSQL parcourt la table sans
+consulter d'index — changer sa nature ne peut rien changer.
+
+Restait la seule question qui vaille, et `scripts/lib/echelle_geo.py` y repond :
+commercants synthetiques inseres dans une transaction **annulee**, `ANALYZE`,
+puis comparaison des deux plans par palier.
+
+⚠️ **La repartition change tout, et ma premiere version l'a manque.**
+
+En repartition **uniforme** sur le nord de l'Algerie : **aucun gain**, les deux
+index font jeu egal. Logique — une bande de latitude y contient une part
+proportionnelle du parc, donc filtrer sur la seule latitude suffit. Ce cas est
+FAVORABLE au btree.
+
+En repartition **par villes**, il a d'abord fallu corriger le generateur :
+aucune ville synthetique ne tombait dans la bande de latitude mesuree, et le
+tableau montrait une egalite parfaite parce qu'il ne mesurait rien d'autre que
+la taille de l'index. Un generateur de decor qui rate sa cible produit un
+resultat parfaitement lisible et parfaitement vide.
+
+Villes **alignees en latitude**, comme le sont Djelfa, Laghouat, Bou Saada et
+Aflou sur les hauts plateaux — trois passages concordants :
+
+    commercants     GiST (en place)     btree (ancien)
+    156             0,08 ms             0,06 ms
+    5 156           0,08 - 0,11 ms      0,07 - 0,10 ms
+    25 156          0,08 - 0,13 ms      0,15 - 0,22 ms
+    100 156         0,10 - 0,13 ms      0,33 - 0,39 ms
+    400 156         0,12 - 0,14 ms      0,85 - 1,23 ms
+
+Le GiST reste **plat** pendant que la table est multipliee par 2 500 ; le btree
+se degrade jusqu'a **sept a neuf fois plus lent**. La bascule commence a payer
+vers **25 000 commercants**, et devient structurante au-dela de 100 000.
+
+⚠️ `echelle_geo.py` **n'est pas un banc** : il ne rend aucun verdict et ne peut
+donc rien refuser. Il produit un tableau qu'un humain lit. Ce qui est solide est
+la FORME des deux courbes, pas les millisecondes au centieme.
+
+### 2026-08-13 — le lot complet, deux passages
+
+**`test-tout.sh`** enchaine 42 bancs et rend un tableau. Il n'existait pas :
+personne ne pouvait dire « tout est vert » avant un deploiement.
+
+**Premier passage : 28 verts · 2 echecs · 2 non concluants · 11 sautes.** Aucun
+de ces defauts n'etait visible en lancant les bancs un par un.
+
+· **six bancs ne rendaient pas le decor** — ils creaient des promos sur le
+  commercant de test sans les arreter. Le plafond etant de 5 actives, tous les
+  suivants echouaient sur `PROMO_ACTIVE_CAP_REACHED`, un refus parfaitement
+  legitime du produit impute a tort aux bancs ;
+· **une quatrieme forme d'appel `python3`** (chemin relatif) faisait passer trois
+  bancs pour des auto-tests casses. Leurs auto-tests passaient : c'etait l'appel
+  qui echouait ;
+· **`client-rayon` lisait une page tronquee comme une absence** — `limit=50` sur
+  une liste triee par distance, decor grossi, le commerce du coin hors page ;
+· **`admin-dashboard` comparait un compteur global a une liste bornee au rayon**,
+  vestige d'avant la bascule geographique.
+
+**Second passage, apres corrections : 36 verts · 0 echec · 5 non concluants ·
+1 saute.**
+
+⚠️ **Deux limites restent, et elles sont d'une autre nature que ce qui a ete
+corrige :**
+
+1. `frontiere-http` rend `429 RATE_LIMITED`. Il figure bien dans les sept bancs
+   « stricts », mais la pause est reglee sur le banc PRECEDENT : elle protege le
+   suivant, pas le gourmand lui-meme. Ma logique etait incomplete ;
+2. `plafond-promos`, `plafond-admin` et `tournee-agent` rendent des non
+   concluants qu'ils n'avaient pas au premier passage. Ils tournent desormais
+   APRES les bancs de moderation qui ne bloquaient plus — l'ordre reel a change
+   — et butent vraisemblablement sur le plafond QUOTIDIEN de creations
+   (5/24 h/commercant). Arreter une promo libere un emplacement actif, jamais un
+   quota journalier : aucun nettoyage ne peut le rendre.
+
+⚠️ **La duree : 45 min au premier passage, ~18 au second.** Mesure : un banc
+prend 0 a 11 secondes, donc 43 pauses de 60 s faisaient 90 % du lot. Une pause
+uniforme appliquait a tous le delai que seul le seau le plus serre exige
+(`report` et `register`, 5/min). La pause suit desormais ce que le banc
+precedent a consomme. **Aucune reinstallation d'app n'est en jeu** : ces bancs
+sont du HTTP pur, et `parcours-ecran` est exclu du lot.
 
 ---
 

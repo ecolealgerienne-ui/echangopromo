@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../../domain/enums/categorie.dart';
 import '../../domain/models/map_shop.dart';
+import '../../domain/models/client_geo_config.dart';
 import '../../domain/models/promo.dart';
 
 /// Le backend pagine `/promo` et `/promo/me/all` (`{items, total, page,
@@ -88,7 +89,6 @@ class PromoApi {
   /// expiration la plus proche — tri appliqué côté backend. `page` permet le
   /// chargement incrémental ("Afficher plus" côté écran client).
   Future<PaginatedPromos> listActive({
-    List<String> communeIds = const [],
     Categorie? categorie,
     List<String> favoriteIds = const [],
     int page = 1,
@@ -96,11 +96,33 @@ class PromoApi {
     String? commercantId,
     PromoServerSort? sort,
     int? limit,
+
+    /// Point de recherche **enregistré par le client**, ou `null`.
+    ///
+    /// ⚠️ **La porte de consentement est ici, et nulle part ailleurs.**
+    /// `null` veut dire « le client n'a rien enregistré, donc rien à
+    /// transmettre » — et le serveur applique alors son propre défaut. Ne
+    /// jamais y substituer une valeur de repli côté app : ce serait envoyer
+    /// une position au nom d'un client qui n'en a donné aucune.
+    ///
+    /// ⚠️ Et **jamais la lecture du capteur GPS** : celle-ci reste sur
+    /// l'appareil (centrage de la carte, distances affichées). Le seul chemin
+    /// du capteur vers ce paramètre passe par un enregistrement explicite du
+    /// client dans `ClientPositionStore`.
+    (double, double)? point,
+    double? radiusKm,
+
+    /// Ne renvoyer que les favoris, **sans cadrage géographique**. Un favori
+    /// est un choix explicite : une règle de proximité n'a pas à le retirer.
+    bool favoritesOnly = false,
   }) async {
     final query = <String, dynamic>{
-      if (communeIds.isNotEmpty) 'communeIds': communeIds.join(','),
+      if (point != null) 'latitude': point.$1,
+      if (point != null) 'longitude': point.$2,
+      if (point != null && radiusKm != null) 'radiusKm': radiusKm,
       if (categorie != null) 'categorie': categorie.value,
       if (favoriteIds.isNotEmpty) 'favoriteIds': favoriteIds.join(','),
+      if (favoritesOnly && favoriteIds.isNotEmpty) 'favoritesOnly': true,
       if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
       if (commercantId != null) 'commercantId': commercantId,
       if (sort != null) 'sort': sort.value,
@@ -110,6 +132,18 @@ class PromoApi {
     final response =
         await _dio.get<Map<String, dynamic>>('/promo', queryParameters: query);
     return PaginatedPromos.fromJson(response.data!);
+  }
+
+  /// Repères géographiques servis par le serveur : point par défaut, rayon par
+  /// défaut, rayon maximum.
+  ///
+  /// ⚠️ **Ces valeurs ne sont jamais recopiées côté app.** Les compiler dans le
+  /// binaire les figerait jusqu'à la prochaine publication sur les stores —
+  /// alors qu'ici, changer le point par défaut est une ligne de `.env`. C'est
+  /// le même contrat que `plafond` dans `GET /promo/me/slots`.
+  Future<ClientGeoConfig> clientConfig() async {
+    final response = await _dio.get<Map<String, dynamic>>('/promo/config');
+    return ClientGeoConfig.fromJson(response.data!);
   }
 
   /// Commerçants géolocalisés de la zone visible de la carte, avec leurs
@@ -133,29 +167,6 @@ class PromoApi {
       },
     );
     return MapShopsResult.fromJson(response.data!);
-  }
-
-  /// Où centrer la carte pour les communes choisies, quand la position GPS
-  /// n'est pas disponible.
-  ///
-  /// `null` quand le serveur ne connaît pas de centre — aucun commerçant
-  /// positionné n'a de promo visible dans ces communes. C'est une réponse à
-  /// part entière, pas un échec : l'appelant garde son propre repli plutôt que
-  /// de recevoir un point inventé (règle #29).
-  Future<({double latitude, double longitude})?> fetchMapCenter(
-    List<String> communeIds,
-  ) async {
-    if (communeIds.isEmpty) return null;
-    final response = await _dio.get<Map<String, dynamic>>(
-      '/promo/map/center',
-      queryParameters: <String, dynamic>{'communeIds': communeIds.join(',')},
-    );
-    final center = response.data!['center'] as Map<String, dynamic>?;
-    if (center == null) return null;
-    return (
-      latitude: (center['latitude'] as num).toDouble(),
-      longitude: (center['longitude'] as num).toDouble(),
-    );
   }
 
   Future<Promo> detail(String id) async {

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import '../../domain/enums/promo_moderation_status.dart';
 import '../../domain/enums/registre_status.dart';
 import '../../domain/models/admin.dart';
 import '../../domain/models/admin_commercant_item.dart';
@@ -50,14 +51,11 @@ class AdminApi {
 
   // --- Modération ---
 
-  Future<List<ModerationItem>> moderationQueue(
-      {String? communeId, String? wilaya}) async {
+  Future<List<ModerationItem>> moderationQueue() async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/moderation/queue',
       queryParameters: {
         'limit': _pageSize,
-        if (communeId != null) 'communeId': communeId,
-        if (wilaya != null) 'wilaya': wilaya,
       },
     );
     final items = response.data!['items'] as List<dynamic>;
@@ -66,16 +64,49 @@ class AdminApi {
         .toList();
   }
 
-  Future<void> masquerPromo(String promoId) async {
-    await _dio.post<void>('/admin/moderation/$promoId/masquer');
+  /// Les trois décisions de modération portent **l'état que le modérateur
+  /// avait à l'écran** (`expectedModerationStatus`, obligatoire côté serveur
+  /// depuis le 2026-08-13).
+  ///
+  /// ⚠️ **Ce n'est pas un paramètre technique, c'est la garde elle-même.** La
+  /// file de modération est nationale et non partitionnée depuis la
+  /// suppression du découpage administratif : deux agents peuvent trancher la
+  /// même promo, et sans cet état le second écrasait silencieusement la
+  /// décision du premier. Le serveur refuse en `MODERATION_STATE_CHANGED` si
+  /// l'état a bougé depuis l'affichage.
+  ///
+  /// ⚠️ Il vient de `item.moderationStatus`, **jamais d'une valeur en dur** :
+  /// écrire `signalee` parce que « c'est ce qu'il y a dans la file » ferait
+  /// échouer toute décision prise depuis l'écran de détail d'une promo, où le
+  /// statut peut être n'importe lequel des quatre.
+  Future<void> masquerPromo(
+    String promoId,
+    PromoModerationStatus expected,
+  ) async {
+    await _dio.post<void>(
+      '/admin/moderation/$promoId/masquer',
+      data: {'expectedModerationStatus': expected.value},
+    );
   }
 
-  Future<void> verifierOkPromo(String promoId) async {
-    await _dio.post<void>('/admin/moderation/$promoId/verifier-ok');
+  Future<void> verifierOkPromo(
+    String promoId,
+    PromoModerationStatus expected,
+  ) async {
+    await _dio.post<void>(
+      '/admin/moderation/$promoId/verifier-ok',
+      data: {'expectedModerationStatus': expected.value},
+    );
   }
 
-  Future<void> avertirPromo(String promoId) async {
-    await _dio.post<void>('/admin/moderation/$promoId/avertir');
+  Future<void> avertirPromo(
+    String promoId,
+    PromoModerationStatus expected,
+  ) async {
+    await _dio.post<void>(
+      '/admin/moderation/$promoId/avertir',
+      data: {'expectedModerationStatus': expected.value},
+    );
   }
 
   /// Vue globale de toutes les promos (plan de correction, Phase 2) — pas
@@ -83,16 +114,12 @@ class AdminApi {
   /// masquer un contenu problématique repéré directement.
   Future<List<ModerationItem>> listAllPromos({
     String? search,
-    String? communeId,
-    String? wilaya,
   }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/promo',
       queryParameters: {
         'limit': _pageSize,
         if (search != null && search.isNotEmpty) 'search': search,
-        if (communeId != null) 'communeId': communeId,
-        if (wilaya != null) 'wilaya': wilaya,
       },
     );
     final items = response.data!['items'] as List<dynamic>;
@@ -107,8 +134,6 @@ class AdminApi {
     String? search,
     RegistreStatus? registreStatus,
     bool? profilePendingReview,
-    String? communeId,
-    String? wilaya,
   }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/admin/commercant',
@@ -118,8 +143,6 @@ class AdminApi {
         if (registreStatus != null) 'registreStatus': registreStatus.value,
         if (profilePendingReview != null)
           'profilePendingReview': profilePendingReview,
-        if (communeId != null) 'communeId': communeId,
-        if (wilaya != null) 'wilaya': wilaya,
       },
     );
     final items = response.data!['items'] as List<dynamic>;
@@ -192,22 +215,14 @@ class AdminApi {
     required String email,
     required String password,
     required String nom,
-    List<String>? communeIds,
   }) async {
     final response =
         await _dio.post<Map<String, dynamic>>('/admin/agent', data: {
       'email': email,
       'password': password,
       'nom': nom,
-      if (communeIds != null) 'communeIds': communeIds,
     });
     return Agent.fromJson(response.data!);
-  }
-
-  Future<void> assignCommunes(
-      {required String agentId, required List<String> communeIds}) async {
-    await _dio.patch<void>('/admin/agent/$agentId/communes',
-        data: {'communeIds': communeIds});
   }
 
   Future<void> revokeAgentToken(String agentId) async {
@@ -236,18 +251,6 @@ class AdminApi {
       '/admin/agent/$agentId/reset-password',
       data: {'newPassword': newPassword},
     );
-  }
-
-  Future<void> transferCommunes({
-    required List<String> communeIds,
-    required String fromAgentId,
-    required String toAgentId,
-  }) async {
-    await _dio.post<void>('/admin/agent/transfer-communes', data: {
-      'communeIds': communeIds,
-      'fromAgentId': fromAgentId,
-      'toAgentId': toAgentId,
-    });
   }
 
   // --- Journal d'audit (plan de correction, Phase 3) ---

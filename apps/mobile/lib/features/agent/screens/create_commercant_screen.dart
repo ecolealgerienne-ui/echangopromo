@@ -35,7 +35,6 @@ class _CreateCommercantScreenState
   final _pinController = TextEditingController();
   final _pinConfirmController = TextEditingController();
   Categorie? _categorie;
-  String? _communeId;
   File? _photo;
   double? _latitude;
   double? _longitude;
@@ -54,8 +53,20 @@ class _CreateCommercantScreenState
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
-    if (!_formKey.currentState!.validate() || _communeId == null) {
-      setState(() => _error = _communeId == null ? l10n.communeRequired : null);
+    // ⚠️ La position est **obligatoire ici**, alors qu'elle reste facultative à
+    // l'auto-inscription. L'agent est physiquement dans le commerce : c'est la
+    // seule capture juste par construction. Sans cette garde, chaque tournée
+    // recréerait des fiches invisibles — 40 des 44 commerçants sans position
+    // mesurés le 2026-08-12 venaient de cette route.
+    //
+    // Refusé côté serveur aussi (`CreateCommercantByAgentDto`) : cette
+    // vérification-ci évite un aller-retour réseau pour rien, elle ne le
+    // remplace pas — une garde uniquement client se contourne en appelant
+    // l'API directement.
+    if (!_formKey.currentState!.validate() ||
+        _latitude == null ||
+        _longitude == null) {
+      setState(() => _error = l10n.positionRequired);
       return;
     }
 
@@ -76,7 +87,6 @@ class _CreateCommercantScreenState
             nom: _nomController.text.trim(),
             adresse: _adresseController.text.trim(),
             categorie: _categorie!,
-            communeId: _communeId!,
             pin: _pinController.text.trim(),
             photoKey: photoKey,
             latitude: _latitude,
@@ -141,6 +151,7 @@ class _CreateCommercantScreenState
           child: ListView(
             children: [
               CommercantFieldsForm(
+                positionRequise: true,
                 photo: _photo,
                 onPhotoChanged: (file) => setState(() => _photo = file),
                 telephoneController: _telephoneController,
@@ -154,8 +165,6 @@ class _CreateCommercantScreenState
                 }),
                 categorie: _categorie,
                 onCategorieChanged: (v) => setState(() => _categorie = v),
-                communeId: _communeId,
-                onCommuneChanged: (v) => setState(() => _communeId = v),
               ),
               const SizedBox(height: 12),
               TextFormField(

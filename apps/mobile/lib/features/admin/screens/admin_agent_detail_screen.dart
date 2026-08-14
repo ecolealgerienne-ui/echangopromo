@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import '../../../domain/models/agent.dart';
-import '../../../l10n/app_localizations.dart';
 import '../../shared/widgets/app_settings_actions.dart';
 
-/// Fiche agent côté admin — la liste (`AgentListScreen`) tassait email et
-/// communes dans un sous-titre tronqué, sans vue détail dédiée. Les actions
-/// (assigner des communes, révoquer la session) restent sur la liste — pas
-/// dupliquées ici, `Agent` ne porte que les champs affichés ci-dessous.
+/// Fiche agent côté admin.
+///
+/// ⚠️ **Cet écran n'a plus grand-chose à montrer depuis le 2026-08-13, et il
+/// le dit lui-même.** Sa raison d'être était que la liste « tassait email et
+/// communes dans un sous-titre tronqué » ; les communes ont disparu, le
+/// sous-titre ne porte plus que l'e-mail, et cette fiche affiche donc
+/// exactement ce que la ligne affichait déjà — un nom et un e-mail.
+///
+/// **Il est conservé volontairement, en attendant une décision produit**, pas
+/// par oubli : le supprimer retire un écran et une route, ce qui dépasse le
+/// retrait du découpage administratif. La question est ouverte dans
+/// `docs/PLAN_SUPPRESSION_COMMUNE.md` §10.
 class AdminAgentDetailScreen extends StatelessWidget {
   const AdminAgentDetailScreen({super.key, required this.agent});
 
@@ -14,7 +21,6 @@ class AdminAgentDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -33,24 +39,6 @@ class AdminAgentDetailScreen extends StatelessWidget {
               Text(agent.email),
             ],
           ),
-          const SizedBox(height: 16),
-          Text(l10n.assignedCommunesLabel,
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          if (agent.communes.isEmpty)
-            Text(
-              l10n.noCommunesAssignedLabel,
-              style: TextStyle(color: colorScheme.onSurfaceVariant),
-            )
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final commune in agent.communes)
-                  Chip(label: Text(commune.nom)),
-              ],
-            ),
         ],
       ),
     );

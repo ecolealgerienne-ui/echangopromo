@@ -61,15 +61,19 @@ BANCS=(
   # ⚠️ Consomme du débit : ~3 sondes par route, plusieurs minutes.
   test-frontiere-http
 
-  # N'écrit rien non plus : ses sondes portent sur les ressources d'un AUTRE
-  # compte, donc elles doivent toutes échouer.
-  test-appartenance
+  # ⚠️ ÉCRIT ET SUPPRIME — et ce commentaire disait le contraire jusqu'au
+  # 2026-08-13. `test-appartenance` ne touchait à rien parce que ses sondes
+  # étaient toutes refusées ; `test-portee-agent` prouve l'inverse (l'agent est
+  # global), donc elles passent : suspendre, réinitialiser un PIN, supprimer.
+  # Il crée son propre commerçant et l'efface en dernière sonde, mais ce n'est
+  # plus un banc en lecture seule.
+  test-portee-agent
 
   # À ADAPTER : les bancs métier, un par règle qui a DÉJÀ produit un défaut.
   # Chacun porte en tête ce qu'il éprouve ET le défaut qui l'a fait naître.
   # test-plafond-promos
   # test-fenetre-signalement
-  # test-visibilite-commune
+  # test-visibilite-rayon
 
   # ⚠️ En dernier : perturbe l'infrastructure (arrêt/redémarrage d'un service).
   # test-resilience-degradee

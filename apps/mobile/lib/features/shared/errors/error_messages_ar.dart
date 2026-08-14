@@ -10,9 +10,6 @@ const Map<String, String> errorMessagesAr = {
   'ADMIN_NOT_FOUND': 'المسؤول غير موجود.',
   'AGENT_EMAIL_TAKEN': 'هذا البريد الإلكتروني مستخدم بالفعل من طرف عون آخر.',
   'AGENT_NOT_FOUND': 'العون غير موجود.',
-  'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT':
-      'إحدى هذه البلديات غير مسندة حاليًا لهذا العون.',
-  'COMMUNE_NOT_FOUND': 'البلدية غير موجودة.',
   'REPORT_ALREADY_SUBMITTED': 'لقد قمت بالإبلاغ عن هذا العرض من قبل.',
   'DEVICE_ID_MISSING': 'معرّف الجهاز مفقود. أعد تشغيل التطبيق.',
   'STORAGE_INVALID_IMAGE': 'الملف المرسل ليس صورة صالحة. أعد المحاولة بصورة.',
@@ -31,6 +28,8 @@ const Map<String, String> errorMessagesAr = {
   'PROMO_DATE_FIN_NOT_FUTURE': 'يجب أن يكون تاريخ الانتهاء في المستقبل.',
   'PROMO_ALREADY_PUBLISHED': 'هذا العرض منشور بالفعل.',
   'PROMO_NOT_PUBLISHED': 'لا يمكن إيقاف سوى عرض منشور.',
+  'MODERATION_STATE_CHANGED': 'قام مشرف آخر بمعالجة هذا العرض في هذه الأثناء. '
+      'تم تحديث القائمة للتو: تحقق من القرار الجديد قبل اتخاذ أي إجراء.',
   'PROMO_PRIX_APRES_NOT_LOWER':
       'يجب أن يكون السعر بعد التخفيض أقل من السعر قبله.',
   'COMMERCANT_PHONE_TAKEN': 'رقم الهاتف هذا مسجل بالفعل.',
@@ -38,13 +37,14 @@ const Map<String, String> errorMessagesAr = {
   'COMMERCANT_OLD_PIN_MISMATCH': 'رمز PIN القديم غير مطابق.',
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION':
       'لا يوجد طلب تحقق في الانتظار.',
-  'COMMERCANT_NOT_IN_AGENT_COMMUNES': 'هذا التاجر ليس ضمن بلديات هذا العون.',
   'COMMERCANT_TERMS_NOT_ACCEPTED': 'يجب عليك قبول شروط الاستخدام لإنشاء حساب.',
   'COMMERCANT_REGISTRE_NOT_VALIDATED':
       'يجب أن يصادق مسؤول على سجلك التجاري قبل أن تتمكن من نشر العروض.',
   'COMMERCANT_REGISTRE_KEY_MISMATCH': 'هذا المستند لا يخص هذا التاجر.',
   'COMMERCANT_PROFILE_PENDING_REVIEW':
       'يجب أن يصادق مسؤول على تعديلات ملفك الشخصي قبل أن تتمكن من نشر العروض.',
+  'COMMERCANT_POSITION_REQUIRED':
+      'حدّد موقع محلك لتتمكن من النشر: الزبائن يبحثون عن العروض القريبة منهم.',
   'COMMERCANT_ACCOUNT_INACTIVE': 'حساب التاجر هذا موقوف أو محذوف.',
   'NOTIFICATION_NOT_FOUND': 'لم يعد هذا الإشعار متاحًا.',
   'RATE_LIMITED': 'عدد كبير جدًا من المحاولات. أعد المحاولة بعد قليل.',

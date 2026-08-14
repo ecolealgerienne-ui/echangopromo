@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ce qui sort de l'appareil, et ce qui n'en sort pas.
+
+  ⚠️ POURQUOI CE FICHIER EXISTE (audit du 2026-08-14). Le manifeste ne déclarait
+  ni `allowBackup`, ni `dataExtractionRules`, ni `fullBackupContent`. Le défaut
+  Android étant « tout sauvegarder », partaient donc dans Auto Backup ET dans le
+  transfert appareil-à-appareil : le `device_id`, les favoris, **la position GPS
+  enregistrée du client**, et le cache ETag.
+
+  ⚠️ ET `android:allowBackup="false"` SEUL N'AURAIT PAS SUFFI. Mesuré : le
+  projet cible `targetSdk 36` (Flutter 3.35.7), et à partir d'API 31 c'est ce
+  fichier qui gouverne. `allowBackup="false"` ferme la sauvegarde cloud mais
+  **pas** le transfert appareil-à-appareil, qui ne se ferme que par la section
+  `<device-transfer>`. D'où les deux sections ci-dessous : en oublier une, c'est
+  n'avoir fermé qu'une moitié en croyant avoir tout fermé.
+
+  ⚠️ CE QUI N'EST PAS EN JEU ICI, et qu'il ne faut pas croire fermer : le jeton
+  de session. Il vit dans `flutter_secure_storage`, chiffré par une clé
+  enveloppée par l'AndroidKeyStore — non exportable, donc jamais restaurable sur
+  un autre appareil. Vérifié pendant l'audit ; c'est une confidentialité que ce
+  fichier n'a pas à assurer.
+
+  Ce qui reste protégé est donc de la VIE PRIVÉE, pas de l'autorisation — au
+  premier rang la position GPS, qui est une donnée personnelle et n'a aucune
+  raison de traverser une sauvegarde.
+
+  On exclut plutôt qu'on inclut : une préférence future oubliée sera sauvegardée
+  (bénin) au lieu d'être perdue en silence.
+-->
+<data-extraction-rules>
+    <!-- Sauvegarde cloud (Google Drive) -->
+    <cloud-backup>
+        <!-- `device_id`, favoris, position GPS, drapeaux d'onboarding, thème,
+             langue : tout `SharedPreferences` de l'app. -->
+        <exclude domain="sharedpref" />
+        <!-- Cache ETag et fichiers temporaires d'upload. -->
+        <exclude domain="file" />
+        <exclude domain="database" />
+    </cloud-backup>
+
+    <!-- Transfert direct d'appareil à appareil — section distincte, et c'est
+         tout l'objet de ce fichier : elle ne suit PAS les règles de la
+         précédente. -->
+    <device-transfer>
+        <exclude domain="sharedpref" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+    </device-transfer>
+</data-extraction-rules>

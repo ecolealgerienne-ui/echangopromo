@@ -4,9 +4,14 @@ import {
   IsLongitude,
   IsOptional,
   IsString,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 import { Categorie } from '../../common/enums/categorie.enum';
+import {
+  ADRESSE_MAX_LENGTH,
+  NOM_MAX_LENGTH,
+} from '../entities/commercant.entity';
 
 /**
  * Édition du profil commerçant après inscription — téléphone volontairement
@@ -16,11 +21,13 @@ export class UpdateCommercantDto {
   @IsOptional()
   @IsString()
   @MinLength(2)
+  @MaxLength(NOM_MAX_LENGTH)
   nom?: string;
 
   @IsOptional()
   @IsString()
   @MinLength(2)
+  @MaxLength(ADRESSE_MAX_LENGTH)
   adresse?: string;
 
   @IsOptional()

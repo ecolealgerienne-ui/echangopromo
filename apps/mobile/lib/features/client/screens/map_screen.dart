@@ -8,21 +8,24 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../app/theme.dart';
 import '../../../data/api/api_exception.dart';
+import '../../../data/local/point_proposal_store.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/models/map_shop.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
 import '../providers/location_providers.dart';
+import '../providers/position_providers.dart';
 import '../providers/map_providers.dart';
 import '../providers/promo_providers.dart';
 import '../utils/marker_cluster.dart';
 import '../widgets/map_shop_sheet.dart';
 
-/// Centre de repli : Djelfa, le quartier pilote. Utilisé tant que la
-/// position de l'utilisateur n'est pas connue (localisation refusée, service
-/// coupé, ou position pas encore remontée) — une carte centrée sur l'océan
-/// serait inexploitable.
-const _fallbackCenter = LatLng(34.6703, 3.2630);
+/// ⚠️ **Le centre de repli n'est plus déclaré ici.** Cet écran en portait un
+/// (Djelfa, en dur) pendant que la configuration serveur en annonçait un autre :
+/// un client sans point enregistré aurait vu une liste autour de l'un et une
+/// carte autour de l'autre. Il n'en existe plus qu'un seul dans tout le dépôt,
+/// `kPointDeRepliHorsLigne`, au bout de `centreParDefautProvider` (A4).
 const _initialZoom = 13.0;
 
 /// Au-delà de ce zoom, deux commerces distincts ne se chevauchent plus :
@@ -46,6 +49,21 @@ class MapScreen extends ConsumerStatefulWidget {
 }
 
 class _MapScreenState extends ConsumerState<MapScreen> {
+  /// L'invitation à activer la localisation a-t-elle été écartée ?
+  ///
+  /// ⚠️ **Plus aucune persistance depuis le 2026-08-14.** Ce drapeau était
+  /// initialisé depuis `LocationInviteStore`, que `main` a supprimé dans le
+  /// commit même qui corrige le second refus Apple 5.1.1(iv) — parce que le
+  /// mécanisme d'écart ÉTAIT le problème : il permettait de fermer
+  /// l'explication sans que la demande système ait lieu.
+  ///
+  /// Il ne sert donc plus qu'à masquer le bandeau immédiatement après un
+  /// accord, sans attendre le rafraîchissement du provider de permission. Il
+  /// n'y a plus rien à retenir d'une session à l'autre : le bandeau ne
+  /// s'affiche que tant que la permission est demandable, et un seul geste
+  /// suffit à sortir de cet état, quelle que soit la réponse.
+  bool _invitationEcartee = false;
+
   final MapController _map = MapController();
 
   /// Zone **chargée**, volontairement plus large que l'écran — pas la zone
@@ -54,6 +72,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   MapBounds? _bounds;
   double _zoom = _initialZoom;
   MapShop? _selected;
+
+  /// Centre de la carte **une fois stabilisée**, pas à chaque image. C'est lui
+  /// que la proposition d'enregistrement offre, et c'est lui qu'on compare à la
+  /// ville déjà enregistrée. Lu depuis `_map.camera` uniquement à ce
+  /// moment-là : le lire pendant un vol proposerait une ville qu'on traverse.
+  LatLng? _centreStabilise;
+
+  late bool _premierPointEcarte =
+      ref.read(pointProposalStoreProvider).premierPointEcarte();
+
+  /// Ville explorée que le client vient d'écarter, à la maille du centième de
+  /// degré. `null` = aucune. Relue au démarrage pour survivre à un retour sur
+  /// l'écran.
+  late String? _villeEcartee =
+      ref.read(pointProposalStoreProvider).villeEcartee();
 
   /// Derniers commerces reçus, conservés pendant qu'une nouvelle zone se
   /// charge. Sans ça, changer de zone vide `valueOrNull` et fait disparaître
@@ -75,10 +108,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _centeredOnUser = false;
 
   /// Drapeau **distinct** de `_centeredOnUser`, et c'est délibéré : un GPS qui
-  /// arrive après le centrage sur la commune doit reprendre la main. Un seul
-  /// drapeau partagé aurait figé la carte sur le centre approximatif alors
-  /// que la position exacte était devenue disponible.
-  bool _centeredOnCommune = false;
+  /// arrive après le centrage sur le point par défaut doit reprendre la main.
+  /// Un seul drapeau partagé aurait figé la carte sur ce centre approximatif
+  /// alors que la position exacte était devenue disponible.
+  ///
+  /// ⚠️ Il s'appelait `_centeredOnCommune` jusqu'au 2026-08-13 — un nom qui
+  /// mentait depuis la bascule géographique : il n'a jamais porté de commune,
+  /// et rien ne le signalait. Un booléen mal nommé se lit comme une intention.
+  bool _centeredOnDefaultPoint = false;
 
   @override
   void dispose() {
@@ -120,71 +157,67 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       // découvre en revanche du terrain neuf et reste une vraie requête.
       final loaded = _bounds;
       final needsFetch = loaded == null || !loaded.contains(next);
-      if (!needsFetch && camera.zoom == _zoom) return;
+      // ⚠️ Le centre se met à jour à CHAQUE stabilisation, avant la sortie
+      // anticipée : se déplacer dans la marge déjà chargée ne demande rien au
+      // serveur, mais change bel et bien la ville qu'on regarde. Le capturer
+      // seulement quand une requête part ferait proposer une ville quittée.
+      final centreChange = _centreStabilise != camera.center;
+      if (!needsFetch && camera.zoom == _zoom && !centreChange) return;
       setState(() {
         if (needsFetch) _bounds = next.padded();
         _zoom = camera.zoom;
+        _centreStabilise = camera.center;
       });
     });
   }
 
-  void _recenterOn(LatLng position, {double? zoom}) {
-    _map.move(position, zoom ?? (_zoom < 14 ? 15.0 : _zoom));
-  }
-
-  /// Le geste « me localiser », et ses trois issues.
+  /// Enregistre un point après consentement — **le même chemin** que le bouton
+  /// flottant, appelé aussi par la proposition.
   ///
-  /// ⚠️ **La troisième est celle qui manquait, et elle enfermait l'utilisateur
-  /// dehors.** Tant que la carte ne montrait ce bouton qu'avec une permission
-  /// encore *demandable*, un client qui avait touché « Ne pas autoriser » ne
-  /// voyait plus jamais rien — ni bouton, ni message. Or **sur iOS ce refus
-  /// arrive dès le premier geste** (`deniedForever` immédiat, voir
-  /// [LocationOutcome.denied]) : le cas rare était en fait le cas normal.
-  ///
-  /// Le bouton est donc toujours là, et chaque état a sa sortie : recentrer,
-  /// demander, ou ouvrir les réglages. Aucun n'est un cul-de-sac — c'est la
-  /// différence entre un bouton inerte (que la carte refusait à juste titre)
-  /// et un bouton qui répond.
-  Future<void> _localiser(LatLng? userPosition) async {
-    if (userPosition != null) {
-      _recenterOn(userPosition, zoom: 15);
-      return;
-    }
-
+  /// ⚠️ Deux copies de ce geste divergeraient : le dialogue de consentement,
+  /// l'invalidation des providers et la confirmation forment un tout, et c'est
+  /// l'invalidation qu'on oublie (règle 30 et règle 37). Une seule
+  /// implémentation, deux appelants.
+  Future<void> _enregistrerPoint(LatLng centre,
+      {bool viaProposition = false}) async {
     final l10n = AppLocalizations.of(context)!;
-    final issue = await demanderPermissionLocalisation();
-    if (!mounted) return;
-
-    switch (issue) {
-      case LocationOutcome.granted:
-        // Le recentrage suit tout seul : `build` centre sur la position dès
-        // qu'elle arrive (`_centeredOnUser`).
-        ref.invalidate(userPositionProvider);
-      case LocationOutcome.serviceOff:
-        _proposerReglages(
-            l10n.mapLocationServiceOff, ouvrirReglagesLocalisation);
-      case LocationOutcome.denied:
-        _proposerReglages(l10n.mapLocationDenied, ouvrirReglagesApplication);
-    }
-  }
-
-  /// Dit ce qui bloque **et** ouvre l'endroit où le débloquer.
-  ///
-  /// ⚠️ Le message seul ne suffit pas : « la localisation est refusée » sans
-  /// chemin vers les réglages, c'est un constat, pas une sortie. C'est
-  /// exactement la forme qu'Apple décrit dans sa réponse du 2026-08-07 —
-  /// informer, et fournir un lien vers Réglages.
-  void _proposerReglages(String message, Future<void> Function() ouvrir) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 8),
-        action: SnackBarAction(
-          label: AppLocalizations.of(context)!.locationOpenSettings,
-          onPressed: () => unawaited(ouvrir()),
-        ),
+    final accepte = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(AppLocalizations.of(dialogContext)!.savePointAction),
+        content: Text(AppLocalizations.of(dialogContext)!.savePointNotice),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(AppLocalizations.of(dialogContext)!.commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(AppLocalizations.of(dialogContext)!.savePointAction),
+          ),
+        ],
       ),
     );
+    if (accepte != true) return;
+    await ref
+        .read(clientPositionProvider.notifier)
+        .enregistrer(centre.latitude, centre.longitude);
+    if (!mounted) return;
+    // ⚠️ Sans cette invalidation, la vitrine et la carte garderaient leur
+    // cadrage d'avant : elles ne sont pas reconstruites de zéro au retour d'une
+    // boîte de dialogue (règle 37).
+    invalidateAfterPositionChange(ref);
+    // Une ville enregistrée depuis la proposition d'exploration efface la
+    // « ville écartée » : elle vient d'être acceptée, la mémoriser comme
+    // refusée n'aurait aucun sens.
+    if (viaProposition) setState(() => _villeEcartee = null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.savePointDone)),
+    );
+  }
+
+  void _recenterOn(LatLng position, {double? zoom}) {
+    _map.move(position, zoom ?? (_zoom < 14 ? 15.0 : _zoom));
   }
 
   Future<void> _openCluster(ShopCluster cluster) async {
@@ -216,6 +249,28 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   /// Dernier recours quand le zoom ne peut plus départager : on liste les
   /// commerces du groupe et l'utilisateur choisit. Une carte doit toujours
   /// mener quelque part.
+  ///
+  /// ── ⚠️ Cette feuille liste des COMMERCES, pas des promos — décision du
+  /// 2026-08-13, prise en connaissance de cause ─────────────────────────────
+  ///
+  /// L'objection est légitime et a été posée : l'app sert à chercher des
+  /// **promos**, et c'est la seule surface où le commerçant est l'unité. Le fil
+  /// client, la vitrine et l'écran de détail sont tous promo-centrés. Le
+  /// marqueur lui-même parle en promos — il affiche « −XX % », la meilleure
+  /// remise du point — et cette feuille répond par des noms de commerces : la
+  /// question et la réponse ne sont pas dans la même monnaie.
+  ///
+  /// **Le changement ne coûterait rien au serveur** : `GET /promo/map` sert
+  /// déjà les promos complètes sous chaque commerce (`toClientJson`), photos
+  /// comprises, et `MapShopSheet` les affiche déjà une fois le commerce choisi.
+  /// Seule cette étape intermédiaire est marchande.
+  ///
+  /// **Gardé tel quel malgré tout.** La réserve qui pèse : dix commerces à cinq
+  /// promos font cinquante cartes dans une feuille, et trancher entre « tout
+  /// lister » et « la meilleure par commerce » est un arbitrage d'écran qui
+  /// n'était pas le sujet du jour. C'est écrit ici plutôt que laissé à
+  /// deviner — sans ça, le prochain à ouvrir ce fichier reposera la même
+  /// question et la croira neuve.
   Future<void> _showClusterPicker(ShopCluster cluster) async {
     setState(() => _selected = null);
     final chosen = await showModalBottomSheet<MapShop>(
@@ -233,36 +288,125 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final shopsAsync =
         bounds == null ? null : ref.watch(mapShopsProvider(bounds));
     final userPosition = ref.watch(userPositionProvider).valueOrNull;
-    final communeCenter = ref.watch(mapCenterForCommunesProvider).valueOrNull;
+    // Cascade unique : point enregistré → défaut serveur → repli hors ligne.
+    // Elle est lue au même endroit par la liste et par la carte, sans quoi un
+    // client sans point verrait l'une autour d'un lieu et l'autre autour d'un
+    // autre (A4 du plan de bascule).
+    final centreParDefaut = ref.watch(centreParDefautProvider);
+    // `?? false` : tant qu'on ne sait pas, on ne propose rien — une invitation
+    // affichée puis retirée est plus déroutante qu'une invitation tardive.
+    final peutDemander =
+        ref.watch(peutDemanderLocalisationProvider).valueOrNull ?? false;
 
-    // Premier centrage sur l'utilisateur dès que sa position est connue —
-    // après le premier rendu, sinon `MapController` n'est pas encore relié
-    // à la carte.
-    if (userPosition != null && !_centeredOnUser) {
-      _centeredOnUser = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _recenterOn(userPosition, zoom: 15);
-      });
-    } else if (userPosition == null &&
-        communeCenter != null &&
-        !_centeredOnCommune) {
-      // Pas de GPS, mais des communes choisies : on ouvre là plutôt que sur
-      // `_fallbackCenter` (Djelfa, en dur), qui envoyait tout client d'ailleurs
-      // regarder une ville qui n'est pas la sienne — vue comme vide, sans rien
-      // pour le lui dire (2026-08-05).
-      //
-      // Zoom volontairement plus large que pour le GPS : ce centre est le
-      // barycentre des commerces d'une commune, pas une position. L'afficher
-      // au même zoom lui donnerait une précision qu'il n'a pas.
-      _centeredOnCommune = true;
+    // ── ⚠️ Précédence : un point ENREGISTRÉ gagne sur le GPS ────────────────
+    //
+    // Un point enregistré est un **choix** ; le GPS est une **mesure**. Tant
+    // que le client n'a rien enregistré, les deux sont à égalité — le défaut
+    // servi par le serveur et la position du téléphone sont deux cadrages
+    // également provisoires, et le premier disponible fait l'affaire. Dès
+    // qu'un point est enregistré, il l'emporte : c'est ce que le client a
+    // demandé, et une mesure n'a pas à défaire une décision.
+    //
+    // ⚠️ **C'était l'inverse jusqu'au 2026-08-13**, et le défaut se voyait mal
+    // parce qu'il fallait être loin de sa ville pour le constater. Un client
+    // qui avait enregistré Djelfa puis rouvrait l'app en voyage était emmené
+    // là où était son téléphone, sans rien pour revenir sinon refaire le
+    // geste. Mesuré au banc, sonde dans cet écran : `defaut = Djelfa`,
+    // `gps = 37.42/-122.08` (position par défaut de l'émulateur), carte
+    // cadrée sur la Californie et **zéro commerce** — le parcours carte
+    // accusait la carte depuis.
+    //
+    // Le bouton « me localiser » reste là pour y aller **à la demande** : on
+    // ne retire pas l'accès au GPS, on retire son autorité.
+    final pointEnregistre = ref.watch(clientPositionProvider);
+    if (pointEnregistre != null && !_centeredOnDefaultPoint) {
+      _centeredOnDefaultPoint = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _recenterOn(
-            LatLng(communeCenter.latitude, communeCenter.longitude),
+            LatLng(pointEnregistre.$1, pointEnregistre.$2),
             zoom: _initialZoom,
           );
         }
       });
+    } else if (pointEnregistre == null &&
+        userPosition != null &&
+        !_centeredOnUser) {
+      // Premier centrage sur l'utilisateur dès que sa position est connue —
+      // après le premier rendu, sinon `MapController` n'est pas encore relié
+      // à la carte.
+      _centeredOnUser = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _recenterOn(userPosition, zoom: 15);
+      });
+    } else if (pointEnregistre == null &&
+        userPosition == null &&
+        !_centeredOnDefaultPoint) {
+      // Pas de GPS : on ouvre sur le point du client s'il en a enregistré un,
+      // sinon sur celui que sert le serveur.
+      //
+      // Zoom volontairement plus large que pour le GPS : ce centre est un
+      // repère, pas une position mesurée. L'afficher au même zoom lui donnerait
+      // une précision qu'il n'a pas.
+      _centeredOnDefaultPoint = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _recenterOn(centreParDefaut, zoom: _initialZoom);
+      });
+    }
+
+    // ── La proposition d'enregistrer une ville par défaut ────────────────
+    //
+    // Deux moments, un seul geste. Le mécanisme d'enregistrement existait
+    // déjà — bouton flottant + consentement — mais **rien ne le proposait** :
+    // il fallait remarquer un bouton libellé « Chercher autour de ce point »
+    // pour comprendre qu'on pouvait fixer sa ville. Les deux scénarios client
+    // du 2026-08-13 le demandent explicitement.
+    //
+    // ⚠️ **Le seuil vient du SERVEUR**, jamais d'une constante écrite ici : au
+    // delà du rayon de recherche, le client regarde des promos qui
+    // n'apparaîtront pas dans sa liste — c'est exactement le moment où la
+    // proposition a du sens, et le jour où le rayon change elle suit
+    // (règle 32).
+    final rayonKm =
+        ref.watch(clientGeoConfigProvider).valueOrNull?.defaultRadiusKm;
+    final centre = _centreStabilise;
+    _Proposition? proposition;
+    if (centre != null && rayonKm != null) {
+      if (pointEnregistre == null) {
+        // Scénario 1 — aucune ville enregistrée. On propose dès que la carte
+        // s'est posée quelque part, que ce soit sur le GPS ou sur le défaut
+        // serveur : à ce stade les deux sont à égalité, et c'est justement au
+        // client de trancher.
+        if (!_premierPointEcarte) {
+          proposition = _Proposition(
+            message: l10n.savePointProposeFirst,
+            centre: centre,
+            onEcarter: () async {
+              await ref.read(pointProposalStoreProvider).ecarterPremierPoint();
+              if (mounted) setState(() => _premierPointEcarte = true);
+            },
+          );
+        }
+      } else {
+        // Scénario 2 — une ville est enregistrée et le client en explore une
+        // autre. `distanceTo` rend des mètres.
+        final ecart =
+            distanceTo(centre, pointEnregistre.$1, pointEnregistre.$2);
+        final cle =
+            PointProposalStore.cleDeVille(centre.latitude, centre.longitude);
+        if (ecart != null && ecart > rayonKm * 1000 && cle != _villeEcartee) {
+          proposition = _Proposition(
+            message: l10n.savePointProposeArea,
+            centre: centre,
+            onEcarter: () async {
+              await ref
+                  .read(pointProposalStoreProvider)
+                  .ecarterVille(centre.latitude, centre.longitude);
+              if (mounted) setState(() => _villeEcartee = cle);
+            },
+          );
+        }
+      }
     }
 
     // Les points restent affichés pendant qu'une nouvelle zone se charge, et
@@ -281,12 +425,23 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
 
     return Scaffold(
+      // ⚠️ **C'est ici, et nulle part ailleurs, que naît le point du client.**
+      //
+      // Le geste est explicite et il porte sa notice : c'est lui qui vaut
+      // consentement (A2.2 du plan). Il n'existe aucun chemin où accorder la
+      // permission de localisation suffirait à enregistrer un point — se
+      // centrer sur soi ne fait que **cadrer**, il faut encore valider. Cette
+      // frontière est ce qui permet d'affirmer aux deux stores qu'il n'y a ni
+      // suivi ni lecture en arrière-plan.
+      floatingActionButton: _BoutonEnregistrerPoint(
+        centreCourant: () => _map.camera.center,
+      ),
       body: Stack(
         children: [
           FlutterMap(
             mapController: _map,
             options: MapOptions(
-              initialCenter: _fallbackCenter,
+              initialCenter: centreParDefaut,
               initialZoom: _initialZoom,
               maxZoom: 18,
               minZoom: 5,
@@ -427,35 +582,68 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ),
             ),
 
-          // ── « Me localiser » ─────────────────────────────────────────────
+          // ── L'invitation à activer la localisation ────────────────────
           //
-          // **Le seul chemin vers la localisation depuis la carte**, et c'est
-          // le cœur de la mise en conformité 5.1.1(iv) : plus aucun message
-          // maison n'annonce la demande. Un bandeau vivait ici, avec un bouton
-          // « Activer la localisation » et une croix pour l'écarter — les deux
-          // défauts qu'Apple a nommés le 2026-08-07 (libellé qui encourage,
-          // possibilité de fermer le message sans demander). Le remplaçant est
-          // le geste standard : l'utilisateur touche la fonction, le système
-          // demande. Aucun texte intercalaire à écarter, donc rien à refuser.
+          // ⚠️ **Ici, et nulle part avant.** Cette proposition vivait dans
+          // l'onboarding, juste après un premier refus : Apple l'a refusée le
+          // 2026-08-05 (5.1.1(iv), « encourages users to allow »). Elle est
+          // désormais faite là où la fonction ne marche pas sans position —
+          // ce qu'Apple suggère explicitement dans sa réponse.
           //
-          // ⚠️ **Toujours affiché, et jamais inerte** — les deux vont ensemble.
-          // La carte le masquait sans position, au motif qu'« un bouton présent
-          // mais inerte laisse croire à une panne » : c'était vrai du bouton
-          // d'alors, qui ne savait que recentrer. Celui-ci répond dans les
-          // trois cas (recentrer, demander, ouvrir les réglages), donc le
-          // masquer ne protège plus de rien — ça ne fait qu'enfermer dehors
-          // celui qui a refusé. Voir `_localiser`.
-          if (_selected == null)
+          // Trois conditions, et chacune compte : la permission doit être
+          // encore DEMANDABLE (voir `peutDemanderLocalisationProvider` — un
+          // `deniedForever` rendrait le bouton inerte), aucune fiche ne doit
+          // être ouverte, et l'utilisateur ne doit pas l'avoir déjà écartée.
+          // Sans cette dernière, l'invitation reviendrait à chaque ouverture
+          // de la carte : la même proposition répétée n'est plus une
+          // proposition.
+          // ⚠️ **Un seul bandeau à la fois, et l'invitation passe devant.**
+          // Activer la localisation est le préalable du scénario 1 : les
+          // empiler proposerait au client de fixer une ville avant même de
+          // savoir où il est, et deux sollicitations superposées se lisent
+          // comme du harcèlement — c'est ce qu'Apple a refusé le 2026-08-05.
+          if (proposition != null &&
+              _selected == null &&
+              !(peutDemander && !_invitationEcartee))
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 24,
+              child: _PropositionPoint(
+                message: proposition.message,
+                onEnregistrer: () => _enregistrerPoint(proposition!.centre,
+                    viaProposition: true),
+                onEcarter: proposition.onEcarter,
+              ),
+            ),
+
+          if (peutDemander && _selected == null && !_invitationEcartee)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 24,
+              child: _InvitationLocalisation(
+                onActiver: () async {
+                  final accorde = await demanderPermissionLocalisation();
+                  if (!context.mounted) return;
+                  ref.invalidate(userPositionProvider);
+                  ref.invalidate(peutDemanderLocalisationProvider);
+                  if (accorde) setState(() => _invitationEcartee = true);
+                },
+              ),
+            ),
+
+          // Masqué plutôt que désactivé quand la position est inconnue : un
+          // bouton "me localiser" présent mais inerte laisse croire à une
+          // panne, alors que la localisation a simplement été refusée.
+          if (userPosition != null && _selected == null)
             PositionedDirectional(
               end: 16,
               bottom: 24,
               child: _RoundButton(
                 icon: Icons.my_location,
-                // Le libellé suit ce que le bouton fait : « recentrer » sur une
-                // carte qui n'a pas encore de position promettrait autre chose.
-                tooltip:
-                    userPosition == null ? l10n.mapLocateMe : l10n.mapRecenter,
-                onTap: () => unawaited(_localiser(userPosition)),
+                tooltip: l10n.mapRecenter,
+                onTap: () => _recenterOn(userPosition, zoom: 15),
               ),
             ),
 
@@ -555,7 +743,7 @@ class _ClusterMarker extends StatelessWidget {
             ],
           ),
           child: Text(
-            '${cluster.count}',
+            '${cluster.promoCount}',
             style: textTheme.titleMedium?.copyWith(
               color: colorScheme.onPrimary,
               fontWeight: FontWeight.w700,
@@ -604,8 +792,33 @@ class _ClusterPicker extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-            child: Text(l10n.mapShopsHere(shops.length),
-                style: textTheme.titleMedium),
+            // ── ⚠️ Le titre compte des PROMOS, le sous-titre des commerces ──
+            //
+            // Il n'annonçait que des commerces, et ça a fait buter trois fois
+            // le même jour : « 15 promos dans la liste, 3 sur la carte », puis
+            // « Autre 4 + Alimentation 22 = 26, mais Toutes 24 ». Les deux
+            // fois, le produit avait raison — un ensemble de LIEUX ne
+            // s'additionne pas comme un ensemble de promos, parce qu'un
+            // commerce dont les promos sont dans deux catégories est compté
+            // dans les deux filtres et une seule fois dans « Toutes ».
+            //
+            // Le chiffre restait donc juste et **illisible** : il répondait en
+            // boutiques à un filtre qui parle en catégories de promos, sur une
+            // app dont l'objet est de chercher des promos.
+            //
+            // ⚠️ Les deux nombres sont montrés, pas l'un à la place de l'autre :
+            // la liste dessous énumère des commerces, et n'afficher qu'un
+            // total de promos rendrait ce qu'on lit incompréhensible à son
+            // tour. Chaque nombre dit ce qu'il compte.
+            //
+            // Composé à partir des deux clés existantes plutôt qu'une
+            // troisième : une clé de plus, c'est trois fichiers `.arb` à tenir
+            // en phase pour une phrase que ceux-ci disent déjà (règle 27).
+            child: Text(
+              '${l10n.promoCount(shops.fold<int>(0, (n, s) => n + s.promos.length))}'
+              ' · ${l10n.mapShopsHere(shops.length)}',
+              style: textTheme.titleMedium,
+            ),
           ),
           // `Flexible` + `shrinkWrap` : la feuille s'ajuste à deux commerces
           // comme à dix, sans occuper l'écran entier pour rien.
@@ -821,6 +1034,225 @@ class _UserDot extends StatelessWidget {
               spreadRadius: 5),
         ],
       ),
+    );
+  }
+}
+
+/// Invitation discrète à activer la localisation, posée sur la carte.
+///
+/// Un bandeau, pas un écran : la carte est déjà là, et la couvrir d'une
+/// proposition plein écran reviendrait à redemander avant de laisser voir —
+/// exactement ce qui a été refusé.
+/// Ce qu'il y a à proposer, et où. `null` quand il n'y a rien à proposer —
+/// jamais un objet « vide » qu'il faudrait interroger pour le savoir.
+class _Proposition {
+  const _Proposition({
+    required this.message,
+    required this.centre,
+    required this.onEcarter,
+  });
+
+  final String message;
+  final LatLng centre;
+  final Future<void> Function() onEcarter;
+}
+
+/// Bandeau proposant de fixer la ville par défaut.
+///
+/// Même forme que `_InvitationLocalisation` volontairement : ce sont deux
+/// propositions du même écran, et leur donner deux apparences ferait croire à
+/// deux natures.
+class _PropositionPoint extends StatelessWidget {
+  const _PropositionPoint({
+    required this.message,
+    required this.onEnregistrer,
+    required this.onEcarter,
+  });
+
+  final String message;
+  final Future<void> Function() onEnregistrer;
+  final Future<void> Function() onEcarter;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colorScheme.secondaryContainer,
+      borderRadius: BorderRadius.circular(AppRadii.md),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 8, 8, 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    message,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSecondaryContainer,
+                        ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  color: colorScheme.onSecondaryContainer,
+                  tooltip: MaterialLocalizations.of(context).closeButtonLabel,
+                  onPressed: onEcarter,
+                ),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: onEcarter,
+                  child: Text(l10n.savePointProposeLater),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: onEnregistrer,
+                  child: Text(l10n.savePointProposeAccept),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// L'explication affichée AVANT la boîte de dialogue système.
+///
+/// ⚠️ **Un seul bouton, et il mène TOUJOURS à la demande système.** C'est la
+/// condition posée par Apple le 2026-08-08 (deuxième refus 5.1.1(iv)) : un
+/// message maison a le droit d'expliquer *pourquoi*, il n'a pas le droit de
+/// devenir une décision.
+///
+/// Ce bandeau portait exactement les deux motifs nommés dans ce refus, et ils
+/// ont été retirés à la fusion du 2026-08-14 :
+///   · une **croix** qui fermait le message sans que la demande système ait
+///     lieu — c'est le « second bouton » qu'Apple refuse, sous forme d'icône ;
+///   · un libellé qui **encourage** (« Activer la localisation ») là où Apple
+///     demande « Continuer » ou « Suivant ».
+///
+/// Un texte à l'impératif (« Activez la localisation pour… ») est interdit pour
+/// la même raison : il encourage autant qu'un bouton. `mapLocationInvite` décrit
+/// une conséquence, il ne demande rien.
+///
+/// ⚠️ **Et il ne harcèle pas pour autant** — ce qui était la raison d'être de la
+/// croix. Le bandeau n'est affiché que tant que la permission est encore
+/// DEMANDABLE (`peutDemanderLocalisationProvider`) : un seul geste suffit à le
+/// faire disparaître, quelle que soit la réponse donnée à la boîte système.
+class _InvitationLocalisation extends StatelessWidget {
+  const _InvitationLocalisation({required this.onActiver});
+
+  final Future<void> Function() onActiver;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colorScheme.secondaryContainer,
+      borderRadius: BorderRadius.circular(AppRadii.md),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 8, 8, 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              l10n.mapLocationInvite,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSecondaryContainer,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: FilledButton(
+                onPressed: onActiver,
+                child: Text(l10n.onboardingLocationContinue),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Enregistre le centre courant de la carte comme point de recherche du client.
+///
+/// ⚠️ **La notice est affichée AVANT l'enregistrement, pas après.** Un
+/// consentement qui arrive une fois la donnée posée n'en est pas un — et c'est
+/// cette boîte de dialogue, avec sa phrase, qui rend vraie l'affirmation faite
+/// aux stores : le client sait ce qu'il envoie, pourquoi, et qu'il peut le
+/// reprendre.
+///
+/// ⚠️ Le bouton bascule en « oublier mon point » quand il y en a un : le
+/// retrait doit être aussi accessible que l'octroi, sinon le consentement n'est
+/// pas reprenable.
+class _BoutonEnregistrerPoint extends ConsumerWidget {
+  const _BoutonEnregistrerPoint({required this.centreCourant});
+
+  final LatLng Function() centreCourant;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final dejaPose = ref.watch(clientPositionProvider) != null;
+
+    return FloatingActionButton.extended(
+      icon: Icon(dejaPose ? Icons.wrong_location_outlined : Icons.my_location),
+      label: Text(dejaPose ? l10n.forgetPointAction : l10n.savePointAction),
+      onPressed: () async {
+        final controleur = ref.read(clientPositionProvider.notifier);
+        if (dejaPose) {
+          await controleur.retirer();
+          if (context.mounted) invalidateAfterPositionChange(ref);
+          return;
+        }
+
+        final centre = centreCourant();
+        final accepte = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(AppLocalizations.of(dialogContext)!.savePointAction),
+            content: Text(AppLocalizations.of(dialogContext)!.savePointNotice),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(AppLocalizations.of(dialogContext)!.commonCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child:
+                    Text(AppLocalizations.of(dialogContext)!.savePointAction),
+              ),
+            ],
+          ),
+        );
+        if (accepte != true) return;
+
+        await controleur.enregistrer(centre.latitude, centre.longitude);
+        if (!context.mounted) return;
+        // ⚠️ Sans cette invalidation, la vitrine et la carte garderaient leur
+        // cadrage d'avant : elles ne sont pas reconstruites de zéro au retour
+        // d'une boîte de dialogue (règle #37).
+        invalidateAfterPositionChange(ref);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.savePointDone)),
+        );
+      },
     );
   }
 }

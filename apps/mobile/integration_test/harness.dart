@@ -76,22 +76,40 @@ const String queueAttendue = String.fromEnvironment('TEST_QUEUE');
 /// rien à voir avec l'écran.
 const String promoDescription = String.fromEnvironment('TEST_PROMO_DESC');
 
-/// Commune à poser dans le magasin local avant le parcours client.
-///
-/// ⚠️ Sans elle, l'accueil n'affiche aucune promo : il montre « Choisissez vos
-/// communes ». C'est la commune du commerçant du décor, servie par
-/// `GET /commercant/me`.
-const String communeCible = String.fromEnvironment('TEST_COMMUNE_ID');
+// ⚠️ **`communeCible` a été retirée le 2026-08-13, et elle était DÉJÀ morte.**
+// Son commentaire affirmait « elle reste utile aux parcours agent, dont le
+// périmètre d'autorisation est toujours la commune » — c'était faux depuis la
+// bascille géographique : elle n'avait **aucun appelant**, les parcours agent
+// lisant `wilayaNom`/`communeNom`. Pendant ce temps `test-parcours-ecran.sh`
+// calculait et passait consciencieusement `--dart-define=TEST_COMMUNE_ID` que
+// rien ne lisait (règle #31).
+//
+// Un `String.fromEnvironment` inutilisé ne fait échouer ni la compilation ni
+// `analyze` : il vaut sa valeur par défaut et se tait.
 
-/// Wilaya et commune **de l'agent**, par leur nom, pour la cascade du
-/// formulaire de création de commerçant.
+/// Point du décor, posé dans les préférences par les parcours client à la
+/// place de l'ancienne sélection de communes.
 ///
-/// ⚠️ Un agent ne peut créer que dans SES communes : choisir la première venue
-/// ferait refuser la création par le serveur, et l'échec accuserait le
-/// formulaire. Les noms sont des **données** (ils viennent de la base), pas des
-/// libellés traduits — les chercher ne lie pas le parcours à la langue.
-const String wilayaNom = String.fromEnvironment('TEST_WILAYA_NOM');
-const String communeNom = String.fromEnvironment('TEST_COMMUNE_NOM');
+/// ⚠️ Ce sont les coordonnées du commerçant du décor, pas un lieu quelconque :
+/// un point à quelques kilomètres de lui ferait sortir ses promos du rayon, et
+/// l'accueil vide accuserait la liste alors que c'est le décor qui viserait à
+/// côté (règle #38).
+/// ⚠️ `String.fromEnvironment` et non `double.fromEnvironment` : ce dernier
+/// n'existe pas en Dart. Les coordonnées voyagent donc en texte et sont
+/// converties ici — avec un repli explicite, parce qu'un décor sans point
+/// n'aurait aucun sens (règle #29 : le repli est nommé, pas subi).
+const String _decorLat =
+    String.fromEnvironment('TEST_DECOR_LAT', defaultValue: '34.6714');
+const String _decorLng =
+    String.fromEnvironment('TEST_DECOR_LNG', defaultValue: '3.2630');
+final double decorLatitude = double.parse(_decorLat);
+final double decorLongitude = double.parse(_decorLng);
+
+// ⚠️ `wilayaNom` et `communeNom` sont partis le 2026-08-13 avec la cascade du
+// formulaire de création. Elles servaient à choisir la commune **de l'agent**
+// plutôt que la première venue — sans quoi le serveur refusait la création et
+// l'échec accusait le formulaire. Le lieu d'un commerce ne s'exprime plus que
+// par sa position sur la carte.
 
 /// Meilleure remise du commerce **telle que le serveur la calcule**
 /// (`bestDiscountPercent`, rendu par `GET /promo/map`), déjà formatée comme le

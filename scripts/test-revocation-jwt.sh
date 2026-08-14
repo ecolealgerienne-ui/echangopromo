@@ -8,16 +8,24 @@
 #   ./scripts/test-revocation-jwt.sh
 #
 # ⚠️ Ce banc RÉVOQUE les jetons admin et agent du décor — c'est son objet. Les
-# comptes restent valides, il suffit de se reconnecter ; mais il consomme
-# 3 connexions sur le seau strict de 5/min, donc à lancer isolé.
+# comptes restent valides, il suffit de se reconnecter. Il consomme 3 connexions
+# sur le seau d'authentification (50/min) — ce n'est plus lui qui impose de le
+# lancer isolé, c'est la révocation.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RACINE="$(cd "$HERE/.." && pwd)"
-command -v python3 >/dev/null 2>&1 || {
-  echo "❌ python3 absent — l'absence de verdict n'est pas un verdict."; exit 2; }
+command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1 || {
+  echo "❌ python3 ou python requis — l'absence de verdict n'est pas un verdict."
+  exit 2; }
+PY=$(command -v python3 || command -v python)
+
+# ⚠️ La console Windows est en cp1252 : sans ça, le moindre « ═ » fait planter
+# le banc en UnicodeEncodeError, et un banc qui ne peut pas AFFICHER son verdict
+# n'en rend aucun.
+export PYTHONIOENCODING=utf-8
 cd "$RACINE" || exit 2
 echo "── auto-test du banc ──"
-python3 "$HERE/lib/revocation_jwt.py" --self-test || {
+"$PY" "$HERE/lib/revocation_jwt.py" --self-test || {
   echo "❌ l'auto-test échoue : le banc lui-même est en cause."; exit 2; }
 echo
-exec python3 "$HERE/lib/revocation_jwt.py" "$@"
+exec "$PY" "$HERE/lib/revocation_jwt.py" "$@"

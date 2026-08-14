@@ -31,19 +31,22 @@
 #                      connexion commerçant bascule en mode admin dès qu'on y
 #                      saisit un e-mail. Ses cinq compteurs valent ceux du
 #                      serveur.
-#   agent              le même écran, avec le périmètre de l'agent — ses
-#                      compteurs ne sont PAS ceux de l'admin.
+#   agent              le même écran, avec le jeton de l'agent. ⚠️ « ses
+#                      compteurs ne sont PAS ceux de l'admin » disait cette
+#                      ligne — c'est faux depuis le 2026-08-13 : l'agent est
+#                      global, les cinq compteurs sont identiques. Ce que le
+#                      parcours éprouve n'a pas changé (l'écran affiche ce que
+#                      le serveur sert POUR CE RÔLE, mesuré avec SON jeton) ;
+#                      c'est la raison qui a changé, et une raison périmée fait
+#                      conclure.
 #   inscription        un commerçant s'inscrit DEPUIS L'APP : formulaire,
 #                      photo du registre, conditions — puis le script vérifie
 #                      que le compte existe et que son registre est en attente.
-#   commune            l'état vide de l'accueil → choix d'une commune → les
-#                      promos DE CETTE COMMUNE apparaissent, et le choix est
-#                      retenu dans le magasin natif.
 #   client             l'accueil et la fiche : une promo fabriquée pour ce
 #                      passage est retrouvée par la recherche, ouverte, et son
 #                      COMPTEUR DE VUES monte côté serveur.
-#   agent-creation     l'agent crée un commerçant DANS SA COMMUNE : le compte
-#                      se connecte ensuite, et il est bien dans sa zone.
+#   agent-creation     l'agent crée un commerçant AVEC SA POSITION : le compte
+#                      se connecte ensuite, et il porte bien son point.
 #   carte              la carte affiche le commerce et sa meilleure remise.
 #                      ⚠️ Pose des COORDONNÉES au commerçant : sans elles, la
 #                      carte est vide — aucun commerçant de la base n'en avait.
@@ -85,22 +88,27 @@ DEVICE_ID="parcours-ecran-0001"
 
 CHOIX="${1:-tous}"
 case "$CHOIX" in
-  tous|premier-lancement|plafond|creation|admin|agent|moderation|client|inscription|agent-creation|commune|signalement|carte) ;;
+  tous|premier-lancement|plafond|creation|admin|agent|moderation|client|inscription|agent-creation|signalement|carte) ;;
+  decor-promos|decor-retouche|ville) ;;
   *) echo "❌ Parcours inconnu : « $CHOIX »."
      echo "   Attendu : premier-lancement | plafond | creation | admin | agent"
      echo "             | moderation | client | inscription | agent-creation"
-     echo "             | commune | signalement | carte"
+     echo "             | signalement | carte"
      echo "             (rien = tous)"
      exit 2 ;;
 esac
 
 # Chaque parcours a besoin d'un décor DIFFÉRENT, et le dire évite de poser un
-# décor pour rien — ou pire, d'en poser un qui consomme des connexions sur un
-# plafond de 5/min avant un parcours qui n'en avait pas besoin.
+# décor pour rien — ou pire, d'en poser un qui consomme une inscription sur un
+# plafond de 5/min avant un parcours qui n'en avait pas besoin. (Les connexions,
+# elles, sont à 50/min depuis le 2026-08-13 et ne serrent plus.)
 BESOIN_COMMERCANT=non
 # `inscription` a besoin du décor UNIQUEMENT pour mesurer le plafond auprès du
 # serveur — le compte qu'il crée, lui, est neuf.
-case "$CHOIX" in tous|plafond|creation|client|inscription|commune|signalement|carte) BESOIN_COMMERCANT=oui ;; esac
+case "$CHOIX" in tous|plafond|creation|client|inscription|signalement|carte) BESOIN_COMMERCANT=oui ;; esac
+# `decor-promos` n'est pas un parcours de vérification : c'est un PRODUCTEUR de
+# décor qui emprunte le formulaire commerçant. Il apporte sa propre liste de
+# comptes (`TEST_COMMERCANTS`) et n'a donc besoin d'aucun décor préalable.
 BESOIN_PRO=non
 case "$CHOIX" in tous|admin|agent|moderation|agent-creation) BESOIN_PRO=oui ;; esac
 
@@ -177,7 +185,7 @@ JETON="$(connexion)"
 if [ -z "$JETON" ]; then
   echo "❌ Connexion du commerçant du décor impossible."
   echo "   ⚠️ Un 429 se déguise en « identifiants incorrects » : le décor vient"
-  echo "      de consommer plusieurs connexions sur un plafond de 5/min."
+  echo "      de consommer plusieurs connexions sur un plafond de 50/min."
   exit 2
 fi
 
@@ -231,21 +239,35 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "carte" ]; then
 # d'un côté seulement, ce parcours le dira.
 echo
 echo "── 2 sexies. Carte ──"
-CARTE_COMMUNE="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ communeId)"
-[ -n "$CARTE_COMMUNE" ] || { echo "❌ communeId du commerçant illisible."; exit 2; }
-
-CENTRE="$(curl -s "$API_URL/promo/map/center?communeIds=$CARTE_COMMUNE"   -H "X-Device-Id: $DEVICE_ID" | "$PY" -c "import sys,json
+# ⚠️ Le cadre se dérive désormais des coordonnées DU COMMERÇANT, plus d'un
+# barycentre de commune : `GET /promo/map/center` a été retirée le 2026-08-12
+# avec la sélection de communes. C'est plus direct — on cadre sur le commerce
+# qu'on va chercher, au lieu de cadrer sur la moyenne d'une commune en espérant
+# qu'il s'y trouve.
+CARTE_POS="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | "$PY" -c "import sys,json
 try:
     d = json.load(sys.stdin)
 except Exception:
     print('ILLISIBLE reponse non JSON'); sys.exit(0)
-c = (d or {}).get('center') or {}
-if c.get('latitude') is None or c.get('longitude') is None:
-    print('ILLISIBLE centre absent'); sys.exit(0)
-print('%s %s' % (c['latitude'], c['longitude']))")"
-case "$CENTRE" in ILLISIBLE*) echo "❌ centre de carte — $CENTRE"; exit 2 ;; esac
-CARTE_LAT="${CENTRE% *}"
-CARTE_LNG="${CENTRE#* }"
+if d.get('latitude') is None or d.get('longitude') is None:
+    print('ILLISIBLE commercant sans position'); sys.exit(0)
+print('%s %s' % (d['latitude'], d['longitude']))")"
+case "$CARTE_POS" in ILLISIBLE*) echo "❌ position du commerçant — $CARTE_POS"; exit 2 ;; esac
+CARTE_LAT="${CARTE_POS% *}"
+CARTE_LNG="${CARTE_POS#* }"
+CARTE_CID="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ id)"
+[ -n "$CARTE_CID" ] || { echo "❌ carte — identifiant du commerçant du décor illisible"; exit 2; }
+# La promo EN LIGNE de ce commerçant — c'est elle qui porte la remise affichée
+# sur le marqueur, et c'est elle qu'on ajustera si sa valeur est déjà prise.
+PROMO_CARTE_ID="$(curl -s "$API_URL/promo/me/all?limit=100"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | "$PY" -c "import sys,json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for p in d.get('items', []):
+    if p.get('lifecycleStatus') == 'publiee':
+        print(p['id']); break")"
+[ -n "$PROMO_CARTE_ID" ] || { echo "❌ carte — aucune promo publiée chez le commerçant du décor"; exit 2; }
 
 BBOX="$(CLAT="$CARTE_LAT" CLNG="$CARTE_LNG" "$PY" -c "import os
 la = float(os.environ['CLAT']); ln = float(os.environ['CLNG'])
@@ -254,7 +276,24 @@ print('north=%s&south=%s&east=%s&west=%s' % (la + 0.2, la - 0.2, ln + 0.2, ln - 
 # On choisit un commerce dont la remise est UNIQUE dans la zone : le marqueur
 # n'affiche que « −XX% », donc deux commerces à la même remise rendraient la
 # désignation ambiguë — et le parcours taperait sur l'un ou l'autre en silence.
-CARTE_CHOIX="$(curl -s "$API_URL/promo/map?$BBOX" -H "X-Device-Id: $DEVICE_ID"   | "$PY" -c "import sys,json,collections
+# ⚠️ **La cible est NOTRE commerce, pas « celui qui a la meilleure remise ».**
+# La version d'origine prenait le commerce à la remise unique la plus élevée
+# dans un cadre de ±0,2° — et supposait, sans le dire, que son marqueur pouvait
+# apparaître SEUL. Deux prémisses fausses derrière cette supposition :
+#
+#   1. **des points confondus ne se séparent à aucun zoom.** La base portait
+#      DIX « Commerce Décor » aux coordonnées identiques (décors empilés, voir
+#      `provision-decor.sh`) : la grappe affichait « 10 », le parcours la tapait
+#      six fois sans rien détacher, puis mourait sur une course
+#      (`Bad state: No element`, 2026-08-13). Le produit n'avait rien ;
+#   2. **on ne contrôle pas le commerce qu'on n'a pas posé.** Viser celui du
+#      décor, dont on connaît la position et les promos, rend l'échec lisible :
+#      s'il n'apparaît pas, c'est la carte, pas le choix de la cible.
+#
+# Les deux prémisses sont désormais VÉRIFIÉES, et le script refuse plutôt que
+# de choisir mal — un parcours qui échoue sur une cible inatteignable accuse le
+# produit (règle 38).
+CARTE_CHOIX="$(curl -s "$API_URL/promo/map?$BBOX" -H "X-Device-Id: $DEVICE_ID"   | CID="$CARTE_CID" "$PY" -c "import sys,json,os,collections
 try:
     d = json.load(sys.stdin)
 except Exception:
@@ -276,33 +315,67 @@ def meilleure(promos):
         if best is None or pct > best:
             best = pct
     return best
-candidats = []
-for c in items:
-    r = meilleure(c.get('promos'))
-    if r is not None and c.get('nom'):
-        candidats.append((r, c['nom']))
-if not candidats:
-    print('ILLISIBLE aucun commerce avec remise dans la zone'); sys.exit(0)
-compte = collections.Counter(r for r, _ in candidats)
-uniques = [(r, n) for r, n in candidats if compte[r] == 1]
-if not uniques:
-    print('ILLISIBLE aucune remise unique dans la zone (%d commerce(s))' % len(candidats)); sys.exit(0)
-uniques.sort(reverse=True)
-print('%d|%s' % uniques[0])")"
+cid = os.environ['CID']
+notre = next((c for c in items if c.get('id') == cid), None)
+if notre is None:
+    print('ILLISIBLE le commerce du decor n est pas sur la carte'); sys.exit(0)
+remise = meilleure(notre.get('promos'))
+if remise is None:
+    print('ILLISIBLE le commerce du decor n a aucune promo a remise'); sys.exit(0)
+# Premisse 1 : personne d autre a ses coordonnees, sinon la grappe ne se scinde
+# jamais et le marqueur individuel n existe a aucun zoom.
+pos = (round(notre['latitude'], 6), round(notre['longitude'], 6))
+empiles = [c.get('nom') for c in items
+           if c.get('id') != cid
+           and (round(c['latitude'], 6), round(c['longitude'], 6)) == pos]
+if empiles:
+    print('ILLISIBLE %d commerce(s) a la position exacte du decor (%s) : la '
+          'grappe ne se scindera a aucun zoom' % (len(empiles), ', '.join(sorted(set(empiles)))))
+    sys.exit(0)
+# Premisse 2 : la remise doit etre unique dans la zone, sinon le marqueur
+# « -XX% » designe plusieurs commerces et le parcours tape l un ou l autre en
+# silence. On ne l ESPERE pas : on choisit une valeur libre et on l imposera a
+# la promo du decor. Un parcours qui se contente d esperer refuse un jour sur
+# deux pour une raison qui n a rien a voir avec ce qu il eprouve.
+prises = {meilleure(c.get('promos')) for c in items if c.get('id') != cid}
+libre = next((p for p in range(75, 14, -1) if p not in prises), None)
+if libre is None:
+    print('ILLISIBLE aucune remise libre entre 15%% et 75%% dans la zone')
+    sys.exit(0)
+print('%d|%d|%s' % (libre, remise, notre.get('nom')))")"
 case "$CARTE_CHOIX" in
   ILLISIBLE*) echo "❌ carte — $CARTE_CHOIX"; exit 2 ;;
 esac
-CARTE_REMISE="−${CARTE_CHOIX%%|*}%"
-CARTE_NOM="${CARTE_CHOIX#*|}"
-echo "✅ « $CARTE_NOM » · marqueur attendu : $CARTE_REMISE (remise unique dans la zone)"
+CARTE_PCT="${CARTE_CHOIX%%|*}"
+_reste="${CARTE_CHOIX#*|}"
+CARTE_PCT_ACTUEL="${_reste%%|*}"
+CARTE_NOM="${_reste#*|}"
+CARTE_REMISE="−${CARTE_PCT}%"
+
+# ⚠️ **On IMPOSE la remise, on ne la subit pas.** La promo du décor vaut
+# 1000 → 700, soit −30 % — une valeur que plusieurs commerces du parc portent
+# aussi. Le marqueur « −30 % » désignerait alors plusieurs points et le parcours
+# taperait l'un ou l'autre en silence.
+#
+# `prixAvant` reste à 1000 pour que le calcul soit exact des deux côtés :
+# l'app arrondit `(avant − après) / avant × 100`, et un prix rond rend un
+# pourcentage entier sans ambiguïté d'arrondi.
+if [ "$CARTE_PCT" != "$CARTE_PCT_ACTUEL" ]; then
+  CARTE_APRES="$(awk -v p="$CARTE_PCT" 'BEGIN{printf "%d", 1000 - p*10}')"
+  maj="$(curl -s -X PATCH "$API_URL/promo/$PROMO_CARTE_ID"     -H "Content-Type: application/json" -H "Authorization: Bearer $JETON"     -H "X-Device-Id: $DEVICE_ID"     -d "{\"prixAvant\":1000,\"prixApres\":$CARTE_APRES}")"
+  if [ -z "$(echo "$maj" | lire_champ id)" ]; then
+    echo "❌ carte — impossible d'imposer la remise $CARTE_REMISE : $maj"; exit 2
+  fi
+  echo "   remise du décor portée de −$CARTE_PCT_ACTUEL% à $CARTE_REMISE (valeur libre dans la zone)"
+fi
+echo "✅ « $CARTE_NOM » · marqueur attendu : $CARTE_REMISE (seul à sa position, remise unique)"
 fi
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "signalement" ]; then
 # ── 2 quinquies. Une promo à signaler, et son état de départ ───────────────
 echo
 echo "── 2 quinquies. Signalement ──"
 SIG_CID="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ id)"
-SIG_COMMUNE="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ communeId)"
-[ -n "$SIG_CID" ] && [ -n "$SIG_COMMUNE" ] || { echo "❌ /commercant/me illisible."; exit 2; }
+[ -n "$SIG_CID" ] || { echo "❌ /commercant/me illisible."; exit 2; }
 
 SIG_DESC="Parcours signalement $(date +%H%M%S)"
 SIG_CREEE="$(curl -s -X POST "$API_URL/promo"   -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"   -H "Authorization: Bearer $JETON"   -d "{\"description\":\"$SIG_DESC\",\"prixAvant\":900,\"prixApres\":600,      \"categorie\":\"alimentation\",\"photoKeys\":[\"promo-photos/$SIG_CID/parcours.jpg\"],      \"dureeJours\":5}")"
@@ -329,56 +402,11 @@ SIG_FILE_AVANT="$(curl -s "$API_URL/admin/moderation/queue"   -H "Authorization:
 [ -n "$SIG_FILE_AVANT" ] || { echo "❌ file de modération illisible."; exit 2; }
 echo "✅ « $SIG_DESC » publique (200) · file de modération : $SIG_FILE_AVANT"
 fi
-if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "commune" ]; then
-# ── 2 quater. La commune du commerçant, par son NOM, et une de ses promos ───
-echo
-echo "── 2 quater. Sélection de commune ──"
-CID_COM="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ communeId)"
-[ -n "$CID_COM" ] || { echo "❌ communeId du commerçant illisible."; exit 2; }
-
-lire_commune() { # ID — → "wilaya|nom" depuis la liste des communes
-  "$PY" -c "import sys,json
-try:
-    d = json.load(sys.stdin)
-except Exception:
-    print('ILLISIBLE reponse non JSON'); sys.exit(0)
-items = d.get('items') if isinstance(d, dict) else d
-if not isinstance(items, list):
-    print('ILLISIBLE liste des communes inattendue'); sys.exit(0)
-for c in items:
-    if c.get('id') == '$1':
-        if not (c.get('wilaya') and c.get('nom')):
-            print('ILLISIBLE commune incomplete'); sys.exit(0)
-        print('%s|%s' % (c['wilaya'], c['nom'])); sys.exit(0)
-print('ILLISIBLE commune introuvable dans /commune')"
-}
-
-INFO_COM="$(curl -s "$API_URL/commune" -H "X-Device-Id: $DEVICE_ID" | lire_commune "$CID_COM")"
-case "$INFO_COM" in
-  ILLISIBLE*) echo "❌ commune — $INFO_COM"; exit 2 ;;
-esac
-COM_WILAYA="${INFO_COM%%|*}"
-COM_NOM="${INFO_COM#*|}"
-
-# Une promo réellement servie POUR CETTE COMMUNE : c'est elle que l'accueil
-# devra afficher une fois la commune choisie. Sans elle, le parcours vérifierait
-# « la liste s'est remplie » au lieu de « avec ce que ce filtre doit rendre ».
-COM_PROMO="$("$PY" -c "import sys,json
-try:
-    d = json.load(sys.stdin)
-except Exception:
-    print('ILLISIBLE reponse non JSON'); sys.exit(0)
-items = d.get('items') or []
-if not items:
-    print('ILLISIBLE aucune promo publiee dans cette commune'); sys.exit(0)
-print(items[0].get('description') or 'ILLISIBLE description vide')"   < <(curl -s "$API_URL/promo?communeIds=$CID_COM&limit=1" -H "X-Device-Id: $DEVICE_ID"))"
-case "$COM_PROMO" in
-  ILLISIBLE*) echo "❌ promo de référence — $COM_PROMO"
-              echo "   Le décor doit publier au moins une promo dans cette commune."
-              exit 2 ;;
-esac
-echo "✅ $COM_WILAYA / $COM_NOM · promo de référence : « $COM_PROMO »"
-fi
+# ⚠️ **Le parcours « choisir sa commune » a été supprimé le 2026-08-12** avec
+# l'écran qu'il pilotait : le client cherche désormais autour d'un point qu'il
+# enregistre, et il n'y a plus de commune à choisir. Le laisser ici aurait fait
+# échouer le lot entier sur un fichier absent — l'échec aurait été franc, mais
+# il aurait accusé le lancement au lieu de dire que la cible n'existe plus.
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "client" ]; then
 # ── 2 ter. Une promo À NOUS, pour que la recherche désigne UNE promo ────────
 #
@@ -395,10 +423,11 @@ PROMO_DESC="Parcours client $(date +%H%M%S)"
 # détour par /commercant/me plutôt qu'un chemin fabriqué.
 CID="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ id)"
 [ -n "$CID" ] || { echo "❌ /commercant/me illisible — impossible de composer une clé photo valide."; exit 2; }
-# La commune du commerçant : sans elle, l'accueil client n'affiche AUCUNE promo
-# (il montre « Choisissez vos communes »).
-COMMUNE_CIBLE="$(curl -s "$API_URL/commercant/me"   -H "Authorization: Bearer $JETON" -H "X-Device-Id: $DEVICE_ID" | lire_champ communeId)"
-[ -n "$COMMUNE_CIBLE" ] || { echo "❌ communeId du commerçant illisible."; exit 2; }
+# ⚠️ La commune du commerçant était lue ici, avec ce motif : « sans elle,
+# l'accueil client n'affiche AUCUNE promo — il montre "Choisissez vos
+# communes" ». Cet écran n'existe plus depuis le 2026-08-12, et la lecture
+# elle-même sortait en `exit 2` sur un `communeId` illisible : elle aurait
+# empêché deux parcours de partir, en accusant le serveur.
 CREEE="$(curl -s -X POST "$API_URL/promo"   -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"   -H "Authorization: Bearer $JETON"   -d "{\"description\":\"$PROMO_DESC\",\"prixAvant\":1000,\"prixApres\":700,      \"categorie\":\"alimentation\",\"photoKeys\":[\"promo-photos/$CID/parcours.jpg\"],      \"dureeJours\":5}")"
 PROMO_CLIENT="$(echo "$CREEE" | lire_champ id)"
 if [ -z "$PROMO_CLIENT" ]; then
@@ -523,36 +552,13 @@ print(total, items[0]['id'] if items else '-')"
   echo "✅ file de modération : $QUEUE_AVANT   ·   promo visée : $PROMO_CIBLE"
 fi
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent-creation" ]; then
-  # ⚠️ **La commune de l'agent, pas la première venue.** Un agent ne peut créer
-  # que dans SES communes ; choisir au hasard ferait refuser la création par le
-  # serveur, et l'échec accuserait le formulaire.
+  # ⚠️ **`lire_zone` a été retirée le 2026-08-13** avec le territoire de
+  # l'agent. Elle lisait la première commune de `GET /agent/me` pour servir son
+  # nom au formulaire — choisir la première venue aurait fait refuser la
+  # création par le serveur, et l'échec aurait accusé le formulaire. Il n'y a
+  # plus de commune à choisir, donc plus de piège à désamorcer.
   JETON_AGENT="$(curl -s -X POST "$API_URL/agent/login"     -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"     -d "{\"email\":\"$AGENT_EMAIL\",\"password\":\"$AGENT_PASSWORD\"}"     | lire_champ accessToken)"
   [ -n "$JETON_AGENT" ] || { echo "❌ connexion agent refusée (429 déguisé ?)"; exit 2; }
-
-  lire_zone() { # → "id|wilaya|commune" de la PREMIÈRE commune de l'agent
-    "$PY" -c "import sys,json
-try:
-    d = json.load(sys.stdin)
-except Exception:
-    print('ILLISIBLE reponse non JSON'); sys.exit(0)
-cs = d.get('communes') or []
-if not cs:
-    print('ILLISIBLE aucune commune rattachee a cet agent'); sys.exit(0)
-c = cs[0]
-if not (c.get('id') and c.get('wilaya') and c.get('nom')):
-    print('ILLISIBLE commune incomplete'); sys.exit(0)
-print('%s|%s|%s' % (c['id'], c['wilaya'], c['nom']))"
-  }
-
-  ZONE="$(curl -s "$API_URL/agent/me"     -H "Authorization: Bearer $JETON_AGENT" -H "X-Device-Id: $DEVICE_ID"     | lire_zone)"
-  case "$ZONE" in
-    ILLISIBLE*) echo "❌ zone de l'agent — $ZONE"; exit 2 ;;
-  esac
-  ZONE_ID="${ZONE%%|*}"
-  ZONE_RESTE="${ZONE#*|}"
-  ZONE_WILAYA="${ZONE_RESTE%%|*}"
-  ZONE_COMMUNE="${ZONE_RESTE#*|}"
-  echo "✅ zone de l'agent : $ZONE_WILAYA / $ZONE_COMMUNE"
 fi
 fi  # BESOIN_PRO
 
@@ -586,9 +592,97 @@ fi
 echo "   appareil : $APPAREIL"
 echo
 
+# ⚠️ **La permission de localisation doit être accordée PENDANT l'installation.**
+#
+# `flutter drive` réinstalle l'application à chaque parcours, ce qui efface les
+# permissions accordées : elles sont attachées au paquet, pas à l'appareil. Et
+# un parcours ne peut pas taper la boîte de dialogue système d'Android — elle
+# n'appartient pas à l'application.
+#
+# Sans ce sas, le parcours « agent crée un commerçant » attend 45 s puis échoue
+# sur « la position n'a pas été captée », alors que le produit va parfaitement
+# bien : c'est la permission qui manque. Constaté le 2026-08-13, après que la
+# position est devenue obligatoire sur cet écran.
+#
+# On boucle donc en tâche de fond, en accordant dès que le paquet apparaît. La
+# boucle est bornée : un « jusqu'à ce que ça marche » sans borne survivrait au
+# parcours lui-même.
+# ⚠️ Et une position SIMULÉE, sans quoi le GPS de l'émulateur ne rend rien : la
+# permission accordée ne suffit pas si l'appareil n'a aucune position à donner.
+# Les coordonnées sont celles du décor — un point ailleurs ferait sortir le
+# commerce créé du rayon des parcours client qui suivent.
+# ⚠️ **Une seule passe ne suffit pas, et le `|| true` cachait le problème.**
+# `emu geo fix` pousse UN relevé ; l'émulateur revient ensuite à sa position par
+# défaut (37.421998, −122.084 — Mountain View). Selon le moment où l'app
+# interroge le GPS, elle recevait donc la Californie.
+#
+# Mesuré le 2026-08-13, sonde posée dans `MapScreen` : la carte ouvrait sur le
+# point enregistré à zoom 13 et rendait **22 commerces**, puis recentrait sur
+# `gps = LatLng(37.421998, -122.084)` à zoom 15 et rendait **0**. Le parcours
+# concluait « ni marqueur ni grappe » — la carte allait parfaitement bien, elle
+# regardait la Californie.
+#
+# ⚠️ Et `adb emu geo fix` rend **OK** dans ce cas : la commande réussit, le
+# relevé n'atteint simplement pas l'application. Un `|| true` par-dessus une
+# commande qui réussit déjà ne protégeait de rien — il empêchait juste de
+# remarquer que sa réussite ne voulait rien dire (règle 29).
+#
+# On réémet donc en tâche de fond pendant toute la course, et le PREMIER envoi
+# est vérifié : s'il échoue, l'appareil ne sait pas simuler de position et tout
+# parcours qui en dépend accuserait l'écran.
+POSITION_PID=""
+poser_position_simulee() {
+  adb -s "$APPAREIL" emu geo fix 3.2630 34.6714 >/dev/null 2>&1 || {
+    echo "❌ « adb emu geo fix » a échoué : l'appareil ne sait pas simuler de"
+    echo "   position. Les parcours qui lisent le GPS accuseraient l'écran."
+    exit 2
+  }
+  ( while :; do
+      adb -s "$APPAREIL" emu geo fix 3.2630 34.6714 >/dev/null 2>&1
+      sleep 2
+    done ) &
+  POSITION_PID=$!
+}
+
+arreter_position_simulee() {
+  [ -n "$POSITION_PID" ] && kill "$POSITION_PID" 2>/dev/null
+  POSITION_PID=""
+}
+
+# Le miroir de la fonction ci-dessus : on RETIRE la permission dès que le paquet
+# est là. `flutter drive` réinstalle l'app à chaque parcours, donc la permission
+# repart de zéro — mais Android peut la ré-accorder si elle était déjà donnée
+# pour ce paquet, d'où une révocation active plutôt qu'une simple abstention.
+refuser_localisation_en_fond() {
+  (
+    for _ in $(seq 1 90); do
+      if adb -s "$APPAREIL" shell pm revoke com.echango.promo            android.permission.ACCESS_FINE_LOCATION >/dev/null 2>&1; then
+        adb -s "$APPAREIL" shell pm revoke com.echango.promo           android.permission.ACCESS_COARSE_LOCATION >/dev/null 2>&1
+        break
+      fi
+      sleep 2
+    done
+  ) &
+}
+
+PERMISSION_PID=""
+accorder_localisation_en_fond() {
+  (
+    for _ in $(seq 1 90); do
+      if adb -s "$APPAREIL" shell pm grant com.echango.promo            android.permission.ACCESS_FINE_LOCATION >/dev/null 2>&1; then
+        adb -s "$APPAREIL" shell pm grant com.echango.promo           android.permission.ACCESS_COARSE_LOCATION >/dev/null 2>&1
+        break
+      fi
+      sleep 2
+    done
+  ) &
+}
+
 jouer() { # FICHIER LIBELLE [defines…]
   local fichier="$1" libelle="$2"; shift 2
   echo "── $libelle ──"
+  poser_position_simulee
+  accorder_localisation_en_fond
   flutter drive \
     -d "$APPAREIL" \
     --driver=test_driver/integration_test.dart \
@@ -749,15 +843,23 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent-creation" ]; then
   AGENT_TEL="+213557$(date +%H%M%S)"
   AGENT_PIN="135792"
   echo "── agent : commerçant à créer $AGENT_TEL ──"
-  jouer parcours_agent_creation_commercant_test.dart "agent — créer un commerçant"     --dart-define=TEST_PRO_EMAIL="$AGENT_EMAIL"     --dart-define=TEST_PRO_PASSWORD="$AGENT_PASSWORD"     --dart-define=TEST_COMMERCANT_TEL="$AGENT_TEL"     --dart-define=TEST_COMMERCANT_PIN="$AGENT_PIN"     --dart-define=TEST_WILAYA_NOM="$ZONE_WILAYA"     --dart-define=TEST_COMMUNE_NOM="$ZONE_COMMUNE"
+  jouer parcours_agent_creation_commercant_test.dart "agent — créer un commerçant"     --dart-define=TEST_PRO_EMAIL="$AGENT_EMAIL"     --dart-define=TEST_PRO_PASSWORD="$AGENT_PASSWORD"     --dart-define=TEST_COMMERCANT_TEL="$AGENT_TEL"     --dart-define=TEST_COMMERCANT_PIN="$AGENT_PIN"
   CODE_AGENT=$?
   noter "agent — créer un commerçant ($AGENT_TEL)" $CODE_AGENT
 
-  # ── Contre-mesure : le compte existe-t-il, et DANS LA BONNE COMMUNE ? ────
+  # ── Contre-mesure : le compte existe-t-il, et PORTE-T-IL SA POSITION ? ───
   #
-  # La seconde question est celle qui compte : c'est la frontière de zone, dont
-  # l'absence avait produit l'IDOR agent → promo (P5). Une ligne affichée dans
-  # une liste ne prouve ni l'un ni l'autre.
+  # ⚠️ **La seconde question a changé le 2026-08-13.** Elle était « est-il dans
+  # la bonne commune ? » — la frontière de zone, dont l'absence avait produit
+  # l'IDOR agent → promo (P5). Cette frontière est supprimée par décision
+  # produit ; la contre-mesure aurait rendu ❌ sur un produit correct.
+  #
+  # Elle porte désormais sur la **position**, et ce n'est pas un pis-aller :
+  # c'est ce qui décide qu'un commerce existe pour un client. Une fiche sans
+  # point n'apparaît sur aucune carte, ne sort d'aucune liste au rayon et ne
+  # peut rien publier — 40 des 44 fiches invisibles mesurées le 2026-08-12
+  # venaient de cette route. Une ligne affichée dans une liste ne prouve ni que
+  # le compte existe, ni qu'il est utilisable.
   if [ "$CODE_AGENT" -eq 0 ]; then
     echo
     echo "── contre-mesure : le commerçant créé, vu du serveur ──"
@@ -767,17 +869,17 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "agent-creation" ]; then
       echo "   ⚠️ Un 429 se déguise en « identifiants incorrects »."
       noter "contre-mesure agent" 1
     else
-      COMMUNE_CREE="$(curl -s "$API_URL/commercant/me"         -H "Authorization: Bearer $JETON_CREE" -H "X-Device-Id: $DEVICE_ID"         | lire_champ communeId)"
-      if [ -z "$COMMUNE_CREE" ]; then
-        echo "⚠️  communeId illisible — la contre-mesure n'a PAS eu lieu."
-        noter "contre-mesure agent (non concluante)" 1
-      elif [ "$COMMUNE_CREE" = "$ZONE_ID" ]; then
-        echo "✅ compte créé et rattaché à $ZONE_COMMUNE, la commune de l'agent"
-        noter "contre-mesure agent" 0
-      else
-        echo "❌ le commerçant est en commune $COMMUNE_CREE, hors de la zone de"
-        echo "   l'agent ($ZONE_ID) : la frontière de zone n'a pas tenu."
+      MOI_CREE="$(curl -s "$API_URL/commercant/me"         -H "Authorization: Bearer $JETON_CREE" -H "X-Device-Id: $DEVICE_ID")"
+      LAT_CREE="$(echo "$MOI_CREE" | lire_champ latitude)"
+      LNG_CREE="$(echo "$MOI_CREE" | lire_champ longitude)"
+      if [ -z "$LAT_CREE" ] || [ -z "$LNG_CREE" ]; then
+        echo "❌ le commerçant créé n'a AUCUNE position (lat='$LAT_CREE',"
+        echo "   lng='$LNG_CREE') : il n'apparaîtra sur aucune carte et ne"
+        echo "   pourra rien publier. L'écran a laissé passer une fiche vide."
         noter "contre-mesure agent" 1
+      else
+        echo "✅ compte créé, connecté, et positionné ($LAT_CREE / $LNG_CREE)"
+        noter "contre-mesure agent" 0
       fi
     fi
   fi
@@ -807,8 +909,9 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "inscription" ]; then
     JETON_NEUF="$(curl -s -X POST "$API_URL/commercant/login"       -H 'Content-Type: application/json' -H "X-Device-Id: $DEVICE_ID"       -d "{\"telephone\":\"$NOUVEAU_TEL\",\"pin\":\"$NOUVEAU_PIN\"}"       | lire_champ accessToken)"
     if [ -z "$JETON_NEUF" ]; then
       echo "❌ connexion impossible avec le compte censé venir d'être créé."
-      echo "   ⚠️ Un 429 se déguise en « identifiants incorrects » — register et"
-      echo "      login partagent le seau strict (5/min)."
+      echo "   ⚠️ Un 429 se déguise en « identifiants incorrects ». Depuis le"
+      echo "      2026-08-13 register (5/min) et login (50/min) ont des seaux"
+      echo "      SÉPARÉS : si ça bloque ici, c'est l'inscription, pas le login."
       noter "contre-mesure inscription" 1
     else
       ETAT_REGISTRE="$(curl -s "$API_URL/commercant/me"         -H "Authorization: Bearer $JETON_NEUF" -H "X-Device-Id: $DEVICE_ID"         | lire_champ registreStatus)"
@@ -828,14 +931,8 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "inscription" ]; then
   echo
 fi
 
-if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "commune" ]; then
-  jouer parcours_selection_commune_test.dart "client — choisir sa commune"     --dart-define=TEST_WILAYA_NOM="$COM_WILAYA"     --dart-define=TEST_COMMUNE_NOM="$COM_NOM"     --dart-define=TEST_COMMUNE_ID="$CID_COM"     --dart-define=TEST_PROMO_DESC="$COM_PROMO"
-  noter "client — choisir sa commune ($COM_NOM)" $?
-  echo
-fi
-
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "client" ]; then
-  jouer parcours_client_liste_fiche_test.dart "client — liste et fiche"     --dart-define=TEST_PROMO_DESC="$PROMO_DESC"     --dart-define=TEST_COMMUNE_ID="$COMMUNE_CIBLE"
+  jouer parcours_client_liste_fiche_test.dart "client — liste et fiche"     --dart-define=TEST_PROMO_DESC="$PROMO_DESC"
   CODE_CLIENT=$?
   noter "client — liste et fiche" $CODE_CLIENT
 
@@ -870,14 +967,73 @@ if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "client" ]; then
   echo
 fi
 
+if [ "$CHOIX" = "decor-promos" ]; then
+  [ -n "${TEST_COMMERCANTS:-}" ] || {
+    echo "❌ TEST_COMMERCANTS absent — liste « tel:pin,tel:pin,… » attendue."
+    exit 2; }
+  # ⚠️ Sans GPS : ce producteur n'a que faire de la position du téléphone, et
+  # un GPS actif ferait voyager la carte au démarrage pour rien.
+  SANS_GPS=oui jouer parcours_promos_serie_test.dart "décor — promos en série"     --dart-define=TEST_COMMERCANTS="$TEST_COMMERCANTS"     --dart-define=TEST_PROMOS_A_CREER="${TEST_PROMOS_A_CREER:-5}"
+  noter "décor — promos en série" $?
+fi
+if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "ville" ]; then
+# ── 2 septies. La ville par défaut et le geste qui la fixe ─────────────────
+#
+# ⚠️ **Les deux noms viennent du SERVEUR**, jamais d'une constante écrite ici :
+# le décor peut changer de libellé, et un parcours qui recopierait « Épicerie
+# Hassi Bahbah » échouerait en accusant la liste. On demande donc à la carte un
+# commerce de la ville visée, et un commerce d'ailleurs — hors du rayon.
+echo
+echo "── 2 septies. Ville par défaut ──"
+VILLE_LAT="${VILLE_LAT:-35.0774}"
+VILLE_LNG="${VILLE_LNG:-3.0281}"
+AILLEURS_LAT="${AILLEURS_LAT:-36.7538}"
+AILLEURS_LNG="${AILLEURS_LNG:-3.0588}"
+nom_dans_zone() { # LAT LNG
+  curl -s "$API_URL/promo/map?north=$(awk -v v=$1 'BEGIN{print v+0.03}')&south=$(awk -v v=$1 'BEGIN{print v-0.03}')&east=$(awk -v v=$2 'BEGIN{print v+0.03}')&west=$(awk -v v=$2 'BEGIN{print v-0.03}')"     -H "X-Device-Id: $DEVICE_ID" | "$PY" -c "import sys,json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for c in d.get('items', []):
+    if (c.get('promos') or []) and c.get('nom'):
+        print(c['nom']); break"
+}
+VILLE_COMMERCE="$(nom_dans_zone "$VILLE_LAT" "$VILLE_LNG")"
+VILLE_AILLEURS="$(nom_dans_zone "$AILLEURS_LAT" "$AILLEURS_LNG")"
+[ -n "$VILLE_COMMERCE" ] || { echo "❌ aucun commerce avec promo autour de $VILLE_LAT,$VILLE_LNG"; exit 2; }
+[ -n "$VILLE_AILLEURS" ] || { echo "❌ aucun commerce avec promo autour de $AILLEURS_LAT,$AILLEURS_LNG"; exit 2; }
+# ⚠️ Les deux villes doivent être hors du rayon l'une de l'autre, sinon
+# l'assertion d'absence serait fausse par construction et le parcours accuserait
+# la liste (règle 38).
+[ "$VILLE_COMMERCE" != "$VILLE_AILLEURS" ] || { echo "❌ même commerce des deux côtés — les deux points ne sont pas assez éloignés"; exit 2; }
+echo "✅ ici « $VILLE_COMMERCE » · ailleurs « $VILLE_AILLEURS »"
+
+  SANS_GPS=oui jouer parcours_ville_par_defaut_test.dart "client — ville par défaut"     --dart-define=TEST_VILLE_COMMERCE="$VILLE_COMMERCE"     --dart-define=TEST_VILLE_COMMERCE_AILLEURS="$VILLE_AILLEURS"     --dart-define=TEST_VILLE_LAT="$VILLE_LAT"     --dart-define=TEST_VILLE_LNG="$VILLE_LNG"
+  noter "client — ville par défaut" $?
+
+  # ⚠️ Un `flutter drive` SÉPARÉ, et ce n'est pas du confort : les préférences
+  # sont un singleton de processus, et l'état d'un test déteint sur le suivant.
+  # Groupés, le changement de ville voyait l'app démarrer sans point posé.
+  SANS_GPS=oui jouer parcours_ville_changement_test.dart "client — changer de ville"     --dart-define=TEST_VILLE_COMMERCE="$VILLE_COMMERCE"     --dart-define=TEST_VILLE_LAT="$VILLE_LAT"     --dart-define=TEST_VILLE_LNG="$VILLE_LNG"
+  noter "client — changer de ville" $?
+fi
+if [ "$CHOIX" = "decor-retouche" ]; then
+  [ -n "${TEST_COMMERCANTS:-}" ] || {
+    echo "❌ TEST_COMMERCANTS absent — liste « tel:pin,tel:pin,… » attendue,"
+    echo "   dans le MÊME ordre qu'à la création : l'ordre fixe l'échelle de prix."
+    exit 2; }
+  SANS_GPS=oui jouer parcours_promos_retouche_test.dart "décor — retouche des prix"     --dart-define=TEST_COMMERCANTS="$TEST_COMMERCANTS"
+  noter "décor — retouche des prix" $?
+fi
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "carte" ]; then
-  jouer parcours_carte_test.dart "client — la carte"     --dart-define=TEST_COMMUNE_ID="$CARTE_COMMUNE"     --dart-define=TEST_REMISE="$CARTE_REMISE"     --dart-define=TEST_COMMERCE_NOM="$CARTE_NOM"
+  SANS_GPS=oui jouer parcours_carte_test.dart "client — la carte"     --dart-define=TEST_REMISE="$CARTE_REMISE"     --dart-define=TEST_COMMERCE_NOM="$CARTE_NOM"
   noter "client — la carte ($CARTE_REMISE)" $?
   echo
 fi
 
 if [ "$CHOIX" = "tous" ] || [ "$CHOIX" = "signalement" ]; then
-  jouer parcours_signalement_test.dart "client — signaler une promo"     --dart-define=TEST_PROMO_DESC="$SIG_DESC"     --dart-define=TEST_COMMUNE_ID="$SIG_COMMUNE"
+  jouer parcours_signalement_test.dart "client — signaler une promo"     --dart-define=TEST_PROMO_DESC="$SIG_DESC"
   CODE_SIG=$?
   noter "client — signaler une promo" $CODE_SIG
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, QueryFailedError, Repository } from 'typeorm';
+import { IsNull, QueryFailedError, Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
 import {
   BadRequestAppException,
@@ -30,6 +30,7 @@ import {
 import { CreateCommercantByAgentDto } from './dto/create-commercant-by-agent.dto';
 import { ListCommercantQueryDto } from './dto/list-commercant-query.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
+import { SetCommercantPositionDto } from './dto/set-position.dto';
 import { UpdateCommercantDto } from './dto/update-commercant.dto';
 
 @Injectable()
@@ -466,11 +467,6 @@ export class CommercantService {
   }
 
   /**
-   * `communeIds` restreint aux communes d'un agent (dashboard partagé
-   * admin/agent, décision produit 2026-07-12) — `undefined` = vue globale
-   * (admin), même convention que `AdminController.scopedCommuneIds`.
-   */
-  /**
    * **Le filtre « compte vivant » commun à tous les compteurs de dashboard.**
    *
    * Le bug avait été trouvé le 2026-07-14 et corrigé sur `countActive`
@@ -485,42 +481,38 @@ export class CommercantService {
    * n'attend pas une validation de registre mais une décision de
    * réactivation, qui rendra son dossier à la file.
    */
-  private aliveAccountWhere(communeIds?: string[]) {
+  private aliveAccountWhere() {
     return {
       deletedAt: IsNull(),
       suspendedAt: IsNull(),
-      ...(communeIds ? { communeId: In(communeIds) } : {}),
     };
   }
 
-  async countActive(communeIds?: string[]): Promise<number> {
-    if (communeIds && communeIds.length === 0) return 0;
+  async countActive(): Promise<number> {
     return this.commercants.count({
       where: {
         accountState: CommercantAccountState.AUTONOME,
-        ...this.aliveAccountWhere(communeIds),
+        ...this.aliveAccountWhere(),
       },
     });
   }
 
   /** Registres en attente de validation (stat dashboard admin, plan de correction). */
-  async countPendingRegistre(communeIds?: string[]): Promise<number> {
-    if (communeIds && communeIds.length === 0) return 0;
+  async countPendingRegistre(): Promise<number> {
     return this.commercants.count({
       where: {
         registreStatus: RegistreStatus.EN_ATTENTE,
-        ...this.aliveAccountWhere(communeIds),
+        ...this.aliveAccountWhere(),
       },
     });
   }
 
   /** Modifications de profil en attente de validation (stat dashboard admin). */
-  async countPendingProfileReview(communeIds?: string[]): Promise<number> {
-    if (communeIds && communeIds.length === 0) return 0;
+  async countPendingProfileReview(): Promise<number> {
     return this.commercants.count({
       where: {
         profilePendingReview: true,
-        ...this.aliveAccountWhere(communeIds),
+        ...this.aliveAccountWhere(),
       },
     });
   }
@@ -529,41 +521,55 @@ export class CommercantService {
    * Vue admin (plan de correction, Phase 2) : recherche + liste sur
    * l'ensemble des commerçants, y compris suspendus et supprimés — sans ça,
    * l'admin ne pourrait jamais retrouver un compte suspendu pour le
-   * réactiver, ni consulter l'historique d'un compte supprimé. `communeIds`
-   * restreint aux communes d'un agent (partage de cet écran admin/agent,
-   * décision produit 2026-07-12) — `undefined` = vue globale (admin).
+   * réactiver, ni consulter l'historique d'un compte supprimé.
+   *
+   * ⚠️ **Vue globale pour tout le monde depuis le 2026-08-13.** Le paramètre
+   * `communeIds` restreignait cet écran aux communes de l'agent ; il est parti
+   * avec le territoire. Un agent voit désormais le parc entier — et le cas
+   * dégénéré s'inverse : un agent sans commune rendait ici une page **vide**,
+   * il rend maintenant **tout**.
    */
   async findAllForAdmin(
     query: ListCommercantQueryDto,
-    communeIds?: string[],
   ): Promise<PaginatedResult<Commercant>> {
-    if (communeIds && communeIds.length === 0) {
-      return toPaginatedResult([], 0, query.page, query.limit);
-    }
-
     const qb = this.commercants
       .createQueryBuilder('commercant')
+      // ⚠️ **Ce filtre manquait, et c'était la QUATRIÈME copie du même oubli**
+      // (2026-08-13). `deletedAt` est une colonne ordinaire, pas un
+      // `@DeleteDateColumn` : TypeORM ne masque donc rien tout seul, et cette
+      // liste servait les comptes supprimés — visibles, comptés, et
+      // actionnables (suspendre, réinitialiser le PIN, revalider un registre
+      // sur un compte qui n'existe plus).
+      //
+      // Le tableau de bord, lui, les excluait déjà via `aliveAccountWhere` :
+      // le compteur et la liste qu'il est censé résumer disaient deux choses
+      // différentes du même parc. Mesuré en supprimant deux comptes de banc,
+      // qui sont restés dans la liste en `autonome`.
+      //
+      // Le docstring d'`aliveAccountWhere` décrit exactement cette famille
+      // (règle #9, « trois copies d'une même règle, une seule corrigée ») —
+      // il en manquait une quatrième, celle-ci.
+      //
+      // ⚠️ **`suspendedAt` n'est PAS filtré ici**, contrairement aux
+      // compteurs. Un compte suspendu doit rester visible : c'est
+      // précisément l'écran depuis lequel on le réactive. Les compteurs
+      // l'excluent parce qu'ils comptent ce qui attend un traitement ; une
+      // liste de gestion, elle, doit montrer ce qui se gère.
+      .where('commercant.deletedAt IS NULL')
       .orderBy('commercant.createdAt', 'DESC');
 
-    if (communeIds) {
-      qb.andWhere('commercant.communeId IN (:...communeIds)', { communeIds });
-    }
-    if (query.communeId) {
-      qb.andWhere('commercant.communeId = :filterCommuneId', {
-        filterCommuneId: query.communeId,
-      });
-    }
-    if (query.wilaya) {
-      qb.innerJoin('commercant.commune', 'commune').andWhere(
-        'commune.wilaya = :wilaya',
-        {
-          wilaya: query.wilaya,
-        },
-      );
-    }
     if (query.search) {
+      // ⚠️ **`adresse` ajoutée à la recherche le 2026-08-13, et ce n'est pas
+      // un agrément.** Le même lot retire le filtre commune/wilaya et la barre
+      // de filtres de l'écran : sans cette ligne, il ne resterait **aucun**
+      // moyen de resserrer géographiquement une liste devenue nationale, sur
+      // un écran conçu quand elle tenait dans une commune.
+      //
+      // C'est aussi ce qui donne un usage au champ que D2 promeut : `adresse`
+      // devient le seul texte de lieu du produit.
       qb.andWhere(
-        '(commercant.nom ILIKE :search OR commercant.telephone ILIKE :search)',
+        '(commercant.nom ILIKE :search OR commercant.telephone ILIKE :search' +
+          ' OR commercant.adresse ILIKE :search)',
         { search: `%${query.search}%` },
       );
     }
@@ -666,20 +672,17 @@ export class CommercantService {
     );
   }
 
-  /** Garde IDOR : un agent ne peut agir que sur les commerçants de ses propres communes. */
-  async assertCommuneMatches(
-    commercantId: string,
-    agentCommuneIds: string[],
-  ): Promise<Commercant> {
-    const commercant = await this.findByIdOrFail(commercantId);
-    if (!agentCommuneIds.includes(commercant.communeId)) {
-      throw new ForbiddenAppException(
-        ErrorCode.COMMERCANT_NOT_IN_AGENT_COMMUNES,
-        "Ce commerçant n'est dans aucune des communes de cet agent",
-      );
-    }
-    return commercant;
-  }
+  // ⚠️ **`assertCommuneMatches` a été retirée le 2026-08-13** (chantier
+  // « agent global »). Elle était la garde IDOR de 14 écritures : 3 de
+  // modération, 7 de gestion de commerçant, 3 sur les promos, plus l'appel en
+  // propre de `PromoController.createByAgent` — le seul qui ne passait pas par
+  // un wrapper, et donc le seul que deux relectures ont manqué.
+  //
+  // Elle faisait aussi `findByIdOrFail` avant de comparer. **Ce n'est PAS une
+  // perte** : les quatorze appelants revérifient l'existence par eux-mêmes,
+  // soit dans le service appelé, soit avant la garde. Vérifié site par site le
+  // 2026-08-13 — l'inverse avait été supposé, et supposer aurait fait écrire
+  // quatorze vérifications inutiles.
 
   /**
    * Un commerçant auto-inscrit (`AUTO_INSCRIT`) ne peut créer/publier de
@@ -704,6 +707,35 @@ export class CommercantService {
   }
 
   /**
+   * Pose la position du commerce, **sans déclencher la revue de profil quand
+   * il n'y en avait aucune**.
+   *
+   * C'est la sortie de l'impasse décrite dans `SetCommercantPositionDto` : le
+   * commerçant bloqué faute de position doit pouvoir se débloquer **seul**, or
+   * la route générale de profil le renverrait attendre un administrateur.
+   *
+   * ⚠️ **L'exception ne vaut que pour la première pose.** Un commerçant qui
+   * *déplace* une position déjà renseignée décrit un commerce qui a changé
+   * d'adresse — exactement ce que la revue admin existe pour regarder. Ce
+   * `wasUnset` est donc la frontière entre « réparer une donnée manquante » et
+   * « modifier son profil », et l'élargir viderait la revue de son objet.
+   */
+  async setPosition(
+    commercantId: string,
+    dto: SetCommercantPositionDto,
+  ): Promise<Commercant> {
+    const commercant = await this.findByIdOrFail(commercantId);
+    const wasUnset =
+      commercant.latitude === null || commercant.longitude === null;
+    commercant.latitude = dto.latitude;
+    commercant.longitude = dto.longitude;
+    if (!wasUnset) {
+      commercant.profilePendingReview = true;
+    }
+    return this.commercants.save(commercant);
+  }
+
+  /**
    * Contrairement à `assertRegistreValidated`, s'applique à **tous** les
    * commerçants sans exception d'origine — décision produit du 2026-07-12 :
    * toute modification de profil (même pour un commerçant confirmé par un
@@ -714,6 +746,34 @@ export class CommercantService {
       throw new ForbiddenAppException(
         ErrorCode.COMMERCANT_PROFILE_PENDING_REVIEW,
         'Les modifications de votre profil doivent être validées par un administrateur avant de pouvoir publier des promos',
+      );
+    }
+  }
+
+  /**
+   * Sans position, une promo n'est **visible par personne** : les clients
+   * cherchent par proximité et la carte filtre sur un cadre, qu'un `NULL` ne
+   * peut pas satisfaire. Publier serait donc un geste sans effet — et sans
+   * cette garde, le commerçant verrait « 3 en ligne » sur un stock que
+   * personne ne voit, exactement le défaut que `countVisible` avait déjà
+   * produit une fois (règle #8).
+   *
+   * ⚠️ **`=== null`, pas la véracité.** `!commercant.longitude` refuserait une
+   * longitude à `0`, qui est le méridien de Greenwich — une coordonnée
+   * parfaitement légitime. Même piège que `configNumber` côté configuration.
+   *
+   * ⚠️ **Ne jamais appeler cette garde sur un enregistrement en brouillon.**
+   * `promo.service.ts` documente la régression exacte qu'on refabriquerait :
+   * des gardes posées pour tout le monde refusaient aussi « Enregistrer comme
+   * brouillon », « avec un message parlant de publier, sur un geste qui ne
+   * publie pas ». Un commerçant sans position doit pouvoir **préparer** ses
+   * promos ; c'est les mettre en ligne qui exige un point.
+   */
+  assertPositionSet(commercant: Commercant): void {
+    if (commercant.latitude === null || commercant.longitude === null) {
+      throw new ForbiddenAppException(
+        ErrorCode.COMMERCANT_POSITION_REQUIRED,
+        'Indiquez la position de votre commerce pour pouvoir publier : les clients cherchent les promos autour d’eux',
       );
     }
   }

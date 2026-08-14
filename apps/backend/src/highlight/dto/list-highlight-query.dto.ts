@@ -1,11 +1,14 @@
 import { Transform } from 'class-transformer';
 import {
-  ArrayMaxSize,
-  ArrayMinSize,
-  IsArray,
+  IsDefined,
+  IsLatitude,
+  IsLongitude,
+  IsNumber,
   IsOptional,
-  IsUUID,
+  IsPositive,
+  ValidateIf,
 } from 'class-validator';
+import { versNombre } from '../../common/transforms/vers-nombre';
 
 /**
  * Les diapositives curées sont **globales** : l'admin met en avant une
@@ -26,13 +29,39 @@ import {
  * listes que cette règle vise.
  */
 export class ListHighlightQueryDto {
-  @IsOptional()
-  @IsArray()
-  @ArrayMinSize(1)
-  @ArrayMaxSize(4)
-  @IsUUID(undefined, { each: true })
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.split(',').filter(Boolean) : value,
+  /**
+   * Point du client, pour cadrer le **repli** calculé (bascule 2026-08-12).
+   *
+   * ⚠️ Mêmes contraintes que `ListPromoQueryDto`, et pour la même raison : le
+   * repli doit rester cohérent avec le fil de l'accueil. Deux cadrages
+   * différents pour deux zones de la même page produiraient une vitrine qui
+   * annonce ce que la liste juste en dessous ne contient pas.
+   *
+   * Absent, le serveur applique son point par défaut — la vitrine n'est donc
+   * jamais vide faute de configuration, mais elle n'est jamais nationale non
+   * plus.
+   */
+  @ValidateIf(
+    (o: ListHighlightQueryDto) =>
+      o.latitude !== undefined || o.longitude !== undefined,
   )
-  communeIds?: string[];
+  @IsDefined()
+  @Transform(versNombre)
+  @IsLatitude()
+  latitude?: number;
+
+  @ValidateIf(
+    (o: ListHighlightQueryDto) =>
+      o.latitude !== undefined || o.longitude !== undefined,
+  )
+  @IsDefined()
+  @Transform(versNombre)
+  @IsLongitude()
+  longitude?: number;
+
+  @IsOptional()
+  @Transform(versNombre)
+  @IsNumber()
+  @IsPositive()
+  radiusKm?: number;
 }

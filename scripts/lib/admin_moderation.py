@@ -245,8 +245,15 @@ def main():
     print("\n── 1. masquer retire la promo de l'affichage client ──")
     avant = journal_ids()
     time.sleep(PACE)
+    # Chaque decision porte l'etat que le moderateur avait a l'ecran
+    # (obligatoire depuis le 2026-08-13, voir `ResolveModerationDto`). La
+    # sequence de ce banc est deterministe : la promo vient d'etre creee, donc
+    # `normale`, puis `masquee`, puis `verifiee_ok`. On l'ecrit en clair plutot
+    # que de relire a chaque fois -- si l'un de ces trois etats devenait faux,
+    # le serveur refuserait en MODERATION_STATE_CHANGED et le banc le dirait,
+    # au lieu de suivre docilement une sequence qu'il n'a pas comprise.
     st, d = appeler("POST", "/admin/moderation/%s/masquer" % pid, ja,
-                    {"reason": "banc"})
+                    {"expectedModerationStatus": "normale"})
     if st not in (200, 201):
         noter("masquer", "non_concluant", "HTTP %s %s" % (st, d.get("code")))
         return 1
@@ -258,7 +265,7 @@ def main():
     # ── 2. verifier-ok lève le masque et ramène la promo ────────────────────
     print("\n── 2. verifier-ok lève le masque ──")
     st, d = appeler("POST", "/admin/moderation/%s/verifier-ok" % pid, ja,
-                    {"reason": "banc"})
+                    {"expectedModerationStatus": "masquee"})
     if st not in (200, 201):
         noter("verifier-ok", "non_concluant", "HTTP %s %s" % (st, d.get("code")))
         return 1
@@ -279,10 +286,11 @@ def main():
     # Le banc avait tort, le serveur non : sonder un effet plutôt qu'une règle
     # produit exactement ce genre de faux rouge.
     print("\n── 3. avertir depuis MASQUÉE : brouillon, mais masque levé ──")
-    appeler("POST", "/admin/moderation/%s/masquer" % pid, ja, {"reason": "banc"})
+    appeler("POST", "/admin/moderation/%s/masquer" % pid, ja,
+            {"expectedModerationStatus": "verifiee_ok"})
     time.sleep(PACE)
     st, d = appeler("POST", "/admin/moderation/%s/avertir" % pid, ja,
-                    {"reason": "banc"})
+                    {"expectedModerationStatus": "masquee"})
     if st not in (200, 201):
         noter("avertir", "non_concluant", "HTTP %s %s" % (st, d.get("code")))
         return 1
@@ -308,6 +316,22 @@ def main():
         noter(action, *verdict_trace(entrees, action, avant))
 
     print("\n" + "═" * 64)
+
+    # ── ⚠️ Rendre le décor tel qu'on l'a trouvé ─────────────────────────────
+    #
+    # Ce banc crée une promo sur le commerçant du décor et ne peut pas la
+    # laisser en ligne : le plafond est de 5 promos actives, et cinq bancs qui
+    # font pareil ferment la porte à tous les suivants. Découvert au premier
+    # lot complet du 2026-08-13 — chacun passait seul, aucun ne passait à la
+    # suite des autres.
+    #
+    # ⚠️ Sans verdict : le nettoyage n'est pas ce que ce banc éprouve, et
+    # l'échouer ferait accuser le produit pour un ménage mal fait. S'il rate,
+    # c'est le banc SUIVANT qui le dira, sur un refus de plafond parfaitement
+    # lisible.
+    if pid:
+        appeler("POST", "/promo/%s/stop" % pid, jg)
+
     echecs = resultats.count("echec")
     non_concluants = resultats.count("non_concluant")
     print("%d contrôles, %d échec(s), %d non concluant(s)"

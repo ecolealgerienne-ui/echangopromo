@@ -58,7 +58,11 @@ export class HighlightService {
    * arrivée à expiration viderait la vitrine de l'accueil jusqu'à ce que
    * l'admin s'en aperçoive.
    */
-  async findForClient(communeIds?: string[]): Promise<HighlightSlide[]> {
+  async findForClient(point?: {
+    latitude: number;
+    longitude: number;
+    radiusKm?: number;
+  }): Promise<HighlightSlide[]> {
     // Pas de `relations` ici : la promo affichée est celle que
     // `findVisibleByIds` renvoie (avec son commerçant), charger la relation
     // une seconde fois par la jointure ne servirait à rien.
@@ -72,7 +76,7 @@ export class HighlightService {
       curated.length > 0 ? await this.keepDisplayable(curated) : [];
     if (slides.length > 0) return slides;
 
-    return this.buildFallbackSlides(communeIds);
+    return this.buildFallbackSlides(point);
   }
 
   /**
@@ -137,24 +141,33 @@ export class HighlightService {
    * expiration de diapositive suffirait à afficher des promos d'une autre
    * wilaya (constaté le 2026-08-05, même motif que `PromoListController`).
    *
-   * Une vitrine **vide** est le bon résultat ici : l'app la replie d'elle-même
-   * (`_TopPromosSection`), et l'accueil demande déjà au client de choisir ses
-   * communes juste en dessous. Mieux vaut ne rien montrer que montrer faux
-   * (règle #29).
+   * ⚠️ **Depuis la bascule géographique (2026-08-12), le cadrage est le point
+   * du client, plus ses communes** — et il n'y a plus de cas « rien à
+   * cadrer » : sans coordonnées, `findActiveForClient` applique le point par
+   * défaut du serveur. L'ancien `if (!communeIds?.length) return []` disparaît
+   * donc avec sa raison d'être, et la vitrine cesse d'être vide pour la seule
+   * raison que le client n'avait rien configuré.
+   *
+   * ⚠️ Ce qu'il ne faut **pas** faire à la place : laisser le repli sans
+   * cadrage du tout. Il redeviendrait national, et un client de Djelfa verrait
+   * en vitrine les meilleures réductions d'Alger — une vitrine qui ment
+   * (A6 du plan de bascule).
    *
    * ⚠️ Ne concerne **que** ce repli. Les diapositives curées restent globales
    * par décision produit — voir `ListHighlightQueryDto`.
    */
-  private async buildFallbackSlides(
-    communeIds?: string[],
-  ): Promise<HighlightSlide[]> {
-    if (!communeIds?.length) return [];
-
+  private async buildFallbackSlides(point?: {
+    latitude: number;
+    longitude: number;
+    radiusKm?: number;
+  }): Promise<HighlightSlide[]> {
     const result = await this.promoService.findActiveForClient({
       page: 1,
       limit: HIGHLIGHT_FALLBACK_LIMIT,
       sort: PromoSortOrder.DISCOUNT,
-      communeIds,
+      latitude: point?.latitude,
+      longitude: point?.longitude,
+      radiusKm: point?.radiusKm,
     });
     return result.items.map((promo) => ({
       // Préfixé : cet identifiant n'est pas celui d'une ligne `highlight`,

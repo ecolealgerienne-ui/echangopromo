@@ -24,10 +24,6 @@ export enum ErrorCode {
   // Agent
   AGENT_EMAIL_TAKEN = 'AGENT_EMAIL_TAKEN',
   AGENT_NOT_FOUND = 'AGENT_NOT_FOUND',
-  AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT = 'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT',
-
-  // Commune
-  COMMUNE_NOT_FOUND = 'COMMUNE_NOT_FOUND',
 
   // Report
   REPORT_ALREADY_SUBMITTED = 'REPORT_ALREADY_SUBMITTED',
@@ -53,6 +49,18 @@ export enum ErrorCode {
   PROMO_REPUBLISH_TOO_SOON = 'PROMO_REPUBLISH_TOO_SOON',
   PROMO_DAILY_CREATION_CAP_REACHED = 'PROMO_DAILY_CREATION_CAP_REACHED',
 
+  /**
+   * Deux modérateurs sur la même promo — la décision a été prise contre un
+   * état que l'écran n'affiche plus (2026-08-13, voir `ResolveModerationDto`).
+   *
+   * ⚠️ **C'est un refus qui protège une décision, pas une erreur de saisie.**
+   * L'action de l'appelant est parfaitement valide ; c'est le monde qui a bougé
+   * sous lui. Le message doit donc dire « quelqu'un d'autre est passé avant
+   * vous », jamais « action impossible » — et l'écran doit se rafraîchir, pas
+   * proposer de réessayer à l'identique.
+   */
+  MODERATION_STATE_CHANGED = 'MODERATION_STATE_CHANGED',
+
   // Highlight (bandeau « Top promos » curé par l'admin)
   HIGHLIGHT_NOT_FOUND = 'HIGHLIGHT_NOT_FOUND',
   HIGHLIGHT_EMPTY_CONTENT = 'HIGHLIGHT_EMPTY_CONTENT',
@@ -64,12 +72,21 @@ export enum ErrorCode {
   COMMERCANT_NOT_FOUND = 'COMMERCANT_NOT_FOUND',
   COMMERCANT_OLD_PIN_MISMATCH = 'COMMERCANT_OLD_PIN_MISMATCH',
   COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION = 'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION',
-  COMMERCANT_NOT_IN_AGENT_COMMUNES = 'COMMERCANT_NOT_IN_AGENT_COMMUNES',
   COMMERCANT_TERMS_NOT_ACCEPTED = 'COMMERCANT_TERMS_NOT_ACCEPTED',
   COMMERCANT_REGISTRE_NOT_VALIDATED = 'COMMERCANT_REGISTRE_NOT_VALIDATED',
   COMMERCANT_REGISTRE_KEY_MISMATCH = 'COMMERCANT_REGISTRE_KEY_MISMATCH',
   COMMERCANT_PROFILE_PENDING_REVIEW = 'COMMERCANT_PROFILE_PENDING_REVIEW',
   COMMERCANT_ACCOUNT_INACTIVE = 'COMMERCANT_ACCOUNT_INACTIVE',
+  /**
+   * Publication refusée faute de position (bascule géographique, 2026-08-12).
+   *
+   * ⚠️ **Son message doit rester nettement distinct de
+   * `COMMERCANT_PROFILE_PENDING_REVIEW`.** Ce sont deux blocages successifs sur
+   * le même geste, et un commerçant qui lit deux refus voisins croit avoir déjà
+   * fait ce qu'on lui demande. L'un dit « il manque un renseignement », l'autre
+   * « un humain doit valider » : la différence doit s'entendre à la lecture.
+   */
+  COMMERCANT_POSITION_REQUIRED = 'COMMERCANT_POSITION_REQUIRED',
 
   /**
    * Notification introuvable **pour ce destinataire** — soit elle appartient à

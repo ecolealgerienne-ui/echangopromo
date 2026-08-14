@@ -14,7 +14,6 @@ class AdminCommercantItem {
     required this.telephone,
     this.adresse,
     required this.categorie,
-    required this.communeId,
     this.photoUrl,
     this.latitude,
     this.longitude,
@@ -36,7 +35,6 @@ class AdminCommercantItem {
         telephone: json['telephone'] as String,
         adresse: json['adresse'] as String?,
         categorie: Categorie.fromValue(json['categorie'] as String),
-        communeId: json['communeId'] as String,
         photoUrl: json['photoUrl'] as String?,
         latitude: (json['latitude'] as num?)?.toDouble(),
         longitude: (json['longitude'] as num?)?.toDouble(),
@@ -59,7 +57,6 @@ class AdminCommercantItem {
   final String telephone;
   final String? adresse;
   final Categorie categorie;
-  final String communeId;
   final String? photoUrl;
   final double? latitude;
   final double? longitude;

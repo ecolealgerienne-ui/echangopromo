@@ -10,9 +10,6 @@ const Map<String, String> errorMessagesEn = {
   'ADMIN_NOT_FOUND': 'Administrator not found.',
   'AGENT_EMAIL_TAKEN': 'This email is already used by an agent.',
   'AGENT_NOT_FOUND': 'Agent not found.',
-  'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT':
-      'At least one of these communes is not currently assigned to this agent.',
-  'COMMUNE_NOT_FOUND': 'Municipality not found.',
   'REPORT_ALREADY_SUBMITTED': 'You have already reported this promo.',
   'DEVICE_ID_MISSING': 'Missing device identifier. Restart the app.',
   'STORAGE_INVALID_IMAGE':
@@ -36,6 +33,10 @@ const Map<String, String> errorMessagesEn = {
   'PROMO_DATE_FIN_NOT_FUTURE': 'The end date must be in the future.',
   'PROMO_ALREADY_PUBLISHED': 'This promo is already published.',
   'PROMO_NOT_PUBLISHED': 'Only a published promo can be stopped.',
+  'MODERATION_STATE_CHANGED':
+      'Another moderator handled this promo in the meantime. '
+          'The list has just been refreshed: check the new decision before '
+          'acting.',
   'PROMO_PRIX_APRES_NOT_LOWER':
       'The discounted price must be lower than the original price.',
   'COMMERCANT_PHONE_TAKEN': 'This phone number is already registered.',
@@ -43,8 +44,6 @@ const Map<String, String> errorMessagesEn = {
   'COMMERCANT_OLD_PIN_MISMATCH': 'The old PIN does not match.',
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION':
       'No pending verification request.',
-  'COMMERCANT_NOT_IN_AGENT_COMMUNES':
-      'This merchant is not in any of this agent\'s communes.',
   'COMMERCANT_TERMS_NOT_ACCEPTED':
       'You must accept the terms of use to create an account.',
   'COMMERCANT_REGISTRE_NOT_VALIDATED':
@@ -53,6 +52,8 @@ const Map<String, String> errorMessagesEn = {
       'This document does not belong to this merchant.',
   'COMMERCANT_PROFILE_PENDING_REVIEW':
       'Your profile changes must be validated by an administrator before you can publish promos.',
+  'COMMERCANT_POSITION_REQUIRED':
+      'Set your shop’s location to publish — customers look for promos around them.',
   'COMMERCANT_ACCOUNT_INACTIVE':
       'This merchant account is suspended or deleted.',
   'NOTIFICATION_NOT_FOUND': 'This notification is no longer available.',

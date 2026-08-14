@@ -7,6 +7,18 @@ les valeurs réelles de ce dépôt.
 Tout ce qui est chiffré ici a été **mesuré le 2026-08-04** sur `main`
 (`77e788a`), pas estimé. Chaque règle métier porte son `fichier:ligne`.
 
+⚠️ **Ce document décrit en partie un produit qui n'existe plus.** Deux chantiers
+ont retiré le découpage administratif : la bascule géographique du 2026-08-12
+(le client cherche autour d'un point qu'il enregistre) et la suppression de
+`commune`/`wilaya` du 2026-08-13 (l'agent devient global, l'adresse en texte
+libre devient le seul repère de lieu).
+
+Le **registre des bancs** et le **tableau des rôles** ci-dessous sont à jour.
+Les **récits datés** — §« scénario d'attaque », §« ce que le décor a révélé »,
+et les colonnes de parcours — ne le sont pas : ils rapportent ce qui a été
+mesuré à leur date, et les réécrire falsifierait un journal. Les lire comme de
+l'histoire, pas comme un état.
+
 ---
 
 ## 1. État des lieux mesuré
@@ -42,7 +54,6 @@ Tout ce qui est chiffré ici a été **mesuré le 2026-08-04** sur `main`
 
 | Table | Lignes |
 |---|---|
-| `commune` | 35 |
 | `commercant` | 1 |
 | `promo` | 1 — **expirée** (`dateFin` = 2026-07-09) |
 | `admin` | 1 |
@@ -152,7 +163,7 @@ partagées (`/notifications`, `/storage/upload`, `/promo/:id`) comptent pour
 | Persona | Auth. | Routes | Écrans | Particularité pour les tests |
 |---|---|---|---|---|
 | **Admin** | mot de passe | **35** | **13** | Compte **unique** en V0. Accès par URL directe `/admin`, non découvrable dans l'app. **La plus grande surface des quatre, de loin.** |
-| **Agent** | mot de passe | **26** | 3 | Rattaché à N communes. ⚠️ **14 de ses routes sont sous `/admin/*`** : il suspend, supprime, valide un registre, réinitialise un PIN, modère. Rôle appelé à disparaître à l'extension multi-wilaya — mais bien présent aujourd'hui. |
+| **Agent** | mot de passe | **26** | 3 | ⚠️ **Sans territoire depuis le 2026-08-13 : il agit sur tout le parc.** **14 de ses routes sont sous `/admin/*`** : il suspend, supprime, valide un registre, réinitialise un PIN, modère — sans aucune garde d'appartenance. Rôle appelé à disparaître, et ce chantier crée l'état qui le rendait caduc. |
 | **Commerçant** | PIN | 17 | 7 | Cycle de vie : inscription → validation registre → actif → suspendu → supprimé. Peut **s'auto-supprimer** (`DELETE /commercant/me`). |
 | **Client** | **aucune** — anonyme | 14 (ouvertes) | 4 + 4 onboarding | C'est ce qui rend 14 routes légitimement ouvertes. Identifié par un `X-Device-Id` **déclaratif, jamais vérifié** — d'où le throttle par IP sur `/report`. |
 
@@ -185,15 +196,28 @@ C'est la liste de départ des bancs de l'étape 4 : **une règle, un banc**.
 | Plafond | Valeur | Portée |
 |---|---|---|
 | global | 60 / min / IP | toutes les routes |
-| `STRICT_THROTTLE` | **5 / min / IP** | les 3 logins, `/commercant/register`, `/report` |
+| `AUTH_THROTTLE` | **50 / min / IP** | les 3 logins — **relevé de 5 le 2026-08-13** |
+| `STRICT_THROTTLE` | **5 / min / IP** | `/commercant/register` et `/report` |
 | `SENSITIVE_ACTION_THROTTLE` | 20 / min / IP | actions d'écriture sensibles |
 | `MAP_THROTTLE` | 180 / min / IP | `/promo/map` |
 
-> ⚠️ **`STRICT_THROTTLE` = 5/min est la contrainte qui dimensionne toute la
-> suite** (mode M9 du générique). Un banc qui se connecte quatre fois de suite
-> consomme presque tout le budget d'une minute. Deux conséquences : la
-> temporisation entre bancs n'est pas optionnelle, et **une session obtenue se
-> réutilise** au lieu de se reconnecter.
+> ⚠️ **Ce paragraphe disait le contraire jusqu'au 2026-08-13**, et le changement
+> déplace la contrainte au lieu de la lever. Il affirmait que « `STRICT_THROTTLE`
+> = 5/min est la contrainte qui dimensionne toute la suite » parce que les trois
+> logins y étaient — un banc qui se connectait quatre fois de suite consommait
+> presque tout le budget d'une minute.
+>
+> Les connexions ont leur propre seau à 50/min. **Les deux seaux étroits sont
+> désormais l'inscription (5/min) et les écritures (20/min)**, et c'est sur eux
+> que se dimensionne un banc. Les deux conséquences pratiques n'ont pas changé
+> de nature, seulement de cause : la temporisation entre bancs reste utile, et
+> **une session obtenue se réutilise** — non plus parce que se reconnecter coûte
+> cher, mais parce qu'un banc qui se reconnecte mesure l'authentification au
+> lieu de ce qu'il prétend éprouver.
+>
+> Deux bancs vident encore délibérément un seau et doivent tourner **seuls** :
+> `test-auth-login.sh` (les connexions, c'est son objet) et
+> `test-abus-signalement.sh` (les signalements).
 
 ### Les données à double vie — cibles de l'étape 2
 
@@ -309,13 +333,12 @@ n'est un oubli constaté au 2026-08-04.
 | `GET /promo` | consultation client — le client est anonyme par conception |
 | `GET /promo/:id` | idem |
 | `GET /promo/map` | idem — protégée par `MAP_THROTTLE` (180/min) |
-| `GET /commune` | sélecteur wilaya → commune, chargé **en entier** par `CommuneCascadeField`. ⚠️ Ne jamais paginer par défaut (règle 15 de `CLAUDE.md`) |
 | `GET /highlight` | bandeau Top promos de l'accueil |
 | `GET /commercant/:id/public` | fiche commerçant publique |
 | `GET /p/:id` | redirection de partage vers le store |
 | `GET /.well-known/assetlinks.json` | vérification App Links Android |
 | `GET /.well-known/apple-app-site-association` | vérification Universal Links iOS |
-| `POST /commercant/login` | authentification — `STRICT_THROTTLE` |
+| `POST /commercant/login` | authentification — `AUTH_THROTTLE` |
 | `POST /agent/login` | idem |
 | `POST /admin/login` | idem |
 | `POST /commercant/register` | inscription — `STRICT_THROTTLE` |
@@ -348,32 +371,53 @@ juillet par `CommercantService.assertZoneMatches` et **jamais rejoué depuis**.
 C'était la faille critique de l'audit V0 ; rien ne garantit aujourd'hui qu'elle
 n'est pas revenue.
 
-**⚠️ Le banc d'appartenance est le vrai enjeu ici, plus encore que le banc de
-refus.** Sur ce produit, un agent authentifié qui agit sur la promo d'un
-commerçant hors de ses communes est le scénario d'attaque réaliste — pas
-l'appel sans jeton. Prévoir deux comptes agent rattachés à des communes
-disjointes.
+**⚠️ Le banc de portée est le vrai enjeu ici, plus encore que le banc de
+refus.** Sur ce produit, le scénario réaliste n'est pas l'appel sans jeton :
+c'est un agent authentifié qui agit sur la fiche d'un commerçant qui n'est pas
+le sien. Jusqu'au 2026-08-13 cela devait être **refusé** ; depuis, cela doit
+être **accepté**. La question n'a pas disparu, elle a changé de signe.
 
-#### Banc d'appartenance — ✅ **passé et prouvé** (2026-08-04)
+#### Banc de portée — ✅ **passé et prouvé** (2026-08-13)
 
-`scripts/test-appartenance.sh` + `scripts/lib/appartenance.py`.
-Auto-test **13 cas dont 8 refus**.
+`scripts/test-portee-agent.sh` + `scripts/lib/portee_agent.py`.
+Auto-test **14 cas dont 10 refus**.
 
 ```
-14 sondes, 0 échec, 0 non concluante
-→ les 14 routes à identifiant rendent 403 COMMERCANT_NOT_IN_AGENT_COMMUNES
+36 contrôles, 0 échec, 0 non concluant
+→ les 14 routes à identifiant ACCEPTENT un agent sur un commerçant étranger
+→ les 3 routes @Roles('admin') seul le refusent toujours
 ```
 
 Les 14 : suspend, reactivate, **delete**, registre/valider, registre/rejeter,
 profile/valider, reset-pin, les 3 actions de modération, `PATCH /promo/:id`,
 publish, stop, et `POST /promo/agent/:commercantId`.
 
-**Le piège central, mesuré avant d'écrire les assertions.** Sondées avec un
-corps vide, deux routes rendent **`400 VALIDATION_ERROR`** : la requête meurt à
-la validation, **avant** le contrôle d'appartenance. Un banc qui compterait ce
-400 comme un refus conclurait juste **par accident**, et resterait vert le jour
-où l'appartenance disparaît. Chaque sonde envoie donc un corps valide, et un
-`VALIDATION_ERROR` est déclaré **non concluant** — jamais réussi.
+⚠️ **Il remplace `test-appartenance`, qui prouvait exactement l'inverse sur les
+mêmes routes.** Le supprimer sans le remplacer aurait laissé quatorze routes
+dont personne ne sait si elles marchent : retirer une garde peut laisser
+derrière un `COMMERCANT_NOT_FOUND` résiduel ou un filtre de portée oublié dans
+un service, sans qu'aucun test ni aucun démarrage n'échoue.
+
+**Prouver une acceptation est plus fragile que prouver un refus.** Un refus se
+lit dans un code ; un `200` peut venir d'une route qui n'a rien fait. D'où :
+
+- **l'effet est constaté, pas le statut** — `suspended`, `registreStatus`, ce
+  que le CLIENT voit, une connexion réussie avec le PIN neuf ;
+- **un `404` est un échec**, pas une absence : le commerçant existe, le banc
+  vient de le créer. C'est la forme que prendrait une portée résiduelle ;
+- **le témoin négatif passe en premier** — un banc qui n'observe que des
+  acceptations serait vert si TOUT était accepté. Trois routes restent
+  `@Roles('admin')` seul, et l'agent doit y être refusé. **Prouvé par mutation
+  sur le produit vivant** : ajouter `'agent'` à `GET /admin/audit-log` fait
+  rendre ❌ au banc (règle 28).
+
+**Le piège central est hérité, et il se retourne à l'identique.** Un
+**`400 VALIDATION_ERROR`** signifie que la requête est morte à la validation,
+**avant** toute décision d'autorisation : elle n'a rien dit de la portée, dans
+un sens comme dans l'autre. Il est donc « non concluant », jamais une réussite.
+*Il s'est déclenché au premier passage — la sonde `reset-pin` envoyait `pin` au
+lieu de `newPin`. Sans cette distinction, le banc aurait accusé une garde
+résiduelle sur un produit correct (règle 38).*
 
 **Deux contrôles complémentaires** :
 
@@ -566,7 +610,6 @@ déséquilibre entre profils ne se voyait pas.
 |---|---|---|
 | `test-client-liste` | `GET /promo`, `GET /promo/:id` | « visible » a **une seule** définition ; **aucune réponse ne porte `photoKey`** (un spread exposait l'UUID de l'agent) |
 | `test-client-carte` | `GET /promo/map` | plafond de 300 commerces, bornes de la zone visible, throttle 180/min (T5) |
-| `test-client-commune` | `GET /commune` | liste **complète**, jamais tronquée — la paginer casserait `CommuneCascadeField` (règle 15) |
 | `test-client-highlight` | `GET /highlight` | bandeau curé : 10 max, repli à 8 |
 | `test-client-fiche` | `GET /commercant/:id/public` | la projection publique — que voit un anonyme, et surtout que ne voit-il pas |
 | `test-client-applinks` | `GET /p/:id`, les 2 `.well-known` | host-scopées : à sonder avec `-H "Host: promo.echango.com"` |
@@ -587,8 +630,12 @@ déséquilibre entre profils ne se voyait pas.
 
 | Banc | Routes exercées | Ce qu'il éprouve en propre |
 |---|---|---|
-| **`test-agent-appartenance`** ⚠️ | **les 14 routes `/admin/*`** + `PATCH /promo/:id` + `POST /promo/agent/:commercantId` | **Le banc le plus important du lot** (T1). Un agent hors de ses communes doit être refusé sur *chacune* — suspendre, supprimer, valider un registre, réinitialiser un PIN, modérer. L'IDOR corrigé à l'audit V0 ne portait que sur les promos : la surface réelle est **sept fois plus grande** |
-| `test-agent-creation` | `POST /agent/commercant`, `GET /agent/me` | le commerçant créé tombe dans une commune de l'agent |
+| **`test-portee-agent`** ⚠️ | **les 14 routes `/admin/*`** + `PATCH /promo/:id` + `publish` + `stop` + `POST /promo/agent/:commercantId`, **plus** les 3 routes `@Roles('admin')` seul | **Neuf le 2026-08-13, remplace `test-agent-appartenance`.** Celui-ci prouvait qu'un agent hors de ses communes était **refusé** sur chacune ; celui-là prouve qu'il y est **accepté**, sur un commerçant qu'il n'a pas créé. Seul banc à exercer ces routes avec un jeton d'agent. ⚠️ **Destructif** — ses sondes étaient sans effet de bord *parce qu'elles étaient refusées* : il crée donc son propre commerçant par auto-inscription et le supprime en dernière sonde. ⚠️ ~20 écritures sur un seau de 20/min : `PACE` à 4 s, ~2 minutes |
+| **`test-moderation-course`** ⚠️ | les 3 résolutions de modération, **en concurrence** | **Neuf le 2026-08-13.** Deux `masquer` vraiment simultanés : exactement un `2xx`, un `409 MODERATION_STATE_CHANGED`. Éprouve les DEUX polarités — la course perdue par un seul, **et** la correction délibérée (« avertir depuis masquee ») qui doit toujours passer : c'est elle qu'un correctif trop strict casse (règle 38). Sonde 3 bis : le **contexte** de la décision (nombre de signalements et motifs) est enregistré au journal, et **mesuré AVANT la résolution** — `verifier-ok` pose `verifiedOkAt`, sur lequel les deux requêtes filtrent, donc mesuré après il vaudrait toujours zéro. C'est la seule des trois résolutions où l'ordre se voit. Sonde 4 : un refus qui aurait tout de même écrit serait le pire des deux mondes. Prouvé par mutation — retirer la condition du `WHERE` rend « les DEUX décisions ont été acceptées » |
+| ~~`test-absences-commune`~~ | *(supprimé le 2026-08-13)* | Il constatait que les 3 routes de commune rendaient `404` et que les 2 tables et la colonne avaient disparu. **Supprimé avec son sujet** : le découpage administratif n'existe plus nulle part — zéro ligne de code vivant dans le backend, le mobile et les bancs, mesuré le jour même. ⚠️ Ses cinq sondes HTTP étaient **vertes** au moment du retrait (`/commune` 404, `PATCH …/communes` 404, `transfer-communes` 404) : rien n'a été masqué. Un banc qui protège un fantôme finit par n'être plus lu, et un contrôle qu'on ne lit plus vaut moins qu'une absence déclarée |
+| **`test-journal-agent`** ⚠️ | les **3 mécanismes** d'enregistrement d'une action d'agent + le filtre `actorType` | **Neuf le 2026-08-13.** `CLAUDE.md` dit du journal qu'il « est devenu le seul contrepoids à la portée globale » — et il n'était éprouvé que pour l'**admin** (`audit_log.py` agit en admin et n'assertent que `actorType == "admin"`). Une sonde par mécanisme : `auditStaffWrite` (branché le jour même), `ModerationService.record`, et les 11 appels en ligne d'`AdminController`. ⚠️ **La sonde qui compte le plus est l'ATTRIBUTION** : la même action par les deux agents doit produire deux `actorId` distincts — un journal qui dit « un agent » sans dire lequel ne vaut rien quand tous sont globaux. Témoin négatif : la **même route** (`PATCH /promo/:id`) par le commerçant propriétaire ne doit rien laisser — la sélectivité porte sur l'acteur, pas sur la route. Agit en agent, **lit en admin** |
+| `test-agent-creation` | `POST /agent/commercant`, `GET /agent/me` | ⚠️ **Sujet changé le 2026-08-13** : le commerçant créé porte **sa position**, vérifiée sur la fiche publique, et la création sans position est refusée par la validation |
+| **`test-commercant-b`** ⚠️ | `PATCH /promo/:id`, `publish`, `stop` | **Neuf le 2026-08-13.** `PROMO_NOT_OWNED_BY_COMMERCANT` devient la garde d'appartenance principale du contrôleur de promo, et n'était provoqué par **aucun** banc. Asserte le **code**, jamais le statut — six gardes partagent le 403 sur ces routes |
 | `test-agent-promo` | `POST /promo/agent/:commercantId` | l'exemption agent/admin des plafonds anti-abus |
 
 #### Admin — 35 routes
@@ -598,8 +645,8 @@ déséquilibre entre profils ne se voyait pas.
 | `test-admin-registre` | `GET /admin/commercant`, `POST …/registre/{valider,rejeter}`, `…/profile/valider`, `…/reset-pin` | le cycle de validation |
 | `test-admin-cycle-commercant` | `POST …/suspend`, `/reactivate`, `/delete` | suspension ≠ suppression, et la suspension **libère le numéro de téléphone** |
 | `test-admin-moderation` | `GET /admin/moderation/queue`, `POST …/{masquer,verifier-ok,avertir}` | seuil de 3 signalements, fenêtre d'ignore de 30 jours |
-| `test-admin-dashboard` | `GET /admin/dashboard`, `GET /admin/promo` | le surcompte, et les filtres wilaya/commune |
-| `test-admin-agents` | `POST`/`GET /admin/agent`, `PATCH /admin/agent/:id/communes`, `POST /admin/agent/transfer-communes`, `…/reset-password` | le transfert de communes — **exactement ce que l'`AuditLogModule` devait tracer** (T2) |
+| `test-admin-dashboard` | `GET /admin/dashboard`, `GET /admin/promo` | le surcompte. ⚠️ **Sa section 4 a été retournée le 2026-08-13** : elle prouvait le cloisonnement de deux agents disjoints, elle prouve désormais que **deux agents distincts voient la même chose, égale à l'admin**. Sans un second agent, « il voit tout » serait indiscernable de « il voit ce qu'il voyait » |
+| `test-admin-agents` | `POST`/`GET /admin/agent`, `…/reset-password` | ⚠️ **Réduit le 2026-08-13** avec ses deux routes de territoire. Ce qui survit est ce qui comptait : `verdict_trace`, seul contrôle du parc qui éprouve qu'une action d'administration **laisse une trace** — **exactement ce que l'`AuditLogModule` devait faire** (T2) |
 | `test-admin-audit-log` | `GET /admin/audit-log` | module resté **non branché depuis le premier commit** ; les actions ci-dessus doivent y laisser une trace |
 | `test-admin-highlight` | `GET`/`POST /admin/highlight`, `PATCH`/`DELETE /admin/highlight/:id`, `POST /admin/highlight/reorder` | plafond de 10, réordonnancement, image importée. **Livré fin juillet, jamais éprouvé**, et porte le `HIGHLIGHT_CAP_REACHED` non traduit de P1 (T2) |
 
@@ -671,9 +718,11 @@ sert l'API — c'est le mode M3 appliqué au diagnostic.
 
 ### Les identifiants du décor
 
-⚠️ **Stables, jamais aléatoires** : `STRICT_THROTTLE` plafonne l'inscription et
-la connexion à 5/min/IP. Un décor à identifiants aléatoires devient inutilisable
-au second passage.
+⚠️ **Stables, jamais aléatoires** : `STRICT_THROTTLE` plafonne l'inscription à
+5/min/IP, et un décor à identifiants aléatoires **crée un compte à chaque
+passage** au lieu de retrouver le sien. Le relèvement des connexions à 50/min ne
+change rien ici : c'est l'inscription qui serre, et c'est elle qu'un décor
+stable évite.
 
 ```
 decor-commercant@echango.local

@@ -11,7 +11,7 @@
 ///   1. l'onboarding revient à chaque lancement (`markCompleted()` qui
 ///      n'écrit pas, ou qui écrit là où la redirection ne lit pas) ;
 ///   2. l'onboarding ne s'affiche jamais (marqué fait trop tôt) — et
-///      l'utilisateur atterrit sur un accueil sans commune ni rôle.
+///      l'utilisateur atterrit sur un accueil sans rôle choisi.
 ///
 /// Aucun test unitaire ne les attrape : les deux dépendent du magasin
 /// `SharedPreferences` **natif**, et `setMockInitialValues` installe justement
@@ -29,22 +29,20 @@
 /// par lancement d'app, pas deux.** La couvrir demande un second
 /// `flutter drive` sur son propre fichier.
 ///
-/// **Le refus de la localisation.** L'écran n'a plus qu'un bouton depuis la
-/// mise en conformité 5.1.1(iv) du 2026-08-08, et il mène TOUJOURS à la boîte
-/// de dialogue **du système** — qu'`integration_test` ne peut pas toucher.
-/// `scripts/test-parcours-ecran.sh` accorde donc la permission par `pm grant`
-/// avant de jouer : aucune boîte ne s'ouvre, et la traversée se vérifie. Le
-/// chemin « refusé » (qui doit mener à l'accueil, pas à la carte) relève d'un
-/// essai manuel, comme la boîte elle-même.
+/// **Le bouton « Activer » de la localisation.** Il ouvre la boîte de dialogue
+/// **du système**, qu'`integration_test` ne peut pas toucher. Le parcours
+/// emprunte donc « Continuer », qui est aussi le chemin qui compte le plus :
+/// c'est lui qui doit laisser l'app utilisable. La permission accordée relève
+/// d'un test manuel, pas de celui-ci.
 ///
-/// ⚠️ **Ce parcours suppose donc la permission ACCORDÉE.** Lancé à la main sans
-/// l'octroi, il se bloque sur la boîte système puis échoue — ce que son message
-/// d'échec dit, plutôt que d'accuser l'écran (règle #38).
+/// ⚠️ **L'invitation à activer la localisation n'est plus dans l'onboarding**
+/// depuis le refus d'Apple du 2026-08-05 : elle vit sur la carte. Ce parcours
+/// vérifie donc qu'après « Continuer », on arrive bien à l'accueil — et pas
+/// sur une seconde demande.
 library;
 
 import 'package:echango_promo/main.dart' as app;
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -57,10 +55,6 @@ void main() {
   testWidgets('un appareil neuf voit l’onboarding, et le retient',
       (tester) async {
     await reinitialiserAppareil();
-    // Le parcours finit désormais sur la CARTE, dont le fond vient d'un
-    // serveur de tuiles externe : une tuile qui ne descend pas ferait échouer
-    // un parcours qui n'affirme rien sur les images.
-    ignorerErreursDeChargementDImage();
 
     // ⚠️ On vérifie l'état de DÉPART, sinon un `clear()` sans effet rendrait
     // tout le parcours vide de sens : l'app afficherait l'accueil, on
@@ -90,57 +84,27 @@ void main() {
       reason: 'la carte « commerçant » manque au choix du rôle',
     );
 
-    // ── 2. Client → l'écran de localisation ──────────────────────────────
+    // ── 2. Client → l'accueil, directement ───────────────────────────────
+    //
+    // ⚠️ **Il y avait ici un écran de localisation, supprimé le 2026-08-12.**
+    // Le client n'a plus aucune permission à accorder pour voir des promos :
+    // sans point enregistré, le serveur cadre sur son défaut. L'invitation à
+    // activer la localisation reste contextuelle, sur la carte — c'est ce
+    // placement qui a levé le refus App Store 5.1.1(iv) du 2026-08-05, et le
+    // supprimer d'ici ne le remet pas en cause.
+    //
+    // ⚠️ Ce que ce parcours doit surtout attraper désormais : `markCompleted()`
+    // n'était appelé QUE depuis l'écran supprimé. S'il manque au choix du rôle,
+    // l'onboarding revient à chaque lancement — et rien d'autre ne le dirait
+    // (voir l'assertion sur le magasin natif, plus bas).
     await taper(tester, find.byIcon(Icons.person_outline));
     await pomperJusqua(
       tester,
-      find.byIcon(Icons.location_on_outlined),
-      raison: 'l’écran de localisation ne suit pas le choix « client »',
+      find.byIcon(Icons.storefront_outlined),
+      raison: 'l’accueil client n’a pas suivi le choix « client »',
     );
 
-    // ── 3. L'écran de localisation n'offre qu'une issue ──────────────────
-    //
-    // ⚠️ **C'est l'assertion que le refus d'Apple a rendue nécessaire**, et
-    // elle porte sur une ABSENCE — donc elle n'a de sens qu'accompagnée de la
-    // présence qui la borne (règle #28) : un bouton, exactement, et aucun
-    // second bouton pour fermer le message sans demander. Deux refus
-    // successifs sont partis de là (5.1.1(iv), 2026-08-05 puis 2026-08-07) :
-    // « Activer la localisation » encourageait, « Continuer » permettait de
-    // remettre la demande à plus tard.
-    //
-    // Les boutons sont comptés par leur TYPE, jamais par leur libellé : le
-    // parcours doit rester vrai sur un appareil en arabe.
-    expect(
-      find.byWidgetPredicate((w) => w is FilledButton),
-      findsOneWidget,
-      reason: 'l’écran de localisation doit porter UN bouton, celui qui mène '
-          'à la demande système',
-    );
-    expect(
-      find.byWidgetPredicate((w) => w is TextButton || w is OutlinedButton),
-      findsNothing,
-      reason: 'un second bouton rouvre la porte au refus 5.1.1(iv) : Apple '
-          'exige que le message mène toujours à la demande système',
-    );
-
-    await taper(tester, find.byWidgetPredicate((w) => w is FilledButton));
-
-    // ── 4. La permission accordée mène à la CARTE ────────────────────────
-    //
-    // Pas à l'accueil : `requestLocationAndFinish` route sur `/carte` quand la
-    // position est disponible — la carte « autour de moi » n'ayant d'intérêt
-    // qu'avec une position. C'est aussi ce qui prouve que la demande a bien eu
-    // lieu et qu'elle a abouti : sans permission, on atterrirait sur `/`.
-    await pomperJusqua(
-      tester,
-      find.byType(FlutterMap),
-      raison: 'la carte n’a pas suivi le bouton de localisation — si l’écran '
-          'de localisation est encore là, la boîte système attend une réponse '
-          'que le test ne peut pas donner : pré-accorder la permission '
-          '(scripts/test-parcours-ecran.sh le fait)',
-    );
-
-    // ── 5. Ce qui a été retenu, dans le VRAI magasin ─────────────────────
+    // ── 4. Ce qui a été retenu, dans le VRAI magasin ─────────────────────
     //
     // C'est l'assertion qui compte : sans elle, on n'a montré que la
     // traversée d'un jour. `SharedPreferences.getInstance()` lit ici le

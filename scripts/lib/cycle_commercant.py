@@ -46,6 +46,10 @@ API_URL = os.environ.get("API_URL", "http://localhost:3000")
 PACE = float(os.environ.get("PACE_SECONDS", "3.2"))
 TEL = os.environ.get("TEL_CYCLE", "+213555000199")
 PIN = "135791"
+# Position de décor, à Djelfa. Obligatoire à la création par agent depuis le
+# 2026-08-12 ; facultative à l'auto-inscription, mais posée quand même ici —
+# ce banc publie, et publier sans position est refusé (règle #38).
+DECOR_LAT, DECOR_LNG = 34.6725, 3.2652
 
 
 def appeler(methode, chemin, jeton=None, corps=None, entetes=None):
@@ -177,7 +181,7 @@ def main():
         "email": _exiger("AGENT_EMAIL"), "password": _exiger("AGENT_PASSWORD")})
     jg = d.get("accessToken")
     if not ja or not jg:
-        print("❌ connexion impossible — décor à rejouer, ou plafond de 5/min.")
+        print("❌ connexion impossible — décor à rejouer, ou plafond de 50 connexions/min.")
         sys.exit(2)
 
     print("════════════════════════════════════════════════════════════════")
@@ -200,10 +204,10 @@ def main():
         print("  ·  commerçant précédent supprimé (banc rejouable)\n")
 
     # ── Décor propre au banc ─────────────────────────────────────────────────
-    commune = appeler("GET", "/commune")[1]["items"][0]["id"]
     st, d = appeler("POST", "/agent/commercant", jg, {
         "telephone": TEL, "nom": "Commerce Cycle", "pin": PIN,
-        "adresse": "Rue du Cycle", "categorie": "alimentation", "communeId": commune})
+        "adresse": "Rue du Cycle", "categorie": "alimentation",
+        "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     if st not in (200, 201):
         print("❌ création du commerçant de travail refusée : %s" % d.get("code"))
         sys.exit(2)
@@ -248,7 +252,7 @@ def main():
     noter("promos dépubliées (brouillon, réversible)",
           *verdict_compte(len(promos_publiques()), 0, "promos visibles"))
     # ⚠️ Un contrôle sauté doit se NOMMER. Une version antérieure se contentait
-    # d'un `if jeton_avant:` : quand la connexion échouait (plafond de 5/min),
+    # d'un `if jeton_avant:` : quand la connexion échouait (plafond atteint),
     # la vérification disparaissait du rapport sans un mot, et le total passait
     # de 7 à 6 sans que rien ne l'explique. Un contrôle absent est indiscernable
     # d'un contrôle réussi pour qui lit vite.
@@ -257,10 +261,11 @@ def main():
         noter("session en cours révoquée", *verdict_session_revoquee(st, d.get("code")))
     else:
         noter("session en cours révoquée", "non_concluant",
-              "pas de jeton avant suspension — connexion refusée (plafond de 5/min ?)")
+              "pas de jeton avant suspension — connexion refusée (plafond de 50/min ?)")
     st, d = appeler("POST", "/commercant/register", corps={
         "telephone": TEL, "nom": "Usurpateur", "categorie": "autre",
-        "communeId": commune, "pin": PIN, "acceptedTerms": True})
+        "pin": PIN, "acceptedTerms": True,
+        "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     noter("numéro TOUJOURS pris (suspension ≠ libération)",
           *verdict_numero_pris(st, d.get("code")))
     time.sleep(PACE)
@@ -285,7 +290,8 @@ def main():
     noter("promos supprimées", *verdict_compte(len(promos_publiques()), 0, "promos visibles"))
     st, d = appeler("POST", "/commercant/register", corps={
         "telephone": TEL, "nom": "Repreneur du local", "categorie": "autre",
-        "communeId": commune, "pin": PIN, "acceptedTerms": True})
+        "pin": PIN, "acceptedTerms": True,
+        "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     noter("numéro LIBÉRÉ par la suppression", *verdict_numero_libre(st, d.get("code")))
     time.sleep(PACE)
 

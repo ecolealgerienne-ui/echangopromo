@@ -5,8 +5,8 @@ import '../../../domain/models/commercant.dart';
 import '../../../domain/models/highlight.dart';
 import '../../../domain/models/promo.dart';
 import '../../../providers/core_providers.dart';
-import 'commune_providers.dart';
 import 'favorites_provider.dart';
+import 'position_providers.dart';
 
 /// Catégorie sélectionnée par le client — recherche guidée par liste
 /// fermée, pas de saisie libre (specs §3.1/§5.6). `null` = toutes catégories.
@@ -121,12 +121,16 @@ class PromoListState {
 class PromoListController extends StateNotifier<PromoListState> {
   PromoListController({
     required PromoApi api,
-    required List<String> communeIds,
+    required (double, double)? point,
+    required double? radiusKm,
     required Categorie? categorie,
     required List<String> favoriteIds,
     required String search,
+    required bool favoritesOnly,
   })  : _api = api,
-        _communeIds = communeIds,
+        _favoritesOnly = favoritesOnly,
+        _point = point,
+        _radiusKm = radiusKm,
         _categorie = categorie,
         _favoriteIds = favoriteIds,
         _search = search,
@@ -135,27 +139,27 @@ class PromoListController extends StateNotifier<PromoListState> {
   }
 
   final PromoApi _api;
-  final List<String> _communeIds;
+
+  /// `null` = le client n'a rien enregistré, donc **on ne transmet rien** et le
+  /// serveur applique son propre point par défaut.
+  ///
+  /// ⚠️ Contrairement au cas des communes, on **interroge quand même** : le
+  /// serveur sait quoi répondre sans position (§5.6 du plan), et une liste
+  /// vide serait ici un mensonge — il y a bien des promos à montrer, autour du
+  /// point par défaut. C'est l'inverse exact de l'ancien comportement, où
+  /// `communeIds: []` valait « aucun filtre » et rendait tout le pays.
+  final (double, double)? _point;
+  final double? _radiusKm;
   final Categorie? _categorie;
   final List<String> _favoriteIds;
   final String _search;
 
+  /// ⚠️ Envoyé au serveur, pas seulement appliqué à l'écran : le filtre local
+  /// ne voyait que les pages déjà chargées, si bien qu'un favori hors du rayon
+  /// disparaissait de l'onglet sans un mot (R7).
+  final bool _favoritesOnly;
+
   Future<void> _load() async {
-    // ⚠️ Aucune commune choisie ⇒ on ne demande rien. Le serveur traite
-    // `communeIds: []` comme **aucun filtre** et non comme « aucune commune »
-    // (`if (query.communeIds?.length)`, `PromoService.findActiveForClient`) :
-    // il renverrait une page entière de promos de toutes les communes, que
-    // l'écran n'affichera jamais puisqu'il montre `_NoCommuneSelected` à la
-    // place. La requête ne coûtait donc rien d'autre que son coût
-    // (2026-08-05).
-    //
-    // L'état reste `loaded` avec zéro promo : c'est l'écran, et lui seul, qui
-    // distingue « pas configuré » de « rien à voir » — l'état de chargement
-    // n'a pas à porter cette différence, il ne saurait pas la rendre.
-    if (_communeIds.isEmpty) {
-      state = const PromoListState(status: PromoListStatus.loaded);
-      return;
-    }
     state = const PromoListState(status: PromoListStatus.loading);
     try {
       final result = await _fetch(page: 1);
@@ -210,30 +214,46 @@ class PromoListController extends StateNotifier<PromoListState> {
   }
 
   Future<PaginatedPromos> _fetch({required int page}) => _api.listActive(
-        communeIds: _communeIds,
+        point: _point,
+        radiusKm: _radiusKm,
         categorie: _categorie,
         favoriteIds: _favoriteIds,
+        favoritesOnly: _favoritesOnly,
         search: _search,
         page: page,
       );
 }
 
-/// Recréé (donc rechargé depuis la page 1) à chaque changement de commune,
+/// Recréé (donc rechargé depuis la page 1) à chaque changement de point,
 /// catégorie ou favoris — ces trois paramètres influencent la requête
 /// serveur elle-même (`favoriteIds` change même le tri backend). `sort` et
 /// `favoritesOnlyFilterProvider` restent des filtres purement locaux
 /// (`visiblePromosProvider`), appliqués sans redéclencher de requête.
+///
+/// ⚠️ **C'est ici que passe la porte de consentement**, et à un seul endroit :
+/// `clientPositionProvider` rend `null` tant que le client n'a rien enregistré,
+/// et `point: null` fait que la requête ne porte **aucune coordonnée**. Le
+/// serveur applique alors son propre défaut. Reproduire cette règle dans chaque
+/// écran appelant, c'est celui qu'on oublie qui transmettra (règle #30).
+///
+/// ⚠️ Le rayon n'est envoyé qu'avec un point, et il vient de la configuration
+/// serveur — jamais d'une constante recopiée ici (règle #32).
 final promoListProvider =
     StateNotifierProvider.autoDispose<PromoListController, PromoListState>(
         (ref) {
   final api = ref.watch(promoApiProvider);
-  final communeIds = ref.watch(selectedCommunesProvider);
+  final point = ref.watch(clientPositionProvider);
+  final rayonKm =
+      ref.watch(clientGeoConfigProvider).valueOrNull?.defaultRadiusKm;
   final categorie = ref.watch(categoryFilterProvider);
   final favorites = ref.watch(favoritesProvider);
   final search = ref.watch(searchQueryProvider);
+  final favoritesOnly = ref.watch(favoritesOnlyFilterProvider);
   return PromoListController(
     api: api,
-    communeIds: communeIds,
+    point: point,
+    favoritesOnly: favoritesOnly,
+    radiusKm: rayonKm,
     categorie: categorie,
     favoriteIds: favorites.toList(),
     search: search,
@@ -312,8 +332,10 @@ final promoDetailProvider =
 /// n'est transmise que pour le repli calculé, une sélection éditoriale étant
 /// globale par nature.
 final topPromosProvider = FutureProvider.autoDispose<List<Highlight>>((ref) {
-  final communeIds = ref.watch(selectedCommunesProvider);
-  return ref.watch(highlightApiProvider).list(communeIds: communeIds);
+  final point = ref.watch(clientPositionProvider);
+  final rayonKm =
+      ref.watch(clientGeoConfigProvider).valueOrNull?.defaultRadiusKm;
+  return ref.watch(highlightApiProvider).list(point: point, radiusKm: rayonKm);
 });
 
 /// "Autres promos du magasin" sur la fiche promo. La promo consultée est

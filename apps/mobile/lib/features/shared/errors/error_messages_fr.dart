@@ -27,11 +27,6 @@ const Map<String, String> errorMessagesFr = {
 
   'AGENT_EMAIL_TAKEN': 'Cet email est déjà utilisé par un agent.',
   'AGENT_NOT_FOUND': 'Agent introuvable.',
-  'AGENT_COMMUNE_NOT_ASSIGNED_TO_AGENT':
-      "Au moins une de ces communes n'est pas actuellement assignée à cet agent.",
-
-  'COMMUNE_NOT_FOUND': 'Commune introuvable.',
-
   'REPORT_ALREADY_SUBMITTED': 'Vous avez déjà signalé cette promotion.',
 
   'DEVICE_ID_MISSING':
@@ -63,6 +58,13 @@ const Map<String, String> errorMessagesFr = {
   'PROMO_DATE_FIN_NOT_FUTURE': 'La date de fin doit être dans le futur.',
   'PROMO_ALREADY_PUBLISHED': 'Cette promotion est déjà publiée.',
   'PROMO_NOT_PUBLISHED': 'Seule une promotion publiée peut être arrêtée.',
+  // ⚠️ Le message dit « quelqu'un d'autre est passé », jamais « action
+  // impossible » : le geste du modérateur était valide, c'est l'état qui a
+  // changé sous lui. Il doit relire, pas réessayer à l'identique.
+  'MODERATION_STATE_CHANGED':
+      'Un autre modérateur a traité cette promotion entre-temps. '
+          'La liste vient d\'être rafraîchie : vérifiez la nouvelle décision '
+          'avant d\'agir.',
   'PROMO_PRIX_APRES_NOT_LOWER':
       'Le prix après réduction doit être inférieur au prix avant réduction.',
 
@@ -71,8 +73,6 @@ const Map<String, String> errorMessagesFr = {
   'COMMERCANT_OLD_PIN_MISMATCH': "L'ancien PIN ne correspond pas.",
   'COMMERCANT_NO_PENDING_REGISTRE_VERIFICATION':
       'Aucune demande de vérification en attente.',
-  'COMMERCANT_NOT_IN_AGENT_COMMUNES':
-      "Ce commerçant n'est dans aucune des communes de cet agent.",
   'COMMERCANT_TERMS_NOT_ACCEPTED':
       "Vous devez accepter les conditions d'utilisation pour créer un compte.",
   'COMMERCANT_REGISTRE_NOT_VALIDATED':
@@ -81,6 +81,13 @@ const Map<String, String> errorMessagesFr = {
       "Ce document n'appartient pas à ce commerçant.",
   'COMMERCANT_PROFILE_PENDING_REVIEW':
       'Les modifications de votre profil doivent être validées par un administrateur avant de pouvoir publier des promos.',
+  // ⚠️ Volontairement très éloigné du message ci-dessus : ce sont deux blocages
+  // successifs sur le même geste. Un commerçant qui lit deux refus voisins
+  // croit avoir déjà fait ce qu'on lui demande. Ici il manque un
+  // renseignement qu'il peut fournir seul ; au-dessus, il faut attendre un
+  // humain.
+  'COMMERCANT_POSITION_REQUIRED':
+      'Indiquez la position de votre commerce pour publier : les clients cherchent les promos autour d’eux.',
   'COMMERCANT_ACCOUNT_INACTIVE':
       'Ce compte commerçant est suspendu ou supprimé.',
   'NOTIFICATION_NOT_FOUND': 'Cette notification n’est plus disponible.',

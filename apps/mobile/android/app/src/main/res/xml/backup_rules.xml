@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Équivalent de `data_extraction_rules.xml` pour les **API 24 à 30**.
+
+  ⚠️ DEUX FICHIERS, ET C'EST OBLIGATOIRE. Android a changé de format à API 31 :
+  `dataExtractionRules` attend une racine `<data-extraction-rules>` avec ses
+  sections `<cloud-backup>` et `<device-transfer>` ; `fullBackupContent` attend
+  une racine `<full-backup-content>`. Faire pointer les deux attributs du
+  manifeste sur le MÊME fichier ne marche pas — le parseur de l'ancienne API
+  échoue sur une racine qu'il ne connaît pas.
+
+  `minSdk` vaut 24 (Flutter 3.35.7), `targetSdk` 36 : les deux chemins sont donc
+  réellement empruntés par le parc. En n'en couvrant qu'un, on ferme la
+  sauvegarde pour les appareils récents et on la laisse ouverte pour les
+  anciens — exactement le genre de couverture partielle qui se lit comme
+  complète.
+
+  Raison de fond et détail des données concernées : voir
+  `data_extraction_rules.xml`.
+-->
+<full-backup-content>
+    <!-- `device_id`, favoris, position GPS enregistrée, drapeaux d'onboarding,
+         thème, langue. -->
+    <exclude domain="sharedpref" />
+    <!-- Cache ETag, fichiers temporaires d'upload. -->
+    <exclude domain="file" />
+    <exclude domain="database" />
+</full-backup-content>

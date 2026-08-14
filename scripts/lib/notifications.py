@@ -270,9 +270,23 @@ def main():
 
     # ── Deux notifications, par deux actions de modération distinctes ───────
     print("\n── 1. deux actions de modération, deux notifications ──")
-    for action in ("avertir", "verifier-ok"):
+    # ⚠️ `expectedModerationStatus` est **obligatoire** depuis le 2026-08-13
+    # (garde de course, voir `ResolveModerationDto`). Ce banc a été le seul des
+    # quatre appelants à ne pas être mis à jour dans le même commit : il rendait
+    # `VALIDATION_ERROR`, donc « non concluant » — il n'a accusé personne, mais
+    # il ne mesurait plus rien.
+    #
+    # ⚠️ **Le `{"reason": ...}` qu'il envoyait était jeté en silence** par
+    # `whitelist: true` : les trois routes ne prenaient aucun corps. Il est
+    # retiré plutôt que gardé — un champ qu'on croit envoyer et que personne ne
+    # lit est pire qu'un champ absent.
+    #
+    # Les deux actions partent de `normale` : la promo vient d'être créée, et
+    # `avertir` remet `moderationStatus` à `normale` (c'est le retour en
+    # brouillon qui porte la sanction, pas le masque).
+    for action, attendu in (("avertir", "normale"), ("verifier-ok", "normale")):
         st, d = appeler("POST", "/admin/moderation/%s/%s" % (pid, action), ja,
-                        {"reason": "banc de test"})
+                        {"expectedModerationStatus": attendu})
         if st not in (200, 201):
             noter("modération : %s" % action, "non_concluant",
                   "HTTP %s %s — pas de notification à examiner"
@@ -334,6 +348,22 @@ def main():
               "compteur = %r après read-all" % compte3.get("count"))
 
     print("\n" + "═" * 64)
+
+    # ── ⚠️ Rendre le décor tel qu'on l'a trouvé ─────────────────────────────
+    #
+    # Ce banc crée une promo sur le commerçant du décor et ne peut pas la
+    # laisser en ligne : le plafond est de 5 promos actives, et cinq bancs qui
+    # font pareil ferment la porte à tous les suivants. Découvert au premier
+    # lot complet du 2026-08-13 — chacun passait seul, aucun ne passait à la
+    # suite des autres.
+    #
+    # ⚠️ Sans verdict : le nettoyage n'est pas ce que ce banc éprouve, et
+    # l'échouer ferait accuser le produit pour un ménage mal fait. S'il rate,
+    # c'est le banc SUIVANT qui le dira, sur un refus de plafond parfaitement
+    # lisible.
+    if pid:
+        appeler("POST", "/promo/%s/stop" % pid, jg)
+
     echecs = resultats.count("echec")
     non_concluants = resultats.count("non_concluant")
     print("%d contrôles, %d échec(s), %d non concluant(s)"

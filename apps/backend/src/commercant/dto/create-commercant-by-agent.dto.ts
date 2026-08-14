@@ -5,12 +5,16 @@ import {
   IsOptional,
   IsPhoneNumber,
   IsString,
-  IsUUID,
   Matches,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 import { Categorie } from '../../common/enums/categorie.enum';
 import { PIN_SET_MESSAGE, PIN_SET_PATTERN } from '../pin.constants';
+import {
+  ADRESSE_MAX_LENGTH,
+  NOM_MAX_LENGTH,
+} from '../entities/commercant.entity';
 
 export class CreateCommercantByAgentDto {
   @IsPhoneNumber('DZ')
@@ -18,6 +22,7 @@ export class CreateCommercantByAgentDto {
 
   @IsString()
   @MinLength(2)
+  @MaxLength(NOM_MAX_LENGTH)
   nom: string;
 
   /**
@@ -33,25 +38,39 @@ export class CreateCommercantByAgentDto {
   @IsOptional()
   @IsString()
   @MinLength(2)
+  @MaxLength(ADRESSE_MAX_LENGTH)
   adresse?: string;
 
   @IsEnum(Categorie)
   categorie: Categorie;
-
-  @IsUUID()
-  communeId: string;
 
   /** Clé S3 de la photo du commerce, déjà uploadée (optionnel). */
   @IsOptional()
   @IsString()
   photoKey?: string;
 
-  /** Position GPS capturée sur l'appareil de l'agent (optionnel). */
-  @IsOptional()
+  /**
+   * Position GPS du commerce — **obligatoire depuis le 2026-08-12**, alors
+   * qu'elle reste facultative à l'auto-inscription.
+   *
+   * ── Pourquoi ici et pas là ────────────────────────────────────────────────
+   *
+   * L'agent est **physiquement dans le commerce** quand il crée la fiche :
+   * c'est la seule capture juste par construction. Le commerçant qui s'inscrit
+   * seul peut très bien le faire depuis chez lui, d'où la différence — et c'est
+   * `PromoService` qui lui refusera de **publier** tant qu'il n'aura pas posé
+   * son point, pas ce DTO qui l'empêchera d'exister.
+   *
+   * ⚠️ **Sans cette obligation, le blocage de publication ne ferait qu'écoper.**
+   * Mesuré le 2026-08-12 sur la base de développement : 44 commerçants sur 53
+   * sans position, dont **40 créés après** le correctif du décor du 2026-08-05.
+   * Ils viennent tous de cette route, par laquelle passent les neuf sites de
+   * `scripts/lib/` qui n'envoyaient aucune coordonnée. Fermer la source vaut
+   * mieux que régulariser le parc indéfiniment.
+   */
   @IsLatitude()
-  latitude?: number;
+  latitude: number;
 
-  @IsOptional()
   @IsLongitude()
-  longitude?: number;
+  longitude: number;
 }

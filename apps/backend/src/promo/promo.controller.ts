@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Patch,
   Post,
   Query,
@@ -9,13 +10,13 @@ import {
 } from '@nestjs/common';
 import { UuidParam } from '../common/decorators/uuid-param.decorator';
 import { Throttle } from '@nestjs/throttler';
-import { AgentService } from '../agent/agent.service';
+import { AuditLogService } from '../audit-log/audit-log.service';
+import { AuditActorType } from '../audit-log/entities/audit-log.entity';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthTokenPayload } from '../auth/role';
-import { CommercantService } from '../commercant/commercant.service';
 import { DeviceId } from '../common/decorators/device-id.decorator';
 import { ForbiddenAppException } from '../common/errors/app-exception';
 import { ErrorCode } from '../common/errors/error-code.enum';
@@ -24,7 +25,6 @@ import { MAP_THROTTLE, SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
 import { StorageService } from '../storage/storage.service';
 import { CreatePromoDto } from './dto/create-promo.dto';
 import { ListPromoMapQueryDto } from './dto/list-promo-map-query.dto';
-import { MapCenterQueryDto } from './dto/map-center-query.dto';
 import { ListPromoQueryDto } from './dto/list-promo-query.dto';
 import { UpdatePromoDto } from './dto/update-promo.dto';
 import { Promo } from './entities/promo.entity';
@@ -35,9 +35,51 @@ export class PromoController {
   constructor(
     private readonly promoService: PromoService,
     private readonly storageService: StorageService,
-    private readonly agentService: AgentService,
-    private readonly commercantService: CommercantService,
+    // ⚠️ `AgentService` et `CommercantService` ont été retirés d'ici le
+    // 2026-08-13 : leur seul usage était de résoudre les communes de l'agent
+    // pour les gardes d'appartenance. Sans elles, plus aucun appelant dans ce
+    // contrôleur (règle #31).
+    //
+    // `CommercantModule` reste nécessaire à `PromoModule` — `PromoService` le
+    // consomme (registre, profil, position, compte actif). `AgentModule`, lui,
+    // n'a plus **aucun** consommateur dans `promo/` : retiré aussi.
+    private readonly auditLogService: AuditLogService,
   ) {}
+
+  /**
+   * ⚠️ **Branché le 2026-08-13, et il aurait dû l'être depuis toujours.**
+   * `createByAgent` exemptait agent et admin des limites anti-abus au motif
+   * qu'ils « agissent via un canal audité » — mesuré : `AuditLogService`
+   * n'était importé ni par ce contrôleur ni par `PromoModule`. **Le canal
+   * n'était pas audité.** Un commentaire affirmait une couverture inexistante,
+   * ce qui est le cas fondateur de la règle #11 dans sa forme la plus chère :
+   * un module bien conçu, branché ailleurs, et une phrase qui dispense d'aller
+   * voir.
+   *
+   * La commune bornait le trou : un agent ne pouvait agir que chez lui. Le
+   * chantier « agent global » le rend national — d'où l'urgence de brancher
+   * plutôt que d'assumer.
+   *
+   * Ne trace **que** les gestes agent/admin : une écriture de commerçant sur
+   * sa propre promo est un usage normal du produit, pas un acte d'autorité.
+   */
+  private async auditStaffWrite(
+    user: AuthTokenPayload,
+    action: string,
+    promoId: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<void> {
+    if (user.role === 'commercant') return;
+    await this.auditLogService.record({
+      actorType:
+        user.role === 'agent' ? AuditActorType.AGENT : AuditActorType.ADMIN,
+      actorId: user.sub,
+      action,
+      targetType: 'promo',
+      targetId: promoId,
+      metadata,
+    });
+  }
 
   /**
    * DTO de sortie explicite plutôt qu'un spread de l'entité (`{...promo}`) :
@@ -60,6 +102,26 @@ export class PromoController {
       id: promo.id,
       commercantId: promo.commercantId,
       commercantNom: promo.commercant?.nom ?? null,
+      /**
+       * Position du commerce — pour que l'app puisse **afficher** la distance
+       * dans la liste (bascule 2026-08-12, A7 du plan).
+       *
+       * Le serveur **ordonne** par distance, l'app **affiche** : la valeur
+       * calculée en SQL sert au `ORDER BY` et n'est jamais rendue, parce que
+       * `getManyAndCount()` jette les colonnes brutes d'un `addSelect` et que
+       * la seule alternative — fusionner `{...promo, distanceKm}` — est le bug
+       * fondateur de la règle #4 (le spread désactive les `@Exclude()`).
+       *
+       * ⚠️ L'ordre affiché reste **celui du serveur** : `distanceTo` côté app
+       * sert au libellé, jamais à re-trier. Deux tris qui divergeraient d'un
+       * epsilon donneraient une liste dont l'ordre contredit ses propres
+       * étiquettes.
+       *
+       * N'ouvre aucune surface nouvelle : ces coordonnées sont déjà publiques
+       * via `GET /promo/map`, qui les sert pour placer les épingles.
+       */
+      commercantLatitude: promo.commercant?.latitude ?? null,
+      commercantLongitude: promo.commercant?.longitude ?? null,
       description: promo.description,
       prixAvant: promo.prixAvant,
       prixApres: promo.prixApres,
@@ -82,14 +144,18 @@ export class PromoController {
   }
 
   /**
-   * Un commerçant ne peut agir que sur ses propres promos ; un agent, que
-   * sur celles des commerçants de ses communes (même pattern IDOR que le
-   * reste du module commerçant).
+   * Un commerçant ne peut agir que sur ses propres promos. **Un agent peut
+   * agir sur toutes** depuis le 2026-08-13 (chantier « agent global ») : la
+   * garde est devenue asymétrique, elle ne se supprime donc pas.
+   *
+   * ⚠️ La branche `commercant` ci-dessous est désormais la garde
+   * d'appartenance **principale** de tout ce contrôleur — la seule autre
+   * survivante est `assertPhotoKeysOwned` côté service. Elle n'était probée
+   * par aucun banc avant ce chantier (`PROMO_NOT_OWNED_BY_COMMERCANT`
+   * n'apparaissait qu'en code *accepté*, jamais provoqué) ; `commercant_b.py`
+   * a été écrit pour ça, dans le même lot.
    */
-  private async assertCanManage(
-    user: AuthTokenPayload,
-    promo: Promo,
-  ): Promise<void> {
+  private assertCanManage(user: AuthTokenPayload, promo: Promo): void {
     if (user.role === 'commercant') {
       if (promo.commercantId !== user.sub) {
         throw new ForbiddenAppException(
@@ -99,13 +165,34 @@ export class PromoController {
       }
       return;
     }
-    const agent = await this.agentService.findByIdOrFail(user.sub);
-    await this.commercantService.assertCommuneMatches(
-      promo.commercantId,
-      agent.communes.map((commune) => commune.id),
-    );
+    // Agent : aucune vérification d'appartenance. Règle #1 levée par décision
+    // produit — il n'a plus de territoire à opposer.
   }
 
+  /**
+   * ⚠️ **`max-age=0, must-revalidate`, et surtout pas un `max-age` positif.**
+   *
+   * Express pose déjà un `ETag` sur cette réponse — mesuré le 2026-08-13, une
+   * requête conditionnelle rend bien `304`. Ce qui manquait est l'en-tête qui
+   * **autorise le client à conserver le corps** entre deux appels : sans
+   * `Cache-Control`, la mise en cache est laissée à l'heuristique de chaque
+   * client, donc à rien de fiable.
+   *
+   * Le corps fait 2,5 Ko compressés pour 20 promos ; un `304` en fait quelques
+   * dizaines d'octets. Sur un marché sensible au coût data, c'est la même page
+   * payée une fois au lieu de dix.
+   *
+   * **Pourquoi zéro seconde de fraîcheur** : une promo masquée par la
+   * modération doit disparaître au prochain appel, pas au bout d'un délai. On
+   * accepte donc de payer l'aller-retour à chaque fois, et on n'économise que
+   * le corps. Un `max-age` positif échangerait de la bande passante contre du
+   * contenu périmé — ce n'est pas le compromis d'un produit qui retire des
+   * arnaques.
+   *
+   * ⚠️ `private` : la réponse dépend de `favoriteIds`, passés par le client.
+   * Un cache partagé (proxy opérateur) servirait les favoris d'un autre.
+   */
+  @Header('Cache-Control', 'private, max-age=0, must-revalidate')
   @Get()
   async list(@Query() query: ListPromoQueryDto) {
     const result = await this.promoService.findActiveForClient(query);
@@ -125,6 +212,11 @@ export class PromoController {
    * il serait sinon capturé comme un identifiant de promo et répondrait
    * `PROMO_NOT_FOUND` au lieu d'atteindre cette méthode.
    */
+  // Même politique que la liste, et pour la même raison : le corps de la carte
+  // pèse 5,7 Ko compressés (mesuré), un `304` quelques dizaines d'octets. La
+  // fraîcheur reste immédiate — panoramiquer ne doit jamais montrer une promo
+  // retirée il y a dix secondes.
+  @Header('Cache-Control', 'private, max-age=0, must-revalidate')
   @Throttle(MAP_THROTTLE)
   @Get('map')
   async map(@Query() query: ListPromoMapQueryDto) {
@@ -149,28 +241,48 @@ export class PromoController {
   }
 
   /**
-   * Où centrer la carte quand le client n'a pas de position GPS mais a choisi
-   * ses communes. Publique et bornée par `MAP_THROTTLE`, comme `GET
-   * /promo/map` dont elle n'est qu'un préalable — elle n'expose rien de plus
-   * que ce que cette route rend déjà (des positions de commerces publics),
-   * et sous une forme moins précise puisque agrégée.
+   * Repères géographiques dont l'app a besoin **avant** de pouvoir demander
+   * quoi que ce soit : où centrer la vue quand le client n'a rien enregistré,
+   * quel rayon appliquer, et jusqu'où il peut l'élargir.
    *
-   * `{ center: null }` quand aucun commerçant positionné n'a de promo visible
-   * dans ces communes : l'app garde alors son propre repli. Un objet plutôt
-   * qu'un `204` — le corps distingue « je sais qu'il n'y a pas de centre » de
-   * « la requête n'a pas abouti », que l'app traite différemment.
+   * ── Pourquoi une route, et pas des valeurs compilées ──────────────────────
    *
-   * Deux segments (`map/center`), donc aucun conflit avec `@Get(':id')` — mais
-   * déclarée ici, près de `@Get('map')`, parce que c'est la même surface.
+   * Le mobile n'a pas de `.env` (`lib/config/env.dart` n'expose que des
+   * `String.fromEnvironment`, figés au build — et qui **se perdent
+   * silencieusement** selon la façon dont `flutter` est lancé, voir
+   * `CLAUDE.md` § Environnement). Une valeur compilée ne se change qu'en
+   * republiant sur les deux stores. Ici, c'est une ligne de `.env`.
+   *
+   * ⚠️ **Route publique et non authentifiée : elle ne doit jamais porter autre
+   * chose que ces quatre nombres.** Tout ce qu'on y ajouterait par commodité
+   * serait servi au monde entier. Elle est épinglée à ce titre dans
+   * `scripts/lib/frontiere_http.py` (règle #33).
+   *
+   * Pas de `@Throttle` dédié : la limite globale (60/min/IP) suffit largement
+   * pour un appel émis une fois au démarrage, et la réponse ne touche pas la
+   * base. C'est un choix, pas un oubli.
+   *
+   * DOIT rester déclarée **avant** `@Get(':id')` — `config` est un segment
+   * unique, il serait sinon capté comme un identifiant (même raison que
+   * `@Get('map')`).
    */
-  @Throttle(MAP_THROTTLE)
-  @Get('map/center')
-  async mapCenter(@Query() query: MapCenterQueryDto) {
-    return {
-      center: await this.promoService.findMapCenterForCommunes(
-        query.communeIds,
-      ),
-    };
+  /**
+   * ⚠️ **La seule route à porter une fraîcheur non nulle**, et c'est réfléchi.
+   *
+   * Elle sert 89 octets de constantes — point par défaut, rayon, plafond — et
+   * l'app la redemande à chaque démarrage. Cinq minutes de cache retirent cet
+   * appel du chemin critique de l'ouverture sans rien coûter : ces valeurs ne
+   * changent qu'au rythme d'un `.env`, et le délai maximal d'un changement de
+   * point par défaut passe de « immédiat » à « cinq minutes ».
+   *
+   * ⚠️ C'est précisément ce que cette route existe pour permettre : changer le
+   * point du pilote **sans republier sur les stores**. Cinq minutes est le prix
+   * assumé de cette souplesse ; l'allonger la reprendrait d'une main.
+   */
+  @Header('Cache-Control', 'private, max-age=300')
+  @Get('config')
+  getClientConfig() {
+    return this.promoService.getClientConfig();
   }
 
   /**
@@ -254,23 +366,34 @@ export class PromoController {
     @UuidParam('commercantId') commercantId: string,
     @Body() dto: CreatePromoDto,
   ) {
-    if (user.role === 'agent') {
-      const agent = await this.agentService.findByIdOrFail(user.sub);
-      await this.commercantService.assertCommuneMatches(
-        commercantId,
-        agent.communes.map((commune) => commune.id),
-      );
-    }
-    // Exempté des plafonds anti-abus (2026-07-14) : agent/admin agissent
-    // via un canal audité, pas l'auto-service commerçant que ces plafonds
-    // visent (voir `PromoService.create`).
+    // ⚠️ **Ici se trouvait la 14ᵉ garde d'appartenance, retirée le
+    // 2026-08-13** — et c'était la seule appelée EN PROPRE plutôt que via
+    // `assertCanManage`, donc invisible à un grep sur cette méthode. Deux
+    // relectures l'ont manquée pour cette raison.
+    //
+    // C'est très exactement la route que la règle #1 de `CLAUDE.md` nomme
+    // comme l'IDOR fondateur (« `PromoController.createByAgent` »), et c'est
+    // la seule route d'écriture de promo que l'app appelle réellement pour un
+    // agent. La rouvrir est une décision produit (« agent global ») ; la
+    // rouvrir sans le dire serait rejouer l'IDOR d'origine à son endroit
+    // d'origine.
+    //
+    // Exempté des plafonds anti-abus (2026-07-14) : agent/admin agissent via
+    // un canal audité — ce qui est vrai depuis le 2026-08-13 seulement, voir
+    // `auditStaffWrite`. Deux limites sont levées, la création 5/24 h et le
+    // cooldown de republication ; le plafond de promos ACTIVES, lui, ne l'est
+    // pas et s'applique à tout le monde.
     // `actorId` : les clés S3 uploadées par un agent portent SON `sub`
     // (`StorageController.upload`), pas celui du commerçant — sans ça la
     // garde d'appartenance refuserait la promo que l'agent vient de saisir.
-    return this.promoService.create(commercantId, dto, {
+    const promo = await this.promoService.create(commercantId, dto, {
       trustedActor: true,
       actorId: user.sub,
     });
+    await this.auditStaffWrite(user, 'promo_create_by_staff', promo.id, {
+      commercantId,
+    });
+    return promo;
   }
 
   /** Édition ouverte au commerçant propriétaire, en plus de l'agent (auparavant agent uniquement). */
@@ -284,8 +407,14 @@ export class PromoController {
     @Body() dto: UpdatePromoDto,
   ) {
     const promo = await this.promoService.findByIdOrFail(id);
-    await this.assertCanManage(user, promo);
-    return this.promoService.update(id, dto, { actorId: user.sub });
+    this.assertCanManage(user, promo);
+    const updated = await this.promoService.update(id, dto, {
+      actorId: user.sub,
+    });
+    await this.auditStaffWrite(user, 'promo_update_by_staff', id, {
+      commercantId: promo.commercantId,
+    });
+    return updated;
   }
 
   /**
@@ -302,10 +431,14 @@ export class PromoController {
     @UuidParam('id') id: string,
   ) {
     const promo = await this.promoService.findByIdOrFail(id);
-    await this.assertCanManage(user, promo);
-    return this.promoService.publish(id, {
+    this.assertCanManage(user, promo);
+    const published = await this.promoService.publish(id, {
       trustedActor: user.role === 'agent',
     });
+    await this.auditStaffWrite(user, 'promo_publish_by_staff', id, {
+      commercantId: promo.commercantId,
+    });
+    return published;
   }
 
   /** Arrêt volontaire (ex. rupture de stock) — libère un slot sur le plafond de 5. */
@@ -318,7 +451,11 @@ export class PromoController {
     @UuidParam('id') id: string,
   ) {
     const promo = await this.promoService.findByIdOrFail(id);
-    await this.assertCanManage(user, promo);
-    return this.promoService.stop(id);
+    this.assertCanManage(user, promo);
+    const stopped = await this.promoService.stop(id);
+    await this.auditStaffWrite(user, 'promo_stop_by_staff', id, {
+      commercantId: promo.commercantId,
+    });
+    return stopped;
   }
 }

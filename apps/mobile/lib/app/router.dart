@@ -25,15 +25,15 @@ import '../features/admin/screens/moderation_queue_screen.dart';
 import '../features/agent/screens/agent_login_screen.dart';
 import '../features/agent/screens/agent_promo_form_screen.dart';
 import '../features/agent/screens/create_commercant_screen.dart';
-import '../features/client/screens/commune_selection_screen.dart';
 import '../features/client/screens/map_screen.dart';
 import '../features/client/screens/promo_detail_screen.dart';
 import '../features/client/screens/promo_list_screen.dart';
-// Conservé volontairement : n'est plus référencé que par la redirection de
-// sélection de commune, désactivée temporairement plus bas. Le retirer
-// obligerait à le remettre au moment de réactiver.
-// ignore: unused_import
-import '../features/client/providers/commune_providers.dart';
+// ⚠️ Un `// ignore: unused_import` était posé ici, avec un commentaire qui
+// annonçait la réactivation prochaine d'une redirection « choisir sa
+// commune ». Cette redirection a été supprimée définitivement, et l'import
+// qu'elle prétendait protéger est en réalité **utilisé** plus bas : le
+// directive `ignore` ne masquait rien et le commentaire décrivait un futur qui
+// n'aura pas lieu. Retirés le 2026-08-13.
 import '../features/commercant/screens/commercant_dashboard_screen.dart';
 import '../features/commercant/screens/commercant_login_screen.dart';
 import '../features/commercant/screens/commercant_register_screen.dart';
@@ -42,7 +42,6 @@ import '../features/commercant/screens/my_promos_screen.dart';
 import '../features/commercant/screens/promo_form_screen.dart';
 import '../features/commercant/screens/registre_resend_screen.dart';
 import '../features/dev/screens/dev_profile_switcher_screen.dart';
-import '../features/onboarding/screens/location_permission_screen.dart';
 import '../features/onboarding/screens/role_choice_screen.dart';
 import '../features/onboarding/screens/splash_screen.dart';
 import '../features/shared/screens/legal_document_screen.dart';
@@ -75,16 +74,12 @@ Widget _unusedBuilder(BuildContext context, GoRouterState state) =>
 
 final _appRoutes = <_AppRoute>[
   _AppRoute('/', (context, state) => const PromoListScreen()),
-  _AppRoute(
-      '/select-commune', (context, state) => const CommuneSelectionScreen()),
   // Carte "autour de moi" — publique comme la liste : pas de compte client.
   _AppRoute('/carte', (context, state) => const MapScreen()),
   // Premier lancement (splash → rôle → localisation). Publics : ces écrans
   // précèdent par nature toute authentification.
   _AppRoute('/onboarding', (context, state) => const SplashScreen()),
   _AppRoute('/onboarding/role', (context, state) => const RoleChoiceScreen()),
-  _AppRoute('/onboarding/location',
-      (context, state) => const LocationPermissionScreen()),
   // Publics, sans rôle requis — accessibles depuis l'inscription commerçant
   // et un lien général (plan de correction, Phase 4).
   _AppRoute('/legal/cgu', (context, state) => const LegalDocumentScreen.cgu()),
@@ -168,11 +163,14 @@ final _appRoutes = <_AppRoute>[
     requiredRole: AppRole.agent,
   ),
   // Agent = modérateur (plan de correction, Phase 2, étendu 2026-07-12 à
-  // dashboard + fiche commerçant) : mêmes écrans que l'admin, le backend
-  // scope automatiquement aux communes de l'agent (voir
-  // AdminController.scopedCommuneIds) — pas de duplication d'écran, à
-  // l'exception volontaire de la gestion des agents et du journal d'audit
-  // (restés admin-only, voir AdminDashboardScreen).
+  // dashboard + fiche commerçant) : mêmes écrans que l'admin — pas de
+  // duplication d'écran, à l'exception volontaire de la gestion des agents et
+  // du journal d'audit (restés admin-only, voir AdminDashboardScreen).
+  //
+  // ⚠️ **Le backend ne scope plus rien depuis le 2026-08-13.** L'agent voyait
+  // ces écrans restreints à ses communes ; il les voit désormais entiers. Ces
+  // deux exceptions admin-only sont donc **tout ce qui distingue encore les
+  // deux rôles** dans l'application.
   _AppRoute(
     '/agent/dashboard',
     (context, state) => const AdminDashboardScreen(),
@@ -285,8 +283,9 @@ final _appRoutes = <_AppRoute>[
     requiredRole: AppRole.admin,
   ),
   // Admin gagne la capacité de publier une promo pour un commerçant
-  // (décision produit 2026-07-12) — même écran que l'agent, la garde de
-  // commune ne s'applique qu'au rôle agent côté backend (vue globale admin).
+  // (décision produit 2026-07-12) — même écran que l'agent. ⚠️ Plus aucune
+  // garde d'appartenance côté backend pour l'un comme pour l'autre depuis le
+  // 2026-08-13.
   _AppRoute(
     '/admin/promo/new/:commercantId',
     (context, state) => AgentPromoFormScreen(
@@ -336,36 +335,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/onboarding';
       }
 
-      // DÉSACTIVÉ TEMPORAIREMENT (2026-07-29, demande utilisateur) : la
-      // sélection de commune bloquait l'accès à l'accueil au premier
-      // lancement, juste après l'onboarding. L'écran et la route
-      // `/select-commune` restent en place et accessibles (le sélecteur de
-      // commune en tête de l'accueil y mène) — seule la redirection
-      // obligatoire est suspendue.
-      //
-      // ⚠️ **L'effet de bord décrit ici jusqu'au 2026-08-05 n'existe plus.**
-      // Il disait que sans commune sélectionnée, l'accueil affichait les
-      // promos de toutes les communes (le backend traitant `communeIds: []`
-      // comme *aucun filtre*), et jugeait ça « acceptable au volume du
-      // pilote ». Ça ne l'était pas : ce n'était pas une liste dégradée mais
-      // une liste **fausse**, présentée sans réserve sous un en-tête annonçant
-      // la zone du client.
-      //
-      // Résolu autrement que par cette redirection, et c'est le point : la
-      // redirection avait été coupée parce qu'elle **bloquait** l'accueil au
-      // premier lancement. `PromoListScreen` affiche désormais
-      // `_NoCommuneSelected` à la place de la seule liste — l'accueil reste
-      // atteignable, les filtres et la vitrine restent visibles, et le client
-      // voit le geste qui lui manque au lieu d'un résultat qui n'est pas le
-      // sien. La requête n'est même plus émise (`PromoListController._load`).
-      //
-      // Rétablir la redirection redeviendrait donc un choix de produit
-      // (forcer avant de laisser entrer), plus un correctif : décommenter le
-      // bloc ci-dessous.
-      //
-      // if (path == '/' && ref.read(selectedCommunesProvider).isEmpty) {
-      //   return '/select-commune';
-      // }
+      // ⚠️ **La redirection « choisir sa commune » a disparu avec son objet**
+      // (bascule géographique du 2026-08-12). Elle était commentée depuis le
+      // 2026-07-29 parce qu'elle bloquait l'accueil au premier lancement, et
+      // son commentaire décrivait un défaut — l'accueil affichant les promos
+      // de toutes les communes — que la bascule referme autrement : sans
+      // point enregistré, le serveur cadre sur son propre défaut et l'accueil
+      // le dit (`_PointParDefautBanner`). Il n'y a plus rien à forcer avant
+      // de laisser entrer.
 
       // Points d'entrée par rôle : redirigent vers le dashboard si déjà
       // connecté avec ce rôle, sinon vers l'écran de connexion — distinct

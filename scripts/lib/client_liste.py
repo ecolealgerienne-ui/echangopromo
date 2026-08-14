@@ -44,10 +44,50 @@ DEVICE_ID = "banc-client-liste-0001"
 
 CHAMPS_INTERNES = ("photoKey", "photoKeys", "thumbnailKey", "imageKey")
 
+# Position du commerce, servie par `GET /promo` **pour que la liste affiche la
+# distance** (bascule 2026-08-12). Ce ne sont pas des champs décoratifs : c'est
+# la moitié serveur d'une chaîne dont l'autre moitié a manqué trois semaines.
+CHAMPS_POSITION = ("commercantLatitude", "commercantLongitude")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Les verdicts — la logique que l'auto-test éprouve
 # ─────────────────────────────────────────────────────────────────────────────
+
+def verdict_position_servie(items):
+    """La liste doit porter la position du commerce, pas seulement l'ordonner.
+
+    ⚠️ **Sonde ajoutée le 2026-08-13, et elle a une histoire.** Le serveur sert
+    `commercantLatitude`/`commercantLongitude` depuis le 2026-08-12, avec un
+    commentaire disant explicitement « pour que l'app puisse afficher la
+    distance dans la liste » — et le modèle Dart **jetait les deux champs**.
+    Rien n'échouait nulle part : le serveur avait raison, l'app compilait, et la
+    distance n'apparaissait simplement pas (règle 31). Les retirer de la
+    projection ne casserait toujours rien côté serveur ; c'est cette sonde, et
+    elle seule, qui le dirait.
+
+    ⚠️ Les champs sont cherchés **présents**, et au moins un item doit les
+    porter **non nuls** : un `null` est légitime (un commerce peut ne pas avoir
+    de position), donc exiger « non nul partout » accuserait le produit sur un
+    parc mixte. Mais si AUCUN ne les porte, la projection est muette.
+    """
+    if not items:
+        return "non_concluant", "liste vide — rien à examiner"
+    manquants = [c for c in CHAMPS_POSITION if not any(c in it for it in items)]
+    if manquants:
+        return ("echec",
+                "%s absent(s) de la projection — l'app ne peut plus calculer "
+                "de distance, et rien d'autre ne le signalerait"
+                % ", ".join(manquants))
+    situes = [it for it in items
+              if it.get("commercantLatitude") is not None
+              and it.get("commercantLongitude") is not None]
+    if not situes:
+        return ("non_concluant",
+                "les champs sont servis mais tous nuls : aucun commerce du "
+                "décor n'est situé, la sonde ne prouve pas qu'ils se remplissent")
+    return "ok", "%d/%d promo(s) situées" % (len(situes), len(items))
+
 
 def verdict_fuite(corps):
     """Aucun champ interne, à quelque profondeur que ce soit."""
@@ -204,7 +244,29 @@ def self_test():
     _v("refus au mauvais code → non concluant",
        verdict_entree(400, "AUTRE", ("PROMO_NOT_FOUND",))[0], "non_concluant")
 
-    refus = 10
+    # ── Position servie (2026-08-13) ─────────────────────────────────────────
+    situe = {"commercantLatitude": 34.6, "commercantLongitude": 3.2}
+    _v("position servie", verdict_position_servie([situe])[0], "ok")
+    # Un parc mixte reste valide : `null` est légitime pour un commerce sans
+    # position, tant qu'au moins un est situé.
+    _v("parc mixte", verdict_position_servie(
+        [situe, {"commercantLatitude": None, "commercantLongitude": None}])[0],
+       "ok")
+    # ⚠️ Le défaut visé : les champs retirés de la projection. Rien d'autre
+    # dans le dépôt ne le signalerait.
+    _v("champs absents de la projection",
+       verdict_position_servie([{"id": "p1"}])[0], "echec")
+    _v("un seul des deux champs",
+       verdict_position_servie([{"commercantLatitude": 34.6}])[0], "echec")
+    # ⚠️ Servis mais tous nuls : la sonde ne peut pas conclure qu'ils se
+    # remplissent — elle le DIT au lieu de passer au vert.
+    _v("tous nuls → non concluant", verdict_position_servie(
+        [{"commercantLatitude": None, "commercantLongitude": None}])[0],
+       "non_concluant")
+    _v("liste vide → non concluant",
+       verdict_position_servie([])[0], "non_concluant")
+
+    refus = 12
     total = _ok + len(_echecs)
     print("auto-test : %d cas, dont %d refus" % (total, refus))
     for e in _echecs:
@@ -252,6 +314,10 @@ def main():
     un = sorted(ids)[0]
     st, detail = appeler("GET", "/promo/%s" % un)
     noter("GET /promo/:id", *verdict_fuite(detail))
+    time.sleep(PACE)
+
+    noter("la liste porte la position du commerce",
+          *verdict_position_servie(liste.get("items", [])))
     time.sleep(PACE)
 
     # ── 2. Liste et détail disent la même chose ─────────────────────────────

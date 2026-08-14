@@ -1,31 +1,32 @@
 #!/usr/bin/env python3
-"""Banc de création par l'agent — un commerçant naît dans SES communes.
+"""Banc de création par l'agent — un commerçant naît AVEC SON POINT.
 
-── Ce que ce banc éprouve ───────────────────────────────────────────────────
+── Ce que ce banc éprouvait, et ce qu'il éprouve maintenant ─────────────────
 
-`POST /agent/commercant` est la porte par laquelle un agent de terrain inscrit
-un commerce. Elle prend une `communeId` **fournie par l'appelant** — et c'est
-exactement la forme d'un IDOR : le rôle est bon, le jeton est valide, et la
-question devient « cette commune est-elle la sienne ? ».
+⚠️ **Son sujet a changé le 2026-08-13.** Il éprouvait la règle 1 sur
+`POST /agent/commercant` : la route prenait une `communeId` fournie par
+l'appelant, ce qui est exactement la forme d'un IDOR — le rôle est bon, le
+jeton est valide, et la question devient « cette commune est-elle la sienne ? ».
+Le chantier « agent global » supprime le territoire, donc la question.
 
-C'est la règle 1 dans son énoncé : *le rôle JWT ne suffit jamais pour une
-action sur la ressource d'un tiers*. La faille corrigée à l'audit V0 ne portait
-que sur les promos ; la surface réelle inclut celle-ci.
+**Il reste le seul invariant de cette route** : la position est obligatoire.
+Ce n'est pas un lot de consolation — c'est la garde qui empêche une tournée de
+fabriquer des fiches invisibles. Mesuré le 2026-08-12 : **40 des 44 commerçants
+sans position venaient d'ici**, et rien dans le produit ne le disait. Un
+commerce sans point n'apparaît sur aucune carte, ne sort d'aucune liste au
+rayon, et ne peut rien publier.
 
 Trois sondes :
 
-1. **Le commerçant créé tombe dans une commune de l'agent** — vérifié sur la
-   ressource, pas sur le code de sortie de la requête qui prétend l'avoir
-   posée.
-2. **Une commune qui n'est pas la sienne est refusée.** Le décor fournit un
-   agent B aux communes disjointes : sa commune est le contre-exemple parfait.
-3. **`GET /agent/me` dit la vérité sur son territoire** — c'est la seule source
-   dont dispose l'app pour composer ses écrans, et c'est aussi ce dont ce banc
-   se sert pour savoir ce qui est légitime.
-
-⚠️ La disjonction des deux agents est **vérifiée**, pas supposée : le décor l'a
-laissée se perdre une fois (agent A avait accumulé quatre communes, dont celle
-de l'agent B). Si elle ne tient pas, la sonde n°2 ne conclut pas.
+1. **`GET /agent/me` répond et l'agent s'y reconnaît** — seule source dont
+   l'app dispose pour composer ses écrans.
+2. **Le commerçant créé porte sa position**, vérifié sur la **fiche publique**
+   et non sur la réponse de création : ce qui compte est ce que le serveur
+   SERT. Un point stocké mais non servi produirait exactement l'invisibilité
+   qu'on cherche à empêcher.
+3. **Sans position, la création est refusée** — et refusée par la validation,
+   code asserté : un 400 rendu pour une autre raison laisserait croire que la
+   garde tient alors qu'elle aurait pu disparaître.
 
 ── Usage ────────────────────────────────────────────────────────────────────
 
@@ -44,43 +45,62 @@ API_URL = os.environ.get("API_URL", "http://localhost:3000")
 PACE = float(os.environ.get("PACE_SECONDS", "1.1"))
 DEVICE_ID = "banc-agent-creation-0001"
 PIN = "654321"
+# Position de décor, à Djelfa. ⚠️ Obligatoire depuis le 2026-08-12 : la création
+# par agent l'exige, et publier sans position est refusé. Sans ces deux valeurs
+# le banc rendrait ❌ sur un produit parfaitement correct (règle #38) — et
+# d'autant plus crédiblement que le message parlerait bien de position.
+DECOR_LAT, DECOR_LNG = 34.6702, 3.2611
 
 
-def verdict_commune(commune_creee, communes_agent):
-    """Le commerçant doit naître chez son agent."""
-    if not communes_agent:
-        return "non_concluant", "l'agent n'a aucune commune — décor incomplet"
-    if commune_creee is None:
-        return "echec", "le commerçant créé n'a pas de commune"
-    if commune_creee not in communes_agent:
+def verdict_position(fiche):
+    """Le commerçant créé par l'agent doit porter SA position.
+
+    ⚠️ Vérifié sur la fiche publique, pas sur la réponse de création : ce qui
+    compte est ce que le serveur SERT, pas ce qu'il a accepté. Un point stocké
+    mais non servi rendrait le commerce invisible sans qu'aucun code d'erreur
+    ne le dise — c'est le mode de défaillance qui a produit 40 fiches
+    invisibles avant le 2026-08-12.
+    """
+    lat, lng = fiche.get("latitude"), fiche.get("longitude")
+    if lat is None or lng is None:
         return ("echec",
-                "créé dans %s, hors des %d commune(s) de l'agent — un agent "
-                "peut inscrire hors de son territoire"
-                % (commune_creee[:8], len(communes_agent)))
-    return "ok", "commune %s, dans son territoire" % commune_creee[:8]
+                "la fiche publique ne sert aucune position (lat=%r, lng=%r) — "
+                "ce commerce n'apparaîtra sur aucune carte et ne pourra rien "
+                "publier" % (lat, lng))
+    return "ok", "%.4f / %.4f" % (lat, lng)
 
 
-def verdict_refus_commune(statut, code):
-    """Créer dans la commune d'un autre doit être refusé."""
+def verdict_refus_sans_position(statut, code):
+    """Créer sans position doit être refusé, et par la VALIDATION.
+
+    ⚠️ Le code compte autant que le statut : un 400 rendu pour une autre raison
+    (numéro déjà pris, PIN mal formé) laisserait croire que la garde de
+    position tient alors qu'elle aurait pu disparaître.
+    """
     if statut == 429:
         return "non_concluant", "429 — ce n'est pas un verdict"
     if statut is None:
         return "echec", "pas de réponse : %s" % code
     if statut in (200, 201):
         return ("echec",
-                "création ACCEPTÉE dans une commune qui n'est pas la sienne — "
-                "l'agent élargit son territoire tout seul (règle 1)")
+                "création ACCEPTÉE sans position — chaque tournée peut de "
+                "nouveau fabriquer des fiches invisibles")
     if statut >= 500 or code == "INTERNAL_ERROR":
         return "echec", "HTTP %s %s — casse au lieu de refuser" % (statut, code)
+    if code != "VALIDATION_ERROR":
+        return ("echec",
+                "refusé en %s mais avec %s, pas VALIDATION_ERROR — une AUTRE "
+                "garde a répondu" % (statut, code or "(sans code)"))
     return "ok", "%s %s" % (statut, code)
 
 
-def verdict_territoire(communes, statut):
+def verdict_identite(moi, statut):
+    """`GET /agent/me` répond, et l'agent s'y reconnaît."""
     if statut != 200:
         return "non_concluant", "GET /agent/me illisible (HTTP %s)" % statut
-    if not communes:
-        return "echec", "l'agent ne connaît aucune de ses communes"
-    return "ok", "%d commune(s)" % len(communes)
+    if not moi.get("id") or not moi.get("email"):
+        return "echec", "réponse sans id ni email — contrat rompu"
+    return "ok", "agent %s" % moi["id"][:8]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -130,25 +150,33 @@ def _v(libelle, obtenu, attendu):
 
 def self_test():
     # ── Doivent PASSER ───────────────────────────────────────────────────────
-    _v("créé chez lui", verdict_commune("c1", {"c1", "c2"})[0], "ok")
-    _v("refus attendu", verdict_refus_commune(403, "X")[0], "ok")
-    _v("territoire connu", verdict_territoire(["c1"], 200)[0], "ok")
+    _v("position servie",
+       verdict_position({"latitude": 34.67, "longitude": 3.26})[0], "ok")
+    _v("refus de validation attendu",
+       verdict_refus_sans_position(400, "VALIDATION_ERROR")[0], "ok")
+    _v("agent identifié",
+       verdict_identite({"id": "a1", "email": "a@b.c"}, 200)[0], "ok")
 
     # ── Doivent REFUSER ──────────────────────────────────────────────────────
-    # ⚠️ Le cas de la règle 1 : le rôle est bon, la ressource ne l'est pas.
-    _v("créé hors de son territoire",
-       verdict_commune("z9", {"c1"})[0], "echec")
-    _v("créé sans commune", verdict_commune(None, {"c1"})[0], "echec")
-    _v("agent sans commune → non concluant",
-       verdict_commune("c1", set())[0], "non_concluant")
-    _v("création hors territoire acceptée",
-       verdict_refus_commune(201, None)[0], "echec")
+    # ⚠️ Le cas fondateur : une fiche née sans point est invisible, et rien
+    # dans le produit ne le dit — 40 des 44 commerçants sans position mesurés
+    # le 2026-08-12 venaient de cette route.
+    _v("fiche sans position", verdict_position({})[0], "echec")
+    _v("latitude seule",
+       verdict_position({"latitude": 34.67})[0], "echec")
+    _v("création sans position acceptée",
+       verdict_refus_sans_position(201, None)[0], "echec")
+    # ⚠️ Refusé, mais par une AUTRE garde : un banc qui n'asserterait que le
+    # statut serait vert le jour où la garde de position disparaît.
+    _v("refusé par une autre garde",
+       verdict_refus_sans_position(400, "COMMERCANT_PHONE_TAKEN")[0], "echec")
     _v("500 au lieu d'un refus",
-       verdict_refus_commune(500, "INTERNAL_ERROR")[0], "echec")
-    _v("429 → non concluant", verdict_refus_commune(429, None)[0], "non_concluant")
-    _v("agent qui s'ignore", verdict_territoire([], 200)[0], "echec")
+       verdict_refus_sans_position(500, "INTERNAL_ERROR")[0], "echec")
+    _v("429 → non concluant",
+       verdict_refus_sans_position(429, None)[0], "non_concluant")
+    _v("agent sans identité", verdict_identite({}, 200)[0], "echec")
     _v("/agent/me illisible → non concluant",
-       verdict_territoire([], 500)[0], "non_concluant")
+       verdict_identite({}, 500)[0], "non_concluant")
 
     refus = 7
     total = _ok + len(_echecs)
@@ -166,7 +194,7 @@ def main():
     agent_b_password = _exiger("AGENT_B_PASSWORD")
 
     print("═" * 64)
-    print("  Création par l'agent — un commerçant naît dans SES communes")
+    print("  Création par l'agent — un commerçant naît AVEC SON POINT")
     print("═" * 64)
 
     def connecter(email, mdp, qui):
@@ -191,51 +219,47 @@ def main():
         resultats.append(verdict)
 
     # ── 1. Le territoire ────────────────────────────────────────────────────
-    print("\n── 1. ce que l'agent sait de son territoire ──")
+    print("\n── 1. l'agent se reconnaît ──")
     st, moi = appeler("GET", "/agent/me", jg)
-    communes_a = [c["id"] for c in (moi.get("communes") or [])]
-    noter("GET /agent/me", *verdict_territoire(communes_a, st))
-    if not communes_a:
-        return 1
+    noter("GET /agent/me", *verdict_identite(moi, st))
     time.sleep(PACE)
 
-    st, moi_b = appeler("GET", "/agent/me", jb)
-    communes_b = [c["id"] for c in (moi_b.get("communes") or [])]
-    time.sleep(PACE)
-
-    # ── 2. Créer chez soi ───────────────────────────────────────────────────
-    print("\n── 2. un commerçant créé tombe dans une commune de l'agent ──")
+    # ── 2. Créer un commerçant, positionné ──────────────────────────────────
+    #
+    # ⚠️ **Les sections « créé chez soi » et « pas chez un autre » ont disparu
+    # le 2026-08-13** avec le territoire de l'agent. Elles étaient le sujet
+    # même de ce banc — son titre disait « un commerçant naît dans SES
+    # communes ».
+    #
+    # Ce qui reste est **le seul invariant de cette route** : la position est
+    # obligatoire. Posée au lot 4 de la bascule géographique, elle est ce qui
+    # empêche une tournée de fabriquer des fiches invisibles — 40 des 44
+    # commerçants sans position mesurés le 2026-08-12 venaient d'ici.
+    print("\n── 2. un commerçant créé par l'agent, avec sa position ──")
     base = time.strftime("%H%M%S")
     st, d = appeler("POST", "/agent/commercant", jg, {
         "telephone": "+213558%s" % base, "nom": "Commerce Agent",
         "pin": PIN, "adresse": "Rue de l'agent", "categorie": "alimentation",
-        "communeId": communes_a[0]})
+        "latitude": DECOR_LAT, "longitude": DECOR_LNG})
     if st not in (200, 201):
-        noter("création chez soi", "non_concluant",
+        noter("création par l'agent", "non_concluant",
               "HTTP %s %s" % (st, d.get("code")))
         return 1
     cid = d.get("id")
     time.sleep(PACE)
     # Vérifié sur la RESSOURCE, pas sur le code de sortie.
     _, fiche = appeler("GET", "/commercant/%s/public" % cid)
-    noter("le commerçant est né chez son agent",
-          *verdict_commune(fiche.get("communeId"), set(communes_a)))
+    noter("le commerçant est né avec sa position", *verdict_position(fiche))
     time.sleep(PACE)
 
-    # ── 3. Créer chez un autre ──────────────────────────────────────────────
-    print("\n── 3. et pas dans la commune d'un autre ──")
-    hors = [c for c in communes_b if c not in communes_a]
-    if not hors:
-        noter("prémisse : une commune hors territoire", "non_concluant",
-              "les deux agents partagent leurs communes — relancer "
-              "provision-decor.sh")
-    else:
-        st, d = appeler("POST", "/agent/commercant", jg, {
-            "telephone": "+213559%s" % base, "nom": "Commerce Intrus",
-            "pin": PIN, "adresse": "Rue d'ailleurs",
-            "categorie": "alimentation", "communeId": hors[0]})
-        noter("création dans la commune de l'agent B",
-              *verdict_refus_commune(st, d.get("code")))
+    # ── 3. Sans position, la création est refusée ───────────────────────────
+    print("\n── 3. et sans position, elle est refusée ──")
+    st, d = appeler("POST", "/agent/commercant", jg, {
+        "telephone": "+213559%s" % base, "nom": "Commerce Sans Point",
+        "pin": PIN, "adresse": "Rue d'ailleurs",
+        "categorie": "alimentation"})
+    noter("création sans latitude ni longitude",
+          *verdict_refus_sans_position(st, d.get("code")))
 
     print("\n" + "═" * 64)
     echecs = resultats.count("echec")

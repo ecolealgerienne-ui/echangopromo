@@ -5,7 +5,6 @@ import '../data/api/admin_api.dart';
 import '../data/api/agent_api.dart';
 import '../data/api/api_client.dart';
 import '../data/api/commercant_api.dart';
-import '../data/api/commune_api.dart';
 import '../data/api/highlight_api.dart';
 import '../data/api/promo_api.dart';
 import '../data/api/report_api.dart';
@@ -14,8 +13,9 @@ import '../data/api/notification_api.dart';
 import '../data/local/auth_session_store.dart';
 import '../data/local/device_id_store.dart';
 import '../data/local/favorites_store.dart';
+import '../data/local/point_proposal_store.dart';
+import '../data/local/etag_cache_store.dart';
 import '../data/local/onboarding_store.dart';
-import '../data/local/selected_commune_store.dart';
 import 'auth_provider.dart';
 
 /// Surchargé dans `main()` une fois `SharedPreferences.getInstance()` résolu.
@@ -33,11 +33,19 @@ final deviceIdStoreProvider =
 final deviceIdProvider =
     Provider<String>((ref) => ref.watch(deviceIdStoreProvider).getOrCreate());
 
-final selectedCommuneStoreProvider = Provider(
-    (ref) => SelectedCommuneStore(ref.watch(sharedPreferencesProvider)));
-
 final favoritesStoreProvider =
     Provider((ref) => FavoritesStore(ref.watch(sharedPreferencesProvider)));
+
+/// Distinct de la demande de localisation : l'activer et
+/// enregistrer une ville sont deux décisions différentes, écartables
+/// séparément (voir `PointProposalStore`).
+final pointProposalStoreProvider =
+    Provider((ref) => PointProposalStore(ref.watch(sharedPreferencesProvider)));
+
+/// Cache de revalidation HTTP — voir `EtagCacheInterceptor` pour ce qu'il
+/// conserve et, surtout, ce qu'il refuse de conserver.
+final etagCacheStoreProvider =
+    Provider((ref) => EtagCacheStore(ref.watch(sharedPreferencesProvider)));
 
 final onboardingStoreProvider =
     Provider((ref) => OnboardingStore(ref.watch(sharedPreferencesProvider)));
@@ -55,11 +63,12 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     // vers le login puisque authControllerProvider ne change jamais tout
     // seul (audit V1 §8).
     onAuthInvalid: () => authController.logout(),
+    // Revalidation conditionnelle des routes publiques : le backend posait un
+    // `ETag` que personne ne lisait (règle 31, mesuré le 2026-08-13).
+    etagCache: ref.watch(etagCacheStoreProvider),
   );
 });
 
-final communeApiProvider =
-    Provider((ref) => CommuneApi(ref.watch(apiClientProvider).dio));
 final promoApiProvider =
     Provider((ref) => PromoApi(ref.watch(apiClientProvider).dio));
 final commercantApiProvider =

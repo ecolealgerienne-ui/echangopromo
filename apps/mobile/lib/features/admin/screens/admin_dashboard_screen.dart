@@ -12,9 +12,12 @@ final _dashboardProvider = FutureProvider.autoDispose(
     (ref) => ref.watch(adminApiProvider).dashboard());
 
 /// Dashboard (specs §3.4) — partagé admin/agent (décision produit
-/// 2026-07-12, agent = modérateur avec les mêmes écrans que l'admin) :
-/// stats globales pour l'admin, restreintes aux communes de l'agent sinon
-/// (backend scope automatiquement via `AdminController.scopedCommuneIds`).
+/// 2026-07-12, agent = modérateur avec les mêmes écrans que l'admin).
+///
+/// ⚠️ **Les cinq compteurs sont globaux pour les deux rôles depuis le
+/// 2026-08-13** : un agent et un admin voient exactement les mêmes chiffres,
+/// et rien à l'écran ne les distingue. C'est voulu — l'agent n'a plus de
+/// territoire —, mais ça retire à cet écran son seul pouvoir discriminant.
 /// Seules la gestion des agents et le journal d'audit restent admin-only —
 /// le registre se consulte/valide depuis la fiche détail commerçant, plus
 /// de menu dédié.

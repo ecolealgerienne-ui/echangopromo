@@ -57,7 +57,7 @@ PACE = float(os.environ.get("PACE_SECONDS", "1.1"))
 
 ROLES_CONNUS = ("commercant", "agent", "admin")
 
-# Les 15 routes ouvertes, épinglées une par une AVEC leur justification.
+# Les 14 routes ouvertes, épinglées une par une AVEC leur justification.
 #
 # ⚠️ Ne jamais y ajouter une entrée pour faire passer le banc : une route
 # ouverte est la seule surface qu'un inconnu peut marteler.
@@ -65,18 +65,25 @@ ROUTES_OUVERTES = {
     ("GET", "/promo"): "consultation client — le client est anonyme par conception",
     ("GET", "/promo/:id"): "idem",
     ("GET", "/promo/map"): "idem — borné par MAP_THROTTLE (180/min)",
-    ("GET", "/promo/map/center"): "centrage de la carte sur les communes choisies — "
-                                  "même surface que /promo/map et même MAP_THROTTLE, "
-                                  "en moins précis (positions agrégées, pas listées)",
-    ("GET", "/commune"): "sélecteur wilaya→commune, chargé en entier par CommuneCascadeField",
+    ("GET", "/promo/config"): "repères géographiques (point par défaut, rayon par "
+                              "défaut, rayon maximum) — l'app en a besoin AVANT de "
+                              "pouvoir demander quoi que ce soit, donc avant tout "
+                              "compte ; ne renvoie que quatre nombres de "
+                              "configuration, aucune donnée métier ni personnelle",
+    # ⚠️ `GET /commune` dépinglée le 2026-08-13, dans le MÊME commit que la
+    # suppression de la route. C'est obligatoire dans ce sens-là : une entrée
+    # épinglée devenue introuvable ne fait qu'**avertir** ici, alors que
+    # l'inverse — une route ouverte non épinglée — sort en échec. Rien ne
+    # rattrape donc un dépinglage oublié, et c'est très exactement ce qui est
+    # arrivé à `/promo/config` le 2026-08-12.
     ("GET", "/highlight"): "bandeau Top promos de l'accueil",
     ("GET", "/commercant/:id/public"): "fiche commerçant publique",
     ("GET", "/p/:id"): "redirection de partage vers le store",
     ("GET", "/.well-known/assetlinks.json"): "vérification App Links Android",
     ("GET", "/.well-known/apple-app-site-association"): "vérification Universal Links iOS",
-    ("POST", "/commercant/login"): "authentification — STRICT_THROTTLE",
-    ("POST", "/agent/login"): "authentification — STRICT_THROTTLE",
-    ("POST", "/admin/login"): "authentification — STRICT_THROTTLE",
+    ("POST", "/commercant/login"): "authentification — AUTH_THROTTLE",
+    ("POST", "/agent/login"): "authentification — AUTH_THROTTLE",
+    ("POST", "/admin/login"): "authentification — AUTH_THROTTLE",
     ("POST", "/commercant/register"): "inscription — STRICT_THROTTLE",
     ("POST", "/report"): "signalement client anonyme — STRICT_THROTTLE, borné par IP "
                          "parce que le X-Device-Id est déclaratif",
@@ -244,7 +251,9 @@ def jetons():
     révoqué, et une nouvelle connexion rend un jeton valide. L'ordre inverse
     invaliderait le jeton qu'on vient d'obtenir.
 
-    ⚠️ Chaque connexion consomme du STRICT_THROTTLE (5/min/IP) — d'où la pause.
+    ⚠️ Chaque connexion consomme du AUTH_THROTTLE (50/min/IP depuis le
+    2026-08-13, 5 auparavant) — la pause reste, elle ne coûte rien et le seau
+    est partagé avec tout ce qui tourne sur la même IP.
     """
     def login(chemin, corps, quoi):
         s, _ = None, None
@@ -420,12 +429,17 @@ def main():
     # (un contrôle dont la cible rétrécit avec ce qu'il contrôle).
     only = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--only=")), None)
     if only:
+        # ⚠️ Le dénominateur se MESURE. Il était écrit « sur 48 » en dur : un
+        # nombre dans une phrase ne peut pas échouer (règle 33), et celui-ci
+        # devient faux au premier ajout ou retrait de route protégée — c'est-à-
+        # dire exactement quand on regarde cette sortie.
+        total_protegees = len(protegees)
         protegees = [t for t in protegees if only in t[1]]
         if not protegees:
             print("❌ --only=%s ne correspond à aucune route protégée." % only)
             sys.exit(2)
-        print("⚠️  filtre --only=%s : %d route(s) sondée(s) sur 48.\n"
-              % (only, len(protegees)))
+        print("⚠️  filtre --only=%s : %d route(s) sondée(s) sur %d.\n"
+              % (only, len(protegees), total_protegees))
     sondes = sum(3 if set(r) != set(ROLES_CONNUS) else 2 for _, _, r in protegees)
     print("── banc de refus ──")
     print("%d routes protégées (sur %d, %d ouvertes épinglées, %d host-scopées)"

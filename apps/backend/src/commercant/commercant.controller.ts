@@ -15,7 +15,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AuthService } from '../auth/auth.service';
 import type { AuthTokenPayload } from '../auth/role';
-import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
+import {
+  AUTH_THROTTLE,
+  SENSITIVE_ACTION_THROTTLE,
+  STRICT_THROTTLE,
+} from '../common/throttle';
 import { DeviceId } from '../common/decorators/device-id.decorator';
 import { StorageService } from '../storage/storage.service';
 import { CommercantService } from './commercant.service';
@@ -24,6 +28,7 @@ import { Commercant } from './entities/commercant.entity';
 import { LoginCommercantDto } from './dto/login-commercant.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
 import { RequestRegistreVerificationDto } from './dto/request-registre-verification.dto';
+import { SetCommercantPositionDto } from './dto/set-position.dto';
 import { UpdateCommercantDto } from './dto/update-commercant.dto';
 
 @Controller('commercant')
@@ -53,7 +58,12 @@ export class CommercantController {
     };
   }
 
-  @Throttle(STRICT_THROTTLE)
+  // ⚠️ `AUTH_THROTTLE` (50/min) et non `STRICT_THROTTLE` (5/min) comme la route
+  // juste au-dessus : c'est une IP qui est comptée, et le parc mobile sort
+  // derrière du NAT opérateur. La création de compte, elle, reste stricte —
+  // voir `common/throttle.ts` pour ce que ce relèvement coûte sur les PIN à
+  // quatre chiffres encore acceptés par `PIN_VERIFY_PATTERN`.
+  @Throttle(AUTH_THROTTLE)
   @Post('login')
   async login(@Body() dto: LoginCommercantDto) {
     const commercant = await this.commercantService.login(
@@ -82,7 +92,6 @@ export class CommercantController {
       nom: commercant.nom,
       adresse: commercant.adresse,
       categorie: commercant.categorie,
-      communeId: commercant.communeId,
       // Ajouté 2026-07-12 : le client a besoin d'appeler le commerçant
       // depuis la fiche promo (tap-pour-appeler), pas seulement de voir son
       // adresse — jusqu'ici omis de cette réponse publique (contrairement à
@@ -101,7 +110,6 @@ export class CommercantController {
       nom: commercant.nom,
       adresse: commercant.adresse,
       categorie: commercant.categorie,
-      communeId: commercant.communeId,
       accountState: commercant.accountState,
       originVerification: commercant.originVerification,
       registreStatus: commercant.registreStatus,
@@ -133,6 +141,33 @@ export class CommercantController {
       user.sub,
       dto,
     );
+    return this.toMeJson(commercant);
+  }
+
+  /**
+   * Pose la position du commerce, et **elle seule**.
+   *
+   * Existe pour une raison précise : `PATCH /commercant/me` allume
+   * `profilePendingReview`, qui **bloque la publication**. Un commerçant à qui
+   * l'on vient de refuser une publication faute de position, et qui la corrige
+   * par la route générale, se retrouve aussitôt bloqué une seconde fois — plus
+   * longtemps, puisqu'il attend alors un administrateur. Il ne peut pas s'en
+   * sortir seul, et le jour de la bascule cela ferait une file de modération de
+   * la taille du parc sans position.
+   *
+   * Voir `SetCommercantPositionDto` et `CommercantService.setPosition` : la
+   * dispense ne vaut que pour la **première** pose ; déplacer une position déjà
+   * renseignée reste une modification de profil.
+   */
+  @Throttle(SENSITIVE_ACTION_THROTTLE)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('commercant')
+  @Patch('me/position')
+  async setMyPosition(
+    @CurrentUser() user: AuthTokenPayload,
+    @Body() dto: SetCommercantPositionDto,
+  ) {
+    const commercant = await this.commercantService.setPosition(user.sub, dto);
     return this.toMeJson(commercant);
   }
 

@@ -1,0 +1,9 @@
+/* Justification de la localisation.
+   ⚠️ Elle décrit un usage SUR L'APPAREIL — centrage de la carte et calcul des
+   distances. Ce qui part au service est le point que le client enregistre
+   lui-même, décrit dans la politique de confidentialité, pas cette lecture-ci.
+   Réécrite une première fois après le refus App Store 5.1.1(iv) du 2026-08-05 :
+   ne pas la régresser. */
+"NSLocationWhenInUseUsageDescription" = "Utilisée pour centrer la carte sur vous et afficher les distances — et, si vous êtes commerçant, pour enregistrer la position de votre commerce afin que les clients puissent le trouver.";
+"NSCameraUsageDescription" = "Utilisée pour prendre la photo de votre commerce ou d'une promo.";
+"NSPhotoLibraryUsageDescription" = "Utilisée pour choisir une photo existante de votre commerce depuis votre galerie.";

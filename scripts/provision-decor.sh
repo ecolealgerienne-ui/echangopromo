@@ -11,14 +11,17 @@
 # Il pose ce qu'un banc ne peut pas poser lui-même :
 #   - un **admin** aux identifiants connus (le seul en base a un mot de passe
 #     que personne ne connaît) ;
-#   - un **agent** rattaché à une commune — il n'y en a aucun en base ;
+#   - **deux agents** (le second est le témoin de la portée globale) ;
 #   - un **commerçant** actif, registre validé.
 #
 # ── ⚠️ Idempotent, et c'est une contrainte de plafond ───────────────────────
 #
-# Les identifiants sont **stables**, jamais aléatoires : `STRICT_THROTTLE`
-# plafonne connexions et inscriptions à 5/min/IP. On tente donc la connexion
-# d'abord — si elle réussit, le compte existe et on ne consomme rien de plus.
+# Les identifiants sont **stables**, jamais aléatoires : on tente donc la
+# connexion d'abord — si elle réussit, le compte existe et on ne consomme ni
+# une inscription ni une création. Le motif date de l'époque où les connexions
+# étaient plafonnées à 5/min/IP ; il reste juste pour `POST /commercant/register`,
+# resté à 5 (`STRICT_THROTTLE`), et il évite de toute façon de dupliquer un
+# compte à chaque rejeu.
 #
 # ── Usage ───────────────────────────────────────────────────────────────────
 #
@@ -29,7 +32,12 @@
 set -uo pipefail
 
 API_URL="${API_URL:-http://localhost:3000}"
-PACE="${PACE_SECONDS:-13}"   # 5 connexions/min => ~12s entre deux
+# ⚠️ Valait 13 s tant que les connexions étaient à 5/min (« ~12 s entre deux »).
+# Elles sont à 50/min depuis le 2026-08-13 (`AUTH_THROTTLE`) et ce décor en
+# consomme six : la temporisation ne protège plus rien de ce côté. Elle reste,
+# courte, parce que deux des huit pauses encadrent une inscription (seau strict,
+# toujours 5/min) et une écriture (seau des écritures, 20/min).
+PACE="${PACE_SECONDS:-2}"
 
 # ⚠️ Stables. Voir l'en-tête.
 D_ADMIN_EMAIL="${D_ADMIN_EMAIL:-decor-admin@echango.local}"
@@ -40,6 +48,73 @@ D_AGENT_B_EMAIL="${D_AGENT_B_EMAIL:-decor-agent-b@echango.local}"
 D_AGENT_B_PASSWORD="${D_AGENT_B_PASSWORD:-decor-agent-b-2026}"
 D_COMMERCANT_TEL="${D_COMMERCANT_TEL:-+213555000101}"
 D_COMMERCANT_PIN="${D_COMMERCANT_PIN:-654321}"
+
+# ── Position du commerçant du décor ──────────────────────────────────────────
+#
+# ⚠️ **Un décor appelé avec un autre numéro pose un commerce de PLUS, et
+# l'ancien reste.** Rien ne le nettoie, et jusqu'au 2026-08-13 tous atterrissaient
+# au même point : la base de développement portait **dix « Commerce Décor » aux
+# coordonnées exactement identiques**, plus quatre « Commerce Sans Point » et
+# trois « Rayon Proche », soit 21 commerces en 5 piles.
+#
+# ⚠️ **Des points confondus ne se séparent à AUCUN zoom.** La carte les regroupe
+# en une grappe qui affiche un nombre, définitivement — et le parcours carte,
+# qui tape les grappes jusqu'à voir un marqueur individuel, tournait dans le
+# vide puis mourait sur une course (`Bad state: No element`). Le produit
+# fonctionnait ; c'est le décor qui rendait la cible inatteignable.
+#
+# Chaque numéro obtient donc **son** point, dérivé de ses quatre derniers
+# chiffres. Déterministe : rejouer le même numéro rend le même point, sinon le
+# décor ne serait plus rejouable.
+#
+# ⚠️ **Le numéro par défaut garde le point historique, à l'octet près.** C'est
+# lui que `registre.py`, `client_rayon.py` et le réglage GPS de l'émulateur
+# (`adb emu geo fix`) prennent comme repère ; le décaler d'un mètre ferait
+# bouger des mesures de distance sans rapport avec ce qu'on corrige ici.
+#
+# L'écart maximal est de ~0,004° (~440 m) : assez pour que deux marqueurs se
+# séparent bien avant le zoom maximal, assez peu pour rester dans tout cadre
+# que ces bancs regardent.
+# ── Nom et adresse, en concordance avec la déclaration réelle ────────────────
+#
+# ⚠️ **Un commerçant se déclare par nom + adresse en TEXTE LIBRE + position**
+# depuis la suppression du découpage administratif : `commune` et `wilaya` ont
+# disparu, l'adresse est facultative et purement indicative, et c'est la
+# position qui décide de tout (visibilité, rayon, carte).
+#
+# Le décor doit donc dire les trois, et les faire **concorder** : un décor qui
+# pose trois commerçants dans trois villes en leur donnant le même nom et la
+# même adresse ne ressemble à aucune déclaration réelle. Il rend aussi deux
+# choses inéprouvables — la recherche admin, qui porte sur nom/téléphone/adresse
+# depuis le 2026-08-13, et toute assertion d'écran qui doit distinguer un
+# commerce d'un autre.
+#
+# Les défauts gardent les valeurs historiques : c'est le décor de Djelfa, et
+# plusieurs bancs le lisent.
+# ⚠️ **`D_SANS_PROMO=oui` s'arrête après le compte, sans créer de promo.**
+# Le décor à trois villes crée les promos **par le formulaire commerçant**
+# (`parcours_creation_promo_test.dart`) et non par l'API : un décor fabriqué par
+# un chemin que le produit n'emprunte pas ne prouve rien sur ce chemin, et c'est
+# précisément l'écran de création qu'on veut voir tenir. Sans ce mode, il
+# faudrait créer la promo ici puis la recréer à l'écran — deux promos pour un
+# commerçant qui n'en veut qu'une, et un plafond quotidien consommé pour rien.
+D_SANS_PROMO="${D_SANS_PROMO:-non}"
+
+D_COMMERCANT_NOM="${D_COMMERCANT_NOM:-Commerce Décor}"
+D_COMMERCANT_ADRESSE="${D_COMMERCANT_ADRESSE:-Rue du Décor}"
+
+D_COMMERCANT_LAT="${D_COMMERCANT_LAT:-}"
+D_COMMERCANT_LNG="${D_COMMERCANT_LNG:-}"
+if [ -z "$D_COMMERCANT_LAT" ] || [ -z "$D_COMMERCANT_LNG" ]; then
+  if [ "$D_COMMERCANT_TEL" = "+213555000101" ]; then
+    D_COMMERCANT_LAT=34.6714
+    D_COMMERCANT_LNG=3.2630
+  else
+    _suffixe="$(printf '%s' "$D_COMMERCANT_TEL" | tr -cd '0-9' | tail -c 4)"
+    D_COMMERCANT_LAT="$(awk -v s="$_suffixe" 'BEGIN{printf "%.5f", 34.6714 + ((s % 100) - 50) * 0.00008}')"
+    D_COMMERCANT_LNG="$(awk -v s="$_suffixe" 'BEGIN{printf "%.5f", 3.2630 + ((int(s / 100) % 100) - 50) * 0.00008}')"
+  fi
+fi
 # Identifiant d'appareil du décor, requis par les routes client anonymes
 # (`@DeviceId()`). Fixe et reconnaissable : ce décor ne mesure pas de vues, il
 # a seulement besoin que l'en-tête existe.
@@ -83,7 +158,13 @@ echo "════════════════════════�
 echo "  Décor des bancs — $API_URL"
 echo "════════════════════════════════════════════════════════════════"
 
-curl -sS -o /dev/null "$API_URL/commune" || fail "Backend injoignable sur $API_URL"
+# ⚠️ **`--fail`, et sur une route qui existe** (2026-08-13). Cette sonde visait
+# `GET /commune` SANS `--fail` : `curl` sort en 0 sur un 404, donc elle restait
+# verte alors même que la route venait de disparaître. Un `curl -o /dev/null`
+# sans `--fail` dans un banc est un aveu — on a décidé de ne pas savoir
+# (règle 29). `GET /promo/config` est épinglée comme route ouverte, donc stable.
+curl -sS --fail -o /dev/null "$API_URL/promo/config" \
+  || fail "Backend injoignable sur $API_URL"
 
 # ─────────────────────────────────────────────────────────────────────────────
 step "1. Admin aux identifiants connus"
@@ -106,22 +187,19 @@ fi
 pass "Admin connecté ($D_ADMIN_EMAIL)"
 
 # ─────────────────────────────────────────────────────────────────────────────
-step "2. Deux communes DISJOINTES"
-
-# ⚠️ Deux communes, et c'est le cœur du banc d'appartenance : sans une seconde
-# commune, l'agent intrus serait un agent sans commune — un cas dégénéré qui ne
-# prouve rien du filtre réel.
-COMMUNE_JSON="$(api GET /commune)"
-COMMUNE_ID="$(echo "$COMMUNE_JSON" | jq -r '.items[0].id // empty')"
-COMMUNE_NOM="$(echo "$COMMUNE_JSON" | jq -r '.items[0].nom // empty')"
-COMMUNE_B_ID="$(echo "$COMMUNE_JSON" | jq -r '.items[1].id // empty')"
-COMMUNE_B_NOM="$(echo "$COMMUNE_JSON" | jq -r '.items[1].nom // empty')"
-[ -n "$COMMUNE_ID" ] || fail "Aucune commune en base" "lancer npm run seed:communes"
-[ -n "$COMMUNE_B_ID" ] || fail "Une seule commune en base — le banc d'appartenance en exige deux"
-pass "Commune A « $COMMUNE_NOM » · Commune B « $COMMUNE_B_NOM »"
-
+# ⚠️ **L'étape « deux communes disjointes » a disparu le 2026-08-13** avec le
+# découpage administratif. Elle posait la prémisse de `test-appartenance` :
+# deux territoires sans intersection, pour qu'un refus mesuré soit un refus
+# d'appartenance et pas autre chose.
+#
+# **Les DEUX agents restent, et c'est essentiel.** Ils ne servent plus à
+# prouver un cloisonnement mais son contraire : que deux agents distincts
+# voient exactement la même chose, égale à ce que voit l'admin. Avec un seul
+# agent, « il voit tout » serait indiscernable de « il voit ce qu'il voyait » —
+# la sonde ne pourrait pas refuser (règle 28). C'est le second agent qui fait
+# la mesure, hier comme aujourd'hui.
 # ─────────────────────────────────────────────────────────────────────────────
-step "3. Agent rattaché à cette commune"
+step "2. Deux agents, sans territoire"
 
 agent_login() {
   api POST /agent/login "$(jq -n --arg e "$D_AGENT_EMAIL" --arg p "$D_AGENT_PASSWORD" \
@@ -133,54 +211,29 @@ AGENT_TOKEN="$(agent_login)"
 if [ -z "$AGENT_TOKEN" ]; then
   info "Absent — création via POST /admin/agent"
   out="$(api POST /admin/agent "$(jq -n --arg e "$D_AGENT_EMAIL" --arg p "$D_AGENT_PASSWORD" \
-    --arg c "$COMMUNE_ID" '{email:$e, password:$p, nom:"Agent Décor", communeIds:[$c]}')" \
+    '{email:$e, password:$p, nom:"Agent Décor"}')" \
     "$ADMIN_TOKEN")"
   echo "$out" | est_erreur && fail "Création agent refusée" "$(echo "$out" | jq -c '{code,message}')"
   sleep "$PACE"
   AGENT_TOKEN="$(agent_login)"
   [ -n "$AGENT_TOKEN" ] || fail "Connexion agent impossible après création"
 fi
-# ⚠️ **Le rattachement est VÉRIFIÉ, pas annoncé** (2026-08-05).
+# ⚠️ **`assurer_communes` a été supprimée le 2026-08-13**, et il vaut la peine
+# de dire ce qu'elle corrigeait — le défaut, lui, peut revenir sous une autre
+# forme. Les communes n'étaient posées qu'à la CRÉATION de l'agent : sur un
+# agent déjà existant, le décor se contentait de se connecter puis d'imprimer
+# « commune « Ain Chouhada » ». Une affirmation, pas une mesure. Agent A avait
+# ainsi accumulé QUATRE communes au fil des sessions, dont celle de l'agent B,
+# et les deux territoires annoncés disjoints se chevauchaient — les sondes
+# d'appartenance testaient alors un refus qui n'avait pas lieu d'être.
 #
-# Les communes n'étaient posées qu'à la CRÉATION de l'agent. Sur un agent déjà
-# existant, le décor se contentait de se connecter puis d'imprimer
-# « commune « Ain Chouhada » » — une affirmation, pas une mesure. Agent A avait
-# ainsi accumulé QUATRE communes au fil des sessions, dont celle de l'agent B :
-# les deux territoires, annoncés disjoints, se chevauchaient.
-#
-# Ce n'est pas un détail de confort. `test-appartenance` repose entièrement sur
-# cette disjonction : l'agent B y sert d'intrus, et s'il partage une commune
-# avec A, la sonde teste un refus qui n'avait pas lieu d'être. Un décor qui
-# affirme sans vérifier fabrique exactement le genre de banc qui rassure.
-assurer_communes() { # JETON_AGENT EMAIL COMMUNE_ID LIBELLE
-  local tok="$1" email="$2" commune="$3" libelle="$4"
-  local actuelles
-  actuelles="$(api GET /agent/me '' "$tok" | jq -r '[.communes[]?.id] | sort | join(",")')"
-  if [ "$actuelles" = "$commune" ]; then
-    return 0
-  fi
-  info "$libelle : rattachement à corriger (actuel : ${actuelles:-aucun})"
-  local aid
-  aid="$(api GET "/admin/agent?limit=100" '' "$ADMIN_TOKEN" \
-    | jq -r --arg e "$email" '.items[]? | select(.email == $e) | .id' | head -1)"
-  [ -n "$aid" ] || fail "$libelle introuvable dans /admin/agent"
-  out="$(api PATCH "/admin/agent/$aid/communes" \
-    "$(jq -n --arg c "$commune" '{communeIds:[$c]}')" "$ADMIN_TOKEN")"
-  echo "$out" | est_erreur && fail "$libelle : réassignation refusée" \
-    "$(echo "$out" | jq -c '{code,message}')"
-  sleep "$PACE"
-  # Relu APRÈS écriture : c'est l'état final qui compte, pas le code de sortie
-  # de la requête qui prétend l'avoir posé.
-  actuelles="$(api GET /agent/me '' "$tok" | jq -r '[.communes[]?.id] | sort | join(",")')"
-  [ "$actuelles" = "$commune" ] || fail \
-    "$libelle : rattachement toujours faux après réassignation" \
-    "attendu $commune, obtenu ${actuelles:-aucun}"
-}
+# **La leçon survit au chantier** : un décor qui affirme sans relire l'état
+# fabrique exactement le genre de banc qui rassure. Toute propriété dont un
+# banc dépend se lit après écriture, jamais depuis le code de sortie de la
+# requête qui prétend l'avoir posée.
+pass "Agent A connecté ($D_AGENT_EMAIL)"
 
-assurer_communes "$AGENT_TOKEN" "$D_AGENT_EMAIL" "$COMMUNE_ID" "Agent A"
-pass "Agent A connecté ($D_AGENT_EMAIL) — commune « $COMMUNE_NOM » (vérifiée)"
-
-# ── Agent B : l'intrus du banc d'appartenance ────────────────────────────────
+# ── Agent B : le témoin de la portée globale ─────────────────────────────────
 agent_b_login() {
   api POST /agent/login "$(jq -n --arg e "$D_AGENT_B_EMAIL" --arg p "$D_AGENT_B_PASSWORD" \
     '{email:$e, password:$p}')" | jq -r '.accessToken // empty'
@@ -189,24 +242,20 @@ agent_b_login() {
 sleep "$PACE"
 AGENT_B_TOKEN="$(agent_b_login)"
 if [ -z "$AGENT_B_TOKEN" ]; then
-  info "Absent — création via POST /admin/agent, sur la commune B"
+  info "Absent — création via POST /admin/agent"
   out="$(api POST /admin/agent "$(jq -n --arg e "$D_AGENT_B_EMAIL" --arg p "$D_AGENT_B_PASSWORD" \
-    --arg c "$COMMUNE_B_ID" '{email:$e, password:$p, nom:"Agent Décor B", communeIds:[$c]}')" \
+    '{email:$e, password:$p, nom:"Agent Décor B"}')" \
     "$ADMIN_TOKEN")"
   echo "$out" | est_erreur && fail "Création agent B refusée" "$(echo "$out" | jq -c '{code,message}')"
   sleep "$PACE"
   AGENT_B_TOKEN="$(agent_b_login)"
   [ -n "$AGENT_B_TOKEN" ] || fail "Connexion agent B impossible après création"
 fi
-assurer_communes "$AGENT_B_TOKEN" "$D_AGENT_B_EMAIL" "$COMMUNE_B_ID" "Agent B"
-pass "Agent B connecté ($D_AGENT_B_EMAIL) — commune « $COMMUNE_B_NOM » (vérifiée)"
-
-# Les deux territoires sont maintenant d'un seul élément chacun, et distincts
-# par construction (`COMMUNE_ID` ≠ `COMMUNE_B_ID`, garanti à l'étape 2). La
-# disjonction sur laquelle reposent `test-appartenance` et
-# `test-admin-dashboard` n'est donc plus une supposition.
-[ "$COMMUNE_ID" != "$COMMUNE_B_ID" ] || fail \
-  "Les deux communes du décor sont identiques — la disjonction est perdue"
+# ⚠️ **Ce n'est plus « l'intrus », c'est le témoin.** Il servait à prouver un
+# refus ; il sert maintenant à prouver que les deux agents voient la même
+# chose. La vérification de disjonction qui suivait ici n'a plus d'objet — il
+# n'y a plus rien à disjoindre.
+pass "Agent B connecté ($D_AGENT_B_EMAIL)"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ── Envoi d'une VRAIE photo ────────────────────────────────────────────────
@@ -243,18 +292,20 @@ COMMERCANT_TOKEN="$(commercant_login)"
 if [ -z "$COMMERCANT_TOKEN" ]; then
   info "Absent — inscription (consomme 1 sur le plafond horaire)"
   # ⚠️ Les coordonnées ne sont PAS décoratives. Sans elles, ce commerçant
-  # n'apparaît sur aucune carte, et `GET /promo/map/center` rend
-  # `{"center":null}` pour sa commune — le parcours écran « carte » s'arrête
-  # alors sur « centre absent », et le banc `client-carte` mesure une carte
-  # vide. Le décor prétend préparer le terrain de TOUS les bancs ; il lui
-  # manquait le point que celui de la carte va chercher.
+  # n'apparaît sur aucune carte, ne sort dans aucune liste au rayon, et
+  # **ne peut plus rien publier** depuis le 2026-08-12 : le banc `client-carte`
+  # mesurerait une carte vide et les autres se feraient refuser leurs promos.
+  # Le décor prétend préparer le terrain de TOUS les bancs ; il lui manquait le
+  # point que la moitié d'entre eux vont chercher.
   # (Constaté le 2026-08-05 : `seed-demo.sh` en posait, `provision-decor.sh`
-  # non — d'où une commune peuplée avec centre et une commune de décor sans.)
+  # non — d'où un décor sans point de repère.)
   out="$(api POST /commercant/register "$(jq -n --arg t "$D_COMMERCANT_TEL" \
-    --arg p "$D_COMMERCANT_PIN" --arg c "$COMMUNE_ID" \
-    '{telephone:$t, nom:"Commerce Décor", adresse:"Rue du Décor", categorie:"alimentation",
-      communeId:$c, pin:$p, acceptedTerms:true,
-      latitude:34.6714, longitude:3.2630}')")"
+    --arg p "$D_COMMERCANT_PIN" \
+    --arg la "$D_COMMERCANT_LAT" --arg ln "$D_COMMERCANT_LNG" \
+    --arg nom "$D_COMMERCANT_NOM" --arg adr "$D_COMMERCANT_ADRESSE" \
+    '{telephone:$t, nom:$nom, adresse:$adr, categorie:"alimentation",
+      pin:$p, acceptedTerms:true,
+      latitude:($la|tonumber), longitude:($ln|tonumber)}')")"
   echo "$out" | est_erreur && fail "Inscription commerçant refusée" \
     "$(echo "$out" | jq -c '{code,message}')"
   sleep "$PACE"
@@ -263,8 +314,48 @@ if [ -z "$COMMERCANT_TOKEN" ]; then
 fi
 pass "Commerçant connecté ($D_COMMERCANT_TEL)"
 
+# ⚠️ **Réparer un compte de décor ANTÉRIEUR au correctif du 2026-08-05.**
+# Ce script est idempotent *par la connexion* : si le compte existe déjà, il
+# n'est jamais réinscrit — donc les coordonnées ajoutées à sa charge utile
+# d'inscription ne s'appliquent jamais à lui. Un décor monté avant cette date
+# reste sans position indéfiniment, et depuis le 2026-08-12 il ne peut plus
+# publier : le décor échouait à l'étape 5 sur `COMMERCANT_POSITION_REQUIRED`,
+# constaté ce jour-là.
+#
+# C'est exactement le cas pour lequel `PATCH /commercant/me/position` existe :
+# elle pose le point SANS déclencher de revue de profil à la première pose, là
+# où `PATCH /commercant/me` renverrait le compte attendre un admin — et le
+# décor se saboterait lui-même, comme le 2026-08-05.
+POSITION_ACTUELLE="$(api GET /commercant/me '' "$COMMERCANT_TOKEN" | jq -r '.latitude // empty')"
+if [ -z "$POSITION_ACTUELLE" ]; then
+  info "Commerçant sans position (compte antérieur) — pose via PATCH /commercant/me/position"
+  out="$(api PATCH /commercant/me/position     "$(jq -n --arg la "$D_COMMERCANT_LAT" --arg ln "$D_COMMERCANT_LNG"        '{latitude:($la|tonumber), longitude:($ln|tonumber)}')" "$COMMERCANT_TOKEN")"
+  echo "$out" | est_erreur && fail "Pose de la position refusée"     "$(echo "$out" | jq -c '{code,message}')"
+  sleep "$PACE"
+  pass "Position posée ($D_COMMERCANT_LAT, $D_COMMERCANT_LNG)"
+fi
+
 # Validation du registre — geste d'administration, pas geste d'utilisateur.
-CID="$(api GET "/admin/commercant?limit=100" '' "$ADMIN_TOKEN" \
+# ⚠️ **`?search=` et non un balayage de `?limit=100`** (2026-08-13). Cette
+# recherche parcourait la première page d'une liste triée par date de création
+# décroissante : au-delà de cent comptes en base, le commerçant du décor — l'un
+# des plus anciens — n'y était **plus**, et le décor annonçait « Commerçant
+# introuvable côté admin après inscription » sur un compte parfaitement
+# présent. C'est le piège nommé par la règle 15 : un consommateur qui traite un
+# point de terminaison paginé comme une liste complète tronque en silence dès
+# que le volume dépasse la page.
+#
+# Le filtre `search` porte sur nom/téléphone/adresse depuis le même jour. On lui
+# donne le numéro, unique parmi les comptes actifs, et on exige quand même
+# l'égalité exacte : une recherche est un filtre, pas une clé.
+#
+# ⚠️ **Sans le `+`, et ce n'est pas un détail.** Dans une chaîne de requête, `+`
+# est décodé comme un ESPACE : passer `+213555000101` tel quel fait chercher
+# « 213555000101 » précédé d'un blanc, et ne trouve rien. Le filtre est un
+# `ILIKE %…%`, donc la sous-chaîne sans indicatif suffit — et elle évite
+# d'avoir à encoder quoi que ce soit.
+D_TEL_RECHERCHE="${D_COMMERCANT_TEL#+}"
+CID="$(api GET "/admin/commercant?limit=100&search=$D_TEL_RECHERCHE" '' "$ADMIN_TOKEN" \
   | jq -r --arg t "$D_COMMERCANT_TEL" '.items[]? | select(.telephone==$t) | .id' | head -1)"
 [ -n "$CID" ] || fail "Commerçant introuvable côté admin après inscription"
 
@@ -277,7 +368,7 @@ CID="$(api GET "/admin/commercant?limit=100" '' "$ADMIN_TOKEN" \
 # ⚠️ `limit` est plafonné côté serveur : une valeur trop grande rend un 400, et
 # un `(.items // .)` complaisant se met alors à itérer l'objet d'erreur au lieu
 # d'échouer. Le repli masquait la panne — on lit donc `.items` et rien d'autre.
-liste="$(api GET "/admin/commercant?limit=100" '' "$ADMIN_TOKEN")"
+liste="$(api GET "/admin/commercant?limit=100&search=$D_TEL_RECHERCHE" '' "$ADMIN_TOKEN")"
 echo "$liste" | est_erreur && fail "Liste des commerçants refusée" \
   "$(echo "$liste" | jq -c '{code,message}')"
 ETAT="$(echo "$liste" | jq -r --arg t "$D_COMMERCANT_TEL" \
@@ -300,7 +391,40 @@ if [ "$ETAT" != "valide" ]; then
 fi
 pass "Registre validé — commerçant $CID"
 
+# ── ⚠️ Un décor idempotent CONVERGE, il ne fait pas que créer ────────────────
+#
+# Le nom et l'adresse ne sont posés qu'à l'inscription. Un compte déjà existant
+# gardait donc les valeurs de sa première pose, quoi qu'on déclare ensuite —
+# et les neuf commerçants des trois villes se sont retrouvés nommés
+# « Commerce Décor », parce qu'ils avaient été inscrits avant que le nom soit
+# paramétrable. Le décor annonçait « Épicerie Hassi Bahbah » dans sa sortie et
+# posait autre chose en base : **un décor qui décrit ce qu'il voulait faire
+# plutôt que ce qu'il a fait**.
+#
+# On rapproche donc l'état réel de l'état déclaré, à chaque passage.
+etat_actuel="$(api GET /commercant/me '' "$COMMERCANT_TOKEN"   | jq -r '[(.nom // ""), (.adresse // "")] | @tsv')"
+nom_actuel="${etat_actuel%%$'	'*}"
+adresse_actuelle="${etat_actuel#*$'	'}"
+if [ "$nom_actuel" != "$D_COMMERCANT_NOM" ] ||    [ "$adresse_actuelle" != "$D_COMMERCANT_ADRESSE" ]; then
+  info "Nom/adresse à aligner : « $nom_actuel » → « $D_COMMERCANT_NOM »"
+  out="$(api PATCH /commercant/me "$(jq -n --arg nom "$D_COMMERCANT_NOM"     --arg adr "$D_COMMERCANT_ADRESSE" '{nom:$nom, adresse:$adr}')"     "$COMMERCANT_TOKEN")"
+  echo "$out" | est_erreur && fail "Mise à jour du profil refusée"     "$(echo "$out" | jq -c '{code,message}')"
+  # ⚠️ **Toute modification de profil rallume `profilePendingReview`**, ce qui
+  # BLOQUE la publication de nouvelles promos jusqu'à validation admin. Un
+  # décor qui corrigerait un nom et laisserait le compte incapable de publier
+  # serait pire que le nom faux. On revalide donc dans la foulée — c'est le
+  # geste que l'admin ferait.
+  out="$(api POST "/admin/commercant/$CID/profile/valider" '{}' "$ADMIN_TOKEN")"
+  echo "$out" | est_erreur && fail "Validation du profil refusée"     "$(echo "$out" | jq -c '{code,message}')"
+  pass "Profil aligné et revalidé"
+fi
+
 # ─────────────────────────────────────────────────────────────────────────────
+if [ "$D_SANS_PROMO" = "oui" ]; then
+  step "5. Promo — SAUTÉE (D_SANS_PROMO=oui)"
+  info "L'appelant la créera par l'écran commerçant."
+  PROMO_ID=""
+else
 step "5. Une promo appartenant à ce commerçant"
 
 # Le banc d'appartenance a besoin d'une ressource RÉELLE à cibler : une promo
@@ -323,9 +447,26 @@ step "5. Une promo appartenant à ce commerçant"
 # plus haut), qui faisait lire un objet d'erreur au lieu d'un statut. Les deux
 # défauts étaient réels et indépendants ; les confondre aurait laissé celui-ci
 # en place, invisible jusqu'au jour où le décor tomberait sur un brouillon.
+# ⚠️ **Le filtre de MODÉRATION est aussi nécessaire que celui de cycle de vie**
+# (2026-08-13). Cette requête ne sélectionnait que sur `lifecycleStatus ==
+# "publiee"`, alors que la vérification d'état finale — et tous les bancs qui
+# consomment `PROMO_ID` — exigent une promo **visible du client**. Or
+# `VISIBLE_MODERATION_STATUSES` ne contient que `normale` et `verifiee_ok` :
+# une promo **signalée** est publiée ET invisible.
+#
+# Le décor rechargeait donc la promo laissée signalée par le parcours de
+# signalement, puis échouait sur « Promo du décor non publiée » — un diagnostic
+# faux qui accuse la publication alors que le sujet est la modération. Deux
+# passages complets ont été perdus dessus.
+#
+# C'est la règle #30 : le décor recopiait la moitié d'un invariant qui vit
+# ailleurs. Il applique désormais les deux conditions que sa propre assertion
+# réclame.
 PROMO_ID="$(api GET "/promo/me/all?limit=100" '' "$COMMERCANT_TOKEN" \
   | jq -r --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-      '[.items[]? | select(.lifecycleStatus == "publiee" and .dateFin > $now)][0].id // empty')"
+      '[.items[]? | select(.lifecycleStatus == "publiee" and .dateFin > $now
+         and (.moderationStatus == "normale"
+              or .moderationStatus == "verifiee_ok"))][0].id // empty')"
 
 # ⚠️ **Publier un brouillon existant AVANT d'en créer un** (2026-08-05).
 # Le plafond anti-abus est de 5 créations par 24 h et par commerçant : après un
@@ -343,10 +484,43 @@ if [ -z "$PROMO_ID" ]; then
     info "Aucune promo visible — publication d'un brouillon existant"
     pub="$(api POST "/promo/$BROUILLON_ID/publish" '{}' "$COMMERCANT_TOKEN")"
     if echo "$pub" | est_erreur; then
-      fail "Publication du brouillon du décor refusée" \
-        "$(echo "$pub" | jq -c '{code,message}')"
+      code_pub="$(echo "$pub" | jq -r '.code // empty')"
+      # ⚠️ **Le commentaire ci-dessus n'est vrai que d'un brouillon JAMAIS
+      # publié** (2026-08-13). Un brouillon peut aussi être une promo arrêtée
+      # puis remise en brouillon : elle porte alors un `publishedAt`, et le
+      # cooldown de republication s'applique. Le décor échouait durement
+      # dessus, en annonçant « publication refusée » là où il n'avait qu'à
+      # créer une promo neuve — la voie de repli existait déjà, dix lignes
+      # plus bas, et n'était simplement pas atteignable.
+      #
+      # Ce refus-ci, et lui seul, est une raison de passer à la création. Tout
+      # autre reste une panne de décor : élargir ce filtre le rendrait aveugle.
+      if [ "$code_pub" = "PROMO_REPUBLISH_TOO_SOON" ]; then
+        # ⚠️ **Deuxième essai, par l'AGENT** (2026-08-13). Le repli « on créera »
+        # ci-dessous suppose qu'une création reste possible — or les deux voies
+        # se ferment ensemble : un brouillon en cooldown ET un plafond de
+        # 5 créations/24 h atteint, et le décor n'a plus rien. C'est arrivé au
+        # rejeu d'ensemble du 2026-08-13, et il faut alors attendre le
+        # lendemain : un décor qui n'est rejouable qu'une fois par jour n'est
+        # pas un décor.
+        #
+        # L'agent est exempté des deux limites (`trustedActor`), et c'est
+        # cohérent avec le produit depuis ce même jour : un agent agit pour
+        # n'importe quel commerçant. On republie donc le MÊME brouillon plutôt
+        # que d'en créer un de plus — la voie du commerçant reste la voie
+        # normale, celle-ci n'est qu'une issue de secours nommée.
+        info "Brouillon en cooldown — republication par l'agent (exempté)"
+        pub="$(api POST "/promo/$BROUILLON_ID/publish" '{}' "$AGENT_TOKEN")"
+        if echo "$pub" | est_erreur; then
+          info "L'agent non plus — on créera ($(echo "$pub" | jq -r '.code // "?"'))"
+          BROUILLON_ID=""
+        fi
+      else
+        fail "Publication du brouillon du décor refusée" \
+          "$(echo "$pub" | jq -c '{code,message}')"
+      fi
     fi
-    PROMO_ID="$BROUILLON_ID"
+    [ -n "$BROUILLON_ID" ] && PROMO_ID="$BROUILLON_ID"
   fi
 fi
 
@@ -370,10 +544,29 @@ if [ -z "$PROMO_ID" ]; then
   PROMO_PHOTO_KEY="$(envoyer_photo "$COMMERCANT_TOKEN" promo)"
   [ -n "$PROMO_PHOTO_KEY" ] || fail "Envoi de la photo de promo impossible" \
     "le décor refuse d'annoncer une photo dont le fichier n'existe pas"
-  out="$(api POST /promo "$(jq -n --arg k "$PROMO_PHOTO_KEY" \
+  corps_promo="$(jq -n --arg k "$PROMO_PHOTO_KEY" \
     '{description:"Promo du décor", prixAvant:1000, prixApres:700,
-      categorie:"alimentation", photoKeys:[$k], dureeJours:5}')" \
-    "$COMMERCANT_TOKEN")"
+      categorie:"alimentation", photoKeys:[$k], dureeJours:5}')"
+  out="$(api POST /promo "$corps_promo" "$COMMERCANT_TOKEN")"
+  # ⚠️ **Le plafond de 5 créations/24 h ferme cette voie pour la journée**, et
+  # c'est la dernière du commerçant. On repasse alors par l'agent, exempté
+  # (`trustedActor`) — même issue de secours que pour la republication ci-dessus,
+  # et pour la même raison : un décor qui n'est rejouable qu'une fois par jour
+  # n'est pas un décor. Ce code d'erreur, et lui seul : élargir le filtre
+  # rendrait le décor aveugle à une vraie panne de création.
+  if [ "$(echo "$out" | jq -r '.code // empty')" = "PROMO_DAILY_CREATION_CAP_REACHED" ]; then
+    info "Plafond quotidien du commerçant atteint — création par l'agent"
+    # La clé S3 doit appartenir à l'ACTEUR : l'agent renvoie donc sa propre
+    # photo. `createByAgent` passe `actorId: agent`, et `assertPhotoKeysOwned`
+    # accepte alors une clé au préfixe de l'agent (voir le commentaire de
+    # `PromoController.createByAgent`).
+    PROMO_PHOTO_KEY="$(envoyer_photo "$AGENT_TOKEN" promo)"
+    [ -n "$PROMO_PHOTO_KEY" ] || fail "Envoi de la photo de promo (agent) impossible"
+    corps_promo="$(jq -n --arg k "$PROMO_PHOTO_KEY" \
+      '{description:"Promo du décor", prixAvant:1000, prixApres:700,
+        categorie:"alimentation", photoKeys:[$k], dureeJours:5}')"
+    out="$(api POST "/promo/agent/$CID" "$corps_promo" "$AGENT_TOKEN")"
+  fi
   echo "$out" | est_erreur && fail "Création promo refusée" "$(echo "$out" | jq -c '{code,message}')"
   PROMO_ID="$(echo "$out" | jq -r '.id // empty')"
   [ -n "$PROMO_ID" ] || fail "Promo créée sans id" "$(echo "$out" | head -c 200)"
@@ -400,20 +593,44 @@ etat_promo="$(api GET "/promo/$PROMO_ID" '' "$COMMERCANT_TOKEN" \
 [ "$etat_promo" = "publiee" ] || fail \
   "Promo du décor non publiée" "lifecycleStatus=${etat_promo:-<absent>}"
 pass "Promo $PROMO_ID"
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-step "6. La commune du décor a un centre de carte"
+if [ "$D_SANS_PROMO" = "oui" ]; then
+  # ⚠️ **Ce contrôle porte sur la CARTE, donc sur une promo visible.** En mode
+  # sans promo il échouerait pour la seule raison qu'on lui a demandé de ne pas
+  # en créer — un décor qui s'accuse lui-même. Ce qu'il reste à vérifier ici,
+  # c'est ce que ce mode promet : le commerçant existe et porte son point.
+  step "6. Le commerçant porte bien son point"
+  pos_me="$(api GET /commercant/me '' "$COMMERCANT_TOKEN"     | jq -r 'if (.latitude != null and .longitude != null)
+             then "\(.latitude),\(.longitude)" else empty end')"
+  [ -n "$pos_me" ] || fail "Le commerçant du décor n'a pas de position"     "sans elle il n'apparaîtra sur aucune carte, et la promo créée à l'écran ne sera publiable par personne"
+  pass "Position $pos_me"
+else
+step "6. Le commerçant du décor est bien SUR la carte"
 # ⚠️ Contrôle, pas commentaire. Le décor a longtemps posé un commerçant SANS
 # coordonnées : tout passait au vert ici, et c'est le parcours « carte » qui
-# s'arrêtait plus tard sur « centre absent » — loin de la cause. Le seul moyen
-# de savoir que le point est posé, c'est de demander au serveur ce qu'il en
-# fait, pas de vérifier qu'on l'a envoyé.
-centre="$(api GET "/promo/map/center?communeIds=$COMMUNE_ID" | jq -c '.center // empty')"
-[ -n "$centre" ] || fail "Commune « $COMMUNE_NOM » sans centre de carte" \
-  "le commerçant du décor n'a pas de coordonnées — le parcours « carte » ne pourra pas partir"
-pass "Centre $centre"
+# s'arrêtait plus tard — loin de la cause. Le seul moyen de savoir que le point
+# est posé, c'est de demander au serveur ce qu'il en fait, pas de vérifier
+# qu'on l'a envoyé.
+#
+# ⚠️ Ce contrôle interrogeait `GET /promo/map/center`, retirée le 2026-08-12
+# avec la sélection de communes. Le remplaçant est **plus fort, pas
+# équivalent** : il demande la carte elle-même, dans un cadre serré autour du
+# décor, et exige d'y trouver CE commerçant. L'ancien se contentait d'un
+# barycentre de commune — il pouvait être non nul sans que celui-ci y soit.
+bbox="north=34.72&south=34.62&east=3.32&west=3.21"
+# ⚠️ `.id` et non `.commercant.id` : la projection de `/promo/map` est PLATE —
+# le commerçant EST l'item, ses promos sont imbriquées dessous. Écrit à
+# l'aveugle la première fois, ce contrôle a rendu ❌ sur un décor parfaitement
+# posé (2026-08-12). Il a échoué franchement au lieu de rendre 0 en silence,
+# ce qui est la seule raison pour laquelle on l'a vu.
+sur_la_carte="$(api GET "/promo/map?$bbox" | jq -r --arg id "$CID"   '[.items[]? | select(.id == $id)] | length')"
+[ "${sur_la_carte:-0}" -ge 1 ] || fail "Le commerçant du décor n'est pas sur la carte"   "pas de coordonnées, ou aucune promo visible — le parcours « carte » ne pourra pas partir"
+pass "Commerçant présent dans le cadre du décor"
 
 echo
+fi
 echo "════════════════════════════════════════════════════════════════"
 echo "  Décor posé. Bloc à exporter avant de lancer un banc :"
 echo "════════════════════════════════════════════════════════════════"
@@ -430,8 +647,12 @@ export PROMO_ID='$PROMO_ID'
 ⚠️ Le banc de refus révoque le jeton admin au démarrage — c'est son troisième
    échantillon. Ce décor étant rejouable, il suffit de le relancer si besoin.
 
-⚠️ Ce script vient de consommer plusieurs connexions sur un plafond de 5/min.
-   Attendre une minute avant de lancer un banc, sinon le 429 se déguisera en
-   « identifiants incorrects ».
+⚠️ Ce script vient de consommer six connexions sur un plafond de 50/min.
+   La marge est confortable depuis le 2026-08-13 ; elle ne l'est plus si l'on
+   enchaîne sur test-auth-login.sh, dont c'est l'objet même de vider le seau.
+   Un 429 se déguise toujours en « identifiants incorrects ».
+   (Pas d'accents graves dans ce bloc : le heredoc n'est pas quoté, ils
+   seraient exécutés comme une commande — défaut introduit puis corrigé le
+   2026-08-13, il affichait « command not found » au milieu du décor.)
 
 EOF

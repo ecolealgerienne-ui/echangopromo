@@ -10,10 +10,8 @@ import {
 import { UuidParam } from '../common/decorators/uuid-param.decorator';
 import { Throttle } from '@nestjs/throttler';
 import { AgentService } from '../agent/agent.service';
-import { AssignCommunesDto } from '../agent/dto/assign-communes.dto';
 import { CreateAgentDto } from '../agent/dto/create-agent.dto';
 import { ResetAgentPasswordDto } from '../agent/dto/reset-agent-password.dto';
-import { TransferCommunesDto } from '../agent/dto/transfer-communes.dto';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { ListAuditLogQueryDto } from '../audit-log/dto/list-audit-log-query.dto';
 import { UpdatePromoActiveCapDto } from './dto/update-promo-active-cap.dto';
@@ -28,8 +26,9 @@ import { CommercantService } from '../commercant/commercant.service';
 import { ListCommercantQueryDto } from '../commercant/dto/list-commercant-query.dto';
 import { ResetCommercantPinDto } from '../commercant/dto/reset-commercant-pin.dto';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
-import { SENSITIVE_ACTION_THROTTLE, STRICT_THROTTLE } from '../common/throttle';
+import { AUTH_THROTTLE, SENSITIVE_ACTION_THROTTLE } from '../common/throttle';
 import { ListModerationQueueQueryDto } from './dto/list-moderation-queue-query.dto';
+import { ResolveModerationDto } from './dto/resolve-moderation.dto';
 import { ListPromoAdminQueryDto } from '../promo/dto/list-promo-admin-query.dto';
 import { Promo } from '../promo/entities/promo.entity';
 import { PromoService } from '../promo/promo.service';
@@ -53,7 +52,7 @@ export class AdminController {
     private readonly storageService: StorageService,
   ) {}
 
-  @Throttle(STRICT_THROTTLE)
+  @Throttle(AUTH_THROTTLE)
   @Post('login')
   async login(@Body() dto: LoginAdminDto) {
     const admin = await this.adminService.login(dto.email, dto.password);
@@ -116,44 +115,11 @@ export class AdminController {
     return this.agentService.findAll(query.page, query.limit);
   }
 
-  /**
-   * Seule route d'écriture de ce contrôleur qui n'injectait même pas
-   * `@CurrentUser()` : elle était structurellement incapable de journaliser,
-   * alors qu'elle **élargit le périmètre IDOR** consommé ensuite par
-   * `assertCommuneMatches` — et que `transfer-communes`, au même effet,
-   * journalise cinquante lignes plus bas (revue 2026-08-05, règle #11).
-   *
-   * ⚠️ Ce commentaire était placé ENTRE les décorateurs de garde et `@Patch`.
-   * NestJS s'en moque, mais le banc de frontière lisait alors la route comme
-   * **ouverte** : il retire les commentaires en laissant des lignes vides, et
-   * sa remontée du bloc de décorateurs s'arrêtait là. Un commentaire au
-   * mauvais endroit faisait donc accuser une route parfaitement protégée
-   * (2026-08-05). Le banc a été rendu insensible aux lignes vides, mais la
-   * place conventionnelle du commentaire reste au-dessus des décorateurs.
-   */
-  @Throttle(SENSITIVE_ACTION_THROTTLE)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
-  @Patch('agent/:id/communes')
-  async assignCommunes(
-    @CurrentUser() user: AuthTokenPayload,
-    @UuidParam('id') agentId: string,
-    @Body() dto: AssignCommunesDto,
-  ) {
-    const agent = await this.agentService.assignCommunes(
-      agentId,
-      dto.communeIds,
-    );
-    await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
-      actorId: user.sub,
-      action: 'assign_agent_communes',
-      targetType: 'agent',
-      targetId: agentId,
-      metadata: { communeIds: dto.communeIds },
-    });
-    return agent;
-  }
+  // ⚠️ `PATCH agent/:id/communes` supprimée le 2026-08-13. Elle portait un
+  // commentaire qui reste utile ailleurs : placé ENTRE les décorateurs de
+  // garde et le verbe, il faisait lire la route comme **ouverte** par le banc
+  // de frontière (2026-08-05). Le banc y est insensible depuis, mais la place
+  // conventionnelle d'un commentaire reste au-dessus des décorateurs.
 
   /** Révoque les JWT déjà émis pour cet agent (device perdu/volé, départ — audit règle #6). */
   @Throttle(SENSITIVE_ACTION_THROTTLE)
@@ -201,30 +167,16 @@ export class AdminController {
     return { ok: true };
   }
 
-  /** Transfère un lot de communes d'un agent à un autre (specs §3.4). */
-  @Throttle(SENSITIVE_ACTION_THROTTLE)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
-  @Post('agent/transfer-communes')
-  async transferCommunes(
-    @CurrentUser() user: AuthTokenPayload,
-    @Body() dto: TransferCommunesDto,
-  ) {
-    await this.agentService.transferCommunes(
-      dto.communeIds,
-      dto.fromAgentId,
-      dto.toAgentId,
-    );
-    await this.auditLogService.record({
-      actorType: AuditActorType.ADMIN,
-      actorId: user.sub,
-      action: 'transfer_communes',
-      targetType: 'agent',
-      targetId: dto.toAgentId,
-      metadata: { communeIds: dto.communeIds, fromAgentId: dto.fromAgentId },
-    });
-    return { ok: true };
-  }
+  // ⚠️ `POST agent/transfer-communes` supprimée le 2026-08-13 (specs §3.4).
+  // Elle répondait à un besoin métier réel que **rien ne reprend** : au départ
+  // d'un agent, transférer son secteur pour que ses commerces ne cessent pas
+  // d'être suivis en silence. Sans territoire, la question ne se pose plus.
+  //
+  // ⚠️ Les entrées d'audit `assign_agent_communes` et `transfer_communes`
+  // restent en base, avec leurs `metadata.communeIds` pointant vers une table
+  // supprimée. **Elles ne sont pas purgées** : c'est de la traçabilité
+  // historique, et l'écran d'audit affiche `action` en brut, donc rien ne
+  // casse.
 
   /**
    * DTO explicite plutôt qu'un spread d'entité (règle #4) — la file de
@@ -258,51 +210,27 @@ export class AdminController {
     };
   }
 
-  /**
-   * Agent = modérateur (plan de correction, Phase 2) : `undefined` pour un
-   * admin (vue globale), la liste des communes de l'agent sinon — jamais
-   * `[]` silencieux qui laisserait passer une requête non filtrée par erreur
-   * ailleurs (chaque appelant traite explicitement le cas `undefined`).
-   */
-  private async scopedCommuneIds(
-    user: AuthTokenPayload,
-  ): Promise<string[] | undefined> {
-    if (user.role !== 'agent') return undefined;
-    const agent = await this.agentService.findByIdOrFail(user.sub);
-    return agent.communes.map((commune) => commune.id);
-  }
-
-  /** Garde IDOR (règle #1) : un agent ne peut modérer que les promos de ses propres communes. */
-  private async assertCanModerate(
-    user: AuthTokenPayload,
-    promoId: string,
-  ): Promise<void> {
-    if (user.role !== 'agent') return;
-    const promo = await this.promoService.findByIdOrFail(promoId);
-    const agent = await this.agentService.findByIdOrFail(user.sub);
-    await this.commercantService.assertCommuneMatches(
-      promo.commercantId,
-      agent.communes.map((commune) => commune.id),
-    );
-  }
-
-  /**
-   * Garde IDOR (règle #1) : un agent ne peut consulter/gérer que les
-   * commerçants de ses propres communes — écran fiche commerçant partagé
-   * avec l'admin (décision produit 2026-07-12), même pattern que
-   * `assertCanModerate` ci-dessus.
-   */
-  private async assertCanManageCommercant(
-    user: AuthTokenPayload,
-    commercantId: string,
-  ): Promise<void> {
-    if (user.role !== 'agent') return;
-    const agent = await this.agentService.findByIdOrFail(user.sub);
-    await this.commercantService.assertCommuneMatches(
-      commercantId,
-      agent.communes.map((commune) => commune.id),
-    );
-  }
+  // ⚠️ **Trois méthodes ont été retirées ici le 2026-08-13, et c'est une
+  // décision produit, pas un nettoyage** (chantier « agent global ») :
+  //
+  //   - `scopedCommuneIds` — projetait les listes sur les communes de l'agent ;
+  //   - `assertCanModerate` — garde IDOR sur les 3 routes de modération ;
+  //   - `assertCanManageCommercant` — garde IDOR sur les 7 routes de gestion.
+  //
+  // Les dix routes ci-dessous n'ont plus, pour seule protection, que leur
+  // `@Roles('admin','agent')`. **C'est la règle #1 qu'on retire** : « le rôle
+  // JWT ne suffit jamais pour une action sur la ressource d'un tiers ». Elle
+  // avait pour cas fondateur exactement cet endroit.
+  //
+  // C'est écrit ici, et rappelé à chacune des dix routes, parce qu'une garde
+  // retirée sans un mot est indiscernable d'une garde jamais branchée — c'est
+  // la règle #10 prise à l'envers, et c'est ainsi que l'IDOR d'origine était
+  // passé la première fois.
+  //
+  // ⚠️ Le cas dégénéré s'INVERSE : un agent sans aucune commune était arrêté
+  // net (huit sites rendaient 0 ou une page vide). Il voyait **zéro**, il voit
+  // désormais **tout**. Le compte le plus mal configuré du parc est celui qui
+  // change le plus.
 
   private actorType(role: string): AuditActorType {
     return role === 'agent' ? AuditActorType.AGENT : AuditActorType.ADMIN;
@@ -315,16 +243,27 @@ export class AdminController {
     @CurrentUser() user: AuthTokenPayload,
     @Query() query: ListModerationQueueQueryDto,
   ) {
-    const communeIds = await this.scopedCommuneIds(user);
-    const result = await this.moderationService.queue(
-      query.page,
-      query.limit,
-      communeIds,
-      {
-        communeId: query.communeId,
-        wilaya: query.wilaya,
-      },
-    );
+    // Portée globale depuis le 2026-08-13 : `undefined` = aucun filtre de
+    // commune. ⚠️ **Tous les agents voient désormais la MÊME file**, et la
+    // commune tenait lieu de partition du travail : rien ne la remplace à ce
+    // jour — point ouvert du plan de suppression.
+    //
+    // ⚠️ **Ce commentaire affirmait, jusqu'au 2026-08-13 au soir, que les trois
+    // résolutions étaient des `update` inconditionnels où « dernier écrivain
+    // gagne, aucune erreur levée ».** C'était vrai le matin, faux le soir, et
+    // c'est exactement le genre d'état périmé qui fait conclure : on lit, on
+    // croit la perte de décision ouverte, on part la refermer une seconde fois.
+    // Chaque résolution porte désormais l'état que le modérateur avait à
+    // l'écran (`expectedModerationStatus`), l'écriture y est conditionnée, et
+    // une décision prise sur un état dépassé rend `409
+    // MODERATION_STATE_CHANGED` — éprouvé par `test-moderation-course.sh`,
+    // mutation comprise.
+    //
+    // **Répartir le travail reste à faire ; le corrompre n'est plus possible en
+    // silence.** L'entrée et la sortie de cette file sont éprouvées par
+    // `test-file-moderation.sh`, qui mesure aussi le seuil de trois appareils
+    // distincts : un signalement isolé ne crée aucun travail.
+    const result = await this.moderationService.queue(query.page, query.limit);
     return {
       ...result,
       items: result.items.map(
@@ -344,12 +283,22 @@ export class AdminController {
   async masquer(
     @CurrentUser() user: AuthTokenPayload,
     @UuidParam('promoId') promoId: string,
+    @Body() dto: ResolveModerationDto,
   ) {
-    await this.assertCanModerate(user, promoId);
+    // ⚠️ Plus aucune garde d'appartenance ici depuis le 2026-08-13 (agent
+    // global) : n'importe quel agent modère n'importe quelle promo du pays.
+    // Voir le bloc « trois méthodes retirées » plus haut. Règle #1 levée.
+    //
+    // ⚠️ **C'est ce retrait qui a rendu la course réelle** : la file est
+    // devenue nationale et non partitionnée, donc tous les agents du pays
+    // regardent la même liste sans que rien ne leur attribue un lot. D'où
+    // `expectedModerationStatus`, qui fait porter la décision par l'état que le
+    // modérateur avait à l'écran (voir `ResolveModerationDto`).
     await this.moderationService.masquer(
       this.actorType(user.role),
       user.sub,
       promoId,
+      dto.expectedModerationStatus,
     );
     return { ok: true };
   }
@@ -361,12 +310,21 @@ export class AdminController {
   async verifierOk(
     @CurrentUser() user: AuthTokenPayload,
     @UuidParam('promoId') promoId: string,
+    @Body() dto: ResolveModerationDto,
   ) {
-    await this.assertCanModerate(user, promoId);
+    // ⚠️ Plus aucune garde d'appartenance ici depuis le 2026-08-13 (agent
+    // global) : n'importe quel agent modère n'importe quelle promo du pays.
+    // Voir le bloc « trois méthodes retirées » plus haut. Règle #1 levée.
+    //
+    // ⚠️ **La plus coûteuse des trois à perdre dans une course** : elle rend la
+    // promo publique ET ouvre une fenêtre d'ignore de 30 jours qui la rend
+    // insensible aux signalements suivants. Écraser un « masquer » avec elle,
+    // c'est republier un contenu retiré et le protéger un mois.
     await this.moderationService.verifierOk(
       this.actorType(user.role),
       user.sub,
       promoId,
+      dto.expectedModerationStatus,
     );
     return { ok: true };
   }
@@ -378,12 +336,20 @@ export class AdminController {
   async avertir(
     @CurrentUser() user: AuthTokenPayload,
     @UuidParam('promoId') promoId: string,
+    @Body() dto: ResolveModerationDto,
   ) {
-    await this.assertCanModerate(user, promoId);
+    // ⚠️ Plus aucune garde d'appartenance ici depuis le 2026-08-13 (agent
+    // global) : n'importe quel agent modère n'importe quelle promo du pays.
+    // Voir le bloc « trois méthodes retirées » plus haut. Règle #1 levée.
+    //
+    // ⚠️ Elle **lève tout statut bloquant** (voir `resolveAvertir`) : écraser
+    // un « masquer » avec elle rend la promo republiable par son commerçant,
+    // masque levé, sans que personne n'ait décidé de le lever.
     await this.moderationService.avertir(
       this.actorType(user.role),
       user.sub,
       promoId,
+      dto.expectedModerationStatus,
     );
     return { ok: true };
   }
@@ -401,8 +367,8 @@ export class AdminController {
     @CurrentUser() user: AuthTokenPayload,
     @Query() query: ListPromoAdminQueryDto,
   ) {
-    const communeIds = await this.scopedCommuneIds(user);
-    const result = await this.promoService.findAllForAdmin(query, communeIds);
+    // Portée globale depuis le 2026-08-13 (chantier « agent global »).
+    const result = await this.promoService.findAllForAdmin(query);
     return {
       ...result,
       items: result.items.map((promo) => this.toAdminPromoJson(promo)),
@@ -423,11 +389,12 @@ export class AdminController {
     @CurrentUser() user: AuthTokenPayload,
     @Query() query: ListCommercantQueryDto,
   ) {
-    const communeIds = await this.scopedCommuneIds(user);
-    const result = await this.commercantService.findAllForAdmin(
-      query,
-      communeIds,
-    );
+    // Portée globale depuis le 2026-08-13 (chantier « agent global »).
+    // ⚠️ La `CommuneFilterBar` de l'app disparaît avec ce chantier. Le seul
+    // moyen de resserrer géographiquement cet écran devenu national est
+    // désormais la recherche texte, à laquelle `adresse` a été ajoutée dans le
+    // même lot (voir `findAllForAdmin`).
+    const result = await this.commercantService.findAllForAdmin(query);
     return {
       ...result,
       items: await Promise.all(
@@ -437,7 +404,6 @@ export class AdminController {
           telephone: commercant.telephone,
           adresse: commercant.adresse,
           categorie: commercant.categorie,
-          communeId: commercant.communeId,
           photoUrl: commercant.photoKey
             ? this.storageService.buildPublicUrl(commercant.photoKey)
             : null,
@@ -482,7 +448,9 @@ export class AdminController {
     @CurrentUser() user: AuthTokenPayload,
     @UuidParam('id') commercantId: string,
   ) {
-    await this.assertCanManageCommercant(user, commercantId);
+    // ⚠️ Plus aucune garde d'appartenance ici depuis le 2026-08-13 (agent
+    // global) : n'importe quel agent gère n'importe quel commerçant du pays.
+    // Voir le bloc « trois méthodes retirées » plus haut. Règle #1 levée.
     await this.commercantService.suspend(commercantId);
     await this.auditLogService.record({
       actorType: this.actorType(user.role),
@@ -536,7 +504,9 @@ export class AdminController {
     @CurrentUser() user: AuthTokenPayload,
     @UuidParam('id') commercantId: string,
   ) {
-    await this.assertCanManageCommercant(user, commercantId);
+    // ⚠️ Plus aucune garde d'appartenance ici depuis le 2026-08-13 (agent
+    // global) : n'importe quel agent gère n'importe quel commerçant du pays.
+    // Voir le bloc « trois méthodes retirées » plus haut. Règle #1 levée.
     await this.commercantService.unsuspend(commercantId);
     await this.auditLogService.record({
       actorType: this.actorType(user.role),
@@ -562,7 +532,9 @@ export class AdminController {
     @CurrentUser() user: AuthTokenPayload,
     @UuidParam('id') commercantId: string,
   ) {
-    await this.assertCanManageCommercant(user, commercantId);
+    // ⚠️ Plus aucune garde d'appartenance ici depuis le 2026-08-13 (agent
+    // global) : n'importe quel agent gère n'importe quel commerçant du pays.
+    // Voir le bloc « trois méthodes retirées » plus haut. Règle #1 levée.
     await this.commercantService.deleteCommercant(commercantId);
     await this.auditLogService.record({
       actorType: this.actorType(user.role),
@@ -582,7 +554,9 @@ export class AdminController {
     @CurrentUser() user: AuthTokenPayload,
     @UuidParam('id') commercantId: string,
   ) {
-    await this.assertCanManageCommercant(user, commercantId);
+    // ⚠️ Plus aucune garde d'appartenance ici depuis le 2026-08-13 (agent
+    // global) : n'importe quel agent gère n'importe quel commerçant du pays.
+    // Voir le bloc « trois méthodes retirées » plus haut. Règle #1 levée.
     await this.commercantService.resolveRegistreVerification(
       commercantId,
       true,
@@ -611,7 +585,9 @@ export class AdminController {
     @CurrentUser() user: AuthTokenPayload,
     @UuidParam('id') commercantId: string,
   ) {
-    await this.assertCanManageCommercant(user, commercantId);
+    // ⚠️ Plus aucune garde d'appartenance ici depuis le 2026-08-13 (agent
+    // global) : n'importe quel agent gère n'importe quel commerçant du pays.
+    // Voir le bloc « trois méthodes retirées » plus haut. Règle #1 levée.
     await this.commercantService.validateProfile(commercantId);
     await this.auditLogService.record({
       actorType: this.actorType(user.role),
@@ -640,7 +616,9 @@ export class AdminController {
     @UuidParam('id') commercantId: string,
     @Body() dto: ResetCommercantPinDto,
   ) {
-    await this.assertCanManageCommercant(user, commercantId);
+    // ⚠️ Plus aucune garde d'appartenance ici depuis le 2026-08-13 (agent
+    // global) : n'importe quel agent gère n'importe quel commerçant du pays.
+    // Voir le bloc « trois méthodes retirées » plus haut. Règle #1 levée.
     await this.commercantService.resetPin(commercantId, dto.newPin);
     await this.auditLogService.record({
       actorType: this.actorType(user.role),
@@ -660,7 +638,9 @@ export class AdminController {
     @CurrentUser() user: AuthTokenPayload,
     @UuidParam('id') commercantId: string,
   ) {
-    await this.assertCanManageCommercant(user, commercantId);
+    // ⚠️ Plus aucune garde d'appartenance ici depuis le 2026-08-13 (agent
+    // global) : n'importe quel agent gère n'importe quel commerçant du pays.
+    // Voir le bloc « trois méthodes retirées » plus haut. Règle #1 levée.
     await this.commercantService.resolveRegistreVerification(
       commercantId,
       false,
@@ -676,10 +656,36 @@ export class AdminController {
   }
 
   /**
-   * Journal d'audit consultable (plan de correction, Phase 3) — admin only,
-   * y compris les actions enregistrées par un agent (transfert de communes,
-   * modération...) : un agent ne voit pas ce journal, seul l'admin doit
-   * pouvoir retracer "qui a fait quoi".
+   * Journal d'audit consultable (plan de correction, Phase 3) — **admin
+   * seulement**, y compris pour les actions enregistrées par un agent : un
+   * agent ne voit pas ce journal, seul l'admin doit pouvoir retracer « qui a
+   * fait quoi ».
+   *
+   * ⚠️ **Cette phrase citait « transfert de communes » comme exemple** — une
+   * route supprimée le 2026-08-13. L'exemple était mort et la règle vivante.
+   *
+   * ⚠️ **Ce journal est devenu le seul contrepoids à la portée globale de
+   * l'agent** (`CLAUDE.md`), depuis que les quatorze gardes d'appartenance sont
+   * tombées le 2026-08-13 : il n'existe plus aucune limite *a priori* à ce
+   * qu'un agent peut faire, seulement une trace *a posteriori*. Trois
+   * mécanismes distincts l'alimentent pour un agent —
+   * `PromoController.auditStaffWrite`, `ModerationService.record`, et les onze
+   * appels en ligne de ce contrôleur — et ils sont éprouvés ensemble par
+   * `test-journal-agent.sh`, qui vérifie surtout l'**attribution** : un journal
+   * qui dit « un agent » sans dire lequel ne vaut rien quand tous sont globaux.
+   *
+   * ⚠️ **« n'expose que des UUID » était écrit ici, et c'est faux depuis le
+   * 2026-08-13** : `findAll` appelle `resoudreLibelles`, qui résout le nom de
+   * l'acteur et celui de la cible en une requête par table — y compris pour les
+   * comptes supprimés, sans quoi une trace deviendrait illisible le jour où
+   * elle compte le plus. Ce qui reste vrai : le journal **ne se filtre que par
+   * `actorType`** (page et limite mises à part), ce qui suffit pour un parc de
+   * commune et pas pour un parc national. Point ouvert, mais pas celui qui
+   * était écrit.
+   *
+   * Le filtre, lui, est éprouvé : `test-journal-agent.sh` §8 exerce
+   * `?actorType=agent` **et** `?actorType=admin`, et refuse si l'un laisse
+   * passer l'autre.
    */
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
@@ -694,14 +700,15 @@ export class AdminController {
 
   /**
    * Dashboard (specs §3.4) — partagé admin/agent (décision produit
-   * 2026-07-12) : stats globales pour l'admin, restreintes aux communes de
-   * l'agent sinon (même `scopedCommuneIds` que modération/liste promos).
+   * 2026-07-12). ⚠️ **Les cinq compteurs sont globaux pour les deux rôles
+   * depuis le 2026-08-13** : un agent et un admin voient exactement les mêmes
+   * chiffres. Rien à l'écran ne distingue « mes commerces » de « tous » —
+   * c'est voulu, l'agent n'ayant plus de territoire.
    */
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'agent')
   @Get('dashboard')
-  async dashboard(@CurrentUser() user: AuthTokenPayload) {
-    const communeIds = await this.scopedCommuneIds(user);
+  async dashboard() {
     const [
       commercesActifs,
       promosPubliees,
@@ -709,11 +716,11 @@ export class AdminController {
       registresEnAttente,
       profilsEnAttente,
     ] = await Promise.all([
-      this.commercantService.countActive(communeIds),
-      this.promoService.countVisible(communeIds),
-      this.reportService.countPendingModeration(communeIds),
-      this.commercantService.countPendingRegistre(communeIds),
-      this.commercantService.countPendingProfileReview(communeIds),
+      this.commercantService.countActive(),
+      this.promoService.countVisible(),
+      this.reportService.countPendingModeration(),
+      this.commercantService.countPendingRegistre(),
+      this.commercantService.countPendingProfileReview(),
     ]);
 
     return {

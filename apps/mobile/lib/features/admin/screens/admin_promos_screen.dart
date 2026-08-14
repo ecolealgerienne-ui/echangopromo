@@ -8,23 +8,16 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/app_settings_actions.dart';
-import '../widgets/commune_filter_bar.dart';
 import '../widgets/promo_moderation_tile.dart';
 
 final _searchProvider = StateProvider.autoDispose<String>((ref) => '');
 
-/// Filtre commune/wilaya (retour terrain 2026-07-14), en plus de la recherche.
-final _wilayaFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
-final _communeFilterProvider =
-    StateProvider.autoDispose<String?>((ref) => null);
+// Filtres commune/wilaya retirés le 2026-08-13 : liste nationale, seule la
+// recherche texte permet encore de la resserrer.
 
 final _allPromosProvider = FutureProvider.autoDispose((ref) {
   final search = ref.watch(_searchProvider);
-  final wilaya = ref.watch(_wilayaFilterProvider);
-  final communeId = ref.watch(_communeFilterProvider);
-  return ref
-      .watch(adminApiProvider)
-      .listAllPromos(search: search, wilaya: wilaya, communeId: communeId);
+  return ref.watch(adminApiProvider).listAllPromos(search: search);
 });
 
 /// Même pattern que `ModerationQueueScreen._inFlightProvider` (audit UX 2026-07-11).
@@ -34,7 +27,7 @@ final _inFlightProvider = StateProvider.autoDispose<Set<String>>((ref) => {});
 /// contrairement à la file de modération, pas seulement celles ayant
 /// atteint le seuil de signalements. Accessible admin + agent (le rôle du
 /// JWT détermine côté backend le périmètre — global pour l'admin, scopé
-/// aux communes de l'agent sinon, voir AdminController.scopedCommuneIds).
+/// national depuis le 2026-08-13, pour l'agent comme pour l'admin).
 class AdminPromosScreen extends ConsumerWidget {
   const AdminPromosScreen({super.key});
 
@@ -50,6 +43,11 @@ class AdminPromosScreen extends ConsumerWidget {
       await action();
       ref.invalidate(_allPromosProvider);
     } catch (error) {
+      // Même raison qu'en file de modération : un conflit se rafraîchit, il ne
+      // se réessaie pas — la ligne affichée décrit un état qui n'existe plus.
+      if (apiErrorCode(error) == 'MODERATION_STATE_CHANGED') {
+        ref.invalidate(_allPromosProvider);
+      }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -98,17 +96,6 @@ class AdminPromosScreen extends ConsumerWidget {
                   ref.read(_searchProvider.notifier).state = value,
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: CommuneFilterBar(
-              wilaya: ref.watch(_wilayaFilterProvider),
-              communeId: ref.watch(_communeFilterProvider),
-              onWilayaChanged: (value) =>
-                  ref.read(_wilayaFilterProvider.notifier).state = value,
-              onCommuneChanged: (value) =>
-                  ref.read(_communeFilterProvider.notifier).state = value,
-            ),
-          ),
           Expanded(
             child: promosAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -133,12 +120,31 @@ class AdminPromosScreen extends ConsumerWidget {
                             ref.invalidate(_allPromosProvider);
                           }
                         },
-                        onMasquer: () => _act(context, ref, item.id,
-                            () => api.masquerPromo(item.id)),
-                        onVerifierOk: () => _act(context, ref, item.id,
-                            () => api.verifierOkPromo(item.id)),
-                        onAvertir: () => _act(context, ref, item.id,
-                            () => api.avertirPromo(item.id)),
+                        // ⚠️ **Troisième appelant, et le compilateur seul l'a
+                        // trouvé.** Cette liste sert TOUTES les promos, pas
+                        // seulement la file : les quatre statuts y passent.
+                        // C'est la raison d'avoir fait de l'état attendu un
+                        // paramètre obligatoire plutôt qu'un nommé optionnel —
+                        // un défaut ici aurait fait échouer en silence toute
+                        // décision prise sur une promo non signalée.
+                        onMasquer: () => _act(
+                            context,
+                            ref,
+                            item.id,
+                            () => api.masquerPromo(
+                                item.id, item.moderationStatus)),
+                        onVerifierOk: () => _act(
+                            context,
+                            ref,
+                            item.id,
+                            () => api.verifierOkPromo(
+                                item.id, item.moderationStatus)),
+                        onAvertir: () => _act(
+                            context,
+                            ref,
+                            item.id,
+                            () => api.avertirPromo(
+                                item.id, item.moderationStatus)),
                       );
                     },
                   ),

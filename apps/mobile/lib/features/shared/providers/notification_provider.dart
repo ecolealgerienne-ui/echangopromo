@@ -43,11 +43,23 @@ class NotificationController {
   /// abouti du point de vue de l'utilisateur.
   ///
   /// Tout autre refus remonte : lui, l'appelant doit le voir.
+  ///
+  /// ⚠️ **Ce `catch` était `on ApiException` jusqu'au 2026-08-14, et il ne
+  /// matchait JAMAIS** — règle #26, dans le seul endroit du dépôt que personne
+  /// n'avait relu. `ApiClient` enveloppe toute `ApiException` dans une
+  /// `DioException` (`.error`) ; il faut donc déballer par `apiErrorCode`.
+  ///
+  /// Ce que la clémence décrite ci-dessus ne faisait pas, mesuré : l'erreur
+  /// traversait jusqu'aux quatre appelants, dont **aucun n'a de `try`**. Elle
+  /// n'affichait donc pas seulement un refus — elle **coupait les
+  /// `ref.invalidate` qui suivent**, si bien que la notification restait
+  /// affichée non lue alors que le serveur l'avait bien marquée. Retaper
+  /// reproduisait l'échec.
   Future<void> markAsRead(String notificationId) async {
     try {
       await _notificationApi.markAsRead(notificationId);
-    } on ApiException catch (e) {
-      if (e.code != 'NOTIFICATION_NOT_FOUND') rethrow;
+    } catch (error) {
+      if (apiErrorCode(error) != 'NOTIFICATION_NOT_FOUND') rethrow;
     }
   }
 

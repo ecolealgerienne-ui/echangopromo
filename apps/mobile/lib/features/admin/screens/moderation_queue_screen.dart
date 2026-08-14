@@ -8,20 +8,12 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/widgets/api_error_text.dart';
 import '../../shared/widgets/app_settings_actions.dart';
-import '../widgets/commune_filter_bar.dart';
 import '../widgets/promo_moderation_tile.dart';
 
-/// Filtre commune/wilaya (retour terrain 2026-07-14).
-final _wilayaFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
-final _communeFilterProvider =
-    StateProvider.autoDispose<String?>((ref) => null);
+// Filtres commune/wilaya retirés le 2026-08-13 : la file est nationale.
 
 final _moderationQueueProvider = FutureProvider.autoDispose((ref) {
-  final wilaya = ref.watch(_wilayaFilterProvider);
-  final communeId = ref.watch(_communeFilterProvider);
-  return ref
-      .watch(adminApiProvider)
-      .moderationQueue(wilaya: wilaya, communeId: communeId);
+  return ref.watch(adminApiProvider).moderationQueue();
 });
 
 /// Id de la promo dont une action (masquer/vérifier/avertir) est en cours —
@@ -46,6 +38,20 @@ class ModerationQueueScreen extends ConsumerWidget {
       await action();
       ref.invalidate(_moderationQueueProvider);
     } catch (error) {
+      // ⚠️ **Un conflit de modération se rafraîchit, il ne se réessaie pas.**
+      // `MODERATION_STATE_CHANGED` dit qu'un autre modérateur a tranché entre
+      // l'affichage et le tap : la ligne à l'écran décrit un état qui n'existe
+      // plus. Laisser la file telle quelle ferait retaper le même bouton sur la
+      // même donnée périmée, indéfiniment — et le message promet justement que
+      // la liste vient d'être rafraîchie. Une promesse dans une traduction que
+      // le code ne tient pas serait pire que pas de message du tout.
+      //
+      // ⚠️ Et il faut passer par `apiErrorCode`, jamais par un `on ApiException
+      // catch` : l'intercepteur de `ApiClient` enveloppe l'exception dans une
+      // `DioException` (règle 26).
+      if (apiErrorCode(error) == 'MODERATION_STATE_CHANGED') {
+        ref.invalidate(_moderationQueueProvider);
+      }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -81,17 +87,11 @@ class ModerationQueueScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: CommuneFilterBar(
-              wilaya: ref.watch(_wilayaFilterProvider),
-              communeId: ref.watch(_communeFilterProvider),
-              onWilayaChanged: (value) =>
-                  ref.read(_wilayaFilterProvider.notifier).state = value,
-              onCommuneChanged: (value) =>
-                  ref.read(_communeFilterProvider.notifier).state = value,
-            ),
-          ),
+          // ⚠️ La `CommuneFilterBar` était ici jusqu'au 2026-08-13. Cette file
+          // est désormais **nationale et partagée par tous les agents**, sans
+          // aucun cadrage ni partition du travail : deux modérateurs peuvent
+          // traiter la même promo, et les résolutions serveur sont des `update`
+          // inconditionnels. C'est un point ouvert, pas un aboutissement.
           Expanded(
             child: queueAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -117,12 +117,27 @@ class ModerationQueueScreen extends ConsumerWidget {
                             ref.invalidate(_moderationQueueProvider);
                           }
                         },
-                        onMasquer: () => _act(context, ref, item.id,
-                            () => api.masquerPromo(item.id)),
-                        onVerifierOk: () => _act(context, ref, item.id,
-                            () => api.verifierOkPromo(item.id)),
-                        onAvertir: () => _act(context, ref, item.id,
-                            () => api.avertirPromo(item.id)),
+                        // `item.moderationStatus` et non `signalee` en dur :
+                        // c'est l'état AFFICHÉ qui fait foi, et c'est lui que
+                        // le serveur compare (voir `AdminApi.masquerPromo`).
+                        onMasquer: () => _act(
+                            context,
+                            ref,
+                            item.id,
+                            () => api.masquerPromo(
+                                item.id, item.moderationStatus)),
+                        onVerifierOk: () => _act(
+                            context,
+                            ref,
+                            item.id,
+                            () => api.verifierOkPromo(
+                                item.id, item.moderationStatus)),
+                        onAvertir: () => _act(
+                            context,
+                            ref,
+                            item.id,
+                            () => api.avertirPromo(
+                                item.id, item.moderationStatus)),
                       );
                     },
                   ),

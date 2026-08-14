@@ -8,6 +8,8 @@ class Promo {
     required this.id,
     required this.commercantId,
     this.commercantNom,
+    this.commercantLatitude,
+    this.commercantLongitude,
     required this.description,
     required this.prixAvant,
     required this.prixApres,
@@ -27,6 +29,8 @@ class Promo {
         id: json['id'] as String,
         commercantId: json['commercantId'] as String,
         commercantNom: json['commercantNom'] as String?,
+        commercantLatitude: (json['commercantLatitude'] as num?)?.toDouble(),
+        commercantLongitude: (json['commercantLongitude'] as num?)?.toDouble(),
         description: json['description'] as String,
         prixAvant: double.parse(json['prixAvant'].toString()),
         prixApres: double.parse(json['prixApres'].toString()),
@@ -55,6 +59,22 @@ class Promo {
   final String id;
   final String commercantId;
   final String? commercantNom;
+
+  /// Position du commerce, servie par `GET /promo` **pour que la liste puisse
+  /// afficher la distance** (bascule 2026-08-12, A7 du plan).
+  ///
+  /// ⚠️ Ces deux champs étaient servis par le serveur et **jetés ici** : le
+  /// modèle ne les lisait pas, donc `PromoCard` ne pouvait rien afficher, donc
+  /// `formatDistance` n'était appelé que par la fiche et la carte. Une capacité
+  /// écrite, documentée côté serveur, et sans appelant — règle 31, et elle ne
+  /// produit aucune erreur : juste une fonctionnalité absente que personne ne
+  /// cherche, puisque le code existe des deux côtés.
+  ///
+  /// ⚠️ `num?` et non `double?` au décodage : un entier JSON (`3`) arrive en
+  /// `int` et un `as double?` planterait. Même piège que les prix, qui passent
+  /// par `double.parse(...toString())` deux lignes plus bas.
+  final double? commercantLatitude;
+  final double? commercantLongitude;
   final String description;
   final double prixAvant;
   final double prixApres;

@@ -46,24 +46,46 @@ fonctionnalités en moins, pas un autre produit. La bascule essaie
 le service ne lit que la table `admins` : `AgentLoginScreen` et
 `POST /agent/login` existaient, étaient couverts par les bancs, et **rien dans
 l'app ne les atteignait** (règle #31). Coût assumé : une connexion d'agent
-consomme deux requêtes du seau strict (5/min/IP).
+consomme **deux** requêtes du seau d'authentification. C'est ce coût, cumulé au
+NAT opérateur du parc mobile algérien, qui a fait relever ce seau de 5 à 50 le
+2026-08-13 — les connexions ont désormais leur propre seau (`AUTH_THROTTLE`),
+séparé de `register` et `report` restés à 5 (voir § Environnement).
 
 Le concept de Zone opérationnelle (découpage interne dédié
-aux tournées d'agent) a été abandonné le 2026-07-09 : un agent est
-désormais rattaché directement à zéro, une ou plusieurs `Commune`
-(relation many-to-many), "assigner toute la wilaya" n'étant qu'une
-commodité d'UI qui sélectionne en masse les communes de cette wilaya —
-un agent par commune n'étant pas soutenable et le rôle agent lui-même
-étant amené à disparaître à l'extension multi-wilaya.
+aux tournées d'agent) a été abandonné le 2026-07-09, puis remplacé par un
+rattachement direct à des `Commune`.
+
+⚠️ **Ce rattachement a disparu à son tour le 2026-08-13 : l'agent est
+global.** Plus de territoire, plus de relation `agent_communes`, plus de
+frontière d'appartenance — un agent agit sur tout le parc. Ce que ça retire et
+que **rien ne remplace** : la garde IDOR de quatorze routes d'écriture (règle 1,
+levée par décision produit) et le seul moyen dont l'admin disposait pour
+**restreindre** un agent.
+
+⚠️ **La file de modération reste non partitionnée** — tous les agents du pays
+voient la même liste, et rien ne leur attribue un lot. **Mais la perte de
+décision qui en découlait est fermée depuis le 2026-08-13** : chaque résolution
+porte l'état que le modérateur avait à l'écran
+(`expectedModerationStatus`) et l'écriture y est conditionnée
+(`UPDATE … WHERE "moderationStatus" = ?`), sinon `409
+MODERATION_STATE_CHANGED`. Ce n'était pas un verrou qui manquait — un verrou
+sérialise, il n'arbitre pas, et deux `UPDATE` inconditionnels sérialisés
+s'écrasent tout autant. Éprouvé par `test-moderation-course.sh`, mutation
+comprise. **Répartir le travail reste à faire ; le corrompre n'est plus
+possible en silence.**
+
+⚠️ Le rôle lui-même est en sursis, et ce document l'annonçait déjà : « le rôle
+agent est amené à disparaître à l'extension multi-wilaya ». Le chantier crée
+exactement l'état décrit. La question est ouverte, pas tranchée.
 
 ```
-apps/backend/src/{commune,agent,admin,commercant,promo,report,audit-log,storage,auth}
+apps/backend/src/{agent,admin,commercant,promo,report,audit-log,storage,auth}
 apps/mobile/lib/{app,data,domain,providers,features/{client,commercant,agent,admin,shared}}
 ```
 
 Commandes utiles :
 - Backend : `cd apps/backend && npm run start:dev` / `build` / `lint` /
-  `seed:admin -- <email> <password> <nom>` / `seed:communes` /
+  `seed:admin -- <email> <password> <nom>` /
   `migration:run` / `migration:generate -- src/migrations/<Nom>` /
   `migration:revert`. Schéma géré uniquement par migrations
   (`synchronize: false` toujours, plus de bascule sur `NODE_ENV`) —
@@ -250,17 +272,24 @@ pratique générique, un bug ou une faille réellement trouvés dans ce repo.
     indépendants (liste des commerces d'une zone, file de modération).*
 
 15. **Tout nouvel endpoint `GET` de liste doit prévoir page/limit dès la
-    conception**, même si le volume initial semble négligeable — ce
-    produit vise explicitement une extension multi-communes puis
-    multi-wilayas. **Exception à vérifier avant de paginer un endpoint
-    existant** : si un client le consomme aujourd'hui comme une liste de
-    référence complète (ex. `/commune` chargé en entier par
-    `CommuneCascadeField` pour construire un sélecteur wilaya → commune),
-    ajouter la pagination sans adapter ce client tronque silencieusement
-    la liste dès que le total dépasse la taille de page par défaut —
-    vérifier les consommateurs existants (mobile, autre service) avant
-    d'activer une pagination par défaut sur un endpoint déjà en
-    production.
+    conception**, même si le volume initial semble négligeable — ce produit
+    vise explicitement un déploiement au-delà du quartier pilote.
+    **Exception à vérifier avant de paginer un endpoint existant** : si un
+    client le consomme aujourd'hui comme une liste de référence complète,
+    ajouter la pagination sans adapter ce client tronque silencieusement la
+    liste dès que le total dépasse la taille de page par défaut — vérifier
+    les consommateurs existants (mobile, autre service) avant d'activer une
+    pagination par défaut sur un endpoint déjà en production.
+
+    ⚠️ **Cette exception n'a plus d'exemple dans ce dépôt depuis le
+    2026-08-13.** Son cas fondateur était `/commune`, chargé en entier par
+    `CommuneCascadeField` pour construire un sélecteur wilaya → commune ;
+    l'endpoint et son consommateur ont été supprimés avec le découpage
+    administratif. **Plus aucun endpoint n'est consommé comme liste de
+    référence complète**, et `client_commune.py` — le seul banc qui éprouvait
+    la non-troncature — disparaît avec lui. La règle reste juste ; c'est son
+    exemple qui est mort, et une exception qui protège un fantôme finit par
+    autoriser n'importe quoi.
 
 16. **Nettoyer le scaffolding généré par un CLI (NestJS, etc.) dès l'ajout
     du premier vrai module métier.** *Trouvé : les seuls tests de tout le
@@ -401,7 +430,9 @@ permet de reconnaître un cas nouveau relevant de la même règle.
     champ de recherche puis exigeait `find.text(description)` — or **`find.text`
     matche aussi les `EditableText`**, donc le champ lui-même. L'assertion
     passait alors qu'aucune carte n'était affichée (aucune commune
-    sélectionnée, l'accueil montrait « Choisissez vos communes »).* En Flutter,
+    sélectionnée, l'accueil montrait « Choisissez vos communes » — cet écran
+    n'existe plus, il a disparu avec le découpage administratif le
+    2026-08-13 ; le défaut, lui, reste entier).* En Flutter,
     viser `(w) => w is Text && w.data == …` dès que la valeur cherchée peut
     aussi être une saisie. En général : **si ce qu'on cherche peut venir du
     test lui-même, l'assertion ne mesure rien.**
@@ -694,14 +725,18 @@ tirer de l'autre.
 | Plafond | Valeur | Portée |
 |---|---|---|
 | global | 60 / min / IP | toutes les routes |
-| `STRICT_THROTTLE` | **5 / min / IP** | les 3 logins, `register`, `report` |
+| `AUTH_THROTTLE` | **50 / min / IP** | les 3 logins — **relevé de 5 le 2026-08-13** |
+| `STRICT_THROTTLE` | **5 / min / IP** | `register` et `report`, plus rien d'autre |
 | `SENSITIVE_ACTION_THROTTLE` | 20 / min / IP | les écritures — **seau partagé** |
 | `MAP_THROTTLE` | 180 / min / IP | `/promo/map` |
 | créations de promo | 5 / 24 h / commerçant | agent et admin **exemptés** |
 | promos actives | 5 / commerçant | **personne n'est exempté** |
 
 ⚠️ **Un 429 se déguise en « identifiants incorrects »** : attendre une minute
-entre deux bancs plutôt que chercher un bug d'authentification.
+entre deux bancs plutôt que chercher un bug d'authentification. ⚠️ **Et depuis
+le 2026-08-13, ce n'est plus la connexion qu'il faut soupçonner en premier** —
+elle a 50 requêtes par minute. Les deux seaux qui serrent sont l'inscription
+(5/min) et les écritures (20/min, **partagé**).
 
 **Trois pièges d'environnement, tous rencontrés le 2026-08-04 :**
 

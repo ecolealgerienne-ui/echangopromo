@@ -10,7 +10,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Categorie } from '../../common/enums/categorie.enum';
-import { Commune } from '../../commune/entities/commune.entity';
 import { Agent } from '../../agent/entities/agent.entity';
 
 /**
@@ -44,14 +43,59 @@ export enum RegistreStatus {
 }
 
 /**
- * Index de la zone visible de la carte (`PromoService.findActiveForMap`).
- * Déclaré ici en plus de la migration `AddCommercantPositionIndex` : sans
- * cette déclaration, un futur `migration:generate` verrait un index présent
- * en base mais absent des entités et proposerait de le supprimer.
+ * Bornes de saisie du nom et de l'adresse — nommées ici, à côté des colonnes
+ * qu'elles décrivent, et importées par les trois DTO d'entrée : la borne ne
+ * doit exister qu'une fois (même convention que `PRIX_MAX`).
+ *
+ * ⚠️ **Ces deux champs n'avaient aucun plafond**, alors que la règle 34 nomme
+ * précisément « un `@IsString` sans `@MaxLength` » comme une borne manquante,
+ * pas un choix. Ils étaient déjà sans plafond avant le 2026-08-13 ; ce qui a
+ * changé ce jour-là, c'est qu'`adresse` est devenue **le seul repère de lieu en
+ * texte libre** du produit, après la suppression de `commune`/`wilaya`. Un
+ * champ qu'on vient de promouvoir mérite une borne.
+ *
+ * ⚠️ **La colonne, elle, reste un `varchar` sans longueur — délibérément.**
+ * Contrairement à `PRIX_MAX`, qui recopie une contrainte que Postgres applique
+ * déjà (`numeric(10, 2)`), il n'y a ici *rien à refléter* : la base accepte
+ * tout. Poser `@Column({ length: … })` exigerait une migration `ALTER TYPE` sur
+ * une table de production pour une valeur que rien n'oblige, et ferait diverger
+ * l'entité de la base tant qu'elle n'est pas écrite (règle 12). La borne est
+ * donc une **décision produit sur l'entrée**, appliquée au seul endroit qui la
+ * fait respecter — et c'est dit plutôt que sous-entendu.
+ *
+ * Les valeurs : 120 pour un nom de commerce, 200 pour une adresse écrite à la
+ * main. **Mesuré avant de choisir** — sur les 129 fiches de la base de
+ * développement au 2026-08-13, la plus longue adresse fait **25** caractères et
+ * le plus long nom **22**. Les bornes sont donc à un ordre de grandeur des
+ * saisies réelles : elles ne peuvent gêner personne aujourd'hui, et empêchent
+ * qu'une fiche devienne un champ de texte libre déguisé.
  */
-@Index('IDX_commercant_position', ['latitude', 'longitude'], {
-  where: '"latitude" IS NOT NULL AND "longitude" IS NOT NULL',
-})
+export const NOM_MAX_LENGTH = 120;
+export const ADRESSE_MAX_LENGTH = 200;
+
+/**
+ * ⚠️ **`IDX_commercant_position` n'est PLUS déclaré ici, et son absence est
+ * délibérée.**
+ *
+ * Depuis `CommercantPositionGistIndex1783880000000`, c'est un index **GiST sur
+ * une expression** — `point("longitude", "latitude")` — et le décorateur
+ * `@Index` de TypeORM ne sait décrire que des colonnes. Le déclarer avec
+ * `['latitude', 'longitude']` ferait dire au modèle un btree que la base n'a
+ * pas : `migration:generate` proposerait alors de remplacer le GiST par un
+ * btree à chaque exécution, et la première migration appliquée sans relecture
+ * défairait la décision du 2026-08-13.
+ *
+ * ⚠️ C'est le miroir de la règle 12, et il est ici assumé plutôt que tenu :
+ * « un index en base sans `@Index()` est un candidat à la suppression ». Le
+ * garde-fou n'est donc pas le décorateur mais **la mesure** — le critère du
+ * dépôt reste qu'un `migration:generate` ne rende RIEN, et il a été vérifié
+ * après ce changement. Le jour où il émet quelque chose sur cet index, c'est
+ * ce commentaire qu'il faut venir relire.
+ *
+ * L'index lui-même est éprouvé par `test-plan-sql.sh`, qui vérifie qu'il est
+ * emprunté quand on force le planificateur et qu'il ne remonte que les lignes
+ * réellement dans le cadre.
+ */
 /**
  * ⚠️ **Unicité du numéro parmi les comptes actifs** — même raison que
  * ci-dessus, et le défaut s'était bel et bien produit : au 2026-08-05,
@@ -106,13 +150,15 @@ export class Commercant {
   @Column({ type: 'enum', enum: Categorie })
   categorie: Categorie;
 
-  @ManyToOne(() => Commune)
-  @JoinColumn({ name: 'communeId' })
-  commune: Commune;
-
-  @Index()
-  @Column()
-  communeId: string;
+  // ⚠️ **`communeId` a été détruite le 2026-08-13**, avec les tables `commune`
+  // et `agent_communes` (migration `DropCommune`). Le lieu d'un commerce ne
+  // s'exprime plus que par `latitude`/`longitude` — qui décident de tout — et
+  // par `adresse`, texte libre facultatif et purement indicatif.
+  //
+  // Aucune recopie de la commune vers l'adresse : elle aurait écrit dans un
+  // champ que les CGU font certifier « exact » au commerçant une valeur qu'il
+  // n'a jamais fournie, et qu'il n'aurait pas pu effacer. Sauvegarde hors dépôt
+  // prise avant le `DROP` — voir l'en-tête de la migration.
 
   /**
    * Plafond de promos actives **propre à ce commerçant**, ou `null` pour

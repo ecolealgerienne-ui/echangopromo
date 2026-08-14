@@ -1,0 +1,3 @@
+"NSLocationWhenInUseUsageDescription" = "تُستخدم لتوسيط الخريطة عليك وعرض المسافات — وإذا كنت تاجرًا، لحفظ موقع محلك حتى يتمكن الزبائن من العثور عليه.";
+"NSCameraUsageDescription" = "تُستخدم لالتقاط صورة لمحلك أو لعرض ترويجي.";
+"NSPhotoLibraryUsageDescription" = "تُستخدم لاختيار صورة موجودة لمحلك من معرض الصور.";

@@ -28,6 +28,16 @@ class AdminPromoDetailScreen extends ConsumerWidget {
       await action();
       if (context.mounted) Navigator.of(context).pop(true);
     } catch (error) {
+      // ⚠️ Sur conflit, **on referme aussi**. Cet écran tient son `item` en
+      // paramètre (`extra` de la route) : il ne sait pas se recharger, et le
+      // statut qu'il affiche est justement celui qui vient d'être démenti.
+      // Rester dessus laisserait le modérateur retaper le même bouton contre
+      // une donnée périmée. `pop(true)` fait recharger la liste d'où il vient,
+      // et il rouvrira la fiche à jour s'il veut toujours décider.
+      if (apiErrorCode(error) == 'MODERATION_STATE_CHANGED' &&
+          context.mounted) {
+        Navigator.of(context).pop(true);
+      }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -125,19 +135,34 @@ class AdminPromoDetailScreen extends ConsumerWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
+                    // ⚠️ `item.moderationStatus` — **le même que celui affiché
+                    // douze lignes plus haut**, et c'est tout l'intérêt : cet
+                    // écran est le seul d'où l'on peut trancher une promo qui
+                    // n'est PAS `signalee` (revenir sur un masquage, par
+                    // exemple). Y écrire un statut en dur ferait échouer
+                    // chacune de ces corrections en `MODERATION_STATE_CHANGED`.
                     OutlinedButton(
-                      onPressed: () =>
-                          _act(context, ref, () => api.masquerPromo(item.id)),
+                      onPressed: () => _act(
+                          context,
+                          ref,
+                          () =>
+                              api.masquerPromo(item.id, item.moderationStatus)),
                       child: Text(l10n.masquerLabel),
                     ),
                     OutlinedButton(
                       onPressed: () => _act(
-                          context, ref, () => api.verifierOkPromo(item.id)),
+                          context,
+                          ref,
+                          () => api.verifierOkPromo(
+                              item.id, item.moderationStatus)),
                       child: Text(l10n.verifierOkLabel),
                     ),
                     OutlinedButton(
-                      onPressed: () =>
-                          _act(context, ref, () => api.avertirPromo(item.id)),
+                      onPressed: () => _act(
+                          context,
+                          ref,
+                          () =>
+                              api.avertirPromo(item.id, item.moderationStatus)),
                       child: Text(l10n.avertirLabel),
                     ),
                   ],

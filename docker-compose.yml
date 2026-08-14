@@ -53,9 +53,32 @@ services:
       - minio_data:/data
     command: server /data --console-address ":9001"
 
-  # Crée le bucket et l'ouvre en lecture publique (comme le sera le bucket
-  # OVH réel) au démarrage — s'arrête une fois fait, ce n'est pas un bug si
-  # ce conteneur apparaît "Exited (0)".
+  # Crée le bucket et ouvre en lecture publique LES SEULS DOSSIERS PUBLICS —
+  # s'arrête une fois fait, ce n'est pas un bug si ce conteneur apparaît
+  # "Exited (0)".
+  #
+  # ⚠️ **CE BLOC OUVRAIT TOUT LE BUCKET JUSQU'AU 2026-08-14**, en une ligne :
+  # `mc anonymous set download local/echango-promo`. Conséquence mesurée pendant
+  # l'audit du 2026-08-14 : les justificatifs d'identité professionnelle de
+  # `registre-documents/` se téléchargeaient **anonymement, sans aucune
+  # signature**, sur le simple chemin de l'objet — alors que
+  # `storage.service.ts:46-52` les déclare privés et que tout le reste du code
+  # (ACL `private`, URL pré-signées à la demande, TTL 15 min) est bâti pour ça.
+  #
+  # La politique de bucket écrasait donc en silence l'ACL par objet, et rien ne
+  # le disait : l'audit HTTP passait, les bancs passaient, l'ACL était bien
+  # posée à l'upload. Seule une requête sur le chemin nu l'a montré.
+  #
+  # La forme ci-dessous calque la PRODUCTION : OVH ne supporte pas les
+  # politiques de bucket (`NotImplemented on PutBucketPolicy`), seule l'ACL par
+  # objet y agit — `public-read` sur les trois dossiers publics, `private` sur
+  # `registre-documents` (voir `PRIVATE_FOLDERS`, storage.service.ts:52).
+  # Ouvrir dossier par dossier ici, c'est reproduire ce comportement au lieu de
+  # le contredire.
+  #
+  # ⚠️ Un nouveau dossier public devra être ajouté ici ET à `UploadFolder`.
+  # Un dossier oublié est inaccessible — bruyant, donc corrigible. C'est
+  # l'inverse de l'erreur précédente, qui était silencieuse.
   minio-init:
     image: minio/mc:latest
     depends_on:
@@ -64,7 +87,9 @@ services:
       /bin/sh -c "
       until mc alias set local http://minio:9000 echango echango123; do sleep 1; done;
       mc mb -p local/echango-promo;
-      mc anonymous set download local/echango-promo;
+      mc anonymous set download local/echango-promo/promo-photos;
+      mc anonymous set download local/echango-promo/commercant-photos;
+      mc anonymous set download local/echango-promo/highlight-images;
       "
 
 volumes:

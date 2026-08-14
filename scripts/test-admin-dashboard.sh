@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 #
-# Banc du tableau de bord — cohérence des compteurs, cloisonnement des vues.
+# Banc du tableau de bord — cohérence des compteurs, portée globale de l'agent.
+#
+# ⚠️ **Retourné le 2026-08-13.** Il prouvait le cloisonnement de l'agent ; le
+# chantier « agent global » le supprime, et les sections 2 et 3 sont devenues
+# des assertions incapables de refuser. La section 4 prouve désormais
+# l'inverse : deux agents distincts voient exactement la même chose, égale à ce
+# que voit l'admin. Un filtre de périmètre oublié quelque part les ferait
+# diverger — c'est le seul contrôle du parc qui le verrait.
 #
 # Le tableau de bord est le seul endroit du produit où l'on regarde des NOMBRES
 # plutôt que des objets. C'est ce qui le rend dangereux : un chiffre faux a
@@ -29,18 +36,23 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RACINE="$(cd "$HERE/.." && pwd)"
 
-command -v python3 >/dev/null 2>&1 || {
-  echo "❌ python3 absent — l'absence de verdict n'est pas un verdict."
-  exit 2
-}
+command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1 || {
+  echo "❌ python3 ou python requis — l'absence de verdict n'est pas un verdict."
+  exit 2; }
+PY=$(command -v python3 || command -v python)
+
+# ⚠️ La console Windows est en cp1252 : sans ça, le moindre « ═ » fait planter
+# le banc en UnicodeEncodeError, et un banc qui ne peut pas AFFICHER son verdict
+# n'en rend aucun.
+export PYTHONIOENCODING=utf-8
 
 cd "$RACINE" || exit 2
 
 echo "── auto-test du banc ──"
-python3 "$HERE/lib/admin_dashboard.py" --self-test || {
+"$PY" "$HERE/lib/admin_dashboard.py" --self-test || {
   echo "❌ l'auto-test échoue : le banc lui-même est en cause."
   exit 2
 }
 
 echo
-exec python3 "$HERE/lib/admin_dashboard.py" "$@"
+exec "$PY" "$HERE/lib/admin_dashboard.py" "$@"
