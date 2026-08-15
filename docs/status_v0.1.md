@@ -4899,6 +4899,32 @@ par l'écran de détail. La phrase des specs §3.1 (« déjà renvoyé par l'API
 publique ») est donc juste, mais pas par la route qu'on croit — et c'est le
 genre de détail qui fait chercher un défaut au mauvais endroit.
 
+── La production est migrée (2026-08-15) ──────────────────────────────────
+
+Migration lancée sur le VPS par le porteur de projet, sans incident signalé.
+**Vérifiée depuis l'extérieur** — la seule chose qu'un « tout est ok » ne prouve
+pas :
+
+| Contrôle (lecture seule, `https://promo.echango.com`) | Résultat |
+|---|---|
+| `GET /promo/config` | `200` |
+| `GET /commercant/:id/public` | `"telephone": "+213611110000"` |
+| `GET /promo/map` — les 9 commerces visibles | **9/9 en E.164, 0 en forme nationale** |
+
+⚠️ **Ces 9 ne sont pas le parc entier** : la carte ne montre que les commerces
+qui ont une position. Le décompte complet demanderait un accès à la base de
+production, que cette vérification n'a pas — et le dire vaut mieux que laisser
+lire « 9/9 » comme « tout le parc ».
+
+⚠️ **Le contrôle est passé par `/promo/map` et non par la fiche publique**, à
+dessein : `GET /commercant/:id/public` **enregistre une vue** au compteur du
+commerçant. Vérifier dix fiches aurait gonflé dix tableaux de bord de vrais
+commerçants — une mesure ne doit pas déplacer ce qu'elle mesure.
+
+*(Au passage, le piège maison a mordu une fois de plus : un emoji dans un
+`python -c` fait planter la console Windows en cp1252. `PYTHONIOENCODING=utf-8`
+est dans tous les bancs pour cette raison exacte.)*
+
 ── Ce qui reste ouvert ────────────────────────────────────────────────────
 
 **Le lien `tel:` du client n'est pas internationalisé.**
