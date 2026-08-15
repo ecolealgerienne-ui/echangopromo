@@ -65,6 +65,39 @@ export function normaliserTelephone(
 }
 
 /**
+ * Nombre de chiffres de fin comparés pour **retrouver** un numéro, par
+ * opposition à le valider.
+ *
+ * Neuf, parce qu'un mobile algérien s'écrit indifféremment `0555000101`,
+ * `+213555000101` ou `00213555000101` : ce qui reste stable, ce sont les neuf
+ * derniers chiffres. C'est le même choix, et le même chiffre, que le
+ * rapprochement d'appels du CRM (`call_tracker_log.py`) — deux règles de
+ * recherche différentes sur les mêmes numéros finiraient par ne pas trouver les
+ * mêmes gens.
+ */
+export const CHIFFRES_SIGNIFICATIFS = 9;
+
+/**
+ * Les chiffres significatifs d'une **recherche**, ou `null` si la saisie n'a
+ * pas l'air d'un numéro.
+ *
+ * ⚠️ **Rien à voir avec `normaliserTelephone`, et les confondre serait une
+ * faute.** Celle-ci valide et rejette ; celle-là doit trouver, y compris sur
+ * une saisie partielle et sans savoir de quel pays il s'agit. Un admin qui tape
+ * `+213555000101` et un autre qui tape `0555000101` cherchent le même
+ * commerçant — c'était vrai avant la normalisation du parc, ça doit le rester
+ * après.
+ *
+ * Le seuil de 6 chiffres évite qu'une recherche par nom contenant deux ou trois
+ * chiffres (« Boutique 22 ») ne se mette à balayer les téléphones.
+ */
+export function chiffresDeRecherche(saisie: string): string | null {
+  const chiffres = (saisie ?? '').replace(/\D/g, '');
+  if (chiffres.length < 6) return null;
+  return chiffres.slice(-CHIFFRES_SIGNIFICATIFS);
+}
+
+/**
  * Le pays d'une saisie, avec son défaut résolu **une seule fois**.
  *
  * Recopier `dto.pays ?? 'DZ'` à chaque site d'appel ferait vivre la décision

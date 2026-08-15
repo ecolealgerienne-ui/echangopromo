@@ -32,6 +32,7 @@ import { ListCommercantQueryDto } from './dto/list-commercant-query.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
 import { SetCommercantPositionDto } from './dto/set-position.dto';
 import {
+  chiffresDeRecherche,
   normaliserTelephone,
   paysOuDefaut,
   TelephoneNormalise,
@@ -620,10 +621,23 @@ export class CommercantService {
       //
       // C'est aussi ce qui donne un usage au champ que D2 promeut : `adresse`
       // devient le seul texte de lieu du produit.
+      // ⚠️ **Le téléphone se cherche par ses chiffres, pas par sa forme**
+      // (2026-08-15). La normalisation du parc a fait basculer 261 fiches de
+      // `+213555000101` à `0555000101` : un `ILIKE` sur la chaîne saisie ne
+      // trouvait plus rien à quiconque connaissait le numéro sous son ancienne
+      // écriture — et le décor des bancs, qui fait exactement ça, l'a signalé
+      // au premier passage. Le défaut aurait été le même pour un admin lisant
+      // un numéro sur une carte de visite internationale.
+      const chiffres = chiffresDeRecherche(query.search);
       qb.andWhere(
         '(commercant.nom ILIKE :search OR commercant.telephone ILIKE :search' +
-          ' OR commercant.adresse ILIKE :search)',
-        { search: `%${query.search}%` },
+          ' OR commercant.adresse ILIKE :search' +
+          (chiffres
+            ? " OR regexp_replace(commercant.telephone, '[^0-9]', '', 'g')" +
+              ' LIKE :chiffres'
+            : '') +
+          ')',
+        { search: `%${query.search}%`, chiffres: `%${chiffres ?? ''}` },
       );
     }
     if (query.accountState) {

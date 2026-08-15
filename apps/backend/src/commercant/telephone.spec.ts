@@ -2,6 +2,7 @@ import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { LoginCommercantDto } from './dto/login-commercant.dto';
 import {
+  chiffresDeRecherche,
   normaliserTelephone,
   PAYS_PAR_DEFAUT,
   paysOuDefaut,
@@ -61,6 +62,36 @@ describe('normaliserTelephone', () => {
     expect(paysOuDefaut('')).toBe(PAYS_PAR_DEFAUT);
     expect(paysOuDefaut('AE')).toBe('AE');
     expect(normaliserTelephone('0555000101')?.pays).toBe(PAYS_PAR_DEFAUT);
+  });
+});
+
+describe('chiffresDeRecherche', () => {
+  it('rend la même clé pour toutes les écritures d’un numéro', () => {
+    // C'est ce qui permet à un admin de retrouver un commerçant qu'il connaît
+    // en `+213…` alors que la base stocke `0…` depuis la normalisation du parc.
+    const clefs = [
+      '0555000101',
+      '+213555000101',
+      '00213555000101',
+      '213 555 00 01 01',
+      '0555 00 01 01',
+    ].map(chiffresDeRecherche);
+    expect(new Set(clefs).size).toBe(1);
+    expect(clefs[0]).toBe('555000101');
+  });
+
+  it('ignore une recherche qui n’a pas l’air d’un numéro', () => {
+    // ⚠️ Le cas qui doit ÉCHOUER : sans ce seuil, chercher « Boutique 22 » se
+    // mettrait à balayer les téléphones sur « 22 » et rendrait n'importe quoi.
+    expect(chiffresDeRecherche('Boutique 22')).toBeNull();
+    expect(chiffresDeRecherche('Alimentation')).toBeNull();
+    expect(chiffresDeRecherche('')).toBeNull();
+    expect(chiffresDeRecherche('12345')).toBeNull();
+  });
+
+  it('accepte une recherche partielle dès six chiffres', () => {
+    expect(chiffresDeRecherche('555000')).toBe('555000');
+    expect(chiffresDeRecherche('0555000101')).toBe('555000101');
   });
 });
 
