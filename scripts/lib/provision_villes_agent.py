@@ -79,15 +79,24 @@ VILLES = [
 
 # Décalages en degrés — 0,006° de latitude ≈ 670 m, 0,008° ≈ 890 m. Assez pour
 # que les trois commerces d'une ville ne se confondent pas sur la carte.
-DECALAGES = [(0.0, 0.0), (0.006, 0.004), (-0.005, 0.008)]
+DECALAGES = [(0.0, 0.0), (0.006, 0.004), (-0.005, 0.008), (0.004, -0.007)]
 
 METIERS = [
     ("Superette", "alimentation", "Rue principale"),
     ("Boulangerie", "alimentation", "Avenue du marche"),
     ("Boutique", "vetements_textile", "Rue du commerce"),
+    # ⚠️ Ajouté le 2026-08-15, en QUATRIÈME position exprès. Les trois premiers
+    # portent le décor déjà posé en production : les réordonner changerait leur
+    # numéro (voir `telephone`) et fabriquerait un parc en double au lieu de
+    # retrouver l'existant. On ajoute à la fin, jamais au milieu.
+    ("Cafe", "restauration", "Place du marche"),
 ]
 
 PROMOS_PAR_COMMERCANT = 2
+
+#: Nombre de commerces par ville. Trois par défaut — la valeur du décor
+#: d'origine, pour qu'un appel sans option reste identique au caractère près.
+COMMERCES_PAR_VILLE_DEFAUT = 3
 
 
 def verdict_creation(statut, code):
@@ -225,11 +234,38 @@ def self_test():
     _v("numéro stable d'un passage à l'autre", telephone(0, 0), telephone(0, 0))
     _v("neuf chiffres apres +213", len(telephone(2, 2)) - 4, 9)
 
-    # ⚠️ Les décalages doivent séparer les commerces : trois positions
+    # ⚠️ Les décalages doivent séparer les commerces : des positions
     # identiques donneraient une grappe indivisible sur la carte.
-    _v("trois décalages distincts", len(set(DECALAGES)), 3)
+    _v("décalages tous distincts", len(set(DECALAGES)), len(DECALAGES))
+    _v("autant de décalages que de métiers", len(DECALAGES), len(METIERS))
 
-    refus = 3
+    # ── Le filtre par ville, et le piège qu'il tend ─────────────────────────
+    #
+    # ⚠️ **C'est l'INDICE qui fabrique le numéro.** Filtrer la liste des villes
+    # puis la ré-énumérer donnerait l'indice 0 à Hassi Bahbah — donc les numéros
+    # de Djelfa — et le script créerait un second parc au lieu de retrouver
+    # l'existant. Ces trois cas sont là pour que ce défaut ne puisse pas
+    # revenir en silence.
+    _v("sans filtre : les trois villes", len(villes_demandees(None)), 3)
+    _v("filtre Djelfa : une seule ville", len(villes_demandees("Djelfa")), 1)
+    _v("filtre insensible à la casse", len(villes_demandees("djelfa")), 1)
+    _v("ville inconnue ⇒ rien, pas un repli",
+       len(villes_demandees("Oran")), 0)
+    _v("Hassi Bahbah garde SON indice",
+       villes_demandees("Hassi Bahbah")[0][0], 1)
+    _v("… donc SON numéro, pas celui de Djelfa",
+       telephone(villes_demandees("Hassi Bahbah")[0][0], 0), telephone(1, 0))
+
+    # ── Le quatrième commerce ───────────────────────────────────────────────
+    _v("le 4e commerce a un numéro neuf",
+       telephone(0, 3) not in [telephone(0, c) for c in range(3)], True)
+    _v("il reste dans la même ville",
+       telephone(0, 3).startswith("+21361"), True)
+
+    # ── Les options ─────────────────────────────────────────────────────────
+    _v("option absente ⇒ défaut", lire_option("--absente", "3"), "3")
+
+    refus = 4
     print("auto-test : %d cas, dont %d refus" % (_ok + len(_echecs), refus))
     for e in _echecs:
         print("  ❌ %s" % e)
@@ -237,8 +273,46 @@ def self_test():
     return not _echecs
 
 
+def lire_option(nom, defaut=None):
+    """`--nom valeur`, ou `defaut`. Rend `None` si l'option est là sans valeur."""
+    if nom not in sys.argv:
+        return defaut
+    i = sys.argv.index(nom)
+    return sys.argv[i + 1] if i + 1 < len(sys.argv) else None
+
+
+def villes_demandees(filtre):
+    """Les villes à traiter, **avec leur indice d'origine**.
+
+    ⚠️ **L'indice compte plus que l'ordre.** `telephone()` en dérive le numéro :
+    filtrer la liste puis la ré-énumérer donnerait à Hassi Bahbah le numéro de
+    Djelfa, donc un second parc au lieu du parc existant. On garde donc
+    l'`enumerate` sur la liste ENTIÈRE et on saute ce qui ne correspond pas.
+    """
+    if not filtre:
+        return list(enumerate(VILLES))
+    cible = filtre.strip().lower()
+    return [(i, v) for i, v in enumerate(VILLES) if v[0].lower() == cible]
+
+
 def main():
     appliquer = "--appliquer" in sys.argv
+    filtre_ville = lire_option("--ville")
+    brut = lire_option("--commerces", str(COMMERCES_PAR_VILLE_DEFAUT))
+    try:
+        par_ville = int(brut)
+    except (TypeError, ValueError):
+        print("❌ --commerces attend un entier, reçu %r." % brut)
+        return 2
+    if not 1 <= par_ville <= len(METIERS):
+        print("❌ --commerces doit être entre 1 et %d (autant que de métiers "
+              "déclarés)." % len(METIERS))
+        return 2
+    villes = villes_demandees(filtre_ville)
+    if not villes:
+        print("❌ ville inconnue : %r. Attendu : %s."
+              % (filtre_ville, ", ".join(v[0] for v in VILLES)))
+        return 2
     print("═" * 70)
     print("  Décor à trois villes, par l'agent — %s"
           % ("ÉCRITURE RÉELLE" if appliquer else "SIMULATION"))
@@ -259,10 +333,10 @@ def main():
     print("  agent connecté\n")
 
     total_c, total_p, deja, refus = 0, 0, 0, []
-    for iv, (ville, lat, lng) in enumerate(VILLES):
+    for iv, (ville, lat, lng) in villes:
         print("── %s ──" % ville)
         for ic, ((dlat, dlng), (metier, cat, rue)) in enumerate(
-                zip(DECALAGES, METIERS)):
+                zip(DECALAGES[:par_ville], METIERS[:par_ville])):
             tel = telephone(iv, ic)
             nom = "%s %s" % (metier, ville)
             if not appliquer:
