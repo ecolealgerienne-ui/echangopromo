@@ -84,6 +84,13 @@ démarre pas du tout**. Une migration qui refuse volontairement (contrôle de
 doublons, par exemple) doit donc être précédée de sa vérification, sur la base
 de production, **avant** le `up -d`.
 
+> **Export vers le CRM Odoo** (PR #28, 2026-08-15) : procédure dédiée dans
+> [`DEPLOIEMENT_CRM_VPS.md`](DEPLOIEMENT_CRM_VPS.md). Aucune migration de
+> schéma ; trois clés à poser dans le `.env.production` du VPS, qu'aucun
+> `git pull` ne met à jour. Sans elles, la tâche de 04:00 journalise son
+> abstention et ne pousse rien — le déploiement est donc inerte tant qu'on ne
+> l'allume pas.
+
 > **Migration du téléphone en E.164** (PR #25, 2026-08-15) : procédure dédiée
 > dans [`MIGRATION_TELEPHONE_VPS.md`](MIGRATION_TELEPHONE_VPS.md). Elle réécrit
 > l'identifiant de connexion de toutes les fiches commerçant et **refuse en
