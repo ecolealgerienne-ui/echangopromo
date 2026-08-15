@@ -67,10 +67,18 @@ def verdict_verrou(statuts):
     if not statuts:
         return "non_concluant", "aucune tentative"
     if 429 not in statuts:
+        # ⚠️ **La cause la plus probable n'est pas le produit.** Le 2026-08-15,
+        # ce message a accusé le limiteur pendant une heure alors que le `.env`
+        # de développement portait `THROTTLE_FACTOR=20` : plafond à 1000, ce
+        # banc en tente 80, il ne pouvait PAS voir de 429. Le nommer ici évite
+        # de refaire le chemin — un banc qui accuse doit dire quoi vérifier
+        # avant de croire son accusation (règle #38).
         return ("echec",
-                "%d tentatives sans jamais de 429 — le verrou ne se déclenche "
-                "pas, le PIN d'un commerçant est brute-forçable en ligne "
-                "(règle 2)" % len(statuts))
+                "%d tentatives sans jamais de 429 — soit THROTTLE_FACTOR est "
+                "relevé côté serveur (le vérifier D'ABORD : au-delà de 1, ce "
+                "banc ne peut pas atteindre le plafond), soit le verrou ne se "
+                "déclenche pas et le PIN d'un commerçant est brute-forçable "
+                "en ligne (règle 2)" % len(statuts))
     rang = statuts.index(429) + 1
     return "ok", "verrou au %de essai (%d tentatives)" % (rang, len(statuts))
 

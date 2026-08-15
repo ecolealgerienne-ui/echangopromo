@@ -20,10 +20,20 @@
  * règle 2 (aucun compteur de tentatives par compte n'existe). Un facteur de 20
  * multiplie par vingt la vitesse d'un brute-force en ligne.
  *
- * ⚠️ **Et aucun banc n'éprouve le limiteur lui-même.** Tous les bancs traitent
- * un 429 comme « pas un verdict » et le contournent ; aucun n'affirme qu'il
- * refuse. Relever les seaux en local ne casse donc rien aujourd'hui — mais
- * c'est parce qu'un trou de couverture existe, pas parce que c'est sûr.
+ * ⚠️ **« Aucun banc n'éprouve le limiteur lui-même » — c'était vrai, ça ne
+ * l'est plus, et la phrase a coûté une heure le 2026-08-15.**
+ * `test-auth-login.sh` §2 affirme précisément que le verrou se déclenche : il
+ * tente jusqu'à **80** connexions et exige un `429`. Avec `THROTTLE_FACTOR=20`
+ * — la valeur du `.env` de développement — le plafond monte à **1000**, le
+ * banc ne l'atteint jamais, et il rend ❌ « le PIN d'un commerçant est
+ * brute-forçable en ligne » sur un produit parfaitement correct. Vérifié en
+ * relançant le même banc avec le facteur à 1 : verrou au **49ᵉ** essai, trois
+ * contrôles verts.
+ *
+ * Relever les seaux en local **casse donc un banc**, et l'accusation qu'il
+ * porte est crédible — c'est le faux négatif décrit quinze lignes plus haut,
+ * retourné contre celui qui l'a écrit. Avant de croire un banc qui accuse le
+ * limiteur, lire cette clé (règle #38).
  */
 function facteurDeSeau(): number {
   const brut = process.env.THROTTLE_FACTOR;
