@@ -140,8 +140,17 @@ export class CrmExportService {
     );
 
     const sql = `
+      -- ⚠️ **Les \`::uuid\` ne sont pas décoratifs.** \`promo."commercantId"\`,
+      -- \`promo_view."promoId"\` et \`commercant_view."commercantId"\` sont des
+      -- **varchar** (le défaut de TypeORM pour un \`string\`), pas des uuid :
+      -- Postgres n'a pas d'opérateur \`=\` implicite entre les deux sur une
+      -- comparaison colonne-colonne, et la requête échoue en
+      -- « operator does not exist: uuid = character varying ». Seul
+      -- \`Report.promoId\` est typé \`uuid\` en base — son entité le documente,
+      -- pour ce défaut exact, rencontré au premier vrai test de la file de
+      -- modération.
       WITH promos AS (
-        SELECT "commercantId" AS cid,
+        SELECT "commercantId"::uuid AS cid,
                COUNT(*) FILTER (WHERE "publishedAt" IS NOT NULL)::int AS deja_publiees,
                COUNT(*) FILTER (WHERE "publishedAt" IS NULL)::int      AS sans_publication,
                MAX("publishedAt")                                     AS derniere_publication,
@@ -160,20 +169,20 @@ export class CrmExportService {
          GROUP BY "commercantId"
       ),
       vues_promo AS (
-        SELECT p."commercantId" AS cid, COUNT(*)::int AS n
+        SELECT p."commercantId"::uuid AS cid, COUNT(*)::int AS n
           FROM promo_view v
-          JOIN promo p ON p.id = v."promoId"
+          JOIN promo p ON p.id = v."promoId"::uuid
          WHERE v."createdAt" > now() - interval '30 days'
          GROUP BY p."commercantId"
       ),
       vues_fiche AS (
-        SELECT "commercantId" AS cid, COUNT(*)::int AS n
+        SELECT "commercantId"::uuid AS cid, COUNT(*)::int AS n
           FROM commercant_view
          WHERE "createdAt" > now() - interval '30 days'
          GROUP BY "commercantId"
       ),
       signalements AS (
-        SELECT p."commercantId" AS cid, COUNT(*)::int AS n
+        SELECT p."commercantId"::uuid AS cid, COUNT(*)::int AS n
           FROM report r
           JOIN promo p ON p.id = r."promoId"
          WHERE r."createdAt" > now() - interval '90 days'
