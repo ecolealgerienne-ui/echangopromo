@@ -97,6 +97,49 @@ Attendu : **`DZ` 58** et **`AE` 7**. Un `DZ` à 0 signifie que le fichier de
 référence n'a pas été chargé — le module tournera sans erreur et l'« État »
 restera vide sur toutes les fiches algériennes, sans que rien ne le signale.
 
+### Rattraper les fiches déjà géocodées — **une seule fois, après cette mise à jour**
+
+⚠️ **La tâche planifiée ne les reprendra JAMAIS.** Une fiche n'est re-géocodée
+que si sa position a bougé de plus de 200 m : tout ce qui portait déjà
+`Géocodé` avant cette mise à jour garderait sa ville et un **État vide pour
+toujours**. Ce n'est pas un état d'attente, c'est un état stable et faux.
+
+Le rattrapage **n'appelle pas Nominatim** — le nom de wilaya est déjà stocké
+dans `wilaya_geocodee`. Il n'y a donc aucun risque de quota :
+
+```bash
+docker exec -i "$CONT" sh -c 'odoo shell --database=echango_crm \
+  --db_host="$HOST" --db_user="$USER" --db_password="$PASSWORD" \
+  --http-port=8079 --gevent-port=8082 --no-http' <<'PY'
+Compte = env['echango.promo.account']
+rattrapes, refuses = 0, {}
+for c in Compte.search([('wilaya_geocodee', '!=', False)]):
+    if c.partner_id.state_id:
+        continue
+    etat = c._etat_correspondant(c.wilaya_geocodee)
+    if etat:
+        c.partner_id.state_id = etat.id
+        rattrapes += 1
+    else:
+        refuses[c.wilaya_geocodee] = refuses.get(c.wilaya_geocodee, 0) + 1
+env.cr.commit()
+print('RATTRAPEES=%d' % rattrapes)
+print('NON APPARIEES :', refuses)
+PY
+```
+
+⚠️ **`docker exec -i`, avec le `-i`.** Sans lui l'entrée standard n'est pas
+transmise : `odoo shell` démarre, ne lit rien, et sort **sans un mot** — on
+croit alors que le script n'a rien trouvé.
+
+**Lire la ligne `NON APPARIEES`, elle n'est pas décorative.** Un nom qui y
+figure est un refus, et il y a deux sortes de refus :
+
+| Ce qu'on y voit | Ce que ça veut dire |
+|---|---|
+| un nom hors DZ/AE (`Californie`, `Île-de-France`) | position aberrante — un GPS d'émulateur, une saisie fantaisiste. **Normal**, rien à faire |
+| une **wilaya bien réelle** | son nom diverge de `res_country_state_dz.xml` — il manque une entrée dans `ALIAS_ETATS` côté CRM |
+
 ### 2. Créer la source et générer le jeton
 
 Dans l'interface : **CRM → echango Promo → Source et jeton**.
