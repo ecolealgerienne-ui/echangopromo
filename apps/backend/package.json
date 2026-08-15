@@ -20,6 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed:admin": "ts-node --transpile-only ./src/scripts/seed-admin.ts",
     "seed:admin:prod": "node dist/scripts/seed-admin.js",
+    "crm:sync": "ts-node --transpile-only ./src/scripts/crm-sync.ts",
+    "crm:sync:prod": "node dist/scripts/crm-sync.js",
     "typeorm": "typeorm-ts-node-commonjs -d src/data-source.ts",
     "migration:generate": "npm run typeorm -- migration:generate",
     "migration:run": "npm run typeorm -- migration:run",

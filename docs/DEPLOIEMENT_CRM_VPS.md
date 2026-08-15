@@ -119,6 +119,34 @@ docker compose --env-file .env.production -f docker-compose.promo.yml up -d --bu
 
 ## 4. Ne pas attendre 04:00 pour savoir si ça marche
 
+### La façon courte — depuis le conteneur, sans aucun jeton
+
+```bash
+cd /opt/echangopromo
+docker compose --env-file .env.production -f docker-compose.promo.yml   exec backend npm run crm:sync:prod
+```
+
+⚠️ **Être dans le conteneur EST l'authentification.** Quiconque peut lancer
+cette commande peut déjà lire la base et le `.env` : exiger un jeton HTTP de
+plus ne protégerait rien, il ajouterait seulement un mot de passe à retrouver au
+pire moment — et pousserait à confondre le JWT d'administrateur avec
+`CRM_SYNC_TOKEN`, qui n'a rien à voir.
+
+Elle démarre le contexte Nest complet et appelle **le même service** que la
+tâche de 04:00 : un déclencheur qui emprunterait un autre chemin ne prouverait
+rien de celui qui tourne la nuit.
+
+| Sortie | Code | Ce que ça veut dire |
+|---|---|---|
+| `Lot … — N fiche(s) en P page(s), acquitté.` | 0 | c'est passé |
+| `Rien envoyé : CRM_SYNC_URL / CRM_SYNC_TOKEN absents` | **2** | les clés ne sont pas lues — ce n'est **pas** une panne |
+| `Envoi échoué : …` | 1 | Odoo a refusé, ou est injoignable — le message dit lequel |
+
+⚠️ **Deux codes de sortie distincts pour « rien envoyé » et « envoi raté »** :
+les confondre ferait traiter une configuration absente comme un incident.
+
+### La façon longue — par HTTP, avec un jeton d'administrateur
+
 Le premier envoi réel ne doit pas être le premier test.
 
 ```bash
