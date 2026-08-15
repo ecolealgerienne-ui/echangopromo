@@ -77,6 +77,20 @@ docker compose --env-file .env.production -f docker-compose.promo.yml up -d --bu
 Les migrations en attente s'appliquent automatiquement au redémarrage du
 conteneur `backend`.
 
+⚠️ **Et c'est pourquoi une migration qui échoue ne dégrade pas : elle coupe.**
+Le conteneur enchaîne `migration:run && node dist/main` — si la première
+commande sort en erreur, la seconde n'est jamais lancée et **le backend ne
+démarre pas du tout**. Une migration qui refuse volontairement (contrôle de
+doublons, par exemple) doit donc être précédée de sa vérification, sur la base
+de production, **avant** le `up -d`.
+
+> **Migration du téléphone en E.164** (PR #25, 2026-08-15) : procédure dédiée
+> dans [`MIGRATION_TELEPHONE_VPS.md`](MIGRATION_TELEPHONE_VPS.md). Elle réécrit
+> l'identifiant de connexion de toutes les fiches commerçant et **refuse en
+> bloc** s'il existe deux comptes actifs qui deviennent un doublon. Sa
+> première étape est une requête en lecture seule à passer avant tout
+> déploiement.
+
 ## Outils d'exploitation — deux scripts qui écrivent en base
 
 ⚠️ **Les deux court-circuitent le produit**, et il faut le savoir avant de les
