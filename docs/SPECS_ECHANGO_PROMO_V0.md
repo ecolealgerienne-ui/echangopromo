@@ -295,13 +295,30 @@ Photo prise obligatoirement via l'appareil photo intégré à l'app (pas de sél
 ### 5.6 Catégories (liste fermée, V0)
 Liste fixe, pas de saisie libre par l'agent, pour éviter la fragmentation dès le premier jour :
 1. Alimentation
-2. Vêtements / Textile
-3. Électroménager
-4. Beauté / Hygiène
-5. Maison / Ameublement
-6. Autre
+2. **Restauration** — restaurants, fast-foods, salons de thé (**ajoutée le
+   2026-07-30**, migration `1783830000000-AddCategorieRestauration`)
+3. Vêtements / Textile
+4. Électroménager
+5. Beauté / Hygiène
+6. Maison / Ameublement
+7. Autre
 
-Extensible en phase ultérieure si besoin identifié sur le terrain.
+**L'ordre de cette liste est l'ordre d'affichage** côté mobile
+(`Categorie.values`) — d'où la place de Restauration juste après Alimentation :
+les deux répondent à la même intention, alors qu'elles sont bien distinctes
+(chercher où manger n'est pas chercher des courses à emporter).
+
+Extensible en phase ultérieure si besoin identifié sur le terrain — la source
+de vérité est `apps/backend/src/common/enums/categorie.enum.ts`, et son miroir
+Dart tenu par `tool/check_enums.dart`.
+
+> ⚠️ **Cette section a annoncé 6 catégories pendant deux semaines et demie
+> après l'ajout de la 7ᵉ** — corrigé le 2026-08-15. Ce n'est pas resté sans
+> effet : `docs/SPEC_INTEGRATION_ECHANGOCRM.md` s'est écrit sur cette liste, et
+> son contrat d'échange aurait fait **rejeter toutes les fiches de restaurants**
+> avec une énumération à 6 valeurs côté CRM. Une liste fermée recopiée dans un
+> document est une copie de plus à tenir (règle 30) : la lire ici sans vérifier
+> l'enum est le geste qui a produit le défaut.
 
 ### 5.7 Langue
 Saisie libre en arabe et/ou français par l'agent/commerçant, sans contrainte de format. Pas de recherche texte libre en V0 (la recherche V0 se limite à la sélection par catégorie prédéfinie, §3.1 — la problématique de correspondance bilingue ne se pose donc pas encore, à traiter uniquement quand la recherche par mot-clé sera développée en phase 2).

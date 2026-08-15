@@ -1,8 +1,14 @@
 # PR — `claude/echango-promo-suite-2026-08-04` → `main`
 
-> Ce fichier existe pour être **copié dans la PR GitHub**, `gh` n'étant installé
-> ni sur le poste ni dans WSL (revérifié le 2026-08-05). Lien direct pour
-> l'ouvrir :
+> ⚠️ **`gh` EST installé et authentifié depuis (au moins) le 2026-08-15** —
+> compte `ecolealgerienne-ui`, vérifié par `gh auth status`. La PR #25 a été
+> ouverte directement par `gh pr create --body-file -`. La phrase d'origine
+> (« `gh` n'étant installé ni sur le poste ni dans WSL, revérifié le
+> 2026-08-05 ») ferait refaire un copier-coller manuel devenu inutile — et
+> c'est le genre d'état périmé qui fait conclure.
+>
+> Ce fichier reste utile comme **brouillon relisible** avant d'ouvrir une PR ;
+> il n'est plus le seul chemin. Lien de comparaison, si besoin :
 > https://github.com/ecolealgerienne-ui/echangopromo/compare/main...claude/echango-promo-suite-2026-08-04?expand=1
 
 **1 commit · 2 fichiers · +100 / −1**

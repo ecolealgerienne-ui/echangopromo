@@ -4,7 +4,7 @@ import {
   IsLatitude,
   IsLongitude,
   IsOptional,
-  IsPhoneNumber,
+  IsISO31661Alpha2,
   IsString,
   Matches,
   MaxLength,
@@ -16,10 +16,22 @@ import {
   ADRESSE_MAX_LENGTH,
   NOM_MAX_LENGTH,
 } from '../entities/commercant.entity';
+import { EstTelephoneDuPays } from './telephone-du-pays.validator';
 
 export class RegisterCommercantDto {
-  @IsPhoneNumber('DZ')
+  @EstTelephoneDuPays()
   telephone: string;
+
+  /**
+   * Pays du numéro, ISO 3166-1 alpha-2. Absent ⇒ `DZ` : le pilote est algérien
+   * et l'app pré-sélectionne l'Algérie. C'est ce pays qui décide de la forme
+   * normalisée et qui entre dans l'unicité `(pays, telephone)` — deux
+   * commerçants de pays différents peuvent légitimement porter les mêmes
+   * chiffres nationaux.
+   */
+  @IsOptional()
+  @IsISO31661Alpha2()
+  pays?: string;
 
   @IsString()
   @MinLength(2)

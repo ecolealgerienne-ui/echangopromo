@@ -9,6 +9,7 @@ class CommercantApi {
 
   Future<String> register({
     required String telephone,
+    required String pays,
     required String nom,
     String? adresse,
     required Categorie categorie,
@@ -21,6 +22,7 @@ class CommercantApi {
     final response =
         await _dio.post<Map<String, dynamic>>('/commercant/register', data: {
       'telephone': telephone,
+      'pays': pays,
       'nom': nom,
       if (adresse != null && adresse.isNotEmpty) 'adresse': adresse,
       'categorie': categorie.value,
@@ -33,10 +35,14 @@ class CommercantApi {
     return response.data!['accessToken'] as String;
   }
 
-  Future<String> login({required String telephone, required String pin}) async {
+  Future<String> login({
+    required String telephone,
+    required String pays,
+    required String pin,
+  }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/commercant/login',
-      data: {'telephone': telephone, 'pin': pin},
+      data: {'telephone': telephone, 'pays': pays, 'pin': pin},
     );
     return response.data!['accessToken'] as String;
   }

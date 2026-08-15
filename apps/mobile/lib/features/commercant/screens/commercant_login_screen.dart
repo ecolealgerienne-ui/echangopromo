@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/models/auth_session.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../shared/data/pays.dart';
+import '../../shared/widgets/telephone_field.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/validators/pin_validator.dart';
@@ -28,6 +30,7 @@ class CommercantLoginScreen extends ConsumerStatefulWidget {
 class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _telephoneController = TextEditingController();
+  Pays _pays = kPaysParDefaut;
   final _pinController = TextEditingController();
   bool _loading = false;
   bool _isAdminMode = false;
@@ -107,6 +110,7 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
       } else {
         final token = await ref.read(commercantApiProvider).login(
               telephone: _telephoneController.text.trim(),
+              pays: _pays.iso,
               pin: _pinController.text.trim(),
             );
         await ref
@@ -188,13 +192,10 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
                           ?.copyWith(color: colorScheme.onSurfaceVariant),
                     ),
                     const SizedBox(height: 28),
-                    TextFormField(
+                    TelephoneField(
                       controller: _telephoneController,
-                      decoration: InputDecoration(
-                        labelText: l10n.telephoneLabel,
-                        hintText: l10n.telephoneHint,
-                        prefixIcon: const Icon(Icons.phone_outlined),
-                      ),
+                      pays: _pays,
+                      onPaysChanged: (p) => setState(() => _pays = p),
                       // `emailAddress` plutôt que `phone` : un clavier numérique
                       // pur empêcherait de taper le "@" qui déclenche le bascule
                       // admin ci-dessous ; les chiffres restent tapables
@@ -203,9 +204,9 @@ class _CommercantLoginScreenState extends ConsumerState<CommercantLoginScreen> {
                       keyboardType: TextInputType.emailAddress,
                       onChanged: (v) =>
                           setState(() => _isAdminMode = v.contains('@')),
-                      validator: (v) => (v == null || v.isEmpty)
-                          ? l10n.telephoneRequired
-                          : null,
+                      // L'indicatif disparaît dès que la saisie devient une
+                      // adresse e-mail : ce champ ouvre aussi l'espace admin.
+                      avecIndicatif: !_isAdminMode,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(

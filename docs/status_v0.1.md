@@ -5,7 +5,7 @@
 correction d'audit, changement d'architecture, décision produit — et pas
 seulement en fin de session.
 
-Dernière mise à jour : **2026-08-04**
+Dernière mise à jour : **2026-08-15**
 
 ---
 
@@ -4724,6 +4724,241 @@ instrument, donc il sait dire non.
 ⚠️ **Les objets gardent leurs clés**, et `Cache-Control` vaut
 `max-age=31536000, immutable` : un appareil qui a déjà chargé une 1×1 la garde.
 Vider le cache de l'app est nécessaire pour la voir changer.
+
+---
+
+## 2026-08-15 — la règle « peut publier » devient une donnée, et le téléphone se normalise
+
+Deux chantiers du lot 0/1 de `docs/SPEC_INTEGRATION_ECHANGOCRM.md`, tous deux
+utiles **indépendamment** du CRM.
+
+── La table ordonnée des motifs ───────────────────────────────────────────
+
+La règle « ce commerçant peut-il publier ? » vivait dans **cinq** gardes
+(`assertAccountActive`, `assertRegistreValidated`, `assertProfileValidated`,
+`assertPositionSet`, `assertUnderCap`) plus une sixième pour le quota de
+créations, rappelées dans le même ordre à deux endroits de `PromoService`. Un
+second consommateur arrive — l'export CRM, qui doit rendre le **motif** au lieu
+de lever — et deux écritures d'une même règle divergent (règle 30).
+
+⚠️ **La spec demandait « une fonction unique appelée par les deux ». C'est
+irréalisable**, et c'est la relecture adverse qui l'a montré : les gardes lèvent
+par ligne, le plafond dépend d'un agrégat que seule la requête produit. Aucune
+fonction n'est à la fois un `throw` et un `CASE WHEN`.
+
+Ce qui est unique, c'est la **table** — une donnée : `REGLES_PUBLICATION`, neuf
+motifs ordonnés, chacun portant sa condition, son `ErrorCode`, son statut HTTP
+et son message. Trois rendus la parcourent sans rien y ajouter : la garde de
+fiche, la garde de brouillon, l'évaluation complète pour l'export.
+
+**Deux choses apprises en le faisant** :
+
+- **Un motif n'est pas un `ErrorCode`.** Le registre a trois états qui appellent
+  trois gestes différents — jamais envoyé (à lui), en attente (à **nous**),
+  rejeté (à lui) — mais un seul message pour le commerçant, qui n'a qu'une
+  chose à faire. Trois motifs, un code : multiplier les codes aurait imposé
+  trois entrées dans chacun des trois mappings mobile (règle 26) pour une
+  distinction dont l'app n'a que faire.
+- **Deux motifs manquaient à la spec**, trouvés en lisant `publish()` : le
+  quota de 5 créations/24 h, et le cooldown de republication de 24 h. Le second
+  a été **écarté** des motifs après examen : il porte sur *une promo*, pas sur
+  le commerçant, qui peut parfaitement en publier une autre. L'inscrire aurait
+  fait déclarer « bloqué » quelqu'un qui ne l'est pas.
+
+**41 cas, dont 2 mutations qui lèvent** : le plafond passé de `>=` à `>` fait
+tomber 3 cas, la règle de position remontée en tête de table en fait tomber 1.
+Le banc sait donc refuser, y compris sur l'**ordre** — ce qu'aucun test de
+condition prise isolément n'aurait vu.
+
+── Le téléphone : le pays, et surtout la normalisation ─────────────────────
+
+⚠️ **Le défaut trouvé est plus grave que le champ demandé.** Les trois DTO
+portaient `@IsPhoneNumber('DZ')`, qui accepte indifféremment `0555000101` **et**
+`+213555000101` ; rien ne normalisait avant l'écriture, et l'app affiche
+`+213...` en exemple de saisie. Les deux formes sont deux chaînes distinctes :
+l'index unique ne les rapproche pas, `findVivantByTelephone` ne trouve que la
+forme exacte saisie. **Deux comptes actifs pour un même commerçant étaient donc
+possibles**, et une connexion pouvait être refusée sur des identifiants exacts.
+Ajouter `pays` ne corrigeait rien de tout ça.
+
+Livré : `commercant/telephone.ts` (forme nationale stockée, E.164 dérivé), le
+validateur `EstTelephoneDuPays` — `@IsPhoneNumber` ne sait **pas** prendre sa
+région d'un autre champ du DTO, sa région est figée à la compilation —, la
+colonne `pays` (défaut `DZ`), l'unicité composite `(pays, telephone)`, et la
+migration `1783890000000` qui normalise l'existant.
+
+**Trois pièges rencontrés** :
+
+- **`parsePhoneNumberFromString('+971551234567', 'DZ')` rend un numéro
+  valide.** L'indicatif explicite l'emporte sur l'indication de pays. Sans le
+  contrôle `country === pays`, un numéro émirati saisi sous « Algérie » aurait
+  été stocké sous un pays qu'il n'a pas, et la colonne serait devenue
+  décorative. Éprouvé par mutation.
+- **L'ordre de la migration n'est pas libre** : normaliser peut rendre
+  identiques deux lignes qui ne l'étaient pas, donc l'index unique tombe
+  **avant**. Et une collision n'est pas arbitrée par une migration — garder
+  l'un ou l'autre compte est une décision produit : elle lève, en nommant les
+  numéros.
+- **L'index garde son nom** (`UQ_commercant_telephone_active`) bien que ses
+  colonnes changent : `saveNewAccount` traduit le `23505` de cette contrainte —
+  et d'elle seule — en « numéro déjà pris ». Le renommer aurait rendu ce refus
+  métier en `500`.
+
+`libphonenumber-js` était déjà là, mais **en transitif** (via `class-validator`)
+— promu en dépendance directe : une dépendance implicite n'est pas une
+dépendance, elle disparaît à la première montée de version du parent.
+
+**État : 13 suites, 185 tests verts**, `tsc` et `eslint` propres.
+
+── Le sélecteur mobile : 245 pays, sans package ───────────────────────────
+
+Décision : **tous** les pays. La table est **générée**
+(`apps/mobile/tool/generer_pays.mjs`) plutôt que prise d'un package —
+même raisonnement que le regroupement de marqueurs écrit à la main : un
+package de sélecteur apporte aussi son style, ses traductions partielles et
+son rythme de mises à jour. Tout était déjà sur la machine :
+
+- **`libphonenumber-js`** (dépendance backend) → codes ISO, indicatifs, et un
+  **numéro d'exemple par pays**. C'est la **même** bibliothèque que celle qui
+  valide et normalise côté serveur : un serveur et une app qui ne partagent pas
+  la même table s'accordent sur la saisie et divergent sur le refus ;
+- **`Intl.DisplayNames`** de Node → les noms en fr/en/ar, données CLDR, celles
+  qu'embarquerait un package.
+
+⚠️ **Les 735 noms de pays ne passent PAS par les `.arb`**, et c'est une
+exception assumée à la règle 27 : ce ne sont pas des chaînes d'interface mais
+de la **donnée de référence**. Les y mettre noierait les ~200 vraies chaînes et
+rendrait toute relecture de traduction impraticable. Ce qui est resté dans les
+`.arb` : le libellé du champ, l'invite de recherche, le « aucun résultat » —
+l'interface, justement.
+
+**Trois choses que la mise en œuvre a imposées** :
+
+- **Le drapeau est calculé, pas stocké** : les indicateurs régionaux Unicode
+  sont les lettres A–Z décalées de `0x1F1A5`. Deux lignes, aucune donnée.
+- **Le tri se fait à l'exécution, sur le nom localisé.** Trier à la génération
+  aurait figé l'ordre du français : « الجزائر » ne tombe pas au même endroit
+  qu'« Algérie », et une liste triée dans une langue qu'on ne lit pas se
+  parcourt au hasard.
+- **L'indicatif disparaît en mode admin.** L'écran de connexion commerçant
+  bascule en admin dès qu'on saisit un e-mail : afficher « +213 » devant une
+  adresse e-mail aurait annoncé un format que le serveur n'attend pas, sur le
+  seul écran où l'on ne peut pas se permettre d'égarer quelqu'un.
+
+L'ancien `telephoneHint` (`"+213..."`) est **supprimé des trois `.arb`** : il
+montrait la forme internationale alors que le champ attend la forme nationale
+— c'est lui qui a fait écrire les deux formes en base. Il est remplacé par le
+numéro d'exemple du pays choisi.
+
+**État mobile : `flutter analyze` 0 problème, `dart format` 0 fichier changé,
+74 tests verts, les 4 vérificateurs de `check_all.dart` au vert.**
+
+── La forme stockée bascule en E.164 (décision produit, même jour) ────────
+
+⚠️ **J'avais choisi la forme nationale ; la décision produit est l'E.164.**
+`0555000101` saisi devient **`+213555000101` en base** — le zéro de tête part à
+la conversion. La **saisie**, elle, ne change pas : c'est ce que le commerçant
+lit sur sa devanture, et l'app lui montre toujours un exemple national.
+
+Ce que ça règle d'un coup :
+
+- le **client** reçoit un numéro composable de partout, donc le `tel:` de
+  `phone_launcher.dart` fonctionne hors d'Algérie — le point ouvert n° 5 de la
+  spec CRM se ferme sans travail supplémentaire ;
+- l'export CRM n'a plus rien à dériver : c'est le champ que le rapprochement
+  d'appels attend ;
+- une seule écriture existe en base, donc une seule à comparer.
+
+⚠️ **Et ça ne casse pas la recherche admin** — c'était mon argument pour la
+forme nationale, et il était déjà périmé : depuis le correctif du même jour,
+elle compare les **chiffres**, pas la chaîne. La garde écrite pour réparer une
+régression a rendu la forme stockée libre de changer dès le lendemain.
+
+**Une SECONDE migration** (`1783900000000`) plutôt qu'une réécriture de la
+première : `1783890000000` est déjà appliquée en développement, et une
+migration appliquée ne se modifie pas — la réécrire ferait diverger deux bases
+ayant vu deux versions du même fichier. Sur un environnement neuf, les deux
+s'enchaînent et aboutissent au même état.
+
+**Parc après conversion : 264 fiches, 264 en `+213`, 0 en forme nationale.**
+
+── Les trois comportements, mesurés sur le serveur qui tourne ─────────────
+
+| Attendu | Mesure |
+|---|---|
+| Défaut Algérie | inscription **sans** champ `pays` → base : `pays = DZ` |
+| Zéro de tête retiré | `0555000101` saisi → base : **`+213555000101`** |
+| Ce que voit le client | `GET /commercant/:id/public` → `"telephone": "+213555900201"` |
+| Connexion, saisie nationale | `201` |
+| Connexion, saisie internationale | `201` |
+| **Témoin — PIN faux** | `400` |
+
+⚠️ **La fiche promo publique ne sert AUCUN téléphone** — vérifié en listant ses
+seize clés. Le numéro vient de `GET /commercant/:id/public`, appelé séparément
+par l'écran de détail. La phrase des specs §3.1 (« déjà renvoyé par l'API
+publique ») est donc juste, mais pas par la route qu'on croit — et c'est le
+genre de détail qui fait chercher un défaut au mauvais endroit.
+
+── Ce qui reste ouvert ────────────────────────────────────────────────────
+
+**Le lien `tel:` du client n'est pas internationalisé.**
+`phone_launcher.dart` compose le numéro **national** servi par l'API publique.
+Sans conséquence tant que tout le monde est algérien ; ça ne l'est plus depuis
+que le sélecteur accepte 245 pays. Le remède est côté serveur : servir l'E.164
+sur la fiche publique, le même champ que le CRM consomme. Pas urgent — le
+pilote n'a que des commerces algériens — mais à ne pas découvrir le jour du
+premier commerce étranger.
+
+── La migration a tourné sur WSL, et le parc était à l'envers ─────────────
+
+**Appliquée le 2026-08-15**, `AddCommercantPaysAndNormalizePhones1783890000000`,
+sur `echango_promo` (conteneur `echangopromo-postgres-1`, port 5433).
+
+⚠️ **La base disait l'inverse de ce que la spec supposait.** Recensement avant
+migration : **261 fiches sur 262 en forme internationale** (`+213…`), **une
+seule** en forme nationale. J'avais écrit que la forme stockée serait « celle
+que le commerçant connaît » — c'est vrai des vrais commerçants, ce ne l'était
+pas du décor, entièrement semé par des scripts qui écrivent `+213`. La
+normalisation a donc **réécrit 261 lignes**, pas trois.
+
+**Aucune collision** : la simulation SQL avant écriture (les 9 derniers
+chiffres, préfixés d'un zéro) rendait 0 groupe en doublon parmi les comptes
+vivants. La garde de la migration n'a donc pas eu à lever — mais elle a bien
+été exécutée, elle n'a pas été sautée.
+
+**État après** : 262 fiches, **0 forme internationale restante**, colonne
+`pays` `NOT NULL DEFAULT 'DZ'`, index `UQ_commercant_telephone_active` devenu
+`UNIQUE btree (pays, telephone) WHERE "deletedAt" IS NULL` — **sous le même
+nom**, donc `saveNewAccount` continue de traduire son `23505`.
+
+── Le témoin, parce qu'une base migrée ne prouve rien ─────────────────────
+
+Un compte de test créé puis supprimé, sur un numéro dont **on a d'abord
+vérifié qu'il était libre** — et la première tentative a échoué là-dessus : le
+numéro choisi existait déjà, le banc l'a dit (`409 COMMERCANT_PHONE_TAKEN`) au
+lieu d'accuser le produit (règle 38).
+
+| Geste | Résultat |
+|---|---|
+| Inscription avec `+213559001243` | `201` |
+| Ce que la base stocke | **`0559001243`, `DZ`** — la normalisation a bien lieu à l'écriture |
+| Connexion `+213559001243` | `201` |
+| Connexion `0559001243` | `201` |
+| Connexion `00213559001243` | `201` |
+| Connexion `0559 00 12 43` | `201` |
+| **PIN faux sur ce même compte** | `400 AUTH_INVALID_CREDENTIALS` |
+| **`+971559001243` sous pays DZ** | `400 VALIDATION_ERROR` |
+| **Réinscription en forme nationale** | `409 COMMERCANT_PHONE_TAKEN` |
+
+Les deux dernières lignes sont les plus importantes. La première montre que la
+chaîne **sait refuser** — sans elle, quatre `201` ne prouveraient que la
+capacité à dire oui. La seconde montre que **l'unicité voit désormais les deux
+écritures comme un seul numéro** : c'est exactement le défaut qui permettait
+deux comptes actifs pour un même commerçant, et il est fermé.
+
+⚠️ **Ce que ça change pour les bancs** : ils envoient tous `+213…`, et
+continuent de fonctionner — la normalisation a lieu à la connexion comme à
+l'inscription. Rien à reprendre dans `scripts/`.
 
 ---
 

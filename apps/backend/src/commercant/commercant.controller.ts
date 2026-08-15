@@ -69,6 +69,7 @@ export class CommercantController {
     const commercant = await this.commercantService.login(
       dto.telephone,
       dto.pin,
+      dto.pays,
     );
     return {
       accessToken: this.authService.issueToken(

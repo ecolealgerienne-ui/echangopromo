@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../l10n/app_localizations.dart';
+import '../data/pays.dart';
 import 'category_dropdown.dart';
 import 'form_section.dart';
 import 'location_capture_field.dart';
 import 'photo_picker_field.dart';
+import 'telephone_field.dart';
 
 /// Champs communs à la création d'une fiche commerçant (auto-inscription et
 /// création par l'agent) : photo, téléphone, nom, adresse, position GPS,
@@ -29,6 +31,8 @@ class CommercantFieldsForm extends ConsumerWidget {
     required this.photo,
     required this.onPhotoChanged,
     required this.telephoneController,
+    required this.pays,
+    required this.onPaysChanged,
     required this.nomController,
     this.positionRequise = false,
     required this.adresseController,
@@ -43,6 +47,12 @@ class CommercantFieldsForm extends ConsumerWidget {
   final File? photo;
   final ValueChanged<File> onPhotoChanged;
   final TextEditingController telephoneController;
+
+  /// Pays de l'indicatif — porté par l'écran appelant, parce que c'est lui qui
+  /// l'envoie au serveur avec le reste de la fiche.
+  final Pays pays;
+  final ValueChanged<Pays> onPaysChanged;
+
   final TextEditingController nomController;
 
   /// ⚠️ Vrai sur l'écran de l'agent uniquement : il est physiquement dans le
@@ -84,16 +94,10 @@ class CommercantFieldsForm extends ConsumerWidget {
             const SizedBox(height: 12),
             CategoryDropdown(value: categorie, onChanged: onCategorieChanged),
             const SizedBox(height: 12),
-            TextFormField(
+            TelephoneField(
               controller: telephoneController,
-              decoration: InputDecoration(
-                labelText: l10n.telephoneLabel,
-                hintText: l10n.telephoneHint,
-                prefixIcon: const Icon(Icons.phone_outlined),
-              ),
-              keyboardType: TextInputType.phone,
-              validator: (v) =>
-                  (v == null || v.isEmpty) ? l10n.telephoneRequired : null,
+              pays: pays,
+              onPaysChanged: onPaysChanged,
             ),
           ],
         ),

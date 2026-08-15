@@ -354,9 +354,18 @@ fi
 # « 213555000101 » précédé d'un blanc, et ne trouve rien. Le filtre est un
 # `ILIKE %…%`, donc la sous-chaîne sans indicatif suffit — et elle évite
 # d'avoir à encoder quoi que ce soit.
+#
+# ⚠️ **Et la comparaison porte sur les CHIFFRES, plus sur la chaîne**
+# (2026-08-15). La normalisation du parc stocke désormais la forme nationale :
+# `+213555000101` est en base sous `0555000101`, et un `select(.telephone==$t)`
+# sur la constante internationale de ce script ne trouvait plus rien. Ce
+# n'était pas une panne du produit — c'était ce script qui comparait deux
+# écritures du même numéro. Les neuf derniers chiffres survivent au prochain
+# changement de forme, quel qu'il soit. (Le serveur, lui, sait désormais
+# chercher un numéro sous n'importe quelle écriture : `chiffresDeRecherche`.)
 D_TEL_RECHERCHE="${D_COMMERCANT_TEL#+}"
 CID="$(api GET "/admin/commercant?limit=100&search=$D_TEL_RECHERCHE" '' "$ADMIN_TOKEN" \
-  | jq -r --arg t "$D_COMMERCANT_TEL" '.items[]? | select(.telephone==$t) | .id' | head -1)"
+  | jq -r --arg t "$D_COMMERCANT_TEL" '.items[]? | select((.telephone|gsub("[^0-9]";"")|.[-9:])==($t|gsub("[^0-9]";"")|.[-9:])) | .id' | head -1)"
 [ -n "$CID" ] || fail "Commerçant introuvable côté admin après inscription"
 
 # ⚠️ **Deux gestes, pas un.** Le commerçant SOUMET son registre, l'admin le
@@ -372,7 +381,7 @@ liste="$(api GET "/admin/commercant?limit=100&search=$D_TEL_RECHERCHE" '' "$ADMI
 echo "$liste" | est_erreur && fail "Liste des commerçants refusée" \
   "$(echo "$liste" | jq -c '{code,message}')"
 ETAT="$(echo "$liste" | jq -r --arg t "$D_COMMERCANT_TEL" \
-  '.items[] | select(.telephone==$t) | .registreStatus // "aucun"')"
+  '.items[] | select((.telephone|gsub("[^0-9]";"")|.[-9:])==($t|gsub("[^0-9]";"")|.[-9:])) | .registreStatus // "aucun"')"
 
 if [ "$ETAT" != "valide" ]; then
   # La clé doit porter le préfixe posé par StorageService.buildKey, sinon
