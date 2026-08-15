@@ -24,6 +24,7 @@ class AgentApi {
 
   Future<Commercant> createCommercant({
     required String telephone,
+    required String pays,
     required String nom,
     String? adresse,
     required Categorie categorie,
@@ -35,6 +36,7 @@ class AgentApi {
     final response =
         await _dio.post<Map<String, dynamic>>('/agent/commercant', data: {
       'telephone': telephone,
+      'pays': pays,
       'nom': nom,
       if (adresse != null && adresse.isNotEmpty) 'adresse': adresse,
       'categorie': categorie.value,

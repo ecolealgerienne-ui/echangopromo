@@ -17,6 +17,7 @@ import '../../../data/api/api_exception.dart';
 import '../../../domain/models/auth_session.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/core_providers.dart';
+import '../../shared/widgets/telephone_field.dart';
 
 class DevProfileSwitcherScreen extends ConsumerStatefulWidget {
   const DevProfileSwitcherScreen({super.key});
@@ -120,6 +121,11 @@ class _DevProfileSwitcherScreenState
       final api = ref.read(commercantApiProvider);
       final token = await api.login(
         telephone: _commercantTelephone.text.trim(),
+        // Écran de développement : le pays n'y est pas saisissable, et le
+        // défaut suffit — un décor algérien. Le poser explicitement plutôt que
+        // de rendre le paramètre facultatif : c'est la seule façon que le
+        // compilateur ait de signaler le prochain écran qui l'oublierait.
+        pays: kPaysParDefaut.iso,
         pin: _commercantPin.text.trim(),
       );
       await ref

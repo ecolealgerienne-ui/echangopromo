@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../shared/data/pays.dart';
+import '../../shared/widgets/telephone_field.dart';
 import '../../shared/validators/pin_validator.dart';
 import '../../shared/widgets/commercant_fields_form.dart';
 import '../../shared/widgets/error_text.dart';
@@ -30,6 +32,7 @@ class _CreateCommercantScreenState
     extends ConsumerState<CreateCommercantScreen> {
   final _formKey = GlobalKey<FormState>();
   final _telephoneController = TextEditingController();
+  Pays _pays = kPaysParDefaut;
   final _nomController = TextEditingController();
   final _adresseController = TextEditingController();
   final _pinController = TextEditingController();
@@ -84,6 +87,7 @@ class _CreateCommercantScreenState
       }
       final commercant = await ref.read(agentApiProvider).createCommercant(
             telephone: _telephoneController.text.trim(),
+            pays: _pays.iso,
             nom: _nomController.text.trim(),
             adresse: _adresseController.text.trim(),
             categorie: _categorie!,
@@ -155,6 +159,8 @@ class _CreateCommercantScreenState
                 photo: _photo,
                 onPhotoChanged: (file) => setState(() => _photo = file),
                 telephoneController: _telephoneController,
+                pays: _pays,
+                onPaysChanged: (p) => setState(() => _pays = p),
                 nomController: _nomController,
                 adresseController: _adresseController,
                 latitude: _latitude,

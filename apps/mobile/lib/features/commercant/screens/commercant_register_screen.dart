@@ -7,6 +7,8 @@ import '../../../data/api/api_exception.dart';
 import '../../../domain/enums/categorie.dart';
 import '../../../domain/models/auth_session.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../shared/data/pays.dart';
+import '../../shared/widgets/telephone_field.dart';
 import '../../../providers/auth_provider.dart';
 import '../../shared/validators/pin_validator.dart';
 import '../../shared/widgets/commercant_fields_form.dart';
@@ -31,6 +33,7 @@ class _CommercantRegisterScreenState
     extends ConsumerState<CommercantRegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _telephoneController = TextEditingController();
+  Pays _pays = kPaysParDefaut;
   final _nomController = TextEditingController();
   final _adresseController = TextEditingController();
   final _pinController = TextEditingController();
@@ -97,6 +100,7 @@ class _CommercantRegisterScreenState
         // qu'après connexion, ci-dessous.
         final token = await api.register(
           telephone: _telephoneController.text.trim(),
+          pays: _pays.iso,
           nom: _nomController.text.trim(),
           adresse: _adresseController.text.trim(),
           categorie: _categorie!,
@@ -155,6 +159,8 @@ class _CommercantRegisterScreenState
               photo: _photo,
               onPhotoChanged: (file) => setState(() => _photo = file),
               telephoneController: _telephoneController,
+              pays: _pays,
+              onPaysChanged: (p) => setState(() => _pays = p),
               nomController: _nomController,
               adresseController: _adresseController,
               latitude: _latitude,
