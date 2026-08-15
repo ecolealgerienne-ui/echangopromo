@@ -28,7 +28,7 @@ export class CrmController {
   async merchants(@Query() query: PaginationQueryDto) {
     const page = (query.page ?? 1) - 1;
     const taille = query.limit ?? 50;
-    const [items, total] = await Promise.all([
+    const [lot, total] = await Promise.all([
       this.exportService.lire(page, taille),
       this.exportService.compter(),
     ]);
@@ -36,7 +36,11 @@ export class CrmController {
       genere_le: new Date().toISOString(),
       total_attendu: total,
       page: page + 1,
-      items,
+      // ⚠️ Rendu à CHAQUE appel, pas seulement en test : c'est ce qui fait de
+      // l'équivalence entre le SQL et la table un contrôle exécuté plutôt
+      // qu'une intention (règle #30).
+      equivalence: this.exportService.verifierEquivalence(lot.lignes, lot.brut),
+      items: lot.lignes,
     };
   }
 }

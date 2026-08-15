@@ -4,6 +4,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Commercant } from '../commercant/entities/commercant.entity';
 import {
+  CommercantOriginVerification,
+  RegistreStatus,
+} from '../commercant/entities/commercant.entity';
+import {
+  evaluerPublication,
   MotifBlocagePublication,
   REGLES_PUBLICATION,
 } from '../commercant/publication-eligibility';
@@ -134,7 +139,10 @@ export class CrmExportService {
    * suppression de la réussite d'UNE nuit précise, c'est perdre en silence le
    * seul chemin par lequel un effacement (loi 18-07) atteint le CRM.
    */
-  async lire(page: number, taille: number): Promise<LigneCrm[]> {
+  async lire(
+    page: number,
+    taille: number,
+  ): Promise<{ lignes: LigneCrm[]; brut: Record<string, unknown>[] }> {
     const visibles = VISIBLE_MODERATION_STATUSES.map((s) => `'${s}'`).join(
       ', ',
     );
@@ -211,6 +219,7 @@ export class CrmExportService {
              f."deletedAt"                          AS supprime_le,
              f."consentedAt"                        AS consentement_le,
              f."registreStatus"                     AS registre_statut,
+             f."profilePendingReview"                AS profil_en_revue,
              f."promoActiveCap"                     AS plafond_propre,
              a.plafond_effectif::int                AS plafond_effectif,
              (COALESCE(pr.deja_publiees, 0) > 0)    AS est_active,
@@ -247,7 +256,7 @@ export class CrmExportService {
       page * taille,
     ]);
 
-    return brut.map((l) => this.enLigneCrm(l));
+    return { lignes: brut.map((l) => this.enLigneCrm(l)), brut };
   }
 
   /** Combien de fiches le lot entier contiendra — l'en-tête l'annonce. */
@@ -257,6 +266,57 @@ export class CrmExportService {
         WHERE "deletedAt" IS NULL OR "deletedAt" > now() - interval '30 days'`,
     );
     return r[0]?.n ?? 0;
+  }
+
+  /**
+   * **Le contrôle d'équivalence** — ce qui tient les deux rendus de la table.
+   *
+   * Le SQL a calculé un motif ; on le recalcule en TypeScript depuis les
+   * **mêmes faits**, avec le prédicat de la table, et on exige l'égalité. Les
+   * deux rendus dérivent de la même ligne de `REGLES_PUBLICATION`, mais rien
+   * ne le garantit à l'exécution : une expression SQL peut dériver de son
+   * prédicat sans que rien ne le signale — un `>=` devenu `>`, un `IS NULL`
+   * oublié.
+   *
+   * ⚠️ **C'est un contrôle, pas un commentaire** (règle #30). La spec exigeait
+   * « une fonction unique appelée par les gardes et par l'export » : c'est
+   * irréalisable, un `throw` par ligne et un `CASE WHEN` en agrégation ne sont
+   * pas la même chose. Ce qui reste faisable, c'est de vérifier qu'ils disent
+   * la même chose sur les données réelles — et de le vérifier à chaque lot.
+   *
+   * ⚠️ **Le quota se compare sans l'exemption agent.** L'export décrit ce
+   * qu'un commerçant peut faire LUI-MÊME ; `acteurDeConfiance` est donc
+   * toujours faux ici, comme dans l'expression SQL.
+   */
+  verifierEquivalence(
+    lignes: LigneCrm[],
+    brut: Record<string, unknown>[],
+  ): { verifiees: number; divergences: string[] } {
+    const divergences: string[] = [];
+    lignes.forEach((ligne, i) => {
+      const l = brut[i];
+      const attendu = evaluerPublication({
+        deletedAt: ligne.supprime_le ? new Date(ligne.supprime_le) : null,
+        suspendedAt: ligne.suspendu_le ? new Date(ligne.suspendu_le) : null,
+        originVerification: ligne.origine as CommercantOriginVerification,
+        registreStatus: (ligne.registre_statut as RegistreStatus) ?? null,
+        profilePendingReview: l.profil_en_revue === true,
+        latitude: ligne.latitude,
+        longitude: ligne.longitude,
+        promosEnLigne: ligne.promos_en_ligne,
+        plafondEffectif: ligne.plafond_effectif,
+        creations24h: Number(l.creations_24h ?? 0),
+        quotaCreation24h: Number(l.quota_creation_24h ?? 0),
+        acteurDeConfiance: false,
+      });
+      if (attendu.motif !== ligne.motif_blocage) {
+        divergences.push(
+          `${ligne.promo_uuid} : SQL dit ${ligne.motif_blocage ?? 'aucun'}, ` +
+            `la table dit ${attendu.motif ?? 'aucun'}`,
+        );
+      }
+    });
+    return { verifiees: lignes.length, divergences };
   }
 
   private enLigneCrm(l: Record<string, unknown>): LigneCrm {
