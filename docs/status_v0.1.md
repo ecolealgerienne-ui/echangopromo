@@ -4810,14 +4810,63 @@ dépendance, elle disparaît à la première montée de version du parent.
 
 **État : 13 suites, 185 tests verts**, `tsc` et `eslint` propres.
 
+── Le sélecteur mobile : 245 pays, sans package ───────────────────────────
+
+Décision : **tous** les pays. La table est **générée**
+(`apps/mobile/tool/generer_pays.mjs`) plutôt que prise d'un package —
+même raisonnement que le regroupement de marqueurs écrit à la main : un
+package de sélecteur apporte aussi son style, ses traductions partielles et
+son rythme de mises à jour. Tout était déjà sur la machine :
+
+- **`libphonenumber-js`** (dépendance backend) → codes ISO, indicatifs, et un
+  **numéro d'exemple par pays**. C'est la **même** bibliothèque que celle qui
+  valide et normalise côté serveur : un serveur et une app qui ne partagent pas
+  la même table s'accordent sur la saisie et divergent sur le refus ;
+- **`Intl.DisplayNames`** de Node → les noms en fr/en/ar, données CLDR, celles
+  qu'embarquerait un package.
+
+⚠️ **Les 735 noms de pays ne passent PAS par les `.arb`**, et c'est une
+exception assumée à la règle 27 : ce ne sont pas des chaînes d'interface mais
+de la **donnée de référence**. Les y mettre noierait les ~200 vraies chaînes et
+rendrait toute relecture de traduction impraticable. Ce qui est resté dans les
+`.arb` : le libellé du champ, l'invite de recherche, le « aucun résultat » —
+l'interface, justement.
+
+**Trois choses que la mise en œuvre a imposées** :
+
+- **Le drapeau est calculé, pas stocké** : les indicateurs régionaux Unicode
+  sont les lettres A–Z décalées de `0x1F1A5`. Deux lignes, aucune donnée.
+- **Le tri se fait à l'exécution, sur le nom localisé.** Trier à la génération
+  aurait figé l'ordre du français : « الجزائر » ne tombe pas au même endroit
+  qu'« Algérie », et une liste triée dans une langue qu'on ne lit pas se
+  parcourt au hasard.
+- **L'indicatif disparaît en mode admin.** L'écran de connexion commerçant
+  bascule en admin dès qu'on saisit un e-mail : afficher « +213 » devant une
+  adresse e-mail aurait annoncé un format que le serveur n'attend pas, sur le
+  seul écran où l'on ne peut pas se permettre d'égarer quelqu'un.
+
+L'ancien `telephoneHint` (`"+213..."`) est **supprimé des trois `.arb`** : il
+montrait la forme internationale alors que le champ attend la forme nationale
+— c'est lui qui a fait écrire les deux formes en base. Il est remplacé par le
+numéro d'exemple du pays choisi.
+
+**État mobile : `flutter analyze` 0 problème, `dart format` 0 fichier changé,
+74 tests verts, les 4 vérificateurs de `check_all.dart` au vert.**
+
 ── Ce qui reste ouvert ────────────────────────────────────────────────────
 
-**Le sélecteur de pays côté mobile n'existe pas**, et c'est volontaire : la
-liste des pays proposés est une décision produit. Conséquence à assumer — le
-serveur accepte n'importe quel code ISO, l'app n'en envoie aucun, donc le
-défaut `DZ` s'applique partout. **Aucune régression** (c'est le comportement
-d'avant), mais le champ n'a pas d'appelant tant que l'écran n'existe pas
-(règle 31).
+**Le lien `tel:` du client n'est pas internationalisé.**
+`phone_launcher.dart` compose le numéro **national** servi par l'API publique.
+Sans conséquence tant que tout le monde est algérien ; ça ne l'est plus depuis
+que le sélecteur accepte 245 pays. Le remède est côté serveur : servir l'E.164
+sur la fiche publique, le même champ que le CRM consomme. Pas urgent — le
+pilote n'a que des commerces algériens — mais à ne pas découvrir le jour du
+premier commerce étranger.
+
+**La migration n'a pas encore tourné sur la base WSL.** Elle refusera de
+s'appliquer s'il existe déjà deux comptes actifs qui deviennent un doublon une
+fois normalisés — c'est voulu : arbitrer lequel garder est une décision
+produit.
 
 ---
 

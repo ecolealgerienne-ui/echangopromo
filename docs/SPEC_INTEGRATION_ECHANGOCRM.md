@@ -696,12 +696,17 @@ l'historique d'une relation en cours.
 2. **Le fuseau des tâches planifiées de Promo** (§3) : à poser, pas à subir.
 3. **Le seuil de mesure du §3.4** — à partir de combien de fiches le
    rapprochement d'appel se dégrade réellement. Personne ne l'a mesuré.
-4. **Quels pays le sélecteur mobile propose.** Le backend accepte n'importe quel
-   code ISO valide depuis le 2026-08-15 ; l'app, elle, n'en propose aucun et
-   laisse donc le défaut `DZ` s'appliquer. Le comportement d'aujourd'hui est
-   inchangé — mais le champ n'a **pas d'appelant** tant que l'écran n'existe
-   pas (règle 31), et la liste des pays offerts est une décision produit, pas
-   un détail d'implémentation.
+4. ~~**Quels pays le sélecteur mobile propose.**~~ **Fermé le 2026-08-15** :
+   les **245** pays connus de libphonenumber, table générée par
+   `apps/mobile/tool/generer_pays.mjs` depuis la **même bibliothèque** que le
+   serveur. Les trois écrans de saisie envoient désormais le code ISO.
+5. **Le lien `tel:` du client n'est pas internationalisé.**
+   `phone_launcher.dart` compose le numéro **national** servi par l'API
+   publique. C'était sans conséquence tant que tout le monde était algérien ;
+   ça ne l'est plus depuis que le sélecteur accepte 245 pays. Il faudrait que
+   l'API publique serve l'E.164 — le même champ que le CRM consomme (§4.1). Le
+   pilote n'ayant que des commerces algériens, ce n'est pas urgent ; c'est
+   surtout à ne pas découvrir le jour du premier commerce étranger.
 
 ---
 
@@ -710,7 +715,7 @@ l'historique d'une relation en cours.
 | Lot | Contenu | Dépôt |
 |---|---|---|
 | **0** ✅ | Table ordonnée des motifs + deux rendus + le contrôle d'équivalence (§5.1) — *fait le 2026-08-15, `publication-eligibility.ts`, 41 cas dont 2 mutations* | Promo |
-| **1** ◐ | Migration de normalisation → colonne `pays` → unicité composite → validateur → connexion — *backend fait le 2026-08-15* ; **sélecteur mobile + `.arb` à faire** (§11.4) | Promo |
+| **1** ✅ | Migration de normalisation → colonne `pays` → unicité composite → validateur → connexion → **sélecteur mobile 245 pays + `.arb`** — *fait le 2026-08-15* | Promo |
 | **2** | Quatre CTE + `@Cron(04:00)` avec fuseau + en-tête de lot + jeton + refus si jeton absent | Promo |
 | **3** | Module : `security/` **livré avec** les modèles, contrôleur `readonly=False`, jeton haché, savepoint, audit, tag | CRM |
 | **4** | Vue SQL, filtres des six états, quatre écrans, géocodage, rétention | CRM |
