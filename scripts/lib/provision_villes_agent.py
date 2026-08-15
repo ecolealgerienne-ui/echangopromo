@@ -79,17 +79,42 @@ VILLES = [
 
 # Décalages en degrés — 0,006° de latitude ≈ 670 m, 0,008° ≈ 890 m. Assez pour
 # que les trois commerces d'une ville ne se confondent pas sur la carte.
-DECALAGES = [(0.0, 0.0), (0.006, 0.004), (-0.005, 0.008), (0.004, -0.007)]
+# ⚠️ **Ajouter à la FIN, jamais au milieu.** Le rang dans cette liste fabrique
+# le numéro de téléphone (voir `telephone`) : intercaler une position
+# renuméroterait tous les commerces suivants, et le script créerait un parc en
+# double au lieu de retrouver l'existant.
+DECALAGES = [
+    (0.0, 0.0),
+    (0.006, 0.004),
+    (-0.005, 0.008),
+    (0.004, -0.007),
+    (-0.008, -0.003),
+    (0.009, 0.009),
+    (-0.007, 0.006),
+    (0.002, 0.011),
+    (-0.010, 0.002),
+]
 
 METIERS = [
     ("Superette", "alimentation", "Rue principale"),
     ("Boulangerie", "alimentation", "Avenue du marche"),
     ("Boutique", "vetements_textile", "Rue du commerce"),
-    # ⚠️ Ajouté le 2026-08-15, en QUATRIÈME position exprès. Les trois premiers
-    # portent le décor déjà posé en production : les réordonner changerait leur
-    # numéro (voir `telephone`) et fabriquerait un parc en double au lieu de
-    # retrouver l'existant. On ajoute à la fin, jamais au milieu.
+    # ⚠️ Ajoutés le 2026-08-15, **à la suite** et jamais au milieu. Les trois
+    # premiers portent le décor déjà posé en production : les réordonner
+    # changerait leur numéro (voir `telephone`) et fabriquerait un parc en
+    # double au lieu de retrouver l'existant.
+    #
+    # Neuf métiers plutôt que trois parce que le script servait de
+    # PROVISIONNEUR à identités fixes : au-delà des slots déclarés, il répondait
+    # « déjà présent » indéfiniment, et il n'y avait aucun moyen d'ajouter un
+    # commerce sans toucher au code. Neuf couvre les six catégories du produit,
+    # `restauration` comprise — que le décor n'exerçait pas du tout.
     ("Cafe", "restauration", "Place du marche"),
+    ("Salon de coiffure", "beaute_hygiene", "Rue des artisans"),
+    ("Electromenager", "electromenager", "Boulevard central"),
+    ("Meubles", "maison_ameublement", "Zone artisanale"),
+    ("Pizzeria", "restauration", "Avenue de la gare"),
+    ("Droguerie", "autre", "Rue de la poste"),
 ]
 
 PROMOS_PAR_COMMERCANT = 2
@@ -265,6 +290,22 @@ def self_test():
     # ── Les options ─────────────────────────────────────────────────────────
     _v("option absente ⇒ défaut", lire_option("--absente", "3"), "3")
 
+    # ── La capacité, et la seule chose qui la borne ─────────────────────────
+    #
+    # ⚠️ Le script est un PROVISIONNEUR à identités fixes : au-delà des slots
+    # déclarés il répond « déjà présent » indéfiniment. Ces cas figent le fait
+    # que les deux listes se suivent — une position manquante pour un métier
+    # déclaré ferait silencieusement sauter le commerce, `zip` s'arrêtant au
+    # plus court.
+    _v("autant de positions que de métiers", len(DECALAGES), len(METIERS))
+    _v("neuf commerces possibles par ville", min(len(DECALAGES), len(METIERS)), 9)
+    tous9 = [telephone(0, c) for c in range(9)]
+    _v("neuf numéros distincts dans une ville", len(set(tous9)), 9)
+    _v("tous à neuf chiffres après +213",
+       {len(t) - 4 for t in tous9}, {9})
+    _v("les trois premiers numéros sont INCHANGÉS",
+       tous9[:3], ["+213611110000", "+213611220000", "+213611330000"])
+
     refus = 4
     print("auto-test : %d cas, dont %d refus" % (_ok + len(_echecs), refus))
     for e in _echecs:
@@ -304,9 +345,11 @@ def main():
     except (TypeError, ValueError):
         print("❌ --commerces attend un entier, reçu %r." % brut)
         return 2
-    if not 1 <= par_ville <= len(METIERS):
-        print("❌ --commerces doit être entre 1 et %d (autant que de métiers "
-              "déclarés)." % len(METIERS))
+    borne = min(len(METIERS), len(DECALAGES))
+    if not 1 <= par_ville <= borne:
+        print("❌ --commerces doit être entre 1 et %d — autant que de métiers "
+              "ET de positions déclarés. Au-delà, il faut en ajouter À LA FIN "
+              "des deux listes, jamais au milieu." % borne)
         return 2
     villes = villes_demandees(filtre_ville)
     if not villes:
