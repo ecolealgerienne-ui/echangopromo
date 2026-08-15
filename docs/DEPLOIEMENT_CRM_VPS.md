@@ -205,6 +205,26 @@ L'écran **Source et jeton** dit depuis quand — une source sans lot reçu depu
   fait bannir l'adresse IP du serveur, et cela se découvre bien après. Un parc
   de 300 fiches se géocode en environ trois heures, puis ne bouge plus : une
   fiche n'est re-géocodée que si sa position a bougé de plus de 200 m.
+
+  ⚠️ **Ne pas lancer de rattrapage manuel massif.** Le 2026-08-15, un lot de
+  216 fiches lancé à la main a fait répondre **429 Too Many Requests** à
+  Nominatim, et 61 fiches sont retombées en `erreur` d'un coup. Depuis, un 429
+  **interrompt le lot** au lieu d'enchaîner — mais la bonne conduite reste de
+  laisser la tâche planifiée faire son travail. Il n'y a rien à rattraper : elle
+  reprend seule ce qui a échoué.
+
+- **La ville ET l'état natif d'Odoo** sont remplis. Deux pièges, opposés :
+
+  | | |
+  |---|---|
+  | **Algérie** | Odoo ne livre **aucune** wilaya — le module pose les **58** (`data/res_country_state_dz.xml`). Sans elles, « État » restait vide quoi que fasse le géocodage |
+  | **Émirats** | Odoo livre **déjà** les 7 émirats, en **anglais**. En reposer un fichier viole `res_country_state_name_code_uniq` et **empêche l'installation du module** |
+
+  ⚠️ **Et l'appariement ne se fait pas sur le nom brut.** Nominatim, à qui l'on
+  demande pourtant du français, rend `Doubaï` (mesuré) là où Odoo stocke
+  `Dubai`, et `Abou Dabi` là où Odoo stocke `Abu Dhabi`. Le rapprochement passe
+  par des formes normalisées et une table d'alias (`ALIAS_ETATS`) — **jamais**
+  un `ilike` sur le nom, qui échouerait en silence.
 - **Aucune écriture vers Promo.** Le CRM ne fait que recevoir.
 
 ## 6. Deux réglages optionnels
