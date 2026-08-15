@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module';
 import { Commercant } from '../commercant/entities/commercant.entity';
 import { CrmController } from './crm.controller';
 import { CrmExportService } from './crm-export.service';
+import { CrmPushService } from './crm-push.service';
 
 /**
  * L'alimentation du CRM Odoo — `docs/SPEC_INTEGRATION_ECHANGOCRM.md`.
@@ -17,7 +18,7 @@ import { CrmExportService } from './crm-export.service';
 @Module({
   imports: [TypeOrmModule.forFeature([Commercant]), AuthModule],
   controllers: [CrmController],
-  providers: [CrmExportService],
-  exports: [CrmExportService],
+  providers: [CrmExportService, CrmPushService],
+  exports: [CrmExportService, CrmPushService],
 })
 export class CrmModule {}

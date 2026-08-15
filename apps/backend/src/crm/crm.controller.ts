@@ -1,9 +1,10 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { CrmExportService } from './crm-export.service';
+import { CrmPushService } from './crm-push.service';
 
 /**
  * La fenêtre de diagnostic sur l'export CRM.
@@ -20,7 +21,10 @@ import { CrmExportService } from './crm-export.service';
  */
 @Controller('crm')
 export class CrmController {
-  constructor(private readonly exportService: CrmExportService) {}
+  constructor(
+    private readonly exportService: CrmExportService,
+    private readonly pushService: CrmPushService,
+  ) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
@@ -42,5 +46,26 @@ export class CrmController {
       equivalence: this.exportService.verifierEquivalence(lot.lignes, lot.brut),
       items: lot.lignes,
     };
+  }
+
+  /**
+   * Déclenche l'envoi sans attendre 04:00.
+   *
+   * ⚠️ **Existe pour que le premier envoi réel ne soit pas le premier test.**
+   * Il fait exactement ce que fait la tâche planifiée — même code, même lot,
+   * même acquittement : un déclencheur qui emprunterait un autre chemin ne
+   * prouverait rien de celui qui tourne la nuit.
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('sync')
+  async sync() {
+    const resultat = await this.pushService.pousser();
+    return (
+      resultat ?? {
+        envoye: false,
+        raison: 'CRM_SYNC_URL / CRM_SYNC_TOKEN absents — rien n’a été envoyé',
+      }
+    );
   }
 }
