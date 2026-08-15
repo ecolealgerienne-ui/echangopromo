@@ -13,6 +13,7 @@ import { ReportModule } from './report/report.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { StorageModule } from './storage/storage.module';
 import { AuthModule } from './auth/auth.module';
+import { CrmModule } from './crm/crm.module';
 import { AppLinksModule } from './app-links/app-links.module';
 import { HighlightModule } from './highlight/highlight.module';
 import { NotificationModule } from './notification/notification.module';
@@ -61,6 +62,7 @@ import { typeOrmBaseOptions } from './data-source';
     StorageModule,
     AuthModule,
     NotificationModule,
+    CrmModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

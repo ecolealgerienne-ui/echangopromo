@@ -115,6 +115,28 @@ export type FaitsPublication = Partial<FaitsFiche> & Partial<FaitsAgregat>;
  */
 export type StatutRefus = 'forbidden' | 'bad_request';
 
+/**
+ * **Les noms de colonnes que le rendu SQL attend.**
+ *
+ * La requête d'export (`CrmExportService`) doit produire exactement ces
+ * alias — c'est le contrat entre la table et elle. Les nommer ici plutôt que
+ * de les écrire à la volée dans chaque expression évite qu'un renommage n'en
+ * corrige que la moitié.
+ */
+export const COLONNES_SQL = {
+  deletedAt: 'f."deletedAt"',
+  suspendedAt: 'f."suspendedAt"',
+  origine: 'f."originVerification"',
+  registre: 'f."registreStatus"',
+  profilEnRevue: 'f."profilePendingReview"',
+  latitude: 'f."latitude"',
+  longitude: 'f."longitude"',
+  promosEnLigne: 'a.promos_en_ligne',
+  plafond: 'a.plafond_effectif',
+  creations24h: 'a.creations_24h',
+  quota: 'a.quota_creation_24h',
+} as const;
+
 export interface RegleBlocage {
   motif: MotifBlocagePublication;
   portee: PorteeRegle;
@@ -122,6 +144,22 @@ export interface RegleBlocage {
   code: ErrorCode;
   applique: (faits: FaitsPublication) => boolean;
   message: (faits: FaitsPublication) => string;
+  /**
+   * Le **second rendu** : la même condition, en SQL, sur les colonnes de
+   * `COLONNES_SQL`.
+   *
+   * ⚠️ **Ce n'est pas une seconde écriture de la règle, c'est une seconde
+   * lecture de la même ligne.** Ce qui l'empêche de diverger du prédicat
+   * TypeScript n'est pas la proximité dans le fichier — c'est le contrôle
+   * exécuté : l'export rend les FAITS en même temps que le motif, et le banc
+   * recalcule le motif en TypeScript depuis ces faits pour exiger l'égalité.
+   * Un commentaire ne peut pas échouer (règle #30) ; ce contrôle, si.
+   *
+   * ⚠️ **`acteurDeConfiance` n'existe pas en SQL** : l'export décrit ce qu'un
+   * commerçant peut faire LUI-MÊME, jamais ce qu'un agent pourrait faire à sa
+   * place. Le quota s'y évalue donc toujours, là où la garde l'exempte.
+   */
+  sql: string;
 }
 
 /**
@@ -144,6 +182,7 @@ export const REGLES_PUBLICATION: readonly RegleBlocage[] = [
     // distinction (un compte supprimé est terminal, un compte suspendu se
     // réactive).
     motif: MotifBlocagePublication.COMPTE_SUPPRIME,
+    sql: `${COLONNES_SQL.deletedAt} IS NOT NULL`,
     portee: 'fiche',
     statut: 'forbidden',
     code: ErrorCode.COMMERCANT_ACCOUNT_INACTIVE,
@@ -152,6 +191,7 @@ export const REGLES_PUBLICATION: readonly RegleBlocage[] = [
   },
   {
     motif: MotifBlocagePublication.COMPTE_SUSPENDU,
+    sql: `${COLONNES_SQL.suspendedAt} IS NOT NULL`,
     portee: 'fiche',
     statut: 'forbidden',
     code: ErrorCode.COMMERCANT_ACCOUNT_INACTIVE,
@@ -170,6 +210,7 @@ export const REGLES_PUBLICATION: readonly RegleBlocage[] = [
   // un seul motif, l'écran « À débloquer » du CRM devient inutilisable.
   {
     motif: MotifBlocagePublication.REGISTRE_ABSENT,
+    sql: `${COLONNES_SQL.origine} = 'auto_inscrit' AND ${COLONNES_SQL.registre} IS NULL`,
     portee: 'fiche',
     statut: 'forbidden',
     code: ErrorCode.COMMERCANT_REGISTRE_NOT_VALIDATED,
@@ -180,6 +221,7 @@ export const REGLES_PUBLICATION: readonly RegleBlocage[] = [
   },
   {
     motif: MotifBlocagePublication.REGISTRE_EN_ATTENTE,
+    sql: `${COLONNES_SQL.origine} = 'auto_inscrit' AND ${COLONNES_SQL.registre} = 'en_attente'`,
     portee: 'fiche',
     statut: 'forbidden',
     code: ErrorCode.COMMERCANT_REGISTRE_NOT_VALIDATED,
@@ -190,6 +232,7 @@ export const REGLES_PUBLICATION: readonly RegleBlocage[] = [
   },
   {
     motif: MotifBlocagePublication.REGISTRE_REJETE,
+    sql: `${COLONNES_SQL.origine} = 'auto_inscrit' AND ${COLONNES_SQL.registre} = 'rejete'`,
     portee: 'fiche',
     statut: 'forbidden',
     code: ErrorCode.COMMERCANT_REGISTRE_NOT_VALIDATED,
@@ -204,6 +247,7 @@ export const REGLES_PUBLICATION: readonly RegleBlocage[] = [
     // de profil, même pour un compte confirmé par un agent, repasse par un
     // contrôle admin avant de pouvoir publier.
     motif: MotifBlocagePublication.PROFIL_EN_REVUE,
+    sql: `${COLONNES_SQL.profilEnRevue} = true`,
     portee: 'fiche',
     statut: 'forbidden',
     code: ErrorCode.COMMERCANT_PROFILE_PENDING_REVIEW,
@@ -227,6 +271,7 @@ export const REGLES_PUBLICATION: readonly RegleBlocage[] = [
     // parlant de publier sur un geste qui ne publie pas (revue 2026-08-05).
     // Préparer ne demande pas de point ; mettre en ligne, si.
     motif: MotifBlocagePublication.POSITION_ABSENTE,
+    sql: `${COLONNES_SQL.latitude} IS NULL OR ${COLONNES_SQL.longitude} IS NULL`,
     portee: 'fiche',
     statut: 'forbidden',
     code: ErrorCode.COMMERCANT_POSITION_REQUIRED,
@@ -239,6 +284,7 @@ export const REGLES_PUBLICATION: readonly RegleBlocage[] = [
     // `dateFin > maintenant` : une promo expirée mais pas encore basculée par le
     // cron de 1 h n'occupe plus d'emplacement. Personne n'en est exempté.
     motif: MotifBlocagePublication.PLAFOND_ATTEINT,
+    sql: `${COLONNES_SQL.promosEnLigne} >= ${COLONNES_SQL.plafond}`,
     portee: 'agregat',
     statut: 'bad_request',
     code: ErrorCode.PROMO_ACTIVE_CAP_REACHED,
@@ -253,6 +299,7 @@ export const REGLES_PUBLICATION: readonly RegleBlocage[] = [
     // compris, sur une fenêtre glissante de 24 h — pas un jour calendaire, sans
     // quoi il suffirait d'attendre minuit.
     motif: MotifBlocagePublication.QUOTA_CREATION_24H,
+    sql: `${COLONNES_SQL.creations24h} >= ${COLONNES_SQL.quota}`,
     portee: 'agregat',
     statut: 'bad_request',
     code: ErrorCode.PROMO_DAILY_CREATION_CAP_REACHED,

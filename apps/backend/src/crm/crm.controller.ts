@@ -1,0 +1,42 @@
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
+import { CrmExportService } from './crm-export.service';
+
+/**
+ * La fenêtre de diagnostic sur l'export CRM.
+ *
+ * ⚠️ **Elle existe pour que le premier passage réel ne soit pas le premier
+ * test.** Sans elle, la seule façon de voir ce que la requête rend serait
+ * d'attendre 04:00 — et de lire le résultat dans Odoo, c'est-à-dire à travers
+ * un second système qui peut lui aussi se tromper.
+ *
+ * ⚠️ **Réservée à l'admin**, et ce n'est pas un excès de prudence : cette route
+ * sert le téléphone, la position et l'état de compte de TOUT le parc en une
+ * requête. C'est le point le plus dense en données personnelles de tout le
+ * produit (règle #33 — une route qu'on oublie de garder est ouverte).
+ */
+@Controller('crm')
+export class CrmController {
+  constructor(private readonly exportService: CrmExportService) {}
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Get('merchants')
+  async merchants(@Query() query: PaginationQueryDto) {
+    const page = (query.page ?? 1) - 1;
+    const taille = query.limit ?? 50;
+    const [items, total] = await Promise.all([
+      this.exportService.lire(page, taille),
+      this.exportService.compter(),
+    ]);
+    return {
+      genere_le: new Date().toISOString(),
+      total_attendu: total,
+      page: page + 1,
+      items,
+    };
+  }
+}
