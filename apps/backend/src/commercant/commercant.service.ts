@@ -172,7 +172,7 @@ export class CommercantService {
    */
   async selfRegister(dto: RegisterCommercantDto): Promise<Commercant> {
     const telephone = this.normaliserOuRefuser(dto.telephone, dto.pays);
-    await this.assertPhoneAvailable(telephone.national, telephone.pays);
+    await this.assertPhoneAvailable(telephone.e164, telephone.pays);
     if (dto.acceptedTerms !== true) {
       throw new BadRequestAppException(
         ErrorCode.COMMERCANT_TERMS_NOT_ACCEPTED,
@@ -184,7 +184,7 @@ export class CommercantService {
     return this.saveNewAccount(
       this.commercants.create({
         ...rest,
-        telephone: telephone.national,
+        telephone: telephone.e164,
         pays: telephone.pays,
         pinHash: await this.authService.hash(pin),
         accountState: CommercantAccountState.AUTONOME,
@@ -207,13 +207,13 @@ export class CommercantService {
     agentId: string,
   ): Promise<Commercant> {
     const telephone = this.normaliserOuRefuser(dto.telephone, dto.pays);
-    await this.assertPhoneAvailable(telephone.national, telephone.pays);
+    await this.assertPhoneAvailable(telephone.e164, telephone.pays);
     const { pin, ...rest } = dto;
 
     return this.saveNewAccount(
       this.commercants.create({
         ...rest,
-        telephone: telephone.national,
+        telephone: telephone.e164,
         pays: telephone.pays,
         pinHash: await this.authService.hash(pin),
         createdByAgentId: agentId,
@@ -234,7 +234,7 @@ export class CommercantService {
     // identifiants sont invalides alors qu'ils sont exacts.
     const normalise = normaliserTelephone(telephone, paysOuDefaut(pays));
     const commercant = normalise
-      ? await this.findVivantByTelephone(normalise.national, normalise.pays)
+      ? await this.findVivantByTelephone(normalise.e164, normalise.pays)
       : null;
     // Un compte suspendu (`suspendedAt`) est traité comme des identifiants
     // invalides plutôt qu'un message dédié — évite de confirmer à un tiers que

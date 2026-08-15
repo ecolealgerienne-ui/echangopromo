@@ -65,6 +65,39 @@ describe('normaliserTelephone', () => {
   });
 });
 
+describe('les trois comportements attendus du produit (2026-08-15)', () => {
+  it('1. le pays par défaut est l’Algérie, sans le deviner', () => {
+    expect(PAYS_PAR_DEFAUT).toBe('DZ');
+    expect(normaliserTelephone('0555000101')?.pays).toBe('DZ');
+    expect(normaliserTelephone('0555000101')?.e164).toBe('+213555000101');
+  });
+
+  it('2. le zéro de tête disparaît : 0555000101 est stocké +213555000101', () => {
+    const normalise = normaliserTelephone('0555000101', 'DZ');
+    // C'est `e164` que le service écrit en base depuis le 2026-08-15.
+    expect(normalise?.e164).toBe('+213555000101');
+    expect(normalise?.e164.startsWith('+2130')).toBe(false);
+  });
+
+  it('3. la forme servie au client est composable de partout', () => {
+    // Le client voit ce que la base contient : l'API publique ne reformate
+    // rien. Un `tel:+213555000101` fonctionne depuis n'importe quel pays, un
+    // `tel:0555000101` seulement depuis l'Algérie.
+    expect(normaliserTelephone('0555000101', 'DZ')?.e164).toMatch(
+      /^\+\d{6,15}$/,
+    );
+  });
+
+  it('et la saisie reste nationale : l’exemple montré ne change pas', () => {
+    // ⚠️ Ce que la base stocke n'est PAS ce que le commerçant tape. Confondre
+    // les deux ferait afficher « +213555000101 » en indice de saisie, donc
+    // ressaisir l'indicatif dans un champ qui a déjà un sélecteur de pays.
+    expect(normaliserTelephone('0555000101', 'DZ')?.national).toBe(
+      '0555000101',
+    );
+  });
+});
+
 describe('chiffresDeRecherche', () => {
   it('rend la même clé pour toutes les écritures d’un numéro', () => {
     // C'est ce qui permet à un admin de retrouver un commerçant qu'il connaît

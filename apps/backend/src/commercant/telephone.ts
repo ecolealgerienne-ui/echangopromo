@@ -13,11 +13,23 @@ import { CountryCode, parsePhoneNumberFromString } from 'libphonenumber-js';
  * réussir à se connecter avec la forme qu'il n'avait pas utilisée à
  * l'inscription.
  *
- * La forme stockée est la **forme nationale**, celle que le commerçant connaît
- * et lit sur sa devanture (`0555000101`). L'E.164 est **dérivé** — pour l'export
- * CRM, où il conditionne le rapprochement des appels entrants
- * (`docs/SPEC_INTEGRATION_ECHANGOCRM.md` §6). Stocker l'E.164 à la place aurait
- * cassé la recherche `ILIKE` de l'écran admin, où l'on tape ce qu'on lit.
+ * ⚠️ **La forme stockée est l'E.164** — `+213555000101` — décision produit du
+ * 2026-08-15. La saisie reste nationale (`0555000101`, le zéro de tête est
+ * retiré à la conversion) : c'est ce que le commerçant lit sur sa devanture, et
+ * ce que l'app lui propose en exemple. C'est l'**écriture en base** qui est
+ * internationale.
+ *
+ * Ce que ce choix règle d'un coup :
+ * - le **client** voit un numéro composable depuis n'importe où, et le lien
+ *   `tel:` de `phone_launcher.dart` fonctionne hors d'Algérie ;
+ * - l'export CRM n'a plus rien à dériver — c'est le champ que le rapprochement
+ *   d'appels attend (`docs/SPEC_INTEGRATION_ECHANGOCRM.md` §6) ;
+ * - une seule écriture existe en base, donc une seule à comparer.
+ *
+ * ⚠️ **Et il ne casse pas la recherche admin**, contrairement à ce que craignait
+ * une version antérieure de ce commentaire : depuis le 2026-08-15 elle compare
+ * les **chiffres** (`chiffresDeRecherche`), pas la chaîne. C'est précisément ce
+ * qui rend la forme stockée libre de changer.
  */
 
 /** Décision produit : le pilote est algérien, le reste est une extension. */
