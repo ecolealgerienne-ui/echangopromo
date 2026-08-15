@@ -4863,10 +4863,56 @@ sur la fiche publique, le même champ que le CRM consomme. Pas urgent — le
 pilote n'a que des commerces algériens — mais à ne pas découvrir le jour du
 premier commerce étranger.
 
-**La migration n'a pas encore tourné sur la base WSL.** Elle refusera de
-s'appliquer s'il existe déjà deux comptes actifs qui deviennent un doublon une
-fois normalisés — c'est voulu : arbitrer lequel garder est une décision
-produit.
+── La migration a tourné sur WSL, et le parc était à l'envers ─────────────
+
+**Appliquée le 2026-08-15**, `AddCommercantPaysAndNormalizePhones1783890000000`,
+sur `echango_promo` (conteneur `echangopromo-postgres-1`, port 5433).
+
+⚠️ **La base disait l'inverse de ce que la spec supposait.** Recensement avant
+migration : **261 fiches sur 262 en forme internationale** (`+213…`), **une
+seule** en forme nationale. J'avais écrit que la forme stockée serait « celle
+que le commerçant connaît » — c'est vrai des vrais commerçants, ce ne l'était
+pas du décor, entièrement semé par des scripts qui écrivent `+213`. La
+normalisation a donc **réécrit 261 lignes**, pas trois.
+
+**Aucune collision** : la simulation SQL avant écriture (les 9 derniers
+chiffres, préfixés d'un zéro) rendait 0 groupe en doublon parmi les comptes
+vivants. La garde de la migration n'a donc pas eu à lever — mais elle a bien
+été exécutée, elle n'a pas été sautée.
+
+**État après** : 262 fiches, **0 forme internationale restante**, colonne
+`pays` `NOT NULL DEFAULT 'DZ'`, index `UQ_commercant_telephone_active` devenu
+`UNIQUE btree (pays, telephone) WHERE "deletedAt" IS NULL` — **sous le même
+nom**, donc `saveNewAccount` continue de traduire son `23505`.
+
+── Le témoin, parce qu'une base migrée ne prouve rien ─────────────────────
+
+Un compte de test créé puis supprimé, sur un numéro dont **on a d'abord
+vérifié qu'il était libre** — et la première tentative a échoué là-dessus : le
+numéro choisi existait déjà, le banc l'a dit (`409 COMMERCANT_PHONE_TAKEN`) au
+lieu d'accuser le produit (règle 38).
+
+| Geste | Résultat |
+|---|---|
+| Inscription avec `+213559001243` | `201` |
+| Ce que la base stocke | **`0559001243`, `DZ`** — la normalisation a bien lieu à l'écriture |
+| Connexion `+213559001243` | `201` |
+| Connexion `0559001243` | `201` |
+| Connexion `00213559001243` | `201` |
+| Connexion `0559 00 12 43` | `201` |
+| **PIN faux sur ce même compte** | `400 AUTH_INVALID_CREDENTIALS` |
+| **`+971559001243` sous pays DZ** | `400 VALIDATION_ERROR` |
+| **Réinscription en forme nationale** | `409 COMMERCANT_PHONE_TAKEN` |
+
+Les deux dernières lignes sont les plus importantes. La première montre que la
+chaîne **sait refuser** — sans elle, quatre `201` ne prouveraient que la
+capacité à dire oui. La seconde montre que **l'unicité voit désormais les deux
+écritures comme un seul numéro** : c'est exactement le défaut qui permettait
+deux comptes actifs pour un même commerçant, et il est fermé.
+
+⚠️ **Ce que ça change pour les bancs** : ils envoient tous `+213…`, et
+continuent de fonctionner — la normalisation a lieu à la connexion comme à
+l'inscription. Rien à reprendre dans `scripts/`.
 
 ---
 
