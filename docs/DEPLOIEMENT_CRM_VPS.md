@@ -122,11 +122,28 @@ docker compose --env-file .env.production -f docker-compose.promo.yml up -d --bu
 Le premier envoi réel ne doit pas être le premier test.
 
 ```bash
-# Un jeton admin
-JETON=$(curl -s -X POST https://promo.echango.com/admin/login \
+# Un jeton admin — en VOYANT ce que le serveur répond.
+#
+# ⚠️ La version courte (un curl dont la réponse part directement dans un
+# python3 -c) laisse JETON VIDE quand la connexion échoue, et l'appel suivant
+# rend alors « 401 AUTH_TOKEN_INVALID » : un message qui accuse l'export alors
+# que c'est la connexion qui a raté. Un script qui jette la réponse du serveur
+# ne peut pas savoir qu'il a échoué.
+REPONSE=$(curl -s -w '\n%{http_code}' -X POST https://promo.echango.com/admin/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"<admin>","password":"<mot de passe>"}' \
-  | python3 -c "import sys,json;print(json.load(sys.stdin)['accessToken'])")
+  -d '{"email":"<admin>","password":"<mot de passe>"}')
+CODE=$(echo "$REPONSE" | tail -1)
+CORPS=$(echo "$REPONSE" | head -n -1)
+echo "connexion -> $CODE"
+[ "$CODE" = "201" ] || echo "  $CORPS"
+
+JETON=$(echo "$CORPS" | python3 -c "import sys,json;print(json.load(sys.stdin).get('accessToken',''))")
+echo "jeton reçu : ${#JETON} caractères"   # 0 = la connexion a échoué
+
+# ⚠️ Ce jeton n'est PAS `CRM_SYNC_TOKEN`. Deux authentifications opposées :
+# celui-ci est un JWT d'administrateur DE PROMO, qui sert à déclencher
+# l'export ; l'autre est le jeton D'ODOO, que Promo présente en poussant. Les
+# confondre rend exactement ce « 401 AUTH_TOKEN_INVALID ».
 
 # Ce que l'export produit, SANS rien envoyer
 curl -s "https://promo.echango.com/crm/merchants?limit=3" \
