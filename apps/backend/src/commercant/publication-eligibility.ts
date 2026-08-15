@@ -284,7 +284,7 @@ export const REGLES_PUBLICATION: readonly RegleBlocage[] = [
     // `dateFin > maintenant` : une promo expirée mais pas encore basculée par le
     // cron de 1 h n'occupe plus d'emplacement. Personne n'en est exempté.
     motif: MotifBlocagePublication.PLAFOND_ATTEINT,
-    sql: `${COLONNES_SQL.promosEnLigne} > ${COLONNES_SQL.plafond}`,
+    sql: `${COLONNES_SQL.promosEnLigne} >= ${COLONNES_SQL.plafond}`,
     portee: 'agregat',
     statut: 'bad_request',
     code: ErrorCode.PROMO_ACTIVE_CAP_REACHED,
