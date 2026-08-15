@@ -302,7 +302,8 @@ deux chaînes différentes. `UQ_commercant_telephone_active` ne les rapproche pa
 commerçant peut avoir deux comptes actifs**. Et la dérivation E.164 appliquée à
 une valeur déjà en E.164 produirait `+213+213555000101`.
 
-**Ordre des travaux** (lot 1) :
+**Ordre des travaux** (lot 1) — ✅ **backend fait le 2026-08-15**, mobile à
+faire (voir §11.4) :
 
 1. **Migration de normalisation** — préalable à tout le reste. Toutes les
    lignes existantes en une forme unique, avec relevé des collisions
@@ -318,13 +319,29 @@ une valeur déjà en E.164 produirait `+213+213555000101`.
    connecter**.
 5. **La connexion porte le pays** (défaut `DZ`, mémorisé).
 
-**Ce que le plan de la v1 oubliait** : les 17 fichiers mobile portant
-`telephone`, les 3 `.arb` où `telephoneHint` code `"+213..."` (règle 27 : les
-trois dans le même commit), **`phone_launcher.dart`** — le `tel:` que le
-*client* compose, seul endroit où l'E.164 sert à un utilisateur —,
-`promo.controller.ts:232` et `admin.controller.ts:209,404` qui servent le
-numéro, `audit-log.service.ts:194` qui l'affiche en libellé, la recherche admin
-`ILIKE` (qui cherchera sur une forme et pas l'autre), et les ~8 scripts de banc.
+**Ce que le plan de la v1 oubliait** : les fichiers mobile portant `telephone`,
+les 3 `.arb` où `telephoneHint` code `"+213..."` (règle 27 : les trois dans le
+même commit), **`phone_launcher.dart`** — le `tel:` que le *client* compose,
+seul endroit où l'E.164 sert à un utilisateur —, `promo.controller.ts:232` et
+`admin.controller.ts:209,404` qui servent le numéro, `audit-log.service.ts:194`
+qui l'affiche en libellé, la recherche admin `ILIKE`, et les ~8 scripts de banc.
+
+**Ce qui a été livré le 2026-08-15** : `commercant/telephone.ts` (le seul
+endroit qui sait à quoi ressemble un numéro ici), le validateur
+`EstTelephoneDuPays` qui lit le pays voisin dans le DTO, la colonne `pays`,
+l'unicité composite sous **le même nom d'index** (`saveNewAccount` traduit son
+`23505` en « numéro déjà pris » — le renommer aurait rendu ce refus en `500`),
+la normalisation à l'inscription **et** à la connexion, et la migration
+`1783890000000`, qui **lève sur collision** plutôt que d'arbitrer un doublon à
+notre place. La recherche admin `ILIKE` n'a pas eu à bouger : la forme stockée
+reste la forme nationale, celle qu'on tape.
+
+⚠️ **Le pays déclaré fait autorité, et ce n'était pas acquis.**
+`parsePhoneNumberFromString('+971551234567', 'DZ')` rend un numéro **valide** —
+l'indicatif explicite l'emporte sur l'indication de pays. Sans le contrôle
+`country === pays`, un numéro émirati saisi sous « Algérie » aurait été accepté
+et stocké sous un pays qu'il n'a pas : la colonne serait décorative et
+l'unicité composite ne voudrait plus rien dire. Éprouvé par mutation.
 
 ### 6.1 Côté Odoo : `country_id` est obligatoire, pas recommandé
 
@@ -679,6 +696,12 @@ l'historique d'une relation en cours.
 2. **Le fuseau des tâches planifiées de Promo** (§3) : à poser, pas à subir.
 3. **Le seuil de mesure du §3.4** — à partir de combien de fiches le
    rapprochement d'appel se dégrade réellement. Personne ne l'a mesuré.
+4. **Quels pays le sélecteur mobile propose.** Le backend accepte n'importe quel
+   code ISO valide depuis le 2026-08-15 ; l'app, elle, n'en propose aucun et
+   laisse donc le défaut `DZ` s'appliquer. Le comportement d'aujourd'hui est
+   inchangé — mais le champ n'a **pas d'appelant** tant que l'écran n'existe
+   pas (règle 31), et la liste des pays offerts est une décision produit, pas
+   un détail d'implémentation.
 
 ---
 
@@ -686,8 +709,8 @@ l'historique d'une relation en cours.
 
 | Lot | Contenu | Dépôt |
 |---|---|---|
-| **0** | Table ordonnée des motifs + deux rendus + le contrôle d'équivalence (§5.1) | Promo |
-| **1** | Migration de normalisation → colonne `pays` → unicité composite → validateur → connexion → mobile + `.arb` (§6) | Promo |
+| **0** ✅ | Table ordonnée des motifs + deux rendus + le contrôle d'équivalence (§5.1) — *fait le 2026-08-15, `publication-eligibility.ts`, 41 cas dont 2 mutations* | Promo |
+| **1** ◐ | Migration de normalisation → colonne `pays` → unicité composite → validateur → connexion — *backend fait le 2026-08-15* ; **sélecteur mobile + `.arb` à faire** (§11.4) | Promo |
 | **2** | Quatre CTE + `@Cron(04:00)` avec fuseau + en-tête de lot + jeton + refus si jeton absent | Promo |
 | **3** | Module : `security/` **livré avec** les modèles, contrôleur `readonly=False`, jeton haché, savepoint, audit, tag | CRM |
 | **4** | Vue SQL, filtres des six états, quatre écrans, géocodage, rétention | CRM |
