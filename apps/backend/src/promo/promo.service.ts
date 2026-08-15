@@ -16,6 +16,11 @@ import {
 } from 'typeorm';
 import { CommercantService } from '../commercant/commercant.service';
 import { Commercant } from '../commercant/entities/commercant.entity';
+import {
+  exceptionDeRefus,
+  MotifBlocagePublication,
+  regleParMotif,
+} from '../commercant/publication-eligibility';
 import { withTimeout } from '../common/async/with-timeout';
 import { configNumber } from '../common/config/config-number';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
@@ -527,11 +532,13 @@ export class PromoService {
     });
     const plafond = this.plafondActif(commercant?.promoActiveCap);
 
-    if (activeCount >= plafond) {
-      throw new BadRequestAppException(
-        ErrorCode.PROMO_ACTIVE_CAP_REACHED,
-        `Plafond de ${plafond} promos actives atteint pour ce commerçant`,
-      );
+    // La décision, le code et le message viennent de la table (règle #30) —
+    // ici on ne fournit que les deux nombres qu'elle ne peut pas compter
+    // elle-même.
+    const regle = regleParMotif(MotifBlocagePublication.PLAFOND_ATTEINT);
+    const faits = { promosEnLigne: activeCount, plafondEffectif: plafond };
+    if (regle.applique(faits)) {
+      throw exceptionDeRefus(regle, faits);
     }
   }
 
@@ -549,17 +556,27 @@ export class PromoService {
   private async assertUnderDailyCreationCap(
     manager: EntityManager,
     commercantId: string,
+    acteurDeConfiance: boolean,
   ): Promise<void> {
     const cap = this.dailyCreationCap();
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const recentCount = await manager.count(Promo, {
       where: { commercantId, createdAt: MoreThan(since) },
     });
-    if (recentCount >= cap) {
-      throw new BadRequestAppException(
-        ErrorCode.PROMO_DAILY_CREATION_CAP_REACHED,
-        `Plafond de ${cap} créations de promo par 24h atteint pour ce commerçant`,
-      );
+    // ⚠️ **L'exemption agent/admin est passée à la table, pas testée ici.**
+    // Elle était un `if (!options?.trustedActor)` recopié aux deux sites
+    // d'appel — donc une règle vivant à trois endroits, dont aucun n'était
+    // celui que le CRM devra lire. Le comptage tourne désormais aussi pour un
+    // acteur de confiance : une requête de plus sur un chemin rare, contre une
+    // exemption qui ne peut plus diverger.
+    const regle = regleParMotif(MotifBlocagePublication.QUOTA_CREATION_24H);
+    const faits = {
+      creations24h: recentCount,
+      quotaCreation24h: cap,
+      acteurDeConfiance,
+    };
+    if (regle.applique(faits)) {
+      throw exceptionDeRefus(regle, faits);
     }
   }
 
@@ -682,17 +699,15 @@ export class PromoService {
   ): Promise<Promo> {
     const commercant =
       await this.commercantService.findByIdOrFail(commercantId);
-    this.commercantService.assertAccountActive(commercant);
-    // Les deux gardes de publication ne s'appliquent qu'à la branche qui
-    // publie. Posées ici pour tout le monde, elles refusaient aussi
-    // « Enregistrer comme brouillon » — avec un message parlant de publier,
-    // sur un geste qui ne publie pas : un commerçant dont le profil est en
-    // relecture ne pouvait plus rien préparer en attendant (revue
-    // 2026-08-05). `publish` les rappelle de toute façon.
+    this.commercantService.assertCompteActif(commercant);
+    // Les gardes de publication ne s'appliquent qu'à la branche qui publie.
+    // Posées ici pour tout le monde, elles refusaient aussi « Enregistrer comme
+    // brouillon » — avec un message parlant de publier, sur un geste qui ne
+    // publie pas : un commerçant dont le profil est en relecture ne pouvait
+    // plus rien préparer en attendant (revue 2026-08-05). `publish` les
+    // rappelle de toute façon.
     if (!dto.asDraft) {
-      this.commercantService.assertRegistreValidated(commercant);
-      this.commercantService.assertProfileValidated(commercant);
-      this.commercantService.assertPositionSet(commercant);
+      this.commercantService.assertFichePubliable(commercant);
     }
     this.assertPriceOrder(dto.prixAvant, dto.prixApres);
     this.assertPhotoKeysOwned(dto.photoKeys, commercantId, options?.actorId);
@@ -710,9 +725,11 @@ export class PromoService {
 
     if (dto.asDraft) {
       return this.withCommercantLock(commercantId, async (manager) => {
-        if (!options?.trustedActor) {
-          await this.assertUnderDailyCreationCap(manager, commercantId);
-        }
+        await this.assertUnderDailyCreationCap(
+          manager,
+          commercantId,
+          options?.trustedActor === true,
+        );
         return manager.save(
           manager.create(Promo, {
             ...base,
@@ -726,9 +743,11 @@ export class PromoService {
     const dateFin = this.resolveDateFin(dto.dateFin, dto.dureeJours);
     return this.withCommercantLock(commercantId, async (manager) => {
       await this.assertUnderCap(manager, commercantId);
-      if (!options?.trustedActor) {
-        await this.assertUnderDailyCreationCap(manager, commercantId);
-      }
+      await this.assertUnderDailyCreationCap(
+        manager,
+        commercantId,
+        options?.trustedActor === true,
+      );
       return manager.save(
         manager.create(Promo, {
           ...base,
@@ -769,10 +788,7 @@ export class PromoService {
     const commercant = await this.commercantService.findByIdOrFail(
       promo.commercantId,
     );
-    this.commercantService.assertAccountActive(commercant);
-    this.commercantService.assertRegistreValidated(commercant);
-    this.commercantService.assertProfileValidated(commercant);
-    this.commercantService.assertPositionSet(commercant);
+    this.commercantService.assertFichePubliable(commercant);
 
     const dateFin = this.resolveDateFin();
     return this.withCommercantLock(promo.commercantId, async (manager) => {

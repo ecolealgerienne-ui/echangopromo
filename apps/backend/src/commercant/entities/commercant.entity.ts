@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { Categorie } from '../../common/enums/categorie.enum';
 import { Agent } from '../../agent/entities/agent.entity';
+import { PAYS_PAR_DEFAUT } from '../telephone';
 
 /**
  * Cycle de vie du compte (specs §3.2). `CREE_AGENT` n'est plus jamais
@@ -112,7 +113,17 @@ export const ADRESSE_MAX_LENGTH = 200;
  * Posé à l'origine par `1783770000000-CommercantTelephoneUniqueActiveOnly` ;
  * déclaré ici pour que le modèle et la base disent la même chose.
  */
-@Index('UQ_commercant_telephone_active', ['telephone'], {
+/**
+ * ⚠️ **Composite `(pays, telephone)` depuis le 2026-08-15, et le nom n'a pas
+ * bougé.** Le nom est lu à l'exécution par `CommercantService.saveNewAccount`,
+ * qui traduit le `23505` de cette contrainte — et d'elle seule — en « numéro
+ * déjà pris ». Le renommer aurait rendu ce refus métier en `500`.
+ *
+ * Pourquoi composite : deux commerçants de pays différents peuvent porter les
+ * mêmes chiffres nationaux. Sur le seul numéro, le premier inscrit aurait
+ * bloqué le second sans qu'aucun message ne dise pourquoi.
+ */
+@Index('UQ_commercant_telephone_active', ['pays', 'telephone'], {
   unique: true,
   where: '"deletedAt" IS NULL',
 })
@@ -140,6 +151,21 @@ export class Commercant {
    */
   @Column()
   telephone: string;
+
+  /**
+   * Pays du numéro (ISO 3166-1 alpha-2), choisi par le commerçant à la saisie.
+   *
+   * ⚠️ **Ce n'est pas une donnée d'affichage : c'est ce qui donne un sens à
+   * `telephone`.** La colonne stocke la forme **nationale** (`0555000101`), qui
+   * ne désigne un correspondant qu'à l'intérieur d'un pays. Sans `pays`, le
+   * même `0555000101` peut être deux abonnés différents, et l'E.164 dérivé pour
+   * le CRM (`docs/SPEC_INTEGRATION_ECHANGOCRM.md` §6) n'est pas calculable.
+   *
+   * Défaut `DZ` : le pilote est algérien. C'est un défaut de saisie assumé, pas
+   * un repli sur une valeur inconnue — le commerçant voit et choisit son pays.
+   */
+  @Column({ type: 'varchar', length: 2, default: PAYS_PAR_DEFAUT })
+  pays: string;
 
   @Column()
   nom: string;

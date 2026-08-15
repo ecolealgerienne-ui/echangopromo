@@ -31,7 +31,17 @@ import { CreateCommercantByAgentDto } from './dto/create-commercant-by-agent.dto
 import { ListCommercantQueryDto } from './dto/list-commercant-query.dto';
 import { RegisterCommercantDto } from './dto/register-commercant.dto';
 import { SetCommercantPositionDto } from './dto/set-position.dto';
+import {
+  normaliserTelephone,
+  paysOuDefaut,
+  TelephoneNormalise,
+} from './telephone';
 import { UpdateCommercantDto } from './dto/update-commercant.dto';
+import {
+  exceptionDeRefus,
+  regleCompteApplicable,
+  regleFicheApplicable,
+} from './publication-eligibility';
 
 @Injectable()
 export class CommercantService {
@@ -74,14 +84,41 @@ export class CommercantService {
    */
   private async findVivantByTelephone(
     telephone: string,
+    pays: string,
   ): Promise<Commercant | null> {
     return this.commercants.findOne({
-      where: { telephone, deletedAt: IsNull() },
+      where: { telephone, pays, deletedAt: IsNull() },
     });
   }
 
-  private async assertPhoneAvailable(telephone: string): Promise<void> {
-    const existing = await this.findVivantByTelephone(telephone);
+  /**
+   * Normalise une saisie, ou refuse.
+   *
+   * ⚠️ **Pas de repli sur la saisie brute.** Le DTO a déjà refusé ce qui n'est
+   * pas un numéro valide du pays déclaré : arriver ici avec un numéro illisible
+   * signale une route qui contourne la validation, pas une saisie maladroite.
+   * Laisser passer la chaîne d'origine réintroduirait exactement le défaut que
+   * `telephone.ts` ferme — deux formes du même numéro en base (règle #29).
+   */
+  private normaliserOuRefuser(
+    saisie: string,
+    pays?: string,
+  ): TelephoneNormalise {
+    const normalise = normaliserTelephone(saisie, paysOuDefaut(pays));
+    if (!normalise) {
+      throw new BadRequestAppException(
+        ErrorCode.VALIDATION_ERROR,
+        'Numéro de téléphone invalide pour le pays indiqué',
+      );
+    }
+    return normalise;
+  }
+
+  private async assertPhoneAvailable(
+    telephone: string,
+    pays: string,
+  ): Promise<void> {
+    const existing = await this.findVivantByTelephone(telephone, pays);
     if (existing) {
       throw new ConflictAppException(
         ErrorCode.COMMERCANT_PHONE_TAKEN,
@@ -133,7 +170,8 @@ export class CommercantService {
    * avant toute ouverture publique — plan de correction Phase 4.
    */
   async selfRegister(dto: RegisterCommercantDto): Promise<Commercant> {
-    await this.assertPhoneAvailable(dto.telephone);
+    const telephone = this.normaliserOuRefuser(dto.telephone, dto.pays);
+    await this.assertPhoneAvailable(telephone.national, telephone.pays);
     if (dto.acceptedTerms !== true) {
       throw new BadRequestAppException(
         ErrorCode.COMMERCANT_TERMS_NOT_ACCEPTED,
@@ -145,7 +183,8 @@ export class CommercantService {
     return this.saveNewAccount(
       this.commercants.create({
         ...rest,
-        telephone: dto.telephone,
+        telephone: telephone.national,
+        pays: telephone.pays,
         pinHash: await this.authService.hash(pin),
         accountState: CommercantAccountState.AUTONOME,
         originVerification: CommercantOriginVerification.AUTO_INSCRIT,
@@ -166,12 +205,15 @@ export class CommercantService {
     dto: CreateCommercantByAgentDto,
     agentId: string,
   ): Promise<Commercant> {
-    await this.assertPhoneAvailable(dto.telephone);
+    const telephone = this.normaliserOuRefuser(dto.telephone, dto.pays);
+    await this.assertPhoneAvailable(telephone.national, telephone.pays);
     const { pin, ...rest } = dto;
 
     return this.saveNewAccount(
       this.commercants.create({
         ...rest,
+        telephone: telephone.national,
+        pays: telephone.pays,
         pinHash: await this.authService.hash(pin),
         createdByAgentId: agentId,
         accountState: CommercantAccountState.AUTONOME,
@@ -180,8 +222,19 @@ export class CommercantService {
     );
   }
 
-  async login(telephone: string, pin: string): Promise<Commercant> {
-    const commercant = await this.findVivantByTelephone(telephone);
+  async login(
+    telephone: string,
+    pin: string,
+    pays?: string,
+  ): Promise<Commercant> {
+    // ⚠️ La saisie est normalisée **avant** la recherche, avec le même code que
+    // l'inscription : sans ça, s'inscrire en `+213555…` puis se connecter en
+    // `0555…` ne retrouverait rien, et le commerçant s'entendrait dire que ses
+    // identifiants sont invalides alors qu'ils sont exacts.
+    const normalise = normaliserTelephone(telephone, paysOuDefaut(pays));
+    const commercant = normalise
+      ? await this.findVivantByTelephone(normalise.national, normalise.pays)
+      : null;
     // Un compte suspendu (`suspendedAt`) est traité comme des identifiants
     // invalides plutôt qu'un message dédié — évite de confirmer à un tiers que
     // ce numéro a un jour eu un compte, et bloque effectivement la connexion
@@ -685,24 +738,38 @@ export class CommercantService {
   // quatorze vérifications inutiles.
 
   /**
-   * Un commerçant auto-inscrit (`AUTO_INSCRIT`) ne peut créer/publier de
-   * promo qu'une fois son registre de commerce validé par un admin —
-   * décision produit du 2026-07-11, qui remplace le badge `vérifié_registre`
-   * non-bloquant prévu aux specs §3.2/§5.4 (revert assumé : ne plus laisser
-   * publier un compte non vérifié). Un commerçant créé par un agent
-   * (`CONFIRME_AGENT`) est déjà vérifié en personne et n'est jamais
-   * concerné par cette garde.
+   * Les quatre gardes de publication, en **une** évaluation ordonnée.
+   *
+   * ⚠️ Elles étaient quatre méthodes distinctes (`assertRegistreValidated`,
+   * `assertProfileValidated`, `assertPositionSet`, `assertAccountActive`),
+   * rappelées dans le même ordre à deux endroits de `PromoService`. Leur règle
+   * a désormais un second consommateur — l'export vers le CRM Odoo
+   * (`docs/SPEC_INTEGRATION_ECHANGOCRM.md` §5), qui doit rendre le **motif**
+   * plutôt que lever — et deux écritures de la même règle divergent
+   * (règle #30). La règle vit maintenant dans `REGLES_PUBLICATION` ; cette
+   * méthode n'en est qu'un rendu, et n'a le droit de rien y ajouter.
    */
-  assertRegistreValidated(commercant: Commercant): void {
-    if (
-      commercant.originVerification ===
-        CommercantOriginVerification.AUTO_INSCRIT &&
-      commercant.registreStatus !== RegistreStatus.VALIDE
-    ) {
-      throw new ForbiddenAppException(
-        ErrorCode.COMMERCANT_REGISTRE_NOT_VALIDATED,
-        'Votre registre de commerce doit être validé par un administrateur avant de pouvoir publier des promos',
-      );
+  assertFichePubliable(commercant: Commercant): void {
+    const regle = regleFicheApplicable(commercant);
+    if (regle) {
+      throw exceptionDeRefus(regle, commercant);
+    }
+  }
+
+  /**
+   * Le sous-ensemble évaluable avant de savoir si le geste publie : compte
+   * supprimé ou suspendu.
+   *
+   * ⚠️ **Ne jamais y ajouter les trois autres.** Posées pour tout le monde,
+   * elles refusaient aussi « Enregistrer comme brouillon » — avec un message
+   * parlant de publier, sur un geste qui ne publie pas : un commerçant dont le
+   * profil est en relecture ne pouvait plus rien préparer en attendant (revue
+   * 2026-08-05).
+   */
+  assertCompteActif(commercant: Commercant): void {
+    const regle = regleCompteApplicable(commercant);
+    if (regle) {
+      throw exceptionDeRefus(regle, commercant);
     }
   }
 
@@ -733,67 +800,5 @@ export class CommercantService {
       commercant.profilePendingReview = true;
     }
     return this.commercants.save(commercant);
-  }
-
-  /**
-   * Contrairement à `assertRegistreValidated`, s'applique à **tous** les
-   * commerçants sans exception d'origine — décision produit du 2026-07-12 :
-   * toute modification de profil (même pour un commerçant confirmé par un
-   * agent) repasse par un contrôle admin avant de pouvoir publier.
-   */
-  assertProfileValidated(commercant: Commercant): void {
-    if (commercant.profilePendingReview) {
-      throw new ForbiddenAppException(
-        ErrorCode.COMMERCANT_PROFILE_PENDING_REVIEW,
-        'Les modifications de votre profil doivent être validées par un administrateur avant de pouvoir publier des promos',
-      );
-    }
-  }
-
-  /**
-   * Sans position, une promo n'est **visible par personne** : les clients
-   * cherchent par proximité et la carte filtre sur un cadre, qu'un `NULL` ne
-   * peut pas satisfaire. Publier serait donc un geste sans effet — et sans
-   * cette garde, le commerçant verrait « 3 en ligne » sur un stock que
-   * personne ne voit, exactement le défaut que `countVisible` avait déjà
-   * produit une fois (règle #8).
-   *
-   * ⚠️ **`=== null`, pas la véracité.** `!commercant.longitude` refuserait une
-   * longitude à `0`, qui est le méridien de Greenwich — une coordonnée
-   * parfaitement légitime. Même piège que `configNumber` côté configuration.
-   *
-   * ⚠️ **Ne jamais appeler cette garde sur un enregistrement en brouillon.**
-   * `promo.service.ts` documente la régression exacte qu'on refabriquerait :
-   * des gardes posées pour tout le monde refusaient aussi « Enregistrer comme
-   * brouillon », « avec un message parlant de publier, sur un geste qui ne
-   * publie pas ». Un commerçant sans position doit pouvoir **préparer** ses
-   * promos ; c'est les mettre en ligne qui exige un point.
-   */
-  assertPositionSet(commercant: Commercant): void {
-    if (commercant.latitude === null || commercant.longitude === null) {
-      throw new ForbiddenAppException(
-        ErrorCode.COMMERCANT_POSITION_REQUIRED,
-        'Indiquez la position de votre commerce pour pouvoir publier : les clients cherchent les promos autour d’eux',
-      );
-    }
-  }
-
-  /**
-   * Compte supprimé ou suspendu (soft dans les deux cas). Le commerçant
-   * lui-même est déjà arrêté en amont — suspension et suppression révoquent
-   * son token (`tokenVersion`) — mais **pas l'agent ni l'admin**, qui
-   * agissent avec le leur : `PromoService.create`/`publish` acceptaient donc
-   * de republier pour un commerçant suspendu, défaisant la cascade qui venait
-   * de repasser ses promos en brouillon (revue 2026-08-05). Invisible côté
-   * client grâce aux gardes défensives des lectures, mais l'état en base
-   * contredisait alors la décision de modération.
-   */
-  assertAccountActive(commercant: Commercant): void {
-    if (commercant.deletedAt || commercant.suspendedAt) {
-      throw new ForbiddenAppException(
-        ErrorCode.COMMERCANT_ACCOUNT_INACTIVE,
-        'Ce compte commerçant est suspendu ou supprimé',
-      );
-    }
   }
 }
