@@ -51,17 +51,51 @@ docker compose --env-file .env.production -f docker-compose.crm.yml \
 du module, c'est `--update` qu'il faut, puis un **redémarrage du serveur** :
 
 ```bash
+cd /opt/echangocrm
+git pull origin main
+
 CONT=$(docker compose --env-file .env.production -f docker-compose.crm.yml ps -q odoo)
-docker exec "$CONT" odoo --database=echango_crm --update=echango_promo_crm \
-  --http-port=8079 --gevent-port=8082 --stop-after-init
+
+docker exec "$CONT" sh -c 'odoo \
+  --database=echango_crm \
+  --db_host="$HOST" --db_user="$USER" --db_password="$PASSWORD" \
+  --update=echango_promo_crm \
+  --http-port=8079 --gevent-port=8082 \
+  --stop-after-init'
+
 docker compose --env-file .env.production -f docker-compose.crm.yml restart odoo
 ```
+
+⚠️ **Les paramètres de base ne sont PAS optionnels ici, et leur absence ne
+parle pas de base.** `docker exec … odoo` court-circuite l'entrypoint de
+l'image, qui est le seul à traduire `HOST` / `USER` / `PASSWORD` en
+`--db_host` / `--db_user` / `--db_password`. Sans eux, Odoo tente une connexion
+par **socket Unix local** et rend `No such file or directory` — un message qui
+fait chercher un conteneur mort ou un volume perdu. *Cette commande figurait
+ici sans eux jusqu'au 2026-08-15, où elle a échoué au premier usage réel.* Les
+lire depuis les variables du conteneur (`sh -c '…'`, guillemets **simples** :
+c'est le shell de dedans qui doit les résoudre) évite d'en recopier la valeur,
+et de la laisser dans l'historique.
 
 ⚠️ **Les deux commandes, pas une.** Une mise à jour lancée dans un `docker exec`
 est un **second processus** : celui qui sert le navigateur garde son registre en
 mémoire, donc ses modèles d'avant. Le symptôme est trompeur — une erreur Owl
 sur un champ qui existe pourtant en base. Et `--http-port` évite un
 `Address already in use` qui ne parle ni de module ni de mise à jour.
+
+### ⚠️ Constater que la mise à jour a chargé les données, pas seulement le code
+
+```bash
+PG=$(docker compose --env-file .env.production -f docker-compose.crm.yml ps -q postgres_crm)
+docker exec -i "$PG" psql -U odoo -d echango_crm -c \
+  "SELECT c.code, COUNT(*) FROM res_country_state s
+     JOIN res_country c ON c.id = s.country_id
+    WHERE c.code IN ('DZ','AE') GROUP BY 1"
+```
+
+Attendu : **`DZ` 58** et **`AE` 7**. Un `DZ` à 0 signifie que le fichier de
+référence n'a pas été chargé — le module tournera sans erreur et l'« État »
+restera vide sur toutes les fiches algériennes, sans que rien ne le signale.
 
 ### 2. Créer la source et générer le jeton
 
