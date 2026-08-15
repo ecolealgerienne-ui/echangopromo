@@ -58,6 +58,7 @@ import os
 import sys
 import time
 import urllib.error
+import random
 import urllib.request
 import uuid
 
@@ -137,6 +138,77 @@ def verdict_creation(statut, code):
     if statut == 429:
         return "debit", "429 — seau de requêtes épuisé, ralentir (PACE_SECONDS)"
     return "echec", "HTTP %s %s" % (statut, code)
+
+
+#: Préfixe réservé aux commerçants ALÉATOIRES — `+2137…`, quand le décor fixe
+#: vit en `+2136…`. Les deux plages sont valides pour un mobile algérien
+#: (vérifié avec la bibliothèque du serveur), et les séparer permet de
+#: reconnaître d'un coup d'œil ce qui a été semé au hasard et ce qui est le
+#: décor stable — donc de savoir quoi supprimer sans toucher au reste.
+PREFIXE_ALEATOIRE = "+2137"
+
+#: Rayon du semis aléatoire autour du centre-ville, en degrés. 0,012° ≈ 1,3 km.
+#: ⚠️ **Un rayon, pas un point.** Dix commerces posés aux mêmes coordonnées
+#: forment une grappe que la carte ne peut pas scinder — le défaut qui a rendu
+#: le parcours carte inexploitable pendant une journée (voir
+#: `provision-decor.sh`). Le hasard ne dispense pas de les écarter.
+RAYON_SEMIS = 0.012
+
+
+def telephone_aleatoire(tirage):
+    """Un numéro neuf, dans la plage réservée au semis.
+
+    ⚠️ **Aucune garantie d'unicité ici, et c'est assumé** : sur 100 millions de
+    combinaisons, une collision est possible mais son coût est nul — le serveur
+    répond `COMMERCANT_PHONE_TAKEN`, le script le compte en « déjà présent » et
+    passe au suivant. Ajouter une vérification préalable ferait une requête de
+    plus par commerçant pour un cas qui ne se produira pas.
+    """
+    return PREFIXE_ALEATOIRE + "".join(str(tirage.randint(0, 9)) for _ in range(8))
+
+
+def commercant_aleatoire(tirage, ville, lat, lng):
+    """Une identité complète, tirée au sort autour du centre-ville."""
+    metier, cat, rue = tirage.choice(METIERS)
+    # Un suffixe court plutôt qu'un compteur : deux passages ne doivent pas
+    # produire « Superette Djelfa 1 » et « Superette Djelfa 1 ».
+    suffixe = "".join(tirage.choice("ABCDEFGHJKLMNPQRSTUVWXYZ") for _ in range(3))
+    return {
+        "telephone": telephone_aleatoire(tirage),
+        "nom": "%s %s %s" % (metier, ville, suffixe),
+        "pin": PIN,
+        "adresse": "%s, %s" % (rue, ville),
+        "categorie": cat,
+        "latitude": round(lat + tirage.uniform(-RAYON_SEMIS, RAYON_SEMIS), 6),
+        "longitude": round(lng + tirage.uniform(-RAYON_SEMIS, RAYON_SEMIS), 6),
+    }
+
+
+def fiches_de_ville(iv, ville, lat, lng, par_ville, semis, tirage):
+    """Les commerçants à poser dans une ville — **une seule forme, deux sources**.
+
+    Le mode fixe et le mode aléatoire ne diffèrent que par la façon de produire
+    cette liste. Tout ce qui suit — création, verdict, promos, photos — est
+    commun (règle #30) : deux chemins d'écriture divergeraient au premier
+    changement du produit, et c'est celui qu'on n'utilise pas ce jour-là qui
+    resterait faux.
+    """
+    if semis:
+        return [commercant_aleatoire(tirage, ville, lat, lng)
+                for _ in range(semis)]
+    fiches = []
+    for ic, ((dlat, dlng), (metier, cat, rue)) in enumerate(
+            zip(DECALAGES[:par_ville], METIERS[:par_ville])):
+        fiches.append({
+            "telephone": telephone(iv, ic),
+            "nom": "%s %s" % (metier, ville),
+            "pin": PIN,
+            "adresse": "%s, %s" % (rue, ville),
+            "categorie": cat,
+            "latitude": round(lat + dlat, 6),
+            "longitude": round(lng + dlng, 6),
+        })
+    return fiches
 
 
 def telephone(indice_ville, indice_commercant):
@@ -306,7 +378,50 @@ def self_test():
     _v("les trois premiers numéros sont INCHANGÉS",
        tous9[:3], ["+213611110000", "+213611220000", "+213611330000"])
 
-    refus = 4
+    # ── Le semis aléatoire ──────────────────────────────────────────────────
+    #
+    # ⚠️ Il est **non rejouable par construction**, et c'est son objet : le
+    # mode fixe répond « déjà présent » indéfiniment une fois ses slots
+    # occupés. Ce que ces cas figent, c'est qu'il ne puisse pas empiéter sur le
+    # décor stable ni s'empiler sur un même point.
+    t1 = random.Random(1)
+    fiches = [commercant_aleatoire(t1, "Djelfa", 34.6714, 3.2630)
+              for _ in range(12)]
+    _v("le semis ne touche PAS la plage du décor fixe",
+       {f["telephone"][:5] for f in fiches}, {PREFIXE_ALEATOIRE})
+    _v("… donc aucun numéro du décor fixe n'est atteignable",
+       any(f["telephone"].startswith("+2136") for f in fiches), False)
+    _v("numéros tous distincts", len({f["telephone"] for f in fiches}), 12)
+    _v("neuf chiffres après +213",
+       {len(f["telephone"]) - 4 for f in fiches}, {9})
+    _v("positions toutes distinctes",
+       len({(f["latitude"], f["longitude"]) for f in fiches}), 12)
+    _v("positions dans le rayon du semis",
+       all(abs(f["latitude"] - 34.6714) <= RAYON_SEMIS
+           and abs(f["longitude"] - 3.2630) <= RAYON_SEMIS for f in fiches),
+       True)
+    _v("catégories parmi celles du produit",
+       {f["categorie"] for f in fiches} <= {m[1] for m in METIERS}, True)
+
+    # Deux tirages non graînés doivent DIFFÉRER — sinon le semis répéterait le
+    # même parc et retomberait dans le « déjà présent » qu'il existe pour éviter.
+    a = commercant_aleatoire(random.Random(), "Djelfa", 34.6714, 3.2630)
+    b = commercant_aleatoire(random.Random(), "Djelfa", 34.6714, 3.2630)
+    _v("deux semis successifs diffèrent", a["telephone"] != b["telephone"], True)
+    # …mais une graine explicite doit rendre le tirage reproductible.
+    _v("une graine rend le tirage reproductible",
+       commercant_aleatoire(random.Random(7), "Djelfa", 34.6714, 3.2630),
+       commercant_aleatoire(random.Random(7), "Djelfa", 34.6714, 3.2630))
+
+    # ── Une seule fabrique de fiches, deux sources ──────────────────────────
+    fixes = fiches_de_ville(0, "Djelfa", 34.6714, 3.2630, 3, 0, None)
+    semees = fiches_de_ville(0, "Djelfa", 34.6714, 3.2630, 3, 5, random.Random(2))
+    _v("mode fixe : autant de fiches que de slots", len(fixes), 3)
+    _v("mode semis : autant de fiches que demandé", len(semees), 5)
+    _v("les deux rendent la MÊME forme de fiche",
+       set(fixes[0]) == set(semees[0]), True)
+
+    refus = 5
     print("auto-test : %d cas, dont %d refus" % (_ok + len(_echecs), refus))
     for e in _echecs:
         print("  ❌ %s" % e)
@@ -351,6 +466,18 @@ def main():
               "ET de positions déclarés. Au-delà, il faut en ajouter À LA FIN "
               "des deux listes, jamais au milieu." % borne)
         return 2
+    brut_semis = lire_option("--aleatoire", "0")
+    try:
+        semis = int(brut_semis)
+    except (TypeError, ValueError):
+        print("❌ --aleatoire attend un entier, reçu %r." % brut_semis)
+        return 2
+    if not 0 <= semis <= 50:
+        print("❌ --aleatoire doit être entre 0 et 50 par ville.")
+        return 2
+    graine = lire_option("--graine")
+    tirage = random.Random(graine) if graine else random.Random()
+
     villes = villes_demandees(filtre_ville)
     if not villes:
         print("❌ ville inconnue : %r. Attendu : %s."
@@ -373,26 +500,35 @@ def main():
     if not jeton:
         print("❌ connexion agent refusée (HTTP %s, %s)" % (st, d.get("code")))
         return 2
-    print("  agent connecté\n")
+    print("  agent connecté")
+    if semis:
+        # ⚠️ **Le dire, et le dire fort.** Tout le reste de ce script est
+        # idempotent ; ce mode ne l'est pas, par construction. Un opérateur qui
+        # le relance « pour voir » double le parc — et c'est le défaut que
+        # `provision-decor.sh` documente pour l'avoir payé : dix décors
+        # superposés avaient rendu le parcours carte inexploitable.
+        print("  ⚠️  SEMIS ALÉATOIRE : %d commerce(s) NEUFS par ville, "
+              "numéros en %s…" % (semis, PREFIXE_ALEATOIRE))
+        print("      Ce mode n'est PAS rejouable : chaque passage en crée "
+              "d'autres.")
+        if not graine:
+            print("      (--graine <n> pour un tirage reproductible)")
+    print("")
 
     total_c, total_p, deja, refus = 0, 0, 0, []
     for iv, (ville, lat, lng) in villes:
         print("── %s ──" % ville)
-        for ic, ((dlat, dlng), (metier, cat, rue)) in enumerate(
-                zip(DECALAGES[:par_ville], METIERS[:par_ville])):
-            tel = telephone(iv, ic)
-            nom = "%s %s" % (metier, ville)
+        for fiche in fiches_de_ville(iv, ville, lat, lng, par_ville, semis,
+                                     tirage):
+            nom, tel, cat = fiche["nom"], fiche["telephone"], fiche["categorie"]
             if not appliquer:
                 print("   %-28s %s  (%.4f, %.4f)"
-                      % (nom, tel, lat + dlat, lng + dlng))
+                      % (nom, tel, fiche["latitude"], fiche["longitude"]))
                 total_c += 1
                 total_p += PROMOS_PAR_COMMERCANT
                 continue
 
-            st, d = appeler("POST", "/agent/commercant", jeton, {
-                "telephone": tel, "nom": nom, "pin": PIN,
-                "adresse": "%s, %s" % (rue, ville), "categorie": cat,
-                "latitude": lat + dlat, "longitude": lng + dlng})
+            st, d = appeler("POST", "/agent/commercant", jeton, fiche)
             v, quoi = verdict_creation(st, d.get("code"))
             cid = d.get("id")
             if v == "cree":
