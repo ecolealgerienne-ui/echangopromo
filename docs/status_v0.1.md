@@ -4853,6 +4853,52 @@ numéro d'exemple du pays choisi.
 **État mobile : `flutter analyze` 0 problème, `dart format` 0 fichier changé,
 74 tests verts, les 4 vérificateurs de `check_all.dart` au vert.**
 
+── La forme stockée bascule en E.164 (décision produit, même jour) ────────
+
+⚠️ **J'avais choisi la forme nationale ; la décision produit est l'E.164.**
+`0555000101` saisi devient **`+213555000101` en base** — le zéro de tête part à
+la conversion. La **saisie**, elle, ne change pas : c'est ce que le commerçant
+lit sur sa devanture, et l'app lui montre toujours un exemple national.
+
+Ce que ça règle d'un coup :
+
+- le **client** reçoit un numéro composable de partout, donc le `tel:` de
+  `phone_launcher.dart` fonctionne hors d'Algérie — le point ouvert n° 5 de la
+  spec CRM se ferme sans travail supplémentaire ;
+- l'export CRM n'a plus rien à dériver : c'est le champ que le rapprochement
+  d'appels attend ;
+- une seule écriture existe en base, donc une seule à comparer.
+
+⚠️ **Et ça ne casse pas la recherche admin** — c'était mon argument pour la
+forme nationale, et il était déjà périmé : depuis le correctif du même jour,
+elle compare les **chiffres**, pas la chaîne. La garde écrite pour réparer une
+régression a rendu la forme stockée libre de changer dès le lendemain.
+
+**Une SECONDE migration** (`1783900000000`) plutôt qu'une réécriture de la
+première : `1783890000000` est déjà appliquée en développement, et une
+migration appliquée ne se modifie pas — la réécrire ferait diverger deux bases
+ayant vu deux versions du même fichier. Sur un environnement neuf, les deux
+s'enchaînent et aboutissent au même état.
+
+**Parc après conversion : 264 fiches, 264 en `+213`, 0 en forme nationale.**
+
+── Les trois comportements, mesurés sur le serveur qui tourne ─────────────
+
+| Attendu | Mesure |
+|---|---|
+| Défaut Algérie | inscription **sans** champ `pays` → base : `pays = DZ` |
+| Zéro de tête retiré | `0555000101` saisi → base : **`+213555000101`** |
+| Ce que voit le client | `GET /commercant/:id/public` → `"telephone": "+213555900201"` |
+| Connexion, saisie nationale | `201` |
+| Connexion, saisie internationale | `201` |
+| **Témoin — PIN faux** | `400` |
+
+⚠️ **La fiche promo publique ne sert AUCUN téléphone** — vérifié en listant ses
+seize clés. Le numéro vient de `GET /commercant/:id/public`, appelé séparément
+par l'écran de détail. La phrase des specs §3.1 (« déjà renvoyé par l'API
+publique ») est donc juste, mais pas par la route qu'on croit — et c'est le
+genre de détail qui fait chercher un défaut au mauvais endroit.
+
 ── Ce qui reste ouvert ────────────────────────────────────────────────────
 
 **Le lien `tel:` du client n'est pas internationalisé.**

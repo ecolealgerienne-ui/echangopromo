@@ -167,7 +167,7 @@ Un objet JSON par commerçant.
 | `nom` | string ≤120 | `nom` | |
 | `adresse` | string ≤200 \| null | `adresse` | Texte libre **indicatif**, jamais un critère géographique |
 | `categorie` | enum | `categorie` | **7 valeurs** : alimentation, restauration, vêtements/textile, électroménager, beauté/hygiène, maison/ameublement, autre |
-| `telephone_e164` | string | dérivé | Voir §6 — **suppose la normalisation faite** |
+| `telephone_e164` | string | `telephone` | **La colonne elle-même depuis le 2026-08-15** : la base stocke l'E.164, il n'y a plus rien à dériver |
 | `pays` | ISO-2 | `pays` | ⚠️ **Colonne inexistante à ce jour** — livrée par le lot 1 |
 | `latitude`, `longitude` | float \| null | `latitude`/`longitude` | `null` fréquent (obligatoire seulement à la publication) |
 | `origine` | enum | `originVerification` | `auto_inscrit` \| `confirme_agent` |
@@ -308,8 +308,10 @@ faire (voir §11.4) :
 1. **Migration de normalisation** — préalable à tout le reste. Toutes les
    lignes existantes en une forme unique, avec relevé des collisions
    éventuelles (deux comptes actifs qui deviennent un doublon).
-2. **Colonne `pays`** (ISO-2, défaut `DZ`), stockage du numéro **national
-   normalisé**, E.164 dérivé à l'export par une fonction unique.
+2. **Colonne `pays`** (ISO-2, défaut `DZ`) et stockage en **E.164**
+   (`1783900000000`, décision produit du 2026-08-15 — la première migration
+   avait posé la forme nationale). La **saisie** reste nationale : le zéro de
+   tête est retiré à la conversion, `0555000101` devient `+213555000101`.
 3. **Unicité composite `(pays, telephone)`** — l'index partiel actuel porte sur
    le seul numéro (`WHERE "deletedAt" IS NULL`).
 4. **Validateur personnalisé** : `@IsPhoneNumber('DZ')` est **codé en dur dans
@@ -700,13 +702,10 @@ l'historique d'une relation en cours.
    les **245** pays connus de libphonenumber, table générée par
    `apps/mobile/tool/generer_pays.mjs` depuis la **même bibliothèque** que le
    serveur. Les trois écrans de saisie envoient désormais le code ISO.
-5. **Le lien `tel:` du client n'est pas internationalisé.**
-   `phone_launcher.dart` compose le numéro **national** servi par l'API
-   publique. C'était sans conséquence tant que tout le monde était algérien ;
-   ça ne l'est plus depuis que le sélecteur accepte 245 pays. Il faudrait que
-   l'API publique serve l'E.164 — le même champ que le CRM consomme (§4.1). Le
-   pilote n'ayant que des commerces algériens, ce n'est pas urgent ; c'est
-   surtout à ne pas découvrir le jour du premier commerce étranger.
+5. ~~**Le lien `tel:` du client n'est pas internationalisé.**~~ **Fermé le
+   2026-08-15** par la bascule en E.164 : `GET /commercant/:id/public` sert
+   désormais `+213555900201`, donc `phone_launcher.dart` compose un numéro
+   valide depuis n'importe quel pays. Mesuré, pas déduit.
 
 ---
 
