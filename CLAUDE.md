@@ -810,6 +810,7 @@ deux sources qui divergent, le défaut que ce fichier dénonce à chaque page.
 | **`docs/status_v0.1.md`** | **le suivi vivant** — état mesuré, points ouverts, arbitrages, journal daté, et « par où reprendre ». `status_v0.md` est figé au 2026-07-12 |
 | `docs/METHODE_TEST.md` | la méthode de test générique à la stack Echango — 11 modes de défaillance, lexique, ordre d'adoption, squelettes |
 | `docs/TEST_PROMO.md` | son instanciation ici — surface par persona, matrice de 27 bancs, registre de couverture |
-| `docs/SPECS_ECHANGO_PROMO_V0.md` | la source de vérité produit |
+| `docs/SPECS_ECHANGO_PROMO_V0.md` | la source de vérité produit. ⚠️ Toute **liste fermée** qu'il recopie (catégories, statuts) est une copie de plus à tenir : vérifier l'enum avant de s'y fier — §5.6 a annoncé 6 catégories pendant deux semaines et demie après l'ajout de la 7ᵉ |
+| **`docs/SPEC_INTEGRATION_ECHANGOCRM.md`** | **le contrat d'échange avec le CRM Odoo** (`echangoCrm`) — exemplaire unique, l'autre dépôt y pointe sans le recopier |
 | `docs/AUDIT_V0.md` · `AUDIT_V1.md` | les findings historiques, fichier:ligne |
 | **`docs/RETOURS_APPLE.md`** | **les allers-retours avec Apple** — 3 refus et 2 blocages, chacun avec sa cause de fond, ses leçons réutilisables et une liste de contrôle avant soumission. **À dérouler avant chaque envoi en revue**, pour ce produit comme pour les autres apps de la suite |
