@@ -199,6 +199,30 @@ Tant que ce workflow n'existe pas, **ce document est la procédure** — et son
 existence ne prouve rien : un document ne peut pas échouer (règle #30). Ce qui
 prouve, c'est la CI.
 
+### Côté iOS, c'est fait — et ça a révélé la même maladie
+
+`codemagic.yaml` portait `--build-name=1.0.0` **en dur** dans ses deux
+workflows. Or App Store Connect affichait **1.0.1 (17)** le 2026-08-16, alors
+que ces lignes n'avaient pas bougé depuis trois commits : **la CI annonçait
+produire autre chose que ce qui était réellement envoyé.** Le compteur
+`$BUILD_NUMBER` de Codemagic n'était pas faux, il était *muet* — il augmente
+sans jamais dire de quel commit il vient, et repart de zéro si le projet CI est
+recréé.
+
+Les deux drapeaux ont été retirés le 2026-08-16 : `pubspec.yaml` fait foi pour
+les deux plateformes. Vérifié de bout en bout — `version: 1.0.1+18` produit un
+APK `versionCode=18`, `versionName=1.0.1`, lu dans l'artefact installé.
+
+⚠️ **Le `+18` illustre la seule arithmétique qui vaille ici** : un `pubspec`
+alimente **deux** stores aux historiques différents (Apple en était à la build
+17, Google au code 12). Le numéro doit dépasser **le plus avancé des deux**, pas
+suivre l'un d'eux — sinon c'est l'autre qui refuse, avec un message qui ne
+parlera pas de `pubspec`.
+
+⚠️ **Et rejouer un build sur le même commit produit désormais le même numéro**,
+donc un refus au second envoi. C'est voulu : c'est ce qui force le commit de
+montée de version, donc l'existence de la correspondance version ↔ commit.
+
 ---
 
 ## 8. Ce qu'on ne sait pas, au 2026-08-16

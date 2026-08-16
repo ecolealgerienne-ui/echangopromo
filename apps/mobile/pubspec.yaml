@@ -1,7 +1,22 @@
 name: echango_promo
 description: echango Promo - Application mobile client, commerçant & agent terrain
 publish_to: 'none'
-version: 0.1.0+1
+# ⚠️ **Seule source de vérité de la version, pour les DEUX stores** depuis le
+# 2026-08-16 : `android/app/build.gradle.kts` la lit déjà (`flutter.versionCode`
+# / `versionName`), et `codemagic.yaml` ne la surcharge plus. Voir
+# `docs/BUILD_ANDROID.md`.
+#
+# ⚠️ **Le `+18` n'est pas un incrément de 1 : c'est le maximum des deux stores,
+# plus un.** Au 2026-08-16, Apple avait reçu la build **17** (version 1.0.1,
+# refusée pour ITMS-91061) et Google le code **12** (version 1.0.0, en examen).
+# Un seul `pubspec` alimente les deux, donc il doit dépasser le plus avancé —
+# sinon c'est celui-là qui refuse, et son message ne parlera pas de `pubspec`.
+#
+# ⚠️ **Un numéro ne se réutilise ni ne redescend jamais**, même après un refus :
+# la 17 est brûlée bien qu'Apple l'ait rejetée. Chaque envoi demande donc un
+# commit ici — et c'est précisément ce qui rend la correspondance
+# version ↔ commit vérifiable, ce qu'aucun compteur de CI ne sait faire.
+version: 1.0.1+18
 
 environment:
   # ⚠️ Borne basse montée de 3.2.0 à 3.4.0 le 2026-08-16, **imposée par

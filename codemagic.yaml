@@ -40,11 +40,11 @@ workflows:
       - name: Build iOS sans signature de code
         script: |
           cd "$APP_DIR"
+          # Version et numéro de build : lus dans `pubspec.yaml`, jamais posés
+          # ici. Voir le commentaire détaillé du workflow signé plus bas.
           flutter build ios \
             --release \
-            --no-codesign \
-            --build-name=1.0.0 \
-            --build-number=$(($BUILD_NUMBER))
+            --no-codesign
 
       - name: Créer l'IPA non-signé
         script: |
@@ -158,14 +158,29 @@ workflows:
       - name: Build IPA signé
         script: |
           cd "$APP_DIR"
-          # `$BUILD_NUMBER` est le compteur de Codemagic : il augmente à
-          # chaque build et ne collisionne jamais. Évite d'interroger
-          # TestFlight, qui échoue tant qu'aucune build n'existe —
-          # c'est-à-dire au tout premier envoi.
+          # ⚠️ **Aucun drapeau de version : `pubspec.yaml` fait foi.**
+          #
+          # Ce bloc portait `--build-name=1.0.0` **en dur** et
+          # `--build-number=$(($BUILD_NUMBER))`, le compteur de Codemagic.
+          # Constaté le 2026-08-16 : App Store Connect affichait **1.0.1 (17)**
+          # alors que ces deux lignes n'avaient pas bougé depuis trois commits.
+          # Autrement dit, la CI annonçait produire autre chose que ce qui était
+          # réellement envoyé — et rien, nulle part, ne pouvait le signaler.
+          #
+          # Le compteur de Codemagic n'était pas faux, il était **muet** : il
+          # augmente sans jamais dire de quel commit il vient, et il repart de
+          # zéro si le projet CI est recréé. Le `pubspec`, lui, est versionné.
+          #
+          # ⚠️ **Conséquence assumée** : rejouer ce workflow sur le même commit
+          # produit le même numéro, et App Store Connect refusera le second
+          # envoi. C'est voulu — cela force un commit de montée de version par
+          # soumission, donc une correspondance version ↔ commit qui existe.
+          #
+          # L'ancien commentaire craignait d'interroger TestFlight pour trouver
+          # le dernier numéro, ce qui échoue au tout premier envoi. Le `pubspec`
+          # n'interroge rien : la crainte est sans objet ici.
           flutter build ipa \
             --release \
-            --build-name=1.0.0 \
-            --build-number=$(($BUILD_NUMBER)) \
             --export-options-plist=/Users/builder/export_options.plist
 
     artifacts:
