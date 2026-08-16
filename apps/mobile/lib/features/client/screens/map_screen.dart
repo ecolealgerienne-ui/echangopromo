@@ -15,6 +15,7 @@ import '../../../domain/models/map_shop.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/core_providers.dart';
 import '../../shared/l10n/enum_labels.dart';
+import '../providers/favorites_provider.dart';
 import '../providers/location_providers.dart';
 import '../providers/position_providers.dart';
 import '../providers/map_providers.dart';
@@ -504,6 +505,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final shopsAsync =
         bounds == null ? null : ref.watch(mapShopsProvider(bounds));
     final userPosition = ref.watch(userPositionProvider).valueOrNull;
+    final favorisSeuls = ref.watch(mapFavoritesOnlyProvider);
+    final favoris = ref.watch(favoritesProvider);
     // Cascade unique : point enregistré → défaut serveur → repli hors ligne.
     // Elle est lue au même endroit par la liste et par la carte, sans quoi un
     // client sans point verrait l'une autour d'un lieu et l'autre autour d'un
@@ -640,11 +643,43 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         if (mounted) setState(() => _lastShops = fresh);
       });
     }
-    final shops = fresh ?? _lastShops;
+    // ⚠️ **Le filtre favoris s'applique ICI, après le cache, et pas dans la
+    // requête.** `GET /promo/map` rend déjà toutes les promos visibles de
+    // chaque commerce retenu, identifiants compris : aucun aller-retour de
+    // plus n'est nécessaire. C'est aussi la seule voie sans toucher au
+    // serveur — le filtre catégorie, lui, part côté serveur parce qu'il
+    // décide quels commerces occupent le plafond `MAX_MAP_COMMERCANTS`.
+    //
+    // ⚠️ **Et c'est exactement pourquoi la troncature doit se dire** : le
+    // plafond est appliqué AVANT ce filtre, donc un commerce favori peut avoir
+    // été coupé côté serveur sans jamais arriver ici. La carte l'annonce
+    // (`mapFavoritesTruncated`) au lieu de laisser croire à un inventaire.
+    final shops = favorisSeuls
+        ? commercesAvecFavori(fresh ?? _lastShops, favoris)
+        : (fresh ?? _lastShops);
     final clusters = clusterShops(
       shops,
       zoom: _zoom >= _maxClusterZoom ? _maxClusterZoom : _zoom,
     );
+
+    // ⚠️ **Une carte vide ne dit pas POURQUOI elle est vide**, et sous le
+    // filtre favoris il y a trois raisons qui appellent trois gestes opposés :
+    // aucun cœur posé (il faut en poser un), des cœurs posés mais aucun ici
+    // (il faut se déplacer), ou une zone tronquée par le serveur AVANT que le
+    // filtre s'applique — auquel cas un favori peut manquer sans que la carte
+    // en sache rien. Un message unique ferait chercher le mauvais remède
+    // (règle #29).
+    //
+    // L'ordre est celui des causes, de la plus en amont à la plus locale.
+    final String? messageFavoris = !favorisSeuls
+        ? null
+        : favoris.isEmpty
+            ? l10n.mapNoFavoritesYet
+            : (shopsAsync?.valueOrNull?.truncated ?? false)
+                ? l10n.mapFavoritesTruncated
+                : (shops.isEmpty && !(shopsAsync?.isLoading ?? false))
+                    ? l10n.mapNoFavoritesHere
+                    : null;
 
     return Scaffold(
       // ⚠️ **C'est ici, et nulle part ailleurs, que naît le point du client.**
@@ -771,7 +806,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     ],
                   ),
                 ),
-                const _CategoryFilterBar(),
+                const _MapFilterBar(),
+                // ⚠️ **Sous la pastille, et pas en bas de l'écran.** Ces
+                // messages y ont d'abord été posés, à côté du bandeau de
+                // troncature — et l'invitation à activer la localisation, qui
+                // occupe le même bas d'écran, les RECOUVRAIT intégralement.
+                // Constaté sur émulateur le 2026-08-16 : filtre actif, carte
+                // vide, et rien à l'écran pour l'expliquer. Un message qu'on
+                // ne peut pas voir n'existe pas.
+                //
+                // Ici, l'explication est adjacente au contrôle qui vient de la
+                // produire, et aucune autre couche ne passe devant.
+                if (messageFavoris != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                    child: _Banner(
+                      message: messageFavoris,
+                      color: colorScheme.secondaryContainer,
+                      onColor: colorScheme.onSecondaryContainer,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -796,7 +850,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 onColor: colorScheme.onErrorContainer,
               ),
             )
-          else if ((shopsAsync?.valueOrNull?.truncated ?? false) &&
+          else if (!favorisSeuls &&
+              (shopsAsync?.valueOrNull?.truncated ?? false) &&
               _selected == null)
             Positioned(
               left: 16,
@@ -982,21 +1037,6 @@ class _ClusterMarker extends StatelessWidget {
   }
 }
 
-/// Filtre par catégorie, en pastilles flottantes au-dessus de la carte.
-///
-/// Pilote le **même** `categoryFilterProvider` que les ronds de l'accueil :
-/// un filtre choisi ici reste actif en revenant à la liste, et
-/// inversement. Deux filtres indépendants pour la même notion se
-/// contrediraient à l'écran sans que le client comprenne pourquoi.
-///
-/// Aucune requête supplémentaire : `mapShopsProvider` observe déjà ce
-/// provider, et le filtrage se fait côté serveur (`GET /promo/map`) plutôt
-/// que sur les commerces déjà chargés — sinon les commerces d'une autre
-/// catégorie occuperaient le plafond de `MAX_MAP_COMMERCANTS` pour rien.
-///
-/// Pastilles et non ronds illustrés comme sur l'accueil : au-dessus d'un
-/// fond cartographique, un libellé lisible prime sur l'image, et la barre
-/// doit manger le moins de carte possible.
 /// Liste des commerces d'un groupe que le zoom ne peut pas départager.
 ///
 /// Sans ça, deux fiches saisies au même point restaient inatteignables :
@@ -1108,13 +1148,37 @@ class _ClusterPicker extends StatelessWidget {
   }
 }
 
-class _CategoryFilterBar extends ConsumerWidget {
-  const _CategoryFilterBar();
+/// Filtres de la carte, en pastilles flottantes : le cœur, puis les catégories.
+///
+/// ⚠️ **Ce bloc était ORPHELIN** — posé entre deux classes, rattaché à aucune
+/// déclaration, donc invisible pour `analyze`. Il décrivait `_CategoryFilterBar`
+/// et avait dérivé sur `_ClusterPicker`. Même défaut que celui déjà signalé en
+/// tête de `map_providers.dart` : un commentaire détaché survit à son sujet
+/// sans que rien ne puisse le signaler.
+///
+/// **Catégorie : provider PARTAGÉ avec l'accueil.** Un filtre choisi ici reste
+/// actif en revenant à la liste, et inversement — deux filtres indépendants
+/// pour la même notion se contrediraient à l'écran. Et il part côté serveur
+/// (`mapShopsProvider` l'observe) plutôt que de trier les commerces déjà
+/// chargés : sinon ceux d'une autre catégorie occuperaient le plafond
+/// `MAX_MAP_COMMERCANTS` pour rien.
+///
+/// **Favoris : provider PROPRE à la carte** (`mapFavoritesOnlyProvider`), et
+/// filtrage local. Les deux différences tiennent à la même raison : sur la
+/// liste, les favoris sont une destination ; ici, un filtre. Le détail du
+/// raisonnement est sur les deux providers, pas recopié ici.
+///
+/// Pastilles et non ronds illustrés comme sur l'accueil : au-dessus d'un fond
+/// cartographique, un libellé lisible prime sur l'image, et la barre doit
+/// manger le moins de carte possible.
+class _MapFilterBar extends ConsumerWidget {
+  const _MapFilterBar();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final selected = ref.watch(categoryFilterProvider);
+    final favorisSeuls = ref.watch(mapFavoritesOnlyProvider);
 
     return SizedBox(
       height: 38,
@@ -1122,6 +1186,20 @@ class _CategoryFilterBar extends ConsumerWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         children: [
+          // ⚠️ **Une pastille dans la barre existante, pas une feuille de
+          // filtres.** Réutiliser celle de la liste amènerait ses quatre
+          // options de tri — proximité, expire bientôt, plus grosse réduction,
+          // nouveautés — qui n'ont aucun sens sur une carte : une carte n'a
+          // pas d'ordre. Quatre contrôles inertes valent moins qu'un contrôle
+          // qui agit.
+          _CategoryChip(
+            label: l10n.mapFavoritesChip,
+            icon: favorisSeuls ? Icons.favorite : Icons.favorite_border,
+            selected: favorisSeuls,
+            onTap: () => ref.read(mapFavoritesOnlyProvider.notifier).state =
+                !favorisSeuls,
+          ),
+          const SizedBox(width: 8),
           _CategoryChip(
             label: l10n.allCategoriesChip,
             selected: selected == null,
@@ -1150,11 +1228,18 @@ class _CategoryChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.icon,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
+
+  /// Facultatif : seule la pastille « Favoris » en porte un. Les catégories
+  /// s'en passent — au-dessus d'un fond cartographique, la barre doit manger
+  /// le moins de carte possible, et un pictogramme par pastille la doublerait
+  /// en largeur pour ne rien dire de plus qu'un libellé déjà explicite.
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -1173,14 +1258,27 @@ class _CategoryChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadii.pill),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Center(
-            child: Text(
-              label,
-              style: textTheme.labelLarge?.copyWith(
-                color: selected ? colorScheme.onPrimary : colorScheme.onSurface,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  size: 16,
+                  color:
+                      selected ? colorScheme.onPrimary : colorScheme.onSurface,
+                ),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                label,
+                style: textTheme.labelLarge?.copyWith(
+                  color:
+                      selected ? colorScheme.onPrimary : colorScheme.onSurface,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),

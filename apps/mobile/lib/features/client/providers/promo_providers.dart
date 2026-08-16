@@ -14,11 +14,36 @@ import 'position_providers.dart';
 /// fermée, pas de saisie libre (specs §3.1/§5.6). `null` = toutes catégories.
 final categoryFilterProvider = StateProvider<Categorie?>((ref) => null);
 
-/// Filtre "mes favoris uniquement" — indépendant du tri, feuille "Filtres et
-/// tri" (proposition 2026-07-11 : liste plutôt que grille, filtre par
-/// favoris/date).
-final favoritesOnlyFilterProvider =
-    StateProvider.autoDispose<bool>((ref) => false);
+/// **Le client est-il DANS ses favoris ?** — une destination, pas un filtre.
+///
+/// ⚠️ **Ce provider s'appelait `favoritesOnlyFilterProvider` jusqu'au
+/// 2026-08-16, et le nom disait la vérité : c'était un filtre.** Il était
+/// piloté par deux contrôles qui ne racontaient pas la même chose — un
+/// interrupteur dans la feuille « Filtres et tri », et l'onglet « Favoris » de
+/// la barre du bas. La barre l'affichait comme un **lieu** (`selectedIndex`),
+/// la pastille de l'en-tête comme un **filtre actif** : les deux affirmations
+/// à l'écran en même temps.
+///
+/// Le sens retenu est le **lieu**, parce que c'est ce qu'une barre d'onglets
+/// veut dire partout ailleurs et qu'on ne rééduque pas ce réflexe. Quatre
+/// conséquences, toutes visibles à l'usage :
+///
+/// - y entrer efface catégorie et recherche (`_enterFavorites`), comme
+///   « Accueil » le fait déjà. Sans ça, un client ayant 12 cœurs et une
+///   catégorie active en voyait **2**, et rien à l'écran ne disait pourquoi ;
+/// - on en sort par « Accueil », pas en retapant l'onglet — un onglet qui
+///   bascule n'est pas un onglet ;
+/// - l'interrupteur a quitté la feuille, qui ne porte plus qu'un tri ;
+/// - la pastille « filtres actifs » ne le compte plus, sinon elle continuerait
+///   de contredire l'onglet.
+///
+/// ⚠️ **La carte a son PROPRE provider** (`mapFavoritesOnlyProvider`), et ce
+/// n'est pas une mise en commun oubliée : là-bas le cœur est un vrai filtre —
+/// il ne remet rien à zéro et ne désigne aucune destination. Deux natures
+/// derrière le même mot. Le filtre catégorie, lui, est un filtre des deux
+/// côtés : c'est précisément pour ça qu'il est partagé, et le raisonnement ne
+/// se transpose pas.
+final favoritesModeProvider = StateProvider.autoDispose<bool>((ref) => false);
 
 /// Texte saisi dans la barre de recherche de l'accueil (nom de promo ou de
 /// magasin). Envoyé au backend (`search`), pas filtré localement : filtrer
@@ -269,8 +294,8 @@ class PromoListController extends StateNotifier<PromoListState> {
 /// Recréé (donc rechargé depuis la page 1) à chaque changement de point,
 /// catégorie ou favoris — ces trois paramètres influencent la requête
 /// serveur elle-même (`favoriteIds` change même le tri backend). `sort` et
-/// `favoritesOnlyFilterProvider` restent des filtres purement locaux
-/// (`visiblePromosProvider`), appliqués sans redéclencher de requête.
+/// `favoritesModeProvider` s'appliquent en plus **localement**
+/// (`visiblePromosProvider`), sans redéclencher de requête.
 ///
 /// ⚠️ **C'est ici que passe la porte de consentement**, et à un seul endroit :
 /// `clientPositionProvider` rend `null` tant que le client n'a rien enregistré,
@@ -300,7 +325,7 @@ final promoListProvider =
   final categorie = ref.watch(categoryFilterProvider);
   final favorites = ref.watch(favoritesProvider);
   final search = ref.watch(searchQueryProvider);
-  final favoritesOnly = ref.watch(favoritesOnlyFilterProvider);
+  final favoritesOnly = ref.watch(favoritesModeProvider);
   return PromoListController(
     api: api,
     point: point?.coordonnees,
@@ -317,7 +342,7 @@ final promoListProvider =
 final visiblePromosProvider = Provider.autoDispose<List<Promo>>((ref) {
   final state = ref.watch(promoListProvider);
   final favorites = ref.watch(favoritesProvider);
-  final favoritesOnly = ref.watch(favoritesOnlyFilterProvider);
+  final favoritesOnly = ref.watch(favoritesModeProvider);
   final sort = ref.watch(promoSortProvider);
 
   final search = ref.watch(searchQueryProvider).trim().toLowerCase();

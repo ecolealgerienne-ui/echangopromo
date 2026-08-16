@@ -20,8 +20,8 @@ import '../providers/location_providers.dart';
 import '../providers/position_providers.dart';
 import '../providers/promo_providers.dart';
 import '../widgets/promo_card.dart';
-import '../widgets/promo_filter_sheet.dart';
 import '../widgets/promo_grid_card.dart';
+import '../widgets/promo_sort_sheet.dart';
 
 const _listPadding = 12.0;
 const _listSpacing = 10.0;
@@ -60,7 +60,7 @@ class PromoListScreen extends ConsumerWidget {
     final promos = ref.watch(visiblePromosProvider);
     final favorites = ref.watch(favoritesProvider);
     final selectedCategorie = ref.watch(categoryFilterProvider);
-    final favoritesOnly = ref.watch(favoritesOnlyFilterProvider);
+    final favoritesMode = ref.watch(favoritesModeProvider);
     final search = ref.watch(searchQueryProvider);
     final expanded = ref.watch(listExpandedProvider);
     final density = ref.watch(promoDensityProvider);
@@ -73,7 +73,7 @@ class PromoListScreen extends ConsumerWidget {
     final focused = expanded ||
         selectedCategorie != null ||
         search.isNotEmpty ||
-        favoritesOnly;
+        favoritesMode;
 
     return Scaffold(
       body: SafeArea(
@@ -99,7 +99,7 @@ class PromoListScreen extends ConsumerWidget {
             _ListHeader(
               focused: focused,
               categorie: selectedCategorie,
-              favoritesOnly: favoritesOnly,
+              favoritesMode: favoritesMode,
               count: promos.length,
             ),
             Expanded(
@@ -129,11 +129,24 @@ class PromoListScreen extends ConsumerWidget {
                           SliverFillRemaining(
                             hasScrollBody: false,
                             child: Padding(
-                              padding: const EdgeInsets.only(top: 80),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 32, vertical: 80),
                               child: Text(
-                                search.isEmpty
-                                    ? l10n.noActivePromos
-                                    : l10n.noSearchResults(search),
+                                // ⚠️ **Trois absences, trois phrases.** Dans les
+                                // favoris, « rien à afficher » a deux causes
+                                // qui appellent deux gestes opposés : aucun
+                                // cœur posé (il faut en poser un), ou des cœurs
+                                // posés dont aucune promo n'est plus servie ici
+                                // (il faut élargir, ou elles ont expiré). Un
+                                // message unique ferait chercher le mauvais
+                                // remède (règle #29).
+                                favoritesMode
+                                    ? (favorites.isEmpty
+                                        ? l10n.favoritesEmptyNone
+                                        : l10n.favoritesEmptyHere)
+                                    : (search.isEmpty
+                                        ? l10n.noActivePromos
+                                        : l10n.noSearchResults(search)),
                                 textAlign: TextAlign.center,
                               ),
                             ),
@@ -373,8 +386,12 @@ class _TopBarState extends ConsumerState<_TopBar> {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final filtersActive = ref.watch(favoritesOnlyFilterProvider) ||
-        ref.watch(promoSortProvider) != PromoSort.proximite;
+    // ⚠️ **Les favoris n'entrent PLUS dans ce compte.** Tant qu'ils étaient un
+    // filtre, la pastille s'allumait en même temps que l'onglet « Favoris » du
+    // bas s'éclairait : l'écran affirmait à la fois « vous êtes dans un lieu »
+    // et « un filtre est actif ». Les favoris sont un lieu ; il ne reste ici
+    // que le tri.
+    final triNonParDefaut = ref.watch(promoSortProvider) != PromoSort.proximite;
     final hasSearch = ref.watch(searchQueryProvider).isNotEmpty;
 
     return Padding(
@@ -456,12 +473,12 @@ class _TopBarState extends ConsumerState<_TopBar> {
               ),
               IconButton(
                 icon: Badge(
-                  isLabelVisible: filtersActive,
+                  isLabelVisible: triNonParDefaut,
                   smallSize: 8,
-                  child: const Icon(Icons.tune),
+                  child: const Icon(Icons.sort),
                 ),
-                tooltip: l10n.filtersSortTooltip,
-                onPressed: () => showPromoFilterSheet(context),
+                tooltip: l10n.sortTooltip,
+                onPressed: () => showPromoSortSheet(context),
               ),
             ],
           ),
@@ -767,8 +784,28 @@ class _CategoryCircle extends StatelessWidget {
 void _resetToHome(WidgetRef ref) {
   ref.read(listExpandedProvider.notifier).state = false;
   ref.read(categoryFilterProvider.notifier).state = null;
-  ref.read(favoritesOnlyFilterProvider.notifier).state = false;
+  ref.read(favoritesModeProvider.notifier).state = false;
   ref.read(searchQueryProvider.notifier).state = '';
+}
+
+/// Entre dans les favoris — **une destination, pas une bascule**.
+///
+/// ⚠️ **Efface catégorie et recherche, exactement comme `_resetToHome`.** Sans
+/// ça, un client ayant 12 cœurs et la pastille « Alimentation » active tapait
+/// « Favoris » et en voyait 2 : la barre du bas lui annonçait qu'il était
+/// arrivé dans ses favoris, et rien à l'écran ne disait qu'il en manquait 10.
+/// Reposer une catégorie ensuite reste possible — c'est le **défaut** qui
+/// change, pas la capacité.
+///
+/// ⚠️ **Idempotent, délibérément.** Retaper l'onglet re-entre au lieu de
+/// sortir : un onglet qui bascule n'est pas un onglet, et aucun autre de cette
+/// barre ne se comporte comme ça. On sort par « Accueil » — le geste que le
+/// retour terrain du 2026-08-04 a déjà identifié comme l'instinctif.
+void _enterFavorites(WidgetRef ref) {
+  ref.read(listExpandedProvider.notifier).state = false;
+  ref.read(categoryFilterProvider.notifier).state = null;
+  ref.read(searchQueryProvider.notifier).state = '';
+  ref.read(favoritesModeProvider.notifier).state = true;
 }
 
 /// Titre de la liste, plus une poignée de glissement en mode filtré : tirer
@@ -777,13 +814,13 @@ class _ListHeader extends ConsumerWidget {
   const _ListHeader({
     required this.focused,
     required this.categorie,
-    required this.favoritesOnly,
+    required this.favoritesMode,
     required this.count,
   });
 
   final bool focused;
   final Categorie? categorie;
-  final bool favoritesOnly;
+  final bool favoritesMode;
   final int count;
 
   /// Vitesse minimale, en pixels par seconde, pour qu'un glissement compte.
@@ -797,9 +834,12 @@ class _ListHeader extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
+    // ⚠️ **Le titre nomme un LIEU, pas un réglage.** Il affichait
+    // « Afficher seulement mes favoris » — la phrase d'un interrupteur, en tête
+    // d'un écran où il n'y a plus d'interrupteur à décrire.
     final title = categorie != null
         ? categorieLabel(context, categorie!)
-        : (favoritesOnly ? l10n.favoritesOnlyLabel : l10n.allPromosTitle);
+        : (favoritesMode ? l10n.favoritesTitle : l10n.allPromosTitle);
 
     return GestureDetector(
       // Glissement dans les deux sens sur cet en-tête (demande 2026-07-29) :
@@ -911,10 +951,10 @@ class _ClientTabBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final favoritesOnly = ref.watch(favoritesOnlyFilterProvider);
+    final favoritesMode = ref.watch(favoritesModeProvider);
 
     return NavigationBar(
-      selectedIndex: favoritesOnly ? 2 : 0,
+      selectedIndex: favoritesMode ? 2 : 0,
       onDestinationSelected: (index) {
         switch (index) {
           case 0:
@@ -924,12 +964,15 @@ class _ClientTabBar extends ConsumerWidget {
             // trouver la croix — deux gestes que personne ne devine. Le
             // bouton Accueil est l'endroit où on va instinctivement
             // (retour terrain, 2026-08-04).
+            //
+            // C'est aussi, depuis le 2026-08-16, **la sortie des favoris** :
+            // ceux-ci sont une destination, on n'en sort pas en retapant leur
+            // propre onglet.
             _resetToHome(ref);
           case 1:
             context.push('/carte');
           case 2:
-            ref.read(favoritesOnlyFilterProvider.notifier).state =
-                !favoritesOnly;
+            _enterFavorites(ref);
           case 3:
             context.push('/commercant');
         }

@@ -3,24 +3,30 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../l10n/app_localizations.dart';
 import '../providers/promo_providers.dart';
 
-/// Feuille modale "Filtres et tri" (proposition 2026-07-11, inspirée de
-/// Karrot/Bonial : filtre appliqué en direct, pas de bouton "Valider" — un
-/// simple reclassement/filtrage local, pas une requête à confirmer).
-Future<void> showPromoFilterSheet(BuildContext context) {
+/// Feuille modale de **tri** (proposition 2026-07-11, inspirée de
+/// Karrot/Bonial : appliqué en direct, pas de bouton « Valider » — un simple
+/// reclassement local, pas une requête à confirmer).
+///
+/// ⚠️ **Elle portait aussi « Afficher seulement mes favoris » jusqu'au
+/// 2026-08-16.** Cet interrupteur écrivait le même bit que l'onglet « Favoris »
+/// de la barre du bas, en le racontant autrement : ici un filtre, là-bas une
+/// destination — et l'écran affichait les deux lectures en même temps. Les
+/// favoris sont devenus un lieu (`favoritesModeProvider`) ; il ne reste ici
+/// que ce qui règle vraiment l'affichage courant.
+Future<void> showPromoSortSheet(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    builder: (context) => const _PromoFilterSheetContent(),
+    builder: (context) => const _PromoSortSheetContent(),
   );
 }
 
-class _PromoFilterSheetContent extends ConsumerWidget {
-  const _PromoFilterSheetContent();
+class _PromoSortSheetContent extends ConsumerWidget {
+  const _PromoSortSheetContent();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final favoritesOnly = ref.watch(favoritesOnlyFilterProvider);
     final sort = ref.watch(promoSortProvider);
 
     return SafeArea(
@@ -32,38 +38,15 @@ class _PromoFilterSheetContent extends ConsumerWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(l10n.filtersSortTitle,
+                  child: Text(l10n.sortTitle,
                       style: Theme.of(context).textTheme.titleMedium),
                 ),
                 TextButton(
-                  onPressed: () {
-                    ref.read(favoritesOnlyFilterProvider.notifier).state =
-                        false;
-                    ref.read(promoSortProvider.notifier).state =
-                        PromoSort.proximite;
-                  },
+                  onPressed: () => ref.read(promoSortProvider.notifier).state =
+                      PromoSort.proximite,
                   child: Text(l10n.resetFiltersLabel),
                 ),
               ],
-            ),
-          ),
-          SwitchListTile(
-            title: Text(l10n.favoritesOnlyLabel),
-            secondary: const Icon(Icons.favorite_outline),
-            value: favoritesOnly,
-            onChanged: (v) =>
-                ref.read(favoritesOnlyFilterProvider.notifier).state = v,
-          ),
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Text(
-                l10n.sortByLabel,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
-              ),
             ),
           ),
           RadioGroup<PromoSort>(
