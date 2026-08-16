@@ -51,17 +51,94 @@ docker compose --env-file .env.production -f docker-compose.crm.yml \
 du module, c'est `--update` qu'il faut, puis un **redémarrage du serveur** :
 
 ```bash
+cd /opt/echangocrm
+git pull origin main
+
 CONT=$(docker compose --env-file .env.production -f docker-compose.crm.yml ps -q odoo)
-docker exec "$CONT" odoo --database=echango_crm --update=echango_promo_crm \
-  --http-port=8079 --gevent-port=8082 --stop-after-init
+
+docker exec "$CONT" sh -c 'odoo \
+  --database=echango_crm \
+  --db_host="$HOST" --db_user="$USER" --db_password="$PASSWORD" \
+  --update=echango_promo_crm \
+  --http-port=8079 --gevent-port=8082 \
+  --stop-after-init'
+
 docker compose --env-file .env.production -f docker-compose.crm.yml restart odoo
 ```
+
+⚠️ **Les paramètres de base ne sont PAS optionnels ici, et leur absence ne
+parle pas de base.** `docker exec … odoo` court-circuite l'entrypoint de
+l'image, qui est le seul à traduire `HOST` / `USER` / `PASSWORD` en
+`--db_host` / `--db_user` / `--db_password`. Sans eux, Odoo tente une connexion
+par **socket Unix local** et rend `No such file or directory` — un message qui
+fait chercher un conteneur mort ou un volume perdu. *Cette commande figurait
+ici sans eux jusqu'au 2026-08-15, où elle a échoué au premier usage réel.* Les
+lire depuis les variables du conteneur (`sh -c '…'`, guillemets **simples** :
+c'est le shell de dedans qui doit les résoudre) évite d'en recopier la valeur,
+et de la laisser dans l'historique.
 
 ⚠️ **Les deux commandes, pas une.** Une mise à jour lancée dans un `docker exec`
 est un **second processus** : celui qui sert le navigateur garde son registre en
 mémoire, donc ses modèles d'avant. Le symptôme est trompeur — une erreur Owl
 sur un champ qui existe pourtant en base. Et `--http-port` évite un
 `Address already in use` qui ne parle ni de module ni de mise à jour.
+
+### ⚠️ Constater que la mise à jour a chargé les données, pas seulement le code
+
+```bash
+PG=$(docker compose --env-file .env.production -f docker-compose.crm.yml ps -q postgres_crm)
+docker exec -i "$PG" psql -U odoo -d echango_crm -c \
+  "SELECT c.code, COUNT(*) FROM res_country_state s
+     JOIN res_country c ON c.id = s.country_id
+    WHERE c.code IN ('DZ','AE') GROUP BY 1"
+```
+
+Attendu : **`DZ` 58** et **`AE` 7**. Un `DZ` à 0 signifie que le fichier de
+référence n'a pas été chargé — le module tournera sans erreur et l'« État »
+restera vide sur toutes les fiches algériennes, sans que rien ne le signale.
+
+### Rattraper les fiches déjà géocodées — **une seule fois, après cette mise à jour**
+
+⚠️ **La tâche planifiée ne les reprendra JAMAIS.** Une fiche n'est re-géocodée
+que si sa position a bougé de plus de 200 m : tout ce qui portait déjà
+`Géocodé` avant cette mise à jour garderait sa ville et un **État vide pour
+toujours**. Ce n'est pas un état d'attente, c'est un état stable et faux.
+
+Le rattrapage **n'appelle pas Nominatim** — le nom de wilaya est déjà stocké
+dans `wilaya_geocodee`. Il n'y a donc aucun risque de quota :
+
+```bash
+docker exec -i "$CONT" sh -c 'odoo shell --database=echango_crm \
+  --db_host="$HOST" --db_user="$USER" --db_password="$PASSWORD" \
+  --http-port=8079 --gevent-port=8082 --no-http' <<'PY'
+Compte = env['echango.promo.account']
+rattrapes, refuses = 0, {}
+for c in Compte.search([('wilaya_geocodee', '!=', False)]):
+    if c.partner_id.state_id:
+        continue
+    etat = c._etat_correspondant(c.wilaya_geocodee)
+    if etat:
+        c.partner_id.state_id = etat.id
+        rattrapes += 1
+    else:
+        refuses[c.wilaya_geocodee] = refuses.get(c.wilaya_geocodee, 0) + 1
+env.cr.commit()
+print('RATTRAPEES=%d' % rattrapes)
+print('NON APPARIEES :', refuses)
+PY
+```
+
+⚠️ **`docker exec -i`, avec le `-i`.** Sans lui l'entrée standard n'est pas
+transmise : `odoo shell` démarre, ne lit rien, et sort **sans un mot** — on
+croit alors que le script n'a rien trouvé.
+
+**Lire la ligne `NON APPARIEES`, elle n'est pas décorative.** Un nom qui y
+figure est un refus, et il y a deux sortes de refus :
+
+| Ce qu'on y voit | Ce que ça veut dire |
+|---|---|
+| un nom hors DZ/AE (`Californie`, `Île-de-France`) | position aberrante — un GPS d'émulateur, une saisie fantaisiste. **Normal**, rien à faire |
+| une **wilaya bien réelle** | son nom diverge de `res_country_state_dz.xml` — il manque une entrée dans `ALIAS_ETATS` côté CRM |
 
 ### 2. Créer la source et générer le jeton
 
@@ -205,6 +282,26 @@ L'écran **Source et jeton** dit depuis quand — une source sans lot reçu depu
   fait bannir l'adresse IP du serveur, et cela se découvre bien après. Un parc
   de 300 fiches se géocode en environ trois heures, puis ne bouge plus : une
   fiche n'est re-géocodée que si sa position a bougé de plus de 200 m.
+
+  ⚠️ **Ne pas lancer de rattrapage manuel massif.** Le 2026-08-15, un lot de
+  216 fiches lancé à la main a fait répondre **429 Too Many Requests** à
+  Nominatim, et 61 fiches sont retombées en `erreur` d'un coup. Depuis, un 429
+  **interrompt le lot** au lieu d'enchaîner — mais la bonne conduite reste de
+  laisser la tâche planifiée faire son travail. Il n'y a rien à rattraper : elle
+  reprend seule ce qui a échoué.
+
+- **La ville ET l'état natif d'Odoo** sont remplis. Deux pièges, opposés :
+
+  | | |
+  |---|---|
+  | **Algérie** | Odoo ne livre **aucune** wilaya — le module pose les **58** (`data/res_country_state_dz.xml`). Sans elles, « État » restait vide quoi que fasse le géocodage |
+  | **Émirats** | Odoo livre **déjà** les 7 émirats, en **anglais**. En reposer un fichier viole `res_country_state_name_code_uniq` et **empêche l'installation du module** |
+
+  ⚠️ **Et l'appariement ne se fait pas sur le nom brut.** Nominatim, à qui l'on
+  demande pourtant du français, rend `Doubaï` (mesuré) là où Odoo stocke
+  `Dubai`, et `Abou Dabi` là où Odoo stocke `Abu Dhabi`. Le rapprochement passe
+  par des formes normalisées et une table d'alias (`ALIAS_ETATS`) — **jamais**
+  un `ilike` sur le nom, qui échouerait en silence.
 - **Aucune écriture vers Promo.** Le CRM ne fait que recevoir.
 
 ## 6. Deux réglages optionnels
