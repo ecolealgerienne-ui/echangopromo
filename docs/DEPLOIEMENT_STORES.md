@@ -131,6 +131,13 @@ un nouvel identifiant, en repartant de zéro côté installations et avis.
    ```bash
    flutter build appbundle --release
    ```
+   ⚠️ **Pour tout build ULTÉRIEUR, et surtout depuis un autre poste : voir
+   `BUILD_ANDROID.md`.** Cette ligne suffit à la première publication, quand
+   il n'existe encore aucun `versionCode` en circulation. Ensuite, le numéro
+   de version, la traçabilité du commit et la clé de signature deviennent des
+   contraintes à part entière — et c'est là que ça a dérapé : constaté le
+   2026-08-16, **quatre numéros de version différents** entre la Console, le
+   dépôt et le téléphone de test.
 4. **Créer l'app sur Play Console** : fiche store (description FR/EN/AR,
    captures d'écran, icône), **politique de confidentialité** (obligatoire
    — une simple page hébergée sur `echango.com` suffit), classification du

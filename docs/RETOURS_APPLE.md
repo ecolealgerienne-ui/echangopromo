@@ -27,9 +27,12 @@ iPad Air 11" (M3)** — voir la leçon G.
 | 2026-08-05 | *non noté* | ❌ Refus | **5.1.1(iv)** — localisation | Produit, écran |
 | 2026-08-07 | 1.0 (10) | ❌ Refus | **5.1.1(iv)** — localisation, *encore* | Produit, écran |
 | 2026-08-10 | 1.0 (11) | ❌ Refus | **2.3.10** — captures d'écran | Métadonnées |
+| 2026-08-16 | 1.0.1 (17) | ❌ Refus | **ITMS-91061** — manifeste de confidentialité manquant (`share_plus`) | Technique, **dépendance** |
 
-**Deux refus sur trois portaient sur le même écran**, et le troisième ne touche
-pas au code. Aucun n'a porté sur une fonctionnalité, une panne ou la sécurité.
+**Deux refus sur quatre portaient sur le même écran** ; les deux autres ne
+touchent ni l'un ni l'autre à notre code — l'un vise les métadonnées, l'autre
+une **dépendance tierce**. Aucun n'a porté sur une fonctionnalité, une panne ou
+la sécurité.
 
 ---
 
@@ -194,6 +197,91 @@ défaut ne montre pas, et l'image fautive y survit à une correction faite
 
 ---
 
+### R4 — ITMS-91061 : un manifeste de confidentialité manquant, chez quelqu'un d'autre (2026-08-16)
+
+**Ce qu'Apple a écrit**, sur la version **1.0.1 (17)** :
+
+> **ITMS-91061: Missing privacy manifest** — Your app includes
+> "Frameworks/share_plus.framework/share_plus", which includes share_plus, an
+> SDK that was identified in the documentation as a commonly used third-party
+> SDK. […] the SDK must include a privacy manifest file. Please contact the
+> provider of the SDK that includes this file to get an updated SDK version
+> with a privacy manifest.
+
+**Ce que ça n'est pas :** notre code. Aucune ligne de l'app n'est en cause, et
+aucun de nos `Info.plist` non plus. Apple exige depuis 2024 qu'une liste
+nommée de **SDK tiers courants** embarque un `PrivacyInfo.xcprivacy` ; c'est au
+paquet de le fournir, pas à nous.
+
+**Mesuré le 2026-08-16**, plutôt que supposé :
+
+```
+share_plus-7.2.2/ios/     ->  Classes/  share_plus.podspec        (aucun manifeste)
+share_plus-10.1.4/ios/…/PrivacyInfo.xcprivacy                     ✅
+share_plus-12.0.1/ios/…/PrivacyInfo.xcprivacy                     ✅
+```
+
+Le `pubspec.yaml` épinglait `share_plus: ^7.2.2` — publiée **avant** que la
+règle existe. Il n'y avait rien à corriger, seulement à monter.
+
+**Le correctif, et pourquoi cette version-là :** `^10.1.4` porte le manifeste
+**et conserve l'API statique** `Share.share(...)` / `Share.shareXFiles(...)`,
+donc **aucun changement dans nos deux appels** (`promo_detail_screen.dart:93` et
+`:100`). La 12+ introduit `SharePlus.instance.share(ShareParams(…))` et
+demanderait de réécrire les deux. Coût annexe : `share_plus 10.1.4` exige
+`sdk >= 3.4.0`, alors que l'app déclare `>=3.2.0` — cette borne est à monter
+aussi.
+
+> **La leçon (J)** : **une dépendance peut faire refuser l'app sans qu'une seule
+> ligne de notre code soit en cause.** Les épinglages anciens sont un risque de
+> conformité, pas seulement une dette technique : `^7.2.2` datait d'avant la
+> règle, et rien dans la CI, l'analyse statique ou les bancs ne pouvait le voir.
+>
+> **La leçon (K)** : **le refus ne nomme qu'UN paquet — celui qu'Apple a
+> rencontré en premier.** Corriger celui-là et renvoyer, c'est risquer le même
+> refus au tour suivant sur le voisin. Le contrôle utile balaie **toutes** les
+> dépendances à code natif Apple, en une fois. Recette employée ici :
+
+```bash
+# Depuis apps/mobile — tout paquet portant un .podspec doit porter un manifeste.
+python - <<'EOF'
+import io, os, re
+cache = os.path.expandvars(r'%LOCALAPPDATA%\Pub\Cache\hosted\pub.dev')
+lock = io.open('pubspec.lock', encoding='utf-8').read()
+paquets = {}
+for bloc in re.split(r'\n  (?=\S)', lock):
+    n = re.search(r'name:\s*(\S+)', bloc); v = re.search(r'version:\s*"([^"]+)"', bloc)
+    if n and v: paquets[n.group(1)] = v.group(1)
+for nom, ver in sorted(paquets.items()):
+    d = os.path.join(cache, '%s-%s' % (nom, ver))
+    if not os.path.isdir(d): continue
+    pod = man = False
+    for _, _, fs in os.walk(d):
+        pod |= any(f.endswith('.podspec') for f in fs)
+        man |= 'PrivacyInfo.xcprivacy' in fs
+    if pod and not man: print('SANS MANIFESTE :', nom, ver)
+EOF
+```
+
+⚠️ **Filtrer sur un dossier `ios/` ne suffit PAS** — première tentative, et elle
+n'a vu que 5 paquets sur 13 : les versions récentes rangent leur code natif dans
+`darwin/`. C'est le `.podspec` qui dit qu'un paquet a du code Apple.
+
+**Résultat du balayage au 2026-08-16** — 13 paquets à code natif Apple, 10 avec
+manifeste, **3 sans** :
+
+| Paquet | Statut |
+|---|---|
+| `share_plus 7.2.2` | ❌ nommé par Apple, à monter |
+| `flutter_image_compress_common 1.0.6` | ⚠️ pas sur la liste d'Apple **à ce jour** — à surveiller |
+| `flutter_image_compress_macos 1.0.3` | hors sujet (macOS, pas distribué) |
+
+⚠️ **« Pas sur la liste » n'est pas « conforme »** : la liste d'Apple s'allonge,
+et un paquet qui passe aujourd'hui peut bloquer une soumission dans six mois
+sans qu'aucun changement n'ait eu lieu de notre côté.
+
+---
+
 ## 3. Les leçons, sous une forme réutilisable
 
 Les lettres renvoient aux cas ci-dessus.
@@ -256,6 +344,9 @@ assumés, pas des détails.
 - [ ] Numéro de build incrémenté (Codemagic le fait via `$BUILD_NUMBER`)
 - [ ] La build est **« Ready to Submit »** dans App Store Connect — pas seulement verte dans la CI
 - [ ] Chaque `NS*UsageDescription` décrit **ce que le testeur verra**, pas un usage secondaire
+- [ ] **Manifestes de confidentialité** : le balayage du R4 ne rend **aucun**
+      paquet sans manifeste *(sinon : ITMS-91061, et un aller-retour par paquet
+      si on ne corrige que celui qu'Apple a nommé)*
 
 ### Permissions — un passage par permission demandée
 
