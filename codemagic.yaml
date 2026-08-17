@@ -8,7 +8,13 @@ workflows:
     instance_type: mac_mini_m2
 
     environment:
-      flutter: stable
+      # ⚠️ **Épinglée — `stable` a cassé le build le 2026-08-15** sans qu'une
+      # ligne du dépôt ait bougé : le plancher iOS exigé par le pod Flutter
+      # monte avec le canal, et `pod install` a fini par le refuser. Voir
+      # `docs/RETOURS_APPLE.md`, cas R0 bis. La relever est une décision, à
+      # prendre avec le plancher iOS des trois fichiers listés en tête de
+      # `apps/mobile/ios/Podfile`.
+      flutter: 3.35.7
       xcode: latest
       cocoapods: default
       vars:
@@ -93,7 +99,13 @@ workflows:
     instance_type: mac_mini_m2
 
     environment:
-      flutter: stable
+      # ⚠️ **Épinglée — `stable` a cassé le build le 2026-08-15** sans qu'une
+      # ligne du dépôt ait bougé : le plancher iOS exigé par le pod Flutter
+      # monte avec le canal, et `pod install` a fini par le refuser. Voir
+      # `docs/RETOURS_APPLE.md`, cas R0 bis. La relever est une décision, à
+      # prendre avec le plancher iOS des trois fichiers listés en tête de
+      # `apps/mobile/ios/Podfile`.
+      flutter: 3.35.7
       xcode: latest
       cocoapods: default
       groups:
