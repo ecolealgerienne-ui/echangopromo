@@ -13,6 +13,13 @@ ce document reste la référence des commandes.
   stack principale Traefik/Vendure, démarrée au moins une fois). Vérifier :
   `docker network inspect echango_network` — si absent, démarrer d'abord la
   stack principale.
+- La stack **echango-geo** doit tourner sur ce même VPS et son service
+  `geo-api` être attaché à `echango_network` — le backend y résout le nom
+  `geo-api` pour le géocodage inverse de la position des commerçants.
+  Vérifier : `docker network inspect echango_network | grep geo-api`. Si
+  absent, déployer d'abord `ecolealgerienne-ui/echango-geo`
+  (`docs/DEPLOIEMENT_VPS.md` de ce dépôt-là). Le jeton partagé se lit avec
+  `grep GEO_INTERNAL_TOKEN /opt/echango-geo/.env.production`.
 - `/opt/echangopromo` = clone de ce dépôt (branche déployée à définir avec
   l'utilisateur — `main` par défaut).
 
@@ -28,14 +35,52 @@ git clone <url-du-repo> .   # ou git pull si déjà cloné
 cp .env.production.example .env.production
 # éditer : POSTGRES_PASSWORD (alphanumérique uniquement, voir commentaire
 # dans le fichier), DATABASE_URL (même mot de passe que POSTGRES_PASSWORD),
-# JWT_SECRET, credentials S3 OVH, BASE_DOMAIN.
+# JWT_SECRET, credentials S3 OVH, BASE_DOMAIN,
+# GEO_INTERNAL_TOKEN (EXACTEMENT celui de /opt/echango-geo/.env.production).
 
 docker compose --env-file .env.production -f docker-compose.promo.yml up -d --build
 ```
 
 Le conteneur `backend` lance automatiquement les migrations au démarrage
 (`Dockerfile` : `npx typeorm migration:run -d dist/data-source.js && node
-dist/main`) — rien à faire de spécial pour ça, `up -d` suffit.
+dist/main`) — rien à faire de spécial pour ça, `up -d` suffit. La migration
+`CommercantGeocodage` marque au passage toute fiche déjà positionnée en
+`geocodage_statut = a_faire` ; `GeoReconcileService` (cron 30 min) résout leur
+ville/wilaya contre `echango-geo` aux passages suivants.
+
+### Vérifier le géocodage inverse
+
+À faire une fois `up -d` terminé, **avant** de considérer le déploiement bon —
+un `GEO_INTERNAL_TOKEN` absent ou faux ne lève pas : la position est sauvée,
+`geocodage_statut` reste `a_faire`, le reconcile boucle sans fin et ville/wilaya
+ne se remplissent jamais. Le silence n'est donc pas une preuve ; il faut le
+témoin.
+
+```bash
+# 1. echango-geo est joignable depuis le conteneur backend et Nominatim répond
+docker compose --env-file .env.production -f docker-compose.promo.yml exec -T backend \
+  sh -c 'node -e "fetch(\"http://geo-api:3000/health\").then(r=>r.json()).then(j=>console.log(JSON.stringify(j)))"'
+#   attendu : {"status":"ok","dependencies":{"nominatim":{"reachable":true}, ...}}
+
+# 2. le couple URL + jeton réels résout une position connue (Alger) — un 401
+#    ici = jeton faux, et c'est LE cas qui passe autrement inaperçu
+docker compose --env-file .env.production -f docker-compose.promo.yml exec -T backend \
+  sh -c 'node -e "fetch(\"http://geo-api:3000/v1/geocode/reverse?lat=36.7538&lon=3.0588\",{headers:{\"X-Internal-Token\":process.env.GEO_INTERNAL_TOKEN}}).then(r=>r.status+\" \"+r.statusText).then(console.log)"'
+#   attendu : 200 OK   (401 Unauthorized = GEO_INTERNAL_TOKEN faux ou absent)
+# Contrôle plus complet (cas mer, panne, ping) : scripts/check-geo-bascule.sh
+# depuis un clone où `cd apps/backend && npm run build` a été lancé.
+
+# 3. dans les 30 min, le reconcile a traité le parc rétabli par la migration
+docker compose --env-file .env.production -f docker-compose.promo.yml logs backend | grep GeoReconcile
+#   attendu : "N fiche(s) géocodée(s)"
+```
+
+⚠️ **Ordre avec le CRM Odoo.** L'export de 04:00 envoie désormais `ville` /
+`wilaya` / `geocodage_statut` dans chaque fiche. Le module `echango_promo_crm`
+doit être en `19.0.1.2.0` (qui accepte ces champs) **avant** le premier envoi,
+sinon toutes les fiches sont refusées. Tant que ce n'est pas le cas, laisser
+`CRM_SYNC_URL` / `CRM_SYNC_TOKEN` vides dans `.env.production` (la tâche
+journalise son abstention et ne pousse rien).
 
 ## Seed (admin)
 
