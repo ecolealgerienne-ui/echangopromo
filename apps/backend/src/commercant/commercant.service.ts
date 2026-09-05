@@ -1,7 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, QueryFailedError, Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
+import {
+  GeoClientService,
+  GeoUnavailableError,
+} from '../common/geo/geo-client.service';
 import {
   BadRequestAppException,
   ConflictAppException,
@@ -24,6 +28,7 @@ import { CommercantView } from './entities/commercant-view.entity';
 import {
   Commercant,
   CommercantAccountState,
+  CommercantGeocodageStatut,
   CommercantOriginVerification,
   RegistreStatus,
 } from './entities/commercant.entity';
@@ -59,6 +64,7 @@ export class CommercantService {
     private readonly authService: AuthService,
     private readonly storageService: StorageService,
     private readonly notificationService: NotificationService,
+    private readonly geoClient: GeoClientService,
   ) {}
 
   /**
@@ -813,6 +819,41 @@ export class CommercantService {
     if (!wasUnset) {
       commercant.profilePendingReview = true;
     }
+    await this.geocoderPosition(commercant);
     return this.commercants.save(commercant);
+  }
+
+  /**
+   * Résout `latitude`/`longitude` en `ville`/`wilaya` via `echango-geo`, et
+   * **ne lève jamais** : la pose de position est le chemin critique, le repère
+   * texte n'est que de la donnée dérivée pour le CRM.
+   *
+   * ⚠️ echango-geo injoignable ⇒ `geocodageStatut = a_faire` et la position est
+   * quand même sauvée ; `GeoReconcileService` reprendra. Un point que Nominatim
+   * ne connaît pas (mer) ⇒ `sans_resultat`, ce n'est pas une panne.
+   */
+  private async geocoderPosition(commercant: Commercant): Promise<void> {
+    try {
+      const { ville, wilaya } = await this.geoClient.reverse(
+        commercant.latitude as number,
+        commercant.longitude as number,
+      );
+      commercant.villeGeocodee = ville;
+      commercant.wilayaGeocodee = wilaya;
+      commercant.geocodageStatut = ville
+        ? CommercantGeocodageStatut.FAIT
+        : CommercantGeocodageStatut.SANS_RESULTAT;
+      commercant.geocodageLatitude = commercant.latitude;
+      commercant.geocodageLongitude = commercant.longitude;
+      commercant.geocodageAt = new Date();
+    } catch (error) {
+      commercant.geocodageStatut =
+        error instanceof GeoUnavailableError
+          ? CommercantGeocodageStatut.A_FAIRE
+          : CommercantGeocodageStatut.ERREUR;
+      new Logger(CommercantService.name).warn(
+        `géocodage différé pour ${commercant.id} : ${(error as Error).message}`,
+      );
+    }
   }
 }

@@ -32,6 +32,12 @@ export interface LigneCrm {
   pays: string;
   latitude: number | null;
   longitude: number | null;
+  // Repère texte dérivé de la position par echango-geo (géocodage inverse fait
+  // côté backend depuis le 2026-09-05 — le CRM ne géocode plus lui-même). Voir
+  // `Commercant.geocodageStatut` pour la signification des cinq états.
+  ville: string | null;
+  wilaya: string | null;
+  geocodage_statut: string;
   origine: string;
   agent_createur_id: string | null;
   date_creation: string;
@@ -212,6 +218,9 @@ export class CrmExportService {
              f.telephone                            AS telephone_e164,
              f.pays,
              f.latitude, f.longitude,
+             f."villeGeocodee"                      AS ville,
+             f."wilayaGeocodee"                     AS wilaya,
+             f."geocodageStatut"                    AS geocodage_statut,
              f."originVerification"                 AS origine,
              f."createdByAgentId"                   AS agent_createur_id,
              f."createdAt"                          AS date_creation,
@@ -333,6 +342,9 @@ export class CrmExportService {
       pays: l.pays as string,
       latitude: l.latitude === null ? null : Number(l.latitude),
       longitude: l.longitude === null ? null : Number(l.longitude),
+      ville: (l.ville as string) ?? null,
+      wilaya: (l.wilaya as string) ?? null,
+      geocodage_statut: l.geocodage_statut as string,
       origine: l.origine as string,
       agent_createur_id: (l.agent_createur_id as string) ?? null,
       date_creation: date(l.date_creation) as string,

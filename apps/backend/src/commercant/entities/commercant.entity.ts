@@ -44,6 +44,20 @@ export enum RegistreStatus {
 }
 
 /**
+ * Où en est le géocodage inverse de la position (specs `echango-geo` §8.3).
+ * Repris à l'identique du modèle Odoo `echango_promo_geocodage.py` : trois
+ * « absences » qui se ressemblent à l'écran mais appellent trois gestes
+ * opposés (règle #10).
+ */
+export enum CommercantGeocodageStatut {
+  SANS_POSITION = 'sans_position',
+  A_FAIRE = 'a_faire',
+  FAIT = 'fait',
+  SANS_RESULTAT = 'sans_resultat',
+  ERREUR = 'erreur',
+}
+
+/**
  * Bornes de saisie du nom et de l'adresse — nommées ici, à côté des colonnes
  * qu'elles décrivent, et importées par les trois DTO d'entrée : la borne ne
  * doit exister qu'une fois (même convention que `PRIX_MAX`).
@@ -251,6 +265,51 @@ export class Commercant {
 
   @Column({ type: 'double precision', nullable: true })
   longitude: number | null;
+
+  /**
+   * Repère texte dérivé de la position par `echango-geo` (géocodage inverse),
+   * pour le CRM Odoo qui n'a pas de vue carte.
+   *
+   * ⚠️ **Cinq états distincts, pas un booléen** (règle #10, repris du modèle
+   * qui vivait côté Odoo `echango_promo_geocodage.py`). `sans_position`,
+   * `a_faire`, `fait`, `sans_resultat` (point en mer / non cartographié) et
+   * `erreur` (echango-geo était injoignable) appellent des gestes opposés :
+   * attendre une position, laisser le reconcile faire, rien, saisir à la main,
+   * ou réessayer. Les confondre reproduirait le défaut qui avait perdu 61
+   * fiches côté CRM.
+   *
+   * Rempli par `CommercantService.setPosition` au moment où la position est
+   * posée ; les `a_faire`/`erreur` sont repris par `GeoReconcileService`.
+   */
+  @Column({
+    type: 'enum',
+    enum: CommercantGeocodageStatut,
+    default: CommercantGeocodageStatut.SANS_POSITION,
+  })
+  @Index('IDX_commercant_geocodage_statut')
+  geocodageStatut: CommercantGeocodageStatut;
+
+  @Column({ type: 'varchar', nullable: true })
+  villeGeocodee: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  wilayaGeocodee: string | null;
+
+  /**
+   * La position **effectivement géocodée**. Égale à `latitude`/`longitude`
+   * pour toute fiche `fait` — `setPosition` re-géocode à chaque changement de
+   * position, donc aucune dérive possible ici (contrairement au CRM, qui
+   * recevait la position par synchro sans pouvoir s'accrocher à l'écriture).
+   * Conservée quand même : elle date le géocodage et sert au diagnostic.
+   */
+  @Column({ type: 'double precision', nullable: true })
+  geocodageLatitude: number | null;
+
+  @Column({ type: 'double precision', nullable: true })
+  geocodageLongitude: number | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  geocodageAt: Date | null;
 
   @Column({ type: 'enum', enum: RegistreStatus, nullable: true })
   registreStatus: RegistreStatus | null;

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module';
+import { GeoModule } from '../common/geo/geo.module';
 import { NotificationModule } from '../notification/notification.module';
 import { Promo } from '../promo/entities/promo.entity';
 import { StorageModule } from '../storage/storage.module';
@@ -19,6 +20,8 @@ import { Commercant } from './entities/commercant.entity';
     AuthModule,
     StorageModule,
     NotificationModule,
+    // Géocodage inverse de la position à la pose (`setPosition`).
+    GeoModule,
   ],
   controllers: [CommercantController],
   providers: [CommercantService],
