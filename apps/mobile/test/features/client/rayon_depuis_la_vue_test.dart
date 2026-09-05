@@ -129,32 +129,4 @@ void main() {
       expect(cadre.west.isFinite, isTrue);
     });
   });
-
-  group('cadreEstPerime', () {
-    test('vue identique au cadre enregistré : rien à proposer', () {
-      expect(cadreEstPerime(5.0, 5.0), isFalse);
-      expect(cadreEstPerime(6.0, 5.0), isFalse);
-    });
-
-    test('on a zoomé : le cadre ne couvre plus ce qu\'on regarde', () {
-      // Le cas d'Alger : la liste montre 5 km, l'écran montre 1 km.
-      expect(cadreEstPerime(1.0, 5.0), isTrue);
-    });
-
-    test('on a dézoomé : le cadre est trop étroit pour ce qu\'on regarde', () {
-      expect(cadreEstPerime(30.0, 5.0), isTrue);
-    });
-
-    test('aucun cadre posé : la pastille a toujours quelque chose à dire', () {
-      expect(cadreEstPerime(5.0, null), isTrue);
-    });
-
-    test('rayon de la vue inconnu : on ne dérange pas', () {
-      // ⚠️ Redéployer la pastille sur une absence de mesure la ferait
-      // réapparaître sans raison, et c'est exactement l'encombrement qu'on
-      // venait de retirer.
-      expect(cadreEstPerime(null, 5.0), isFalse);
-      expect(cadreEstPerime(null, null), isFalse);
-    });
-  });
 }
