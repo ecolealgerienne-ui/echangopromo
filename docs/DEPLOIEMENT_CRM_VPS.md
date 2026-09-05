@@ -99,13 +99,15 @@ restera vide sur toutes les fiches algériennes, sans que rien ne le signale.
 
 ### Rattraper les fiches déjà géocodées — **une seule fois, après cette mise à jour**
 
-⚠️ **La tâche planifiée ne les reprendra JAMAIS.** Une fiche n'est re-géocodée
-que si sa position a bougé de plus de 200 m : tout ce qui portait déjà
-`Géocodé` avant cette mise à jour garderait sa ville et un **État vide pour
-toujours**. Ce n'est pas un état d'attente, c'est un état stable et faux.
+⚠️ **Le géocodage inverse ne se fait plus côté Odoo** (module 19.0.1.2.0,
+bascule du 2026-09-05) : `ville`/`wilaya` arrivent dans l'instantané nocturne,
+résolus par echango Promo au moment où la position est posée. Ce module ne
+fait plus qu'apparier la wilaya reçue à un `res.country.state`.
 
-Le rattrapage **n'appelle pas Nominatim** — le nom de wilaya est déjà stocké
-dans `wilaya_geocodee`. Il n'y a donc aucun risque de quota :
+Après la mise à jour, les fiches déjà `Géocodé` gardent leur `wilaya_geocodee`
+mais peuvent avoir un **État natif vide** — l'appariement n'avait tourné qu'à
+leur premier géocodage. Ce rattrapage **n'appelle rien d'externe**, il relit
+`wilaya_geocodee` :
 
 ```bash
 docker exec -i "$CONT" sh -c 'odoo shell --database=echango_crm \
@@ -276,19 +278,13 @@ L'écran **Source et jeton** dit depuis quand — une source sans lot reçu depu
 
 - **La tâche de 04:00** (heure d'Alger, fuseau explicite) pousse l'instantané
   complet chaque nuit.
-- **Le géocodage inverse** tourne côté Odoo toutes les 15 minutes, par lots de
-  25, contre Nominatim. ⚠️ Sa politique d'usage impose **une requête par
-  seconde** : le rythme est déjà calibré, ne pas l'accélérer — un dépassement
-  fait bannir l'adresse IP du serveur, et cela se découvre bien après. Un parc
-  de 300 fiches se géocode en environ trois heures, puis ne bouge plus : une
-  fiche n'est re-géocodée que si sa position a bougé de plus de 200 m.
-
-  ⚠️ **Ne pas lancer de rattrapage manuel massif.** Le 2026-08-15, un lot de
-  216 fiches lancé à la main a fait répondre **429 Too Many Requests** à
-  Nominatim, et 61 fiches sont retombées en `erreur` d'un coup. Depuis, un 429
-  **interrompt le lot** au lieu d'enchaîner — mais la bonne conduite reste de
-  laisser la tâche planifiée faire son travail. Il n'y a rien à rattraper : elle
-  reprend seule ce qui a échoué.
+- **Le géocodage inverse ne tourne plus côté Odoo** (module 19.0.1.2.0).
+  `ville`/`wilaya` arrivent dans l'instantané de 04:00, résolus par echango
+  Promo (service `echango-geo`, Nominatim auto-hébergé) au moment où le
+  commerçant pose sa position. Plus de tâche planifiée, plus de quota
+  Nominatim, plus de lot à calibrer. Ce module ne fait qu'apparier la wilaya
+  reçue à un `res.country.state` natif (`_etat_correspondant`) au fil des
+  lots.
 
 - **La ville ET l'état natif d'Odoo** sont remplis. Deux pièges, opposés :
 

@@ -49,7 +49,7 @@ d'entrée** : ce document ne les rediscute pas.
 | 3 | **Client** : point par défaut = **Alger**, en configuration. Pas de GPS demandé au démarrage. Le client **enregistre lui-même** le point qui détermine ses promos — voir décisions 10 et 12. |
 | 4 | **Liste client** : rayon par défaut **5 km**, configurable, plus un tri par distance. |
 | 5 | `MAX_MAP_COMMERCANTS = 300` (`promo.service.ts:82`) passe en configuration. |
-| 6 | Pour voir d'autres wilayas, le client **navigue sur la carte**. Pas de recherche de lieu par nom, pas de liste de villes, **pas de géocodeur** (ni direct ni inverse). |
+| 6 | Pour voir d'autres wilayas, le client **navigue sur la carte**. Pas de recherche de lieu par nom, pas de liste de villes, **pas de géocodeur** (ni direct ni inverse). ⚠️ **Amendée le 2026-09-05** : l'**inverse côté serveur** est rouvert — le backend résout la position d'un commerçant en `ville`/`wilaya` via `echango-geo` au moment du `setPosition` (colonnes `*Geocodee`, `GeoModule`), pour le CRM qui n'a pas de vue carte. Le **parcours client est inchangé** : toujours pas de recherche de lieu par nom, pas de forward geocoding. |
 | 7 | Le commerçant fournit **seulement sa position**. Pas d'adresse obligatoire. |
 | 8 | Les commerçants déjà en base **sans position** : leurs promos deviennent **invisibles dès le basculement**. Pas de période de grâce. |
 | 9 | La table `Commune` est **conservée**. Suppression ultérieure éventuelle, seulement si elle s'avère inutile. |

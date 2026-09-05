@@ -170,6 +170,8 @@ Un objet JSON par commerçant.
 | `telephone_e164` | string | `telephone` | **La colonne elle-même depuis le 2026-08-15** : la base stocke l'E.164, il n'y a plus rien à dériver |
 | `pays` | ISO-2 | `pays` | ⚠️ **Colonne inexistante à ce jour** — livrée par le lot 1 |
 | `latitude`, `longitude` | float \| null | `latitude`/`longitude` | `null` fréquent (obligatoire seulement à la publication) |
+| `ville`, `wilaya` | string \| null | `villeGeocodee`/`wilayaGeocodee` | **Géocodage inverse fait par le backend** (via `echango-geo`) au moment où la position est posée. Le CRM ne géocode plus lui-même. `null` ensemble si point inconnu (mer) ou pas encore résolu — lire `geocodage_statut` pour trancher |
+| `geocodage_statut` | enum | `geocodageStatut` | `sans_position` \| `a_faire` \| `fait` \| `sans_resultat` \| `erreur`. `a_faire`/`erreur` sont transitoires (le reconcile backend les reprend) ; `sans_resultat` est terminal (point non cartographié) |
 | `origine` | enum | `originVerification` | `auto_inscrit` \| `confirme_agent` |
 | `agent_createur_id` | uuid \| null | `createdByAgentId` | `null` si auto-inscription |
 | `date_creation` | datetime | `createdAt` | |
