@@ -1,0 +1,76 @@
+# Podfile iOS — **versionné volontairement**, contrairement à ce que génère
+# `flutter create`.
+#
+# ── Pourquoi ce fichier existe dans le dépôt ────────────────────────────────
+#
+# Il n'y était pas jusqu'au 2026-08-11, et ce n'était pas un choix : il n'est
+# créé qu'au premier build iOS, donc **sur un Mac** — et il n'y en a pas sur le
+# poste de développement. Codemagic le régénérait à chaque build à partir du
+# gabarit Flutter, dans lequel la ligne `platform` est **commentée**.
+#
+# Conséquence, constatée le 2026-08-11 : CocoaPods choisissait lui-même le
+# plancher iOS, l'annonçait au passage
+# (« Automatically assigning platform `iOS` with version `13.0` […] because no
+# platform was specified »), et le build échouait sur
+# « Specs satisfying the `Flutter` dependency were found, but they required a
+# higher minimum deployment target ».
+#
+# ⚠️ **Le plancher iOS de l'app était donc décidé par la machine de build, pas
+# par le dépôt.** Tant qu'il est implicite, il change quand l'outillage change —
+# sans commit, sans avertissement, et en accusant CocoaPods.
+#
+# ── Les TROIS endroits qui doivent dire la même chose ───────────────────────
+#
+# Le relever un jour demande de les changer tous les trois, dans le même
+# commit — sinon le désaccord se manifeste au build, pas à la lecture :
+#
+#   1. la ligne `platform` ci-dessous ;
+#   2. `IPHONEOS_DEPLOYMENT_TARGET` dans `Runner.xcodeproj/project.pbxproj`
+#      (**trois** occurrences : Debug, Release, Profile) ;
+#   3. `MinimumOSVersion` dans `Flutter/AppFrameworkInfo.plist`.
+#
+# Les trois valent 13.0 au 2026-08-11.
+platform :ios, '13.0'
+
+# Les statistiques CocoaPods partent en requête synchrone à chaque `pod
+# install` : autant de secondes ajoutées à chaque build.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+end
+
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+flutter_ios_podfile_setup
+
+target 'Runner' do
+  use_frameworks!
+  use_modular_headers!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+  end
+end

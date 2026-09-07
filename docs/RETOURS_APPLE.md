@@ -27,6 +27,7 @@ iPad Air 11" (M3)** — voir la leçon G.
 | 2026-08-05 | *non noté* | ❌ Refus | **5.1.1(iv)** — localisation | Produit, écran |
 | 2026-08-07 | 1.0 (10) | ❌ Refus | **5.1.1(iv)** — localisation, *encore* | Produit, écran |
 | 2026-08-10 | 1.0 (11) | ❌ Refus | **2.3.10** — captures d'écran | Métadonnées |
+| 2026-08-15 | — | **Bloqué avant revue** | `pod install` — plancher iOS choisi par la machine | Technique, build |
 | 2026-08-16 | 1.0.1 (17) | ❌ Refus | **ITMS-91061** — manifeste de confidentialité manquant (`share_plus`) | Technique, **dépendance** |
 
 **Deux refus sur quatre portaient sur le même écran** ; les deux autres ne
@@ -64,6 +65,56 @@ embarque un jour sa propre implémentation de chiffrement.
 > **La leçon** : un blocage Apple peut être **totalement silencieux**. Ici, rien
 > n'échoue — ça n'apparaît simplement pas. Toujours vérifier l'**état** de la
 > build dans App Store Connect, jamais se fier au succès du build CI.
+
+---
+
+### R0 bis — `flutter: stable` : le build casse sans qu'une ligne ait bougé (2026-08-15)
+
+**Symptôme :** après plusieurs IPA partis chez Apple sans encombre, `pod install`
+échoue en CI :
+
+```
+[!] CocoaPods could not find compatible versions for pod "Flutter":
+    Specs satisfying the `Flutter (from `Flutter`)` dependency were found,
+    but they required a higher minimum deployment target.
+[!] Automatically assigning platform `iOS` with version `13.0` on target
+    `Runner` because no platform was specified.
+```
+
+Aucun commit entre le dernier build vert et celui-ci. Le premier réflexe est de
+chercher dans le dépôt — il n'y a rien à y trouver.
+
+**Deux causes, et la seconde est la vraie :**
+
+1. **Le `Podfile` n'était pas versionné.** Il n'est créé qu'au premier build iOS,
+   donc sur un Mac — et il n'y en a pas sur le poste de développement. Codemagic
+   le régénérait à chaque build depuis le gabarit Flutter, où la ligne `platform`
+   est **commentée**. CocoaPods choisissait donc lui-même le plancher iOS, et le
+   disait : c'est la seconde ligne du message, celle qu'on lit comme un
+   avertissement anodin.
+2. **`flutter: stable` est une cible mouvante.** Le plancher iOS exigé par le pod
+   Flutter monte avec les versions du canal. Le jour où `stable` a franchi ce
+   seuil, le build a cassé — sans commit, sans avertissement.
+
+Les deux ensemble donnent le pire cas : **le plancher iOS de l'app était décidé
+par la machine de build, pas par le dépôt.**
+
+**Ce qui a été fait :** `apps/mobile/ios/Podfile` versionné avec un
+`platform :ios, '13.0'` explicite (et, en tête, les **trois** endroits qui
+doivent rester d'accord), et `flutter:` épinglé à `3.35.7` dans les deux
+workflows de `codemagic.yaml` — la version du poste où l'app compile, s'analyse
+et passe ses tests.
+
+> **La leçon (L)** : **ce qui n'est pas dans le dépôt est décidé ailleurs.** Un
+> fichier de configuration régénéré à chaque build n'est pas une configuration,
+> c'est un défaut par défaut. Et une version d'outillage non épinglée (`stable`,
+> `latest`, `3.+`) fabrique des échecs dont la cause est **absente de
+> l'historique** — même défaut que `espresso-core:3.+` côté Android.
+>
+> ⚠️ **À vérifier sur les autres apps de la suite** : TikMeal, echango POS et
+> echango Vendeur utilisent le même Codemagic. Si elles déclarent
+> `flutter: stable` sans `Podfile` versionné, **elles casseront le même jour**,
+> et chacune fera chercher la cause dans son propre code.
 
 ---
 
@@ -159,6 +210,30 @@ Le bouton est désormais toujours affiché, avec quatre issues et aucun cul-de-s
 | Permission demandable | Déclenche la boîte système |
 | Refusée (`deniedForever`) | Message + action **Réglages** (`openAppSettings`) |
 | Service de localisation coupé | Message + action **Réglages** (`openLocationSettings`) |
+
+⚠️ **CE QUE CETTE SECTION DÉCRIT N'EST PLUS DANS LE CODE — constaté le
+2026-08-16.** Le tableau ci-dessus est faux en l'état : `map_screen.dart`
+n'affiche le bouton que sous `if (userPosition != null && _selected == null)`,
+donc **une seule issue**, pas quatre. `LocationOutcome`,
+`ouvrirReglagesApplication` et `ouvrirReglagesLocalisation` n'existent pas dans
+`location_providers.dart`.
+
+**La preuve que c'est une perte de fusion, pas une décision** : les quatre
+clés de traduction posées pour ce correctif — `mapLocateMe`,
+`locationOpenSettings`, `mapLocationDenied`, `mapLocationServiceOff` — sont
+toujours présentes dans les **trois** `.arb` et n'ont **aucun appelant**
+(règle #31). Les chaînes ont survécu à la fusion, le code non.
+
+**Conséquence, et elle est réelle sur iOS** : l'écran d'onboarding ayant été
+supprimé, la seule demande part du bandeau de la carte, affiché tant que
+`peutDemander` est vrai. Au premier « Ne pas autoriser », iOS passe en
+`deniedForever` ⇒ le bandeau disparaît **et** le bouton « me localiser » ne
+s'affiche pas (position inconnue). **Le client est enfermé dehors** — exactement
+le défaut que cette section déclare fermé.
+
+**Une des deux choses doit changer : le code ou ce texte.** Tant que les deux
+coexistent, c'est le document qui ment, et c'est pire qu'un défaut non
+documenté — *un état périmé fait conclure*.
 
 > **La leçon (D)** : **un refus sans porte de retour est un défaut produit**, pas
 > seulement de conformité. Et Apple donne lui-même le remède dans sa lettre :
@@ -327,6 +402,10 @@ nouveautés, URL marketing et support. *(R3)*
 
 **I. Un rejet de métadonnées ne demande pas un nouveau build.** *(R3)*
 
+**L. Ce qui n'est pas dans le dépôt est décidé ailleurs.** Fichier régénéré à
+chaque build, version d'outillage non épinglée : l'échec arrive sans cause
+visible dans l'historique. *(R0 bis)*
+
 **J. Le libellé et la clé doivent dire la même chose.** `onboardingLocationLater`
 portant le texte « Continuer » était le prochain contresens garanti : la clé a
 été renommée dans le même commit. *(R1)*
@@ -341,6 +420,8 @@ assumés, pas des détails.
 ### Build et technique
 
 - [ ] `ITSAppUsesNonExemptEncryption` déclarée dans `Info.plist` *(sinon : build invisible, R0)*
+- [ ] Version de Flutter **épinglée** dans la CI, jamais `stable` *(R0 bis)*
+- [ ] `ios/Podfile` versionné, avec un `platform :ios` explicite *(R0 bis)*
 - [ ] Numéro de build incrémenté (Codemagic le fait via `$BUILD_NUMBER`)
 - [ ] La build est **« Ready to Submit »** dans App Store Connect — pas seulement verte dans la CI
 - [ ] Chaque `NS*UsageDescription` décrit **ce que le testeur verra**, pas un usage secondaire
